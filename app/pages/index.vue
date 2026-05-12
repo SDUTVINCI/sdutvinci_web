@@ -7,7 +7,6 @@ const heroLinks = [
   { label: 'Bilibili', href: 'https://space.bilibili.com/471524675', external: true },
   { label: 'GitHub', href: 'https://github.com/SDUTVINCI', external: true },
   { label: '微信公众号', href: 'https://mp.weixin.qq.com/s/AAPWX2zOhJjA-s2MA-g2Ew', external: true },
-  { label: '2025 迎新 QQ 群', href: 'https://qm.qq.com/q/heOyGXc35e', external: true },
   { label: '加入我们', href: '/recruitment', external: false }
 ]
 
