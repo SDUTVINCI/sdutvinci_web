@@ -14,6 +14,7 @@ const navItems = [
 ]
 
 const theme = ref<Theme>('light')
+const showMobileNav = ref(false)
 
 const isActive = (to: string) => {
   if (to === '/') {
@@ -45,8 +46,21 @@ const toggleTheme = () => {
   applyTheme(theme.value === 'dark' ? 'light' : 'dark')
 }
 
+const closeMobileNav = () => {
+  showMobileNav.value = false
+}
+
+const toggleMobileNav = () => {
+  showMobileNav.value = !showMobileNav.value
+}
+
 const themeLabel = computed(() => theme.value === 'dark' ? '切换浅色模式' : '切换深色模式')
 const themeIcon = computed(() => theme.value === 'dark' ? '☀' : '☾')
+const mobileNavLabel = computed(() => showMobileNav.value ? '关闭导航菜单' : '打开导航菜单')
+
+watch(() => route.fullPath, () => {
+  closeMobileNav()
+})
 
 onMounted(() => {
   const storedTheme = localStorage.getItem('vinci-theme')
@@ -65,13 +79,27 @@ onMounted(() => {
     </NuxtLink>
 
     <div class="header-actions">
-      <nav class="site-nav" aria-label="主导航">
+      <button
+        v-if="showMobileNav"
+        class="mobile-nav-backdrop"
+        type="button"
+        aria-label="关闭导航"
+        @click="closeMobileNav"
+      />
+
+      <nav
+        id="site-navigation"
+        class="site-nav"
+        :class="{ 'is-open': showMobileNav }"
+        aria-label="主导航"
+      >
         <NuxtLink
           v-for="item in navItems"
           :key="item.to"
           class="nav-link"
           :class="{ active: isActive(item.to) }"
           :to="item.to"
+          @click="closeMobileNav"
         >
           {{ item.label }}
         </NuxtLink>
@@ -86,6 +114,24 @@ onMounted(() => {
       >
         <span class="theme-toggle-icon" aria-hidden="true">{{ themeIcon }}</span>
         <span class="visually-hidden">{{ themeLabel }}</span>
+      </button>
+
+      <button
+        class="nav-toggle"
+        :class="{ 'is-open': showMobileNav }"
+        type="button"
+        :aria-expanded="showMobileNav"
+        aria-controls="site-navigation"
+        :aria-label="mobileNavLabel"
+        :title="mobileNavLabel"
+        @click="toggleMobileNav"
+      >
+        <span class="nav-toggle-bars" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+        </span>
+        <span class="visually-hidden">{{ mobileNavLabel }}</span>
       </button>
     </div>
   </header>

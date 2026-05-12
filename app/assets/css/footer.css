@@ -79,7 +79,7 @@
 .footer-records a {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   border: 1px solid rgba(0, 137, 150, 0.16);
   border-radius: 999px;
   padding: 6px 12px;
@@ -88,19 +88,16 @@
   font-weight: 750;
 }
 
+.footer-record-icon {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  object-fit: contain;
+  opacity: 0.86;
+}
+
 .footer-records a:hover {
   border-color: rgba(201, 52, 52, 0.24);
   background: var(--record-bg-hover);
   color: var(--red-dark);
-}
-
-.footer-records a span {
-  min-width: 34px;
-  border-radius: 999px;
-  padding: 2px 7px;
-  background: rgba(0, 137, 150, 0.1);
-  color: var(--cyan);
-  font-size: 0.75rem;
-  font-weight: 900;
-  text-align: center;
 }

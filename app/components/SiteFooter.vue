@@ -21,7 +21,12 @@
       <div class="footer-records">
         <span class="footer-copyright">© 2026 山东理工大学 Vinci 机器人队</span>
         <a href="https://beian.miit.gov.cn" target="_blank" rel="noopener noreferrer">
-          <span>ICP</span>
+          <img
+            class="footer-record-icon"
+            src="https://cdn.tungchiahui.cn/tungwebsite/assets/images/footer/favicon-miit.webp"
+            alt=""
+            aria-hidden="true"
+          >
           鲁ICP备2025185601号-1
         </a>
         <a
@@ -29,7 +34,12 @@
           target="_blank"
           rel="noopener noreferrer"
         >
-          <span>公安</span>
+          <img
+            class="footer-record-icon"
+            src="https://cdn.tungchiahui.cn/tungwebsite/assets/images/footer/favicon-mps.webp"
+            alt=""
+            aria-hidden="true"
+          >
           鲁公网安备37030302001123号
         </a>
       </div>
