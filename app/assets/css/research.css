@@ -1,0 +1,74 @@
+.achievement-section {
+  width: min(var(--content), calc(100% - 48px));
+  margin: 88px auto 96px;
+}
+
+.achievement-timeline {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.achievement-card {
+  position: relative;
+  min-height: 190px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 26px 28px 26px 158px;
+  background:
+    linear-gradient(90deg, rgba(201, 52, 52, 0.045), transparent 135px),
+    var(--surface);
+}
+
+.achievement-card::before {
+  position: absolute;
+  top: 30px;
+  bottom: 30px;
+  left: 122px;
+  width: 2px;
+  background: linear-gradient(var(--red), var(--cyan));
+  content: "";
+}
+
+.achievement-year {
+  position: absolute;
+  top: 26px;
+  left: 24px;
+  display: inline-flex;
+  min-width: 74px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(201, 52, 52, 0.16);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: rgba(201, 52, 52, 0.08);
+  color: var(--red);
+  font-size: 1.55rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.achievement-card ul {
+  display: grid;
+  gap: 9px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.achievement-card li {
+  position: relative;
+  color: var(--ink-soft);
+  font-size: 0.98rem;
+}
+
+.achievement-card li::before {
+  position: absolute;
+  top: 0.7em;
+  left: -22px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--gold);
+  content: "";
+}

@@ -1,0 +1,115 @@
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  min-height: var(--site-header-height);
+  padding: 10px max(24px, calc((100vw - var(--content)) / 2));
+  border-bottom: 1px solid var(--header-line);
+  background: var(--header-bg);
+  backdrop-filter: blur(18px);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.brand-logo {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+.brand-copy {
+  display: grid;
+  min-width: 0;
+}
+
+.brand-title {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brand-subtitle {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.site-nav {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.nav-link {
+  min-width: 64px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 8px 14px;
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: center;
+}
+
+.nav-link:hover,
+.nav-link.active {
+  border-color: rgba(201, 52, 52, 0.22);
+  background: rgba(201, 52, 52, 0.08);
+  color: var(--red-dark);
+}
+
+.theme-toggle {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--ink-soft);
+  cursor: pointer;
+  font: inherit;
+  box-shadow: var(--shadow-soft);
+}
+
+.theme-toggle:hover {
+  border-color: rgba(0, 137, 150, 0.32);
+  color: var(--cyan);
+}
+
+.theme-toggle-icon {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.05rem;
+  line-height: 1;
+}

@@ -1,0 +1,54 @@
+.page-hero {
+  display: grid;
+  min-height: 360px;
+  align-items: end;
+  padding: 96px max(24px, calc((100vw - var(--content)) / 2)) 72px;
+  background:
+    linear-gradient(90deg, rgba(14, 26, 32, 0.9), rgba(14, 26, 32, 0.58)),
+    url('/images/cheer.png') center / cover;
+  color: #ffffff;
+}
+
+.members-hero {
+  background:
+    linear-gradient(90deg, rgba(14, 26, 32, 0.92), rgba(14, 26, 32, 0.54)),
+    url('/images/background_footer.png') center / cover;
+}
+
+.recruitment-hero {
+  background:
+    linear-gradient(90deg, rgba(14, 26, 32, 0.9), rgba(14, 26, 32, 0.54)),
+    url('/images/joinus.jpg') center / cover;
+}
+
+.contact-hero {
+  background:
+    linear-gradient(90deg, rgba(14, 26, 32, 0.9), rgba(14, 26, 32, 0.5)),
+    url('/images/cooporate.jpg') center / cover;
+}
+
+.news-hero {
+  background:
+    linear-gradient(90deg, rgba(14, 26, 32, 0.9), rgba(14, 26, 32, 0.54)),
+    url('/images/news.png') center / cover;
+}
+
+.wiki-hero {
+  background:
+    linear-gradient(90deg, rgba(14, 26, 32, 0.93), rgba(14, 26, 32, 0.5)),
+    url('/images/background_footer.png') center / cover;
+}
+
+.page-hero > div {
+  max-width: 760px;
+}
+
+.page-hero p:not(.eyebrow) {
+  margin-top: 20px;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 1.12rem;
+}
+
+.research-stats {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}

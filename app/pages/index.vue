@@ -44,8 +44,8 @@ const featureSections = [
     ],
     image: '/images/cooporate.jpg',
     imageAlt: '机器人项目协作场景',
-    href: '/projects',
-    cta: '查看项目'
+    href: '/wiki',
+    cta: '查看知识库'
   },
   {
     kicker: '团队成员',
