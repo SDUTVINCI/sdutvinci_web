@@ -5,7 +5,7 @@ const route = useRoute()
 const slug = decodeURIComponent(String(route.params.slug ?? ''))
 
 const { data: member } = await useAsyncData<Member | null>(`members:${slug}`, async () => {
-  return queryCollection('members').where('title', '=', slug).first() as Promise<Member | null>
+  return queryCollection('members').where('name', '=', slug).first() as Promise<Member | null>
 })
 
 if (!member.value) {
@@ -20,7 +20,7 @@ const { data: rawMembers } = await useAsyncData<Member[]>('members:related', () 
 )
 
 useHead(() => ({
-  title: `${member.value?.title || '成员'} | Vinci 机器人队`
+  title: `${member.value?.name || '成员'} | Vinci 机器人队`
 }))
 
 const cleanText = (value: unknown) =>
@@ -45,7 +45,7 @@ const splitSeason = (value: unknown) =>
 
 const formatSeasonList = (value: unknown) => splitSeason(value).join('、')
 
-const displayName = computed(() => String(member.value?.title || '成员'))
+const displayName = computed(() => String(member.value?.name || '成员'))
 const roleText = computed(() => uniq(splitPhrases(member.value?.role)).join('，'))
 
 const linkLabels: Record<string, string> = {
@@ -88,7 +88,7 @@ const relatedMembers = computed(() => {
   const currentGroup = groupLabel(current)
 
   return [...(rawMembers.value ?? [])]
-    .filter((item) => item.title !== current.title)
+    .filter((item) => item.name !== current.name)
     .map((item) => {
       const seasons = [...splitSeason(item.time), ...splitSeason(item.advisor)]
       const seasonScore = seasons.some((season) => currentSeasons.has(season)) ? 2 : 0
@@ -96,7 +96,7 @@ const relatedMembers = computed(() => {
       return { item, score: seasonScore + groupScore }
     })
     .filter(({ score }) => score > 0)
-    .sort((a, b) => b.score - a.score || String(a.item.title).localeCompare(String(b.item.title), 'zh-CN'))
+    .sort((a, b) => b.score - a.score || String(a.item.name).localeCompare(String(b.item.name), 'zh-CN'))
     .slice(0, 3)
     .map(({ item }) => item)
 })
@@ -148,7 +148,7 @@ const relatedMembers = computed(() => {
         <div class="related-member-list">
           <MemberCard
             v-for="item in relatedMembers"
-            :key="item.title"
+            :key="item.name"
             :member="item"
             compact
           />

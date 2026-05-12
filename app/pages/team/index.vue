@@ -35,7 +35,7 @@ const splitSeason = (value: unknown) =>
     .map((part) => part.trim())
     .filter(Boolean)
 
-const memberName = (member: Member) => String(member.title || '')
+const memberName = (member: Member) => String(member.name || '')
 
 const allMembers = computed(() =>
   [...(rawMembers.value ?? [])].sort((a, b) => {
@@ -104,7 +104,7 @@ const matchesSearch = (member: Member) => {
   if (!keyword) return true
 
   const haystack = [
-    member.title,
+    member.name,
     member.role,
     member.type,
     member.time,
@@ -202,7 +202,7 @@ const stats = computed(() => [
           </div>
 
           <div class="member-grid">
-            <MemberCard v-for="member in group.members" :key="member.title" :member="member" />
+            <MemberCard v-for="member in group.members" :key="member.name" :member="member" />
           </div>
         </section>
       </div>

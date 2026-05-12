@@ -834,15 +834,17 @@ p {
   min-height: 190px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 24px 24px 24px 112px;
-  background: var(--surface);
+  padding: 26px 28px 26px 158px;
+  background:
+    linear-gradient(90deg, rgba(201, 52, 52, 0.045), transparent 135px),
+    var(--surface);
 }
 
 .achievement-card::before {
   position: absolute;
   top: 30px;
   bottom: 30px;
-  left: 82px;
+  left: 122px;
   width: 2px;
   background: linear-gradient(var(--red), var(--cyan));
   content: "";
@@ -850,8 +852,16 @@ p {
 
 .achievement-year {
   position: absolute;
-  top: 24px;
+  top: 26px;
   left: 24px;
+  display: inline-flex;
+  min-width: 74px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(201, 52, 52, 0.16);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: rgba(201, 52, 52, 0.08);
   color: var(--red);
   font-size: 1.55rem;
   font-weight: 900;
@@ -875,7 +885,7 @@ p {
 .achievement-card li::before {
   position: absolute;
   top: 0.7em;
-  left: -18px;
+  left: -22px;
   width: 7px;
   height: 7px;
   border-radius: 999px;
@@ -885,17 +895,25 @@ p {
 
 .site-footer {
   border-top: 1px solid var(--line);
-  background: #edf2f0;
+  background:
+    linear-gradient(180deg, #eef4f1, #e5ece8);
 }
 
 .footer-inner {
-  display: flex;
+  display: grid;
   width: min(var(--content), calc(100% - 48px));
   margin: 0 auto;
+  gap: 22px;
+  padding: 34px 0 28px;
+}
+
+.footer-main {
+  display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 28px;
-  padding: 34px 0;
+  border-bottom: 1px solid rgba(170, 184, 178, 0.58);
+  padding-bottom: 22px;
 }
 
 .footer-brand {
@@ -941,13 +959,55 @@ p {
   color: var(--red-dark);
 }
 
+.footer-records {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.footer-copyright {
+  color: var(--ink-soft);
+  font-weight: 800;
+}
+
+.footer-records a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(0, 137, 150, 0.16);
+  border-radius: 999px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.58);
+  color: var(--ink-soft);
+  font-weight: 750;
+}
+
+.footer-records a:hover {
+  border-color: rgba(201, 52, 52, 0.24);
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--red-dark);
+}
+
+.footer-records a span {
+  min-width: 34px;
+  border-radius: 999px;
+  padding: 2px 7px;
+  background: rgba(0, 137, 150, 0.1);
+  color: var(--cyan);
+  font-size: 0.75rem;
+  font-weight: 900;
+  text-align: center;
+}
+
 @media (max-width: 920px) {
   .site-header {
     min-height: 66px;
   }
 
   .home-hero {
-    min-height: 560px;
+    min-height: 640px;
   }
 
   .brand-subtitle {
@@ -997,7 +1057,7 @@ p {
     max-width: 420px;
   }
 
-  .footer-inner {
+  .footer-main {
     align-items: flex-start;
     flex-direction: column;
   }
@@ -1033,9 +1093,13 @@ p {
 
   .hero-content {
     display: grid;
-    min-height: 500px;
+    min-height: 0;
     align-content: center;
-    padding: 66px 0 74px;
+    padding: 90px 0 104px;
+  }
+
+  .home-hero {
+    min-height: max(700px, calc(100svh - 72px));
   }
 
   h1 {
@@ -1058,7 +1122,7 @@ p {
 
   .stats-band,
   .research-stats {
-    margin-top: 0;
+    margin-top: 24px;
     grid-template-columns: 1fr;
   }
 
@@ -1082,7 +1146,22 @@ p {
   }
 
   .achievement-card {
-    padding: 82px 22px 22px 38px;
+    padding: 86px 22px 24px;
+  }
+
+  .achievement-card::before {
+    top: 82px;
+    bottom: 26px;
+    left: 34px;
+  }
+
+  .achievement-year {
+    top: 22px;
+    left: 20px;
+  }
+
+  .achievement-card ul {
+    padding-left: 56px;
   }
 
   .member-controls,
@@ -1110,13 +1189,13 @@ p {
   }
 
   .achievement-card::before {
-    top: 76px;
+    top: 82px;
     bottom: 26px;
-    left: 22px;
+    left: 34px;
   }
 
   .achievement-year {
-    top: 24px;
-    left: 22px;
+    top: 22px;
+    left: 20px;
   }
 }

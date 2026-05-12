@@ -28,7 +28,7 @@ const splitSeason = (value: unknown) =>
 
 const formatSeasonList = (value: unknown) => splitSeason(value).join('、')
 
-const displayName = computed(() => String(props.member.title || '成员'))
+const displayName = computed(() => String(props.member.name || '成员'))
 const memberPath = computed(() => `/team/${encodeURIComponent(displayName.value)}`)
 
 const seasonText = computed(() => {
