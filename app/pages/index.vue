@@ -36,6 +36,18 @@ const featureSections = [
     cta: '查看成果'
   },
   {
+    kicker: 'Wiki 知识库',
+    title: '把踩过的坑、调好的环境和项目经验沉淀下来',
+    text: [
+      'Wiki 用来记录队伍训练、环境搭建、工具链配置和项目复盘，让新成员能沿着前人的路径更快上手。',
+      '它不是单纯的展示页，而是日常真正会用到的工程手册：遇到问题先查，解决之后继续补充。'
+    ],
+    image: '/images/cooporate.jpg',
+    imageAlt: 'Vinci 机器人队知识库资料展示',
+    href: '/wiki',
+    cta: '进入 Wiki'
+  },
+  {
     kicker: '项目展示',
     title: '机械、电控、算法、运营共同推进项目落地',
     text: [
@@ -44,8 +56,8 @@ const featureSections = [
     ],
     image: '/images/cooporate.jpg',
     imageAlt: '机器人项目协作场景',
-    href: '/wiki',
-    cta: '查看知识库'
+    href: '/projects',
+    cta: '查看项目'
   },
   {
     kicker: '团队成员',

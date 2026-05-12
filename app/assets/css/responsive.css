@@ -96,7 +96,7 @@
   }
 }
 
-@media (max-width: 620px) {
+@media (max-width: 920px) {
   :root {
     --site-header-height: 62px;
   }
@@ -204,6 +204,12 @@
     border: 0;
     padding: 0;
     background: rgba(15, 23, 42, 0.3);
+  }
+}
+
+@media (max-width: 620px) {
+  :root {
+    --site-header-height: 62px;
   }
 
   .hero-content,
