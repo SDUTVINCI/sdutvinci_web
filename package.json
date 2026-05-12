@@ -1,0 +1,17 @@
+{
+  "name": "sdutvinci-website-nuxt",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "nuxt dev --host 0.0.0.0",
+    "build": "nuxt build",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview"
+  },
+  "dependencies": {
+    "@nuxt/content": "^3.13.0",
+    "better-sqlite3": "^12.9.0",
+    "nuxt": "^4.4.0",
+    "vue": "^3.5.0"
+  }
+}
