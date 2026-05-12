@@ -45,7 +45,7 @@ const featureSections = [
     image: '/images/cooporate.jpg',
     imageAlt: 'Vinci 机器人队知识库资料展示',
     href: '/wiki',
-    cta: '进入 Wiki'
+    cta: '进入Wiki知识库'
   },
   {
     kicker: '项目展示',
@@ -54,7 +54,7 @@ const featureSections = [
       '作为多学科交叉的机器人团队，我们与企业、学校等多方面展开合作。',
       '队内项目训练从结构设计、嵌入式控制、视觉算法到工程管理完整展开。'
     ],
-    image: '/images/cooporate.jpg',
+    image: '/images/projects.jpg',
     imageAlt: '机器人项目协作场景',
     href: '/projects',
     cta: '查看项目'
