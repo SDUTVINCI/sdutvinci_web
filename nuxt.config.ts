@@ -1,10 +1,20 @@
 import { existsSync, readdirSync } from 'node:fs'
-import { basename } from 'node:path'
+import { basename, join } from 'node:path'
 import { getWikiContentMeta } from './utils/wiki-content-meta'
 
+const getMarkdownFiles = (dir: string): string[] =>
+  readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name)
+
+    if (entry.isDirectory()) {
+      return getMarkdownFiles(path)
+    }
+
+    return entry.isFile() && entry.name.endsWith('.md') ? [path] : []
+  })
+
 const memberRoutes = existsSync('content/members')
-  ? readdirSync('content/members')
-    .filter((file) => file.endsWith('.md'))
+  ? getMarkdownFiles('content/members')
     .map((file) => `/team/${basename(file, '.md')}`)
   : []
 
