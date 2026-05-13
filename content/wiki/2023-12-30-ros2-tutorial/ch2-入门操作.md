@@ -641,6 +641,7 @@ vim ~/.config/terminator/config
     [[[window0]]]
       type = Window
       parent = ""
+      size = 920, 660
     [[[child1]]]
       type = Terminal
       parent = window0
