@@ -44,7 +44,7 @@ https://www.bilibili.com/video/BV1VB4y137ys
 
     8.  C/C++语言
 
-      [Vinci机器人队电控组入门指导](/wiki/2023-09-29-ji-qi-ren-gong-cheng-shi-cheng-zhang-ji-hua)
+      [Vinci机器人队电控组入门指导](/wiki/2023-09-29-vinci-ji-qi-ren-dui-pei-yang-ji-hua)
 
       [Vinci机器人队C/C++资料](/wiki/2023-10-05-cplusplus-jiao-xue)
 

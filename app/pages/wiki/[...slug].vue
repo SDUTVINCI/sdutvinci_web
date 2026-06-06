@@ -124,14 +124,15 @@ const activeHeadingId = ref('')
 const readingProgress = ref(0)
 const tocLinks = ref<TocDisplayLink[]>([])
 const defaultHeadingScrollOffset = 108
-const anchorSettleDelay = 140
 const pendingAnchorId = ref('')
+const scrollRetryTimers: ReturnType<typeof setTimeout>[] = []
 const imageLoadCleanupFns: Array<() => void> = []
+const anchorSettleDelays = [820, 1300, 2100]
 let headingScrollOffset = defaultHeadingScrollOffset
 let headingElements: HTMLElement[] = []
 let zoomInstance: ReturnType<typeof mediumZoom> | null = null
 let viewportSyncFrame: number | null = null
-let anchorSettleTimer: ReturnType<typeof setTimeout> | null = null
+let contentResizeObserver: ResizeObserver | null = null
 
 const hasMobileDrawer = computed(() => showDocNav.value || showToc.value)
 
@@ -307,6 +308,19 @@ const enhanceCodeBlocks = () => {
   })
 }
 
+const enhanceTables = () => {
+  const tables = document.querySelectorAll('.wiki-content-body table') as NodeListOf<HTMLTableElement>
+
+  tables.forEach((table) => {
+    if (table.parentElement?.classList.contains('table-scroll')) return
+
+    const wrapper = document.createElement('div')
+    wrapper.className = 'table-scroll'
+    table.parentNode?.insertBefore(wrapper, table)
+    wrapper.appendChild(table)
+  })
+}
+
 const initImageZoom = () => {
   if (zoomInstance) {
     zoomInstance.detach()
@@ -334,11 +348,9 @@ const scrollHeadingIntoView = (id: string, behavior: ScrollBehavior = 'smooth') 
   return true
 }
 
-const clearAnchorSettleTimer = () => {
-  if (anchorSettleTimer === null) return
-
-  clearTimeout(anchorSettleTimer)
-  anchorSettleTimer = null
+const clearAnchorSettleTimers = () => {
+  scrollRetryTimers.forEach((timer) => clearTimeout(timer))
+  scrollRetryTimers.length = 0
 }
 
 const clearImageLoadListeners = () => {
@@ -360,25 +372,52 @@ const correctHeadingPosition = (id: string) => {
   return false
 }
 
-const settlePendingAnchor = () => {
-  anchorSettleTimer = null
+const warmImagesBeforeHeading = async (id: string) => {
+  const headingTop = getHeadingTargetTop(id)
+  if (headingTop === null) return
 
-  if (!pendingAnchorId.value) return
+  const images = Array.from(document.querySelectorAll('.wiki-content-body img')) as HTMLImageElement[]
+  const pendingImages = images.filter((image) => {
+    const imageTop = image.getBoundingClientRect().top + window.scrollY
+    return imageTop < headingTop && !image.complete
+  })
 
-  const hasCorrection = correctHeadingPosition(pendingAnchorId.value)
-  if (!hasCorrection) {
-    pendingAnchorId.value = ''
-    return
-  }
+  if (!pendingImages.length) return
 
-  scheduleAnchorSettle()
+  await Promise.race([
+    Promise.allSettled(pendingImages.map((image) => {
+      image.loading = 'eager'
+
+      if (image.decode) {
+        return image.decode().catch(() => undefined)
+      }
+
+      return new Promise<void>((resolve) => {
+        image.addEventListener('load', () => resolve(), { once: true })
+        image.addEventListener('error', () => resolve(), { once: true })
+      })
+    })),
+    new Promise((resolve) => setTimeout(resolve, 900))
+  ])
 }
 
-const scheduleAnchorSettle = () => {
-  if (!pendingAnchorId.value) return
+const scheduleAnchorSettle = (id: string) => {
+  clearAnchorSettleTimers()
 
-  clearAnchorSettleTimer()
-  anchorSettleTimer = setTimeout(settlePendingAnchor, anchorSettleDelay)
+  anchorSettleDelays.forEach((delay) => {
+    const timer = setTimeout(() => {
+      if (pendingAnchorId.value !== id) return
+      correctHeadingPosition(id)
+    }, delay)
+    scrollRetryTimers.push(timer)
+  })
+
+  const doneTimer = setTimeout(() => {
+    if (pendingAnchorId.value === id) {
+      pendingAnchorId.value = ''
+    }
+  }, anchorSettleDelays[anchorSettleDelays.length - 1] + 500)
+  scrollRetryTimers.push(doneTimer)
 }
 
 const decodeAnchorHash = (hash: string) => {
@@ -408,11 +447,10 @@ const navigateToHeading = (
   behavior: ScrollBehavior = 'smooth',
   shouldUpdateHash = false
 ) => {
-  clearAnchorSettleTimer()
+  clearAnchorSettleTimers()
   pendingAnchorId.value = id
 
-  const hasScrolled = scrollHeadingIntoView(id, behavior)
-  if (!hasScrolled) {
+  if (getHeadingTargetTop(id) === null) {
     pendingAnchorId.value = ''
     return false
   }
@@ -421,7 +459,12 @@ const navigateToHeading = (
     updateUrlHash(id)
   }
 
-  scheduleAnchorSettle()
+  warmImagesBeforeHeading(id).finally(() => {
+    if (pendingAnchorId.value !== id) return
+    scrollHeadingIntoView(id, behavior)
+    scheduleAnchorSettle(id)
+  })
+
   return true
 }
 
@@ -437,7 +480,7 @@ const handleHashChange = () => {
 
 const cancelPendingAnchorScroll = () => {
   pendingAnchorId.value = ''
-  clearAnchorSettleTimer()
+  clearAnchorSettleTimers()
 }
 
 const setupImageLoadReflowSync = () => {
@@ -449,7 +492,9 @@ const setupImageLoadReflowSync = () => {
 
     const handleImageSettled = () => {
       scheduleViewportSync()
-      scheduleAnchorSettle()
+      if (pendingAnchorId.value) {
+        correctHeadingPosition(pendingAnchorId.value)
+      }
     }
 
     image.addEventListener('load', handleImageSettled, { once: true })
@@ -461,6 +506,22 @@ const setupImageLoadReflowSync = () => {
   })
 }
 
+const setupContentResizeSync = () => {
+  contentResizeObserver?.disconnect()
+  contentResizeObserver = null
+
+  const content = document.querySelector('.wiki-content-body')
+  if (!content) return
+
+  contentResizeObserver = new ResizeObserver(() => {
+    scheduleViewportSync()
+    if (pendingAnchorId.value) {
+      correctHeadingPosition(pendingAnchorId.value)
+    }
+  })
+  contentResizeObserver.observe(content)
+}
+
 const enhanceContent = async () => {
   cancelPendingAnchorScroll()
   clearViewportSyncFrame()
@@ -469,9 +530,11 @@ const enhanceContent = async () => {
   syncHeadingScrollOffset()
   buildTocFromDom()
   enhanceCodeBlocks()
+  enhanceTables()
   initImageZoom()
   applyHeadingDecorations()
   setupImageLoadReflowSync()
+  setupContentResizeSync()
   updateViewportState()
 }
 
@@ -495,18 +558,20 @@ const isTocActive = (id: string) => activeHeadingId.value === id
 
 const handleWindowScroll = () => {
   scheduleViewportSync()
-  scheduleAnchorSettle()
 }
 
 const handleWindowResize = () => {
   syncHeadingScrollOffset()
   scheduleViewportSync()
-  scheduleAnchorSettle()
+  if (pendingAnchorId.value) {
+    correctHeadingPosition(pendingAnchorId.value)
+  }
 }
 
 watch(hasMobileDrawer, (isOpen) => {
   if (import.meta.client) {
     document.body.style.overflow = isOpen ? 'hidden' : ''
+    document.body.classList.toggle('wiki-drawer-open', isOpen)
   }
 })
 
@@ -545,10 +610,13 @@ onUnmounted(() => {
   window.removeEventListener('wheel', cancelPendingAnchorScroll)
   window.removeEventListener('touchstart', cancelPendingAnchorScroll)
   window.removeEventListener('keydown', cancelPendingAnchorScroll)
-  clearAnchorSettleTimer()
+  clearAnchorSettleTimers()
   clearViewportSyncFrame()
   clearImageLoadListeners()
+  contentResizeObserver?.disconnect()
+  contentResizeObserver = null
   document.body.style.overflow = ''
+  document.body.classList.remove('wiki-drawer-open')
 
   if (zoomInstance) {
     zoomInstance.detach()
@@ -616,8 +684,24 @@ function normalizePath(path: string) {
 
       <main class="wiki-main">
         <div class="mobile-actions">
-          <button v-if="docNavigationItems.length" type="button" @click="showDocNav = true">文档</button>
-          <button v-if="tocLinks.length" type="button" @click="showToc = true">目录</button>
+          <button
+            v-if="docNavigationItems.length"
+            type="button"
+            aria-label="打开章节目录"
+            @click="showDocNav = true"
+          >
+            <span class="mobile-action-icon" aria-hidden="true">§</span>
+            <span>章节</span>
+          </button>
+          <button
+            type="button"
+            aria-label="打开页内目录"
+            :disabled="!tocLinks.length"
+            @click="showToc = true"
+          >
+            <span class="mobile-action-icon" aria-hidden="true">#</span>
+            <span>页内</span>
+          </button>
         </div>
 
         <nav class="wiki-breadcrumb" aria-label="当前位置">
