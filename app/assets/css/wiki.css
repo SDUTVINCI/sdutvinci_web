@@ -468,6 +468,11 @@
   cursor: zoom-in;
 }
 
+.medium-zoom-overlay,
+.medium-zoom-image--opened {
+  z-index: 1600;
+}
+
 .wiki-content-body .table-scroll {
   overflow-x: auto;
   margin: 1.5rem 0;
