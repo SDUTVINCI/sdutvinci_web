@@ -21,7 +21,7 @@ https://github.com/SDUTVINCI/docker
 
 2.  显卡驱动必须满足≥570.86.10
 
-3.  设备的架构必须为amd64(x86\_64)架构或者aarch64(arm64)架构。(绝大多数设备均满足)
+3.  设备的架构必须为amd64(x86_64)架构或者aarch64(arm64)架构。(绝大多数设备均满足)
 
 4.  支持的显卡型号如下:
 
@@ -47,7 +47,7 @@ https://github.com/SDUTVINCI/docker
 
 5.  CuDNN9.7.0
 
-6.  cv\_bridge(amd64支持，但arm64暂时没构建，请自行构建)
+6.  cv_bridge(amd64支持，但arm64暂时没构建，请自行构建)
 
 7.  Livox-SDK2
 
@@ -64,7 +64,7 @@ docker pull sdutvincirobot/ros-opencv:humble-411
 #### ROS+OpenCV纯CPU版本
 https://hub.docker.com/repository/docker/tungchiahui/ros
 
-https://github.com/tungchiahui/ros-docker/blob/main/README-zh\_CN.md
+https://github.com/tungchiahui/ros-docker/blob/main/README-zh_CN.md
 
 1.  从dockerhub上拉取镜像
 
@@ -81,7 +81,7 @@ docker pull tungchiahui/ros:jazzy-noble
 #### （无ROS）OpenCV4.11+CUDA12.8+CuDNN9.7.0
 https://hub.docker.com/repository/docker/tungchiahui/opencv
 
-https://github.com/tungchiahui/ros-docker/blob/main/README-zh\_CN.md
+https://github.com/tungchiahui/ros-docker/blob/main/README-zh_CN.md
 
 OpenCV4.11+CUDA12.8+CuDNN9.7.0：
 
@@ -102,7 +102,7 @@ docker pull tungchiahui/opencv:411-cuda128-cudnn971-noble
 #### ROS+OpenCV4.11+CUDA12.8+CuDNN9.7.0
 https://hub.docker.com/repository/docker/tungchiahui/ros-opencv/general
 
-https://github.com/tungchiahui/ros-docker/blob/main/README-zh\_CN.md
+https://github.com/tungchiahui/ros-docker/blob/main/README-zh_CN.md
 
 1.  拉取镜像：
 
@@ -116,9 +116,9 @@ https://github.com/tungchiahui/ros-docker/blob/main/README-zh\_CN.md
 
     2.  显卡驱动必须满足≥570.86.10
 
-    3.  设备的架构必须为amd64(x86\_64)架构或者aarch64(arm64)架构。(绝大多数设备均满足)
+    3.  设备的架构必须为amd64(x86_64)架构或者aarch64(arm64)架构。(绝大多数设备均满足)
 
-    4.  cv\_bridge(amd64支持，但arm64暂时没构建，请自行构建)
+    4.  cv_bridge(amd64支持，但arm64暂时没构建，请自行构建)
 
     5.  支持的显卡型号如下:
 

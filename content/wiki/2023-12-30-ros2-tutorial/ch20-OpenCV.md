@@ -66,7 +66,7 @@ sudo apt install python3-numpy
 sudo apt install libboost-python-dev
 ```
 
-修改cv\_bridge的CMakeLists
+修改cv_bridge的CMakeLists
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1956.webp)
 

@@ -204,9 +204,9 @@ ssh-keygen
 
 上面这个命令会在用户目录.ssh文件夹下创建公私钥：
 
-1.  id\_rsa （私钥）；
+1.  id_rsa （私钥）；
 
-2.  id\_rsa.pub (公钥)。
+2.  id_rsa.pub (公钥)。
 
 **2.公钥上传**
 
@@ -216,7 +216,7 @@ ssh-keygen
 ssh-copy-id -i ~/.ssh/id_rsa.pub 账号@ip
 ```
 
-上面这条指令是将本地公钥上传到远程主机的ssh目录下，该目录下有文件authorized\_keys保存了公钥内容。
+上面这条指令是将本地公钥上传到远程主机的ssh目录下，该目录下有文件authorized_keys保存了公钥内容。
 
 以后再远程登录就无需录入密码了。
 

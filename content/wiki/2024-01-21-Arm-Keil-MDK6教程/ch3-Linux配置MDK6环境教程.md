@@ -49,7 +49,7 @@ vim ~/.bashrc
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2024/01/21/image1.webp)
 
-这个 **VCPKG\_HOME是vcpkg的目录**
+这个 **VCPKG_HOME是vcpkg的目录**
 
 ```bash
 #配置vcpkg环境 
@@ -76,7 +76,7 @@ vcpkg --version
 
 仓库链接：
 
-https://github.com/TungChiahuiMCURepos/CubeMX\_CMake\_Template
+https://github.com/TungChiahuiMCURepos/CubeMX_CMake_Template
 
 ```bash
 git clone https://github.com/TungChiahuiMCURepos/CubeMX_CMake_Template.git

@@ -20,7 +20,7 @@ colcon build --cmake-args -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 ### 消息接口
 底盘驱动启动之后，会持续广播一个比较重要的数据——里程计。里程计用于描述当前机器人相对于出发点的位姿以及速度等信息，里程计在机器人定位和导航的局部路径规划中有着重要的作用。在ROS2中里程计消息被封装为了`nav_msgs/msg/Odometry`接口，可通过指令`ros2 interface show nav_msgs/msg/Odometry`查看该接口的具体数据结构，结果如下：
 
-它描述的是机器人位姿与速度的预估信息。 其中位姿信息是以header中的frame\_id为参考系的，而速度信息则是以child\_frame\_id为参考系的。
+它描述的是机器人位姿与速度的预估信息。 其中位姿信息是以header中的frame_id为参考系的，而速度信息则是以child_frame_id为参考系的。
 
 在 **ROS2** 中， **odom 坐标系** （通常是 `odom` frame）遵循 **右手坐标系** ，其定义如下：
 
@@ -83,11 +83,11 @@ geometry_msgs/TwistWithCovariance twist
 
 需要注意的是，
 
-1.  坐标和位姿是相对于**frame\_id**的，一般是odom自己。
+1.  坐标和位姿是相对于**frame_id**的，一般是odom自己。
 
-2.  而线速度和角速度是相对于**child\_frame\_id**的。一般是base\_link **。** （这里注意，学长我最初就弄错了）
+2.  而线速度和角速度是相对于**child_frame_id**的。一般是base_link **。** （这里注意，学长我最初就弄错了）
 
-3.  虽然Twist是相对于child\_frame\_id **（** base\_link）的，但是他表达的是**瞬时值**，就和汽车一样，汽车上面的速度表也是相对于车身的**瞬时值**。
+3.  虽然Twist是相对于child_frame_id **（** base_link）的，但是他表达的是**瞬时值**，就和汽车一样，汽车上面的速度表也是相对于车身的**瞬时值**。
 
 4.  里程计在计算时是存在累计误差的，它所描述的是机器人的预估位姿，并不绝对准确。
 
@@ -106,7 +106,7 @@ geometry_msgs/TwistWithCovariance twist
 
 注意，如果你没有正儿八经的里程计，那么里程计的数据可以由底盘电机编码器数据计算而成。
 
-除了发布话题的代码，别忘记发布odom与base\_link之间的动态坐标变换。
+除了发布话题的代码，别忘记发布odom与base_link之间的动态坐标变换。
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1798.webp)
 

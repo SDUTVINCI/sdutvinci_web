@@ -94,7 +94,7 @@ void led_task(void const * argument)
 
 在这里多加一行../\*\*
 
-除了以上这种方式，也可以通过修改c\_cpp\_properties.json文件进行。
+除了以上这种方式，也可以通过修改c_cpp_properties.json文件进行。
 
 输入 `"../**"` (意思是将上一个目录(工程根目录)里的所有文件全部加载到Include Path中)
 
@@ -167,7 +167,7 @@ clang -v
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2024/01/21/image95.webp)
 
-修改里面的内容，该内容是 cmake产生的compile\_commands.json 文件所在的路径(路径会随MDK6版本更新而改变，请自己找文件所在路径)
+修改里面的内容，该内容是 cmake产生的compile_commands.json 文件所在的路径(路径会随MDK6版本更新而改变，请自己找文件所在路径)
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2024/01/21/image96.webp)
 
@@ -272,7 +272,7 @@ clang -v
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2024/01/21/image113.webp)
 
-可以看到日志这几行，显示gpio\_demo和gpio\_test都成功被编译了
+可以看到日志这几行，显示gpio_demo和gpio_test都成功被编译了
 
 ```bash
 [14/22] Building C object CMakeFiles/Template_Linux.dir/home/tungchiahui/user/Source/STM32_Projects/N1_F407ZGT6_GPIO_Test/bsp/boards/Src/gpio_test.o

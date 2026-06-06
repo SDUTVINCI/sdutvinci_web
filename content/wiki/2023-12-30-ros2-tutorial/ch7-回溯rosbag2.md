@@ -25,9 +25,9 @@ title: "回溯rosbag2"
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1231.webp)
 
-需要依赖于rosbag2\_cpp或者rosbag2\_py
+需要依赖于rosbag2_cpp或者rosbag2_py
 
-然后还要依赖于geometry\_msgs，这个是因为我们要序列化的数据是这个包下的速度指令。
+然后还要依赖于geometry_msgs，这个是因为我们要序列化的数据是这个包下的速度指令。
 
 ```bash
 ros2 pkg create cpp02_rosbag --build-type ament_cmake --dependencies rclcpp rosbag2_cpp geometry_msgs --node-name cpp01_writer
@@ -244,9 +244,9 @@ ros2 bag play src/cpp02_rosbag/my_bag
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1259.webp)
 
-如果已经生成了一遍my\_bag，再想生成新的会显示不能覆盖。
+如果已经生成了一遍my_bag，再想生成新的会显示不能覆盖。
 
-解决方案，可以把my\_bag设置为动态的，加个时间戳或者直接按功能命名。
+解决方案，可以把my_bag设置为动态的，加个时间戳或者直接按功能命名。
 
 ### rosbag2 C++ 读取数据
 ```cpp

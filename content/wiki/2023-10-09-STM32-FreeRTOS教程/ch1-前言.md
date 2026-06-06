@@ -22,9 +22,9 @@ https://www.bilibili.com/video/BV19g411p7UT
 
 5.  正点原子开发板资料(请下载A盘资料)：
 
-http://www.openedv.com/docs/boards/stm32/zdyz\_stm32f103\_warshipV4.html
+http://www.openedv.com/docs/boards/stm32/zdyz_stm32f103_warshipV4.html
 
-http://www.openedv.com/docs/boards/stm32/zdyz\_stm32f407\_explorerV3.html
+http://www.openedv.com/docs/boards/stm32/zdyz_stm32f407_explorerV3.html
 
 6.  【【中科大RM电控合集】手把手Keil+STM32CubeMX+VsCode环境配置-哔哩哔哩】 https://b23.tv/5mwveRt
 

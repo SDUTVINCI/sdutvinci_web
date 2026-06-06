@@ -72,7 +72,7 @@ sudo dnf install qt6-qtdeclarative-devel qt6-qtsvg-devel qt6-qtwayland-devel qt6
 ### 调用.ui类并编译运行
 首先先确保你的VScode+CMake配置正确。
 
-然后再`cmake ..`，接着`make install`，此时QT\_Projects/QT6/QT6\_Template/build/src/QT6TEST/目录下会出现`.h`文件。
+然后再`cmake ..`，接着`make install`，此时QT_Projects/QT6/QT6_Template/build/src/QT6TEST/目录下会出现`.h`文件。
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/10/image69.webp)
 
@@ -109,4 +109,4 @@ int qt6_test(int argc,char **argv)
 
 我这里有个配置好的QT6环境，你可以clone下来使用。
 
-https://github.com/tungchiahui/QT\_Projects/tree/main/QT6/QT6\_Template
+https://github.com/tungchiahui/QT_Projects/tree/main/QT6/QT6_Template

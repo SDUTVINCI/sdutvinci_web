@@ -1,5 +1,5 @@
 ---
-title: "OpenCV\\_CUDA环境搭建"
+title: "OpenCV_CUDA环境搭建"
 ---
 
 ### Linux
@@ -11,7 +11,7 @@ WSL2安装教程[Vinci机器人队Linux入门教程](/wiki/2024-03-30-linux-jiao
 
 **实体机Linux****＞****WSL2****＞＞****Windows**
 
-关于cv\_bridge:最好在安装ros之前编译opencv，这样安装ros时,cv\_bridge就会自己指向已经安装过的opencv，并且ros不会另外安装opencv，如此就可以通过find\_package指令找到电脑上仅有的cv\_bridge和opencv，保证系统环境不被污染。关于补救办法，请看常见问题
+关于cv_bridge:最好在安装ros之前编译opencv，这样安装ros时,cv_bridge就会自己指向已经安装过的opencv，并且ros不会另外安装opencv，如此就可以通过find_package指令找到电脑上仅有的cv_bridge和opencv，保证系统环境不被污染。关于补救办法，请看常见问题
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/10/image23.webp)
 
@@ -78,7 +78,7 @@ sudo dnf install -y curl gcc gcc-c++ make cmake cmake-gui \
 #### 下载OpenCV源码
 https://github.com/opencv/opencv
 
-https://github.com/opencv/opencv\_contrib
+https://github.com/opencv/opencv_contrib
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/10/image26.webp)
 
@@ -121,7 +121,7 @@ mkdir -p build && cd build
 
 OpenCV使用CMake与Makefile进行编译，编译选项较多，详见（也可以不看，不过不同版本有些CMake编译选项是不同的）：
 
-https://docs.opencv.org/4.10.0/db/d05/tutorial\_config\_reference.html
+https://docs.opencv.org/4.10.0/db/d05/tutorial_config_reference.html
 
 下方被划掉的是在OpenCV4.11.0中已经不复存在的参数，但是可能在其他版本的OpenCV中仍有效，请自行用`CMake-LAH`(不推荐)命令或者`CMake-gui`(推荐)查看。
 
@@ -163,7 +163,7 @@ https://docs.opencv.org/4.10.0/db/d05/tutorial\_config\_reference.html
 | 33 | WITH_OPENGL | ON | 启用OPENGL |
 |  |  |  |  |
 
-1.  查询GPU Compute Capability(CUDA\_ARCH\_BIN参数):
+1.  查询GPU Compute Capability(CUDA_ARCH_BIN参数):
 
 https://developer.nvidia.com/cuda-gpus#collapseOne
 
@@ -179,9 +179,9 @@ Jetson代表工控机序列显卡。
 
 如果你是3060(台式桌面端，则要找左列的3060)
 
-通过图得知，我的显卡算力(GPU Compute Capability)为8.6，所以我的CMake的CUDA\_ARCH\_BIN参数为8.6。
+通过图得知，我的显卡算力(GPU Compute Capability)为8.6，所以我的CMake的CUDA_ARCH_BIN参数为8.6。
 
-CUDA\_ARCH\_PTX为BIN的最高值，我只设置了一个BIN，所以最高值就是这个8.6。(只有你要给电脑更换显卡的情况下，才要给BIN设置多个值，就需要把你要用的显卡的值全包含在BIN中，而PTX只需要BIN的最高值即可)
+CUDA_ARCH_PTX为BIN的最高值，我只设置了一个BIN，所以最高值就是这个8.6。(只有你要给电脑更换显卡的情况下，才要给BIN设置多个值，就需要把你要用的显卡的值全包含在BIN中，而PTX只需要BIN的最高值即可)
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/10/image34.webp)
 
@@ -282,9 +282,9 @@ cmake .. -DCMAKE_BUILD_TYPE=Release \
 
 ###### 常见问题
 ####### 无CUDA选项
-有时候CMake-GUI只会在编译后才显示某些参数(比如只有编译过WITH\_CUDA才会显示CUDA相关的选项)。
+有时候CMake-GUI只会在编译后才显示某些参数(比如只有编译过WITH_CUDA才会显示CUDA相关的选项)。
 
-所以你需要先把WITH\_CUDA打上勾，再点左下角的config,这样才会出现和CUDA相关的选项，再把那些选项配置一下。
+所以你需要先把WITH_CUDA打上勾，再点左下角的config,这样才会出现和CUDA相关的选项，再把那些选项配置一下。
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/10/image44.webp)
 
@@ -293,8 +293,8 @@ cmake .. -DCMAKE_BUILD_TYPE=Release \
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/10/image45.webp)
 
-####### OPENCV\_PYTHON3\_VERSION参数的类型错了
-在cmake-gui中不知道为何OPENCV\_PYTHON3\_VERSION参数的类型成了布尔型。
+####### OPENCV_PYTHON3_VERSION参数的类型错了
+在cmake-gui中不知道为何OPENCV_PYTHON3_VERSION参数的类型成了布尔型。
 
 需要手动改为字符串型数据。
 
@@ -402,7 +402,7 @@ opencv_version
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/10/image56.webp)
 
-#### 测试OpenCV\_CUDA(CMake程序示例)
+#### 测试OpenCV_CUDA(CMake程序示例)
 1.  CMake是一定要掌握的，请看下方文档学习:[CMake C/C++编译环境配置](/wiki/2023-10-05-cplusplus-jiao-xue/ch21-cmake-gong-cheng-mu-ban)
 
 2.  如图测试完毕：
@@ -411,7 +411,7 @@ opencv_version
 
 3.  下方是实例工程我已上传至GitHub供大家下载：(下方示例工程里的CMake模板不是最新的，可能不如新版功能齐全，不如新版各方面设计的更周到，如果想找最新版模板请看[CMake C/C++编译环境配置](/wiki/2023-10-05-cplusplus-jiao-xue/ch21-cmake-gong-cheng-mu-ban))
 
-https://github.com/tungchiahui/opencv\_cuda\_test
+https://github.com/tungchiahui/opencv_cuda_test
 
 ```bash
 
@@ -458,7 +458,7 @@ source ../script/setup_vinci_emis.bash
 
       github上的讨论：
 
-https://github.com/ros-perception/vision\_opencv/tree/kinetic
+https://github.com/ros-perception/vision_opencv/tree/kinetic
 
 根据GitHub中的解决方案，将对应报错.hpp文件中的相应代码修改（若只是有一些WARNING那大可不必修改）：
 
@@ -474,19 +474,19 @@ https://github.com/ros-perception/vision\_opencv/tree/kinetic
 make -j16
 ```
 
-##### ros原装opencv与自己搭建的opencv\_cuda冲突的问题
-原因：ros自带的cv\_bridge自动链接ros的opencv，而ros自带的opencv没有cuda加速，故报错。
+##### ros原装opencv与自己搭建的opencv_cuda冲突的问题
+原因：ros自带的cv_bridge自动链接ros的opencv，而ros自带的opencv没有cuda加速，故报错。
 
 Ubuntu允许多版本 opencv共存，不建议直接卸载opencv，可能导致相关环境异常。
 
-解决方案：额外配置一个版本的cv\_bridge进行opencv的链接
+解决方案：额外配置一个版本的cv_bridge进行opencv的链接
 
 ###### ROS1
 解决方案：
 
-在https://github.com/ros-perception/vision\_opencv/tree/kinetic中下载对应版本的cv\_bridge
+在https://github.com/ros-perception/vision_opencv/tree/kinetic中下载对应版本的cv_bridge
 
-先对cv\_bridge中的CmakeList.txt进行修改，OpencvDIR对应自己的opencv安装路径，并将修改包名：
+先对cv_bridge中的CmakeList.txt进行修改，OpencvDIR对应自己的opencv安装路径，并将修改包名：
 
 ```cmake
 project(cv_bridge_480)#修改为你的包名，加个版本号就可以
@@ -507,14 +507,14 @@ find_package(OpenCV 4.8.0 REQUIRED
   <name>cv_bridge_480</name>
 ```
 
-此时将cv\_bridge作为一个ros功能包进行编译，把包整体复制进你工作空间的src中进行编译
+此时将cv_bridge作为一个ros功能包进行编译，把包整体复制进你工作空间的src中进行编译
 
 ```xml
 cp -rf ./cv_bridge ~/Yolo_Tensorrt_Demo/demo01_test/src
 catkin_make
 ```
 
-然后就可以将cv\_bridge作为功能包使用了，在你原本的包CmakeLists中添加
+然后就可以将cv_bridge作为功能包使用了，在你原本的包CmakeLists中添加
 
 ```cmake
 find_package(cv_bridge_480)
@@ -528,9 +528,9 @@ package.xml:
 <exec_depend>cv_bridge_480</exec_depend>
 ```
 
-到这里自定义的cv\_bridge包就配好了
+到这里自定义的cv_bridge包就配好了
 
-如果你还想在vscode中使用代码补全，添加路径一直到cv\_bridge包的include就可以,我这里是另一个工作空间，都一样。
+如果你还想在vscode中使用代码补全，添加路径一直到cv_bridge包的include就可以,我这里是另一个工作空间，都一样。
 
 ```json
 "includePath": [
@@ -541,7 +541,7 @@ package.xml:
 ```
 
 ###### ROS2
-详见[ROS2机器人操作系统教程](/wiki/2023-12-30-ros2-tutorial)中CV\_Bridge章节.
+详见[ROS2机器人操作系统教程](/wiki/2023-12-30-ros2-tutorial)中CV_Bridge章节.
 
 ##### opencv编译爆内存的问题
 解决方案：采用多核编译，一般采用make -j16 （这里16是CPU线程数，可以根据实际情况进行调整）即可解决，cpu线程越多，编译速度就越快
@@ -553,7 +553,7 @@ Mingw：
 mingw64-make -j16
 ```
 
-值得注意的是，mingw并不支持windows上的opencv\_contrib编译，这在configure一开始就会提示
+值得注意的是，mingw并不支持windows上的opencv_contrib编译，这在configure一开始就会提示
 
 Vs：
 

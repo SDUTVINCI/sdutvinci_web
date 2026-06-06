@@ -25,7 +25,7 @@ pip3 install vcstool
 
 repositories:是总标签
 
-ros\_ws是克隆完这个仓库，要把仓库里的文件放在哪一个文件夹的文件夹的名字。
+ros_ws是克隆完这个仓库，要把仓库里的文件放在哪一个文件夹的文件夹的名字。
 
 type是仓库管理的类型，一般为git.
 

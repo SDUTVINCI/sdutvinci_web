@@ -15,7 +15,7 @@ title: "机器人导航Navigation2(实体篇)"
 
 以下代码都在下方这个github仓库里：
 
-https://github.com/CyberNaviRobot/CyberRobot\_ROS2\_WS
+https://github.com/CyberNaviRobot/CyberRobot_ROS2_WS
 
 *下方的教程只有实现思路，不会放源码，所以建议克隆一下这个仓库，看看源码。*
 
@@ -23,12 +23,12 @@ https://github.com/CyberNaviRobot/CyberRobot\_ROS2\_WS
 https://docs.nav2.org/configuration/index.html
 
 ### SLAM 定位与建图
-#### slam\_toolbox
+#### slam_toolbox
 根据上方的节点说明，我们要订阅/scan和/tf。
 
 一般激光雷达的说明书都会提供源码去发布/scan,所以这个请看你硬件的说明书。
 
-/tf则需要我们发布odom\_frame到base\_frame的转换，我们必须使用C++代码去动态发布odom的坐标变换。
+/tf则需要我们发布odom_frame到base_frame的转换，我们必须使用C++代码去动态发布odom的坐标变换。
 
 但是这里你需要发布/odom,以便于知道机器人的位置和姿态，这样才能够够推算出机器人在map中的位置。
 
@@ -75,7 +75,7 @@ ros2 launch mycar_slam_slam_toolbox online_sync_launch.py use_sim_time:=false
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1816.webp)
 
-再发布一下TF，可以直接用launch开启robot\_state\_publisher和joint\_state\_publisher,并打开urdf模型来发布TF。
+再发布一下TF，可以直接用launch开启robot_state_publisher和joint_state_publisher,并打开urdf模型来发布TF。
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1817.webp)
 
@@ -120,7 +120,7 @@ ros2 launch mycar_map_server map_server.launch.py
 
 然后需要坐标变换消息，即/tf话题。
 
-然后那个/initial\_pose话题，是2D地图上的初始位置，可以用rviz2发布，也可以用C++代码发布。
+然后那个/initial_pose话题，是2D地图上的初始位置，可以用rviz2发布，也可以用C++代码发布。
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1826.webp)
 
@@ -138,7 +138,7 @@ https://docs.nav2.org/configuration/packages/configuring-amcl.html#
 
 这里的OmniChassis不止指全向轮底盘，而是广义的全向轮底盘，像全向轮底盘，麦轮底盘都是全向轮底盘。当然也可以自定义底盘类型。
 
-这个配置文件最顶上的那个use\_sim\_time设置为False。
+这个配置文件最顶上的那个use_sim_time设置为False。
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1829.webp)
 

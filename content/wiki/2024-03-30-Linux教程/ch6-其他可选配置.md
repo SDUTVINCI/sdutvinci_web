@@ -315,7 +315,7 @@ sudo cp -r ./Apple.BigSur.Dark.P6 /usr/share/plasma/look-and-feel
 
 在右上角可以添加脚本和应用，添加脚本前先要确认脚本是否拥有可执行权限。也可以选择开机时运行脚本和关机时运行脚本。
 
-例子：拿docker\_x11的命令`xhost +local:docker`为例。
+例子：拿docker_x11的命令`xhost +local:docker`为例。
 
 先找到一个存放脚本的文件夹，你自己在home分区创一个就可以了。
 

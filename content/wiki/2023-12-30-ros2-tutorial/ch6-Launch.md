@@ -27,7 +27,7 @@ ros2 launch 功能包名 launch文件名
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1105.webp)
 
-ros2 pkg create cpp01\_launch --build-type ament\_cmake --dependencies rclcpp
+ros2 pkg create cpp01_launch --build-type ament_cmake --dependencies rclcpp
 
 ```bash
 ros2 pkg create cpp01_launch --build-type ament_cmake --dependencies rclcpp
@@ -162,7 +162,7 @@ node:
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1130.webp)
 
-### Launch\_Python\_Node
+### Launch_Python_Node
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1131.webp)
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1132.webp)
@@ -171,7 +171,7 @@ node:
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1134.webp)
 
-这个是标签exec\_name
+这个是标签exec_name
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1135.webp)
 
@@ -364,7 +364,7 @@ def generate_launch_description():
 
 第一个是原话题名称，第二个是新话题名称
 
-### Launch\_Python\_执行命令
+### Launch_Python_执行命令
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1165.webp)
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1166.webp)
@@ -475,7 +475,7 @@ def generate_launch_description():
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1177.webp)
 
-### Launch\_Python\_参数设置
+### Launch_Python_参数设置
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1178.webp)
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1179.webp)
@@ -496,7 +496,7 @@ def generate_launch_description():
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1186.webp)
 
-也可以传值，比如传backg\_r:=0
+也可以传值，比如传backg_r:=0
 
 这样背景色就变的更偏蓝绿了。
 
@@ -541,7 +541,7 @@ def generate_launch_description():
     return LaunchDescription([bg_r,bg_g,bg_b,turtle])
 ```
 
-### Launch\_Python\_文件包含
+### Launch_Python_文件包含
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1190.webp)
 
 假设我要编写一个机器人启动相关的launch文件，在这个launch文件中，我可能要启动雷达，启动IMU，启动底盘等等，我们需要把这些launch文件都包含进机器人启动的launch文件中。
@@ -560,7 +560,7 @@ def generate_launch_description():
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1194.webp)
 
-这个参数是launch\_file\_path就是文件路径。
+这个参数是launch_file_path就是文件路径。
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1195.webp)
 
@@ -624,7 +624,7 @@ def generate_launch_description():
     return LaunchDescription([include])
 ```
 
-### Launch\_Python\_分组设置
+### Launch_Python_分组设置
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1205.webp)
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1206.webp)
@@ -684,7 +684,7 @@ def generate_launch_description():
     return LaunchDescription([group1,group2])
 ```
 
-### Launch\_Python\_事件设置
+### Launch_Python_事件设置
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1212.webp)
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1213.webp)
@@ -715,9 +715,9 @@ def generate_launch_description():
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1222.webp)
 
-target\_action是事件源，你要为哪个节点注册事件。
+target_action是事件源，你要为哪个节点注册事件。
 
-on\_start是等到事件被触发，你要做哪些操作？
+on_start是等到事件被触发，你要做哪些操作？
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1223.webp)
 
@@ -778,12 +778,12 @@ def generate_launch_description():
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1227.webp)
 
-on\_exit可以创建一个对象，也可以放在列表里。
+on_exit可以创建一个对象，也可以放在列表里。
 
 可以只学Python版本的Launch，XML和Yaml版本的Launch可以了解就行，自己写就写Python版本的，当你要用到别人开源的功能包用的Launch是Xml或者yaml版本一般不影响正常使用。
 
-### Launch\_XML\_YAML\_Node
-### Launch\_XML\_YAML\_执行命令
-### Launch\_XML\_YAML\_参数设置
-### Launch\_XML\_YAML\_分组设置
-### Launch\_XML\_YAML\_文件包含
+### Launch_XML_YAML_Node
+### Launch_XML_YAML_执行命令
+### Launch_XML_YAML_参数设置
+### Launch_XML_YAML_分组设置
+### Launch_XML_YAML_文件包含

@@ -107,13 +107,13 @@ https://gitee.com/qinyinan/amber-ce-bookworm
 ##### 根据源码，手动编译（不推荐）
 1.  Ubuntu
 
-https://zhuanlan.zhihu.com/p/688413327?utm\_psn=1805362924497268736
+https://zhuanlan.zhihu.com/p/688413327?utm_psn=1805362924497268736
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2024/07/13/image4.webp)
 
 2.  Fedora
 
-https://zhuanlan.zhihu.com/p/687755518?utm\_psn=1823704798471520256
+https://zhuanlan.zhihu.com/p/687755518?utm_psn=1823704798471520256
 
 ### 测试ROS1
 1.  配置环境（只需配置一次即可）

@@ -413,7 +413,7 @@ sudo shutdown -r now
 
 8.  使用Fcitx5工具箱优化Fcitx5(进入Github自己看说明书安装)
 
-https://github.com/debuggerx01/fcitx5\_customizer
+https://github.com/debuggerx01/fcitx5_customizer
 
 ```Plain Text
 
@@ -537,7 +537,7 @@ sudo dnf makecache
 
 （ **建议：打开字幕观看，因为有些莫名出现的问题，会在弹幕里有解答** ）
 
-https://www.bilibili.com/video/BV1554y1n7zv/?vd\_source=ceb9c29ca8792358f229b53eef0c1448
+https://www.bilibili.com/video/BV1554y1n7zv/?vd_source=ceb9c29ca8792358f229b53eef0c1448
 
 ### 显卡驱动安装
 #### 卸载显卡驱动(卸载干净)
@@ -800,7 +800,7 @@ https://developer.nvidia.com/cuda-toolkit-archive
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2024/03/30/image245.webp)
 
-我这里是Intel CPU(X86\_64架构或者叫amd64架构)，所以选择X86\_64。（AMD和Intel全是X86的，如果分不清，请看[Vinci机器人队单片机教程](/wiki/2023-10-09-stm32-freertos-jiao-cheng)）
+我这里是Intel CPU(X86_64架构或者叫amd64架构)，所以选择X86_64。（AMD和Intel全是X86的，如果分不清，请看[Vinci机器人队单片机教程](/wiki/2023-10-09-stm32-freertos-jiao-cheng)）
 
 我是Fedora41，所以选择了Fedora41 ,(你是RockyLinux要选择RockyLinux)如下图所示:
 
@@ -941,7 +941,7 @@ https://developer.nvidia.com/cuda-toolkit-archive
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2024/03/30/image254.webp)
 
-我这里是Intel CPU(X86\_64架构或者叫amd64架构)，所以选择X86\_64。（AMD和Intel全是X86的，如果分不清，请看[Vinci机器人队单片机教程](/wiki/2023-10-09-stm32-freertos-jiao-cheng)）
+我这里是Intel CPU(X86_64架构或者叫amd64架构)，所以选择X86_64。（AMD和Intel全是X86的，如果分不清，请看[Vinci机器人队单片机教程](/wiki/2023-10-09-stm32-freertos-jiao-cheng)）
 
 我是Debian12，所以选择了Debian12 ,(你是Ubuntu要选择Ubuntu)如下图所示，建议选择runfile文件进行安装。
 
@@ -1051,7 +1051,7 @@ https://developer.nvidia.cn/rdp/cudnn-archive#a-collapse805-111
 
 蓝色的是arm64(aarch64)架构的Ubuntu，是Ubuntu且CPU为arm64(aarch64)架构的可以选择下载。
 
-**我这里选择所有Linux X86\_64最通用的办法：**
+**我这里选择所有Linux X86_64最通用的办法：**
 
 下载好的：
 

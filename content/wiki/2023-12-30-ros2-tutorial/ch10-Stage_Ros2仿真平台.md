@@ -2,7 +2,7 @@
 title: "Stage_Ros2仿真平台"
 ---
 
-stage\_ros2是基于Stage模拟器的ROS2功能包，用于在虚拟环境中模拟和控制机器人的行为。它提供了强大的工具和通信接口，可用于开发、测试和验证机器人系统。通过stage\_ros2，用户可以轻松创建虚拟环境，并使用ROS 2发送指令控制机器人的运动，同时接收传感器数据。这个功能包可以帮助用户以更低的成本和风险进行机器人开发，提供了高效且灵活的机器人仿真环境。
+stage_ros2是基于Stage模拟器的ROS2功能包，用于在虚拟环境中模拟和控制机器人的行为。它提供了强大的工具和通信接口，可用于开发、测试和验证机器人系统。通过stage_ros2，用户可以轻松创建虚拟环境，并使用ROS 2发送指令控制机器人的运动，同时接收传感器数据。这个功能包可以帮助用户以更低的成本和风险进行机器人开发，提供了高效且灵活的机器人仿真环境。
 
 *stage使用手册：*
 
@@ -10,7 +10,7 @@ http://rtv.github.io/Stage/modules.html
 
 （ **可以不学** ，连ROS2官方都已经移除掉了Stage， **用更牛X的Gazebo更好** ，但学一学也问题不大）
 
-#### stage\_ros2安装与运行
+#### stage_ros2安装与运行
 1.安装
 
 因为ROS2官方已经移除掉了Stage，所以我们要通过源码编译手动安装，已经有大佬适配了ROS2版本的Stage：
@@ -34,7 +34,7 @@ git clone https://github.com/damuxt/stage_ros2.git
 
 2.节点说明
 
-`stage_ros2`节点是stage\_ros2功能包的核心节点之一。它通过加载world文件来创建一个仿真场景，包括地图、障碍物和机器人等元素。world文件描述了虚拟环境的属性，节点会根据文件中的描述构建对应的环境。stage\_ros2节点利用这个虚拟环境来模拟机器人的运动、感知和控制。通过该节点和world文件的结合，可以进行机器人的仿真和测试。
+`stage_ros2`节点是stage_ros2功能包的核心节点之一。它通过加载world文件来创建一个仿真场景，包括地图、障碍物和机器人等元素。world文件描述了虚拟环境的属性，节点会根据文件中的描述构建对应的环境。stage_ros2节点利用这个虚拟环境来模拟机器人的运动、感知和控制。通过该节点和world文件的结合，可以进行机器人的仿真和测试。
 
 3.使用
 
@@ -48,8 +48,8 @@ ros2 launch stage_ros2 my_house.launch.py
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1618.webp)
 
-#### stage\_ros2仿真框架搭建
-本节开始，我们将介绍如何通过stage\_ros2自定义仿真环境。
+#### stage_ros2仿真框架搭建
+本节开始，我们将介绍如何通过stage_ros2自定义仿真环境。
 
 1.准备工作
 
@@ -69,7 +69,7 @@ install(DIRECTORY launch world config DESTINATION share/${PROJECT_NAME})
 
 2.搭建代码框架
 
-在功能包的launch目录下，新建stage\_sim.launch.py文件，并输入如下内容：
+在功能包的launch目录下，新建stage_sim.launch.py文件，并输入如下内容：
 
 ```bash
 import os
@@ -89,7 +89,7 @@ return LaunchDescription([
     ])
 ```
 
-该launch文件将运行stage\_ros2节点，并加载world目录下的sim.world文件。
+该launch文件将运行stage_ros2节点，并加载world目录下的sim.world文件。
 
 在world目录下，新建sim.world文件，并输入如下内容：
 
@@ -149,32 +149,32 @@ threads                   0
 
 *   用于世界的识别名称，例如在图形用户界面的标题栏中使用。
 
-*   interval\_sim <float>
+*   interval_sim <float>
 
 *   每次调用 World::Update() 时运行的模拟时间量。每个模型都有其自己可配置的更新间隔，可以大于或小于此值，但比此值更短的间隔在图形用户界面或 World 更新回调中是不可见的。您可能不需要改变默认值100毫秒：此值在客户端内部使用，如Player和WebSim。
 
-*   quit\_time <float> 在模拟时间达到指定的秒数后停止模拟。在 libstage 中，World::Update() 返回 true。在带有图形用户界面的 Stage 中，模拟被暂停。在没有图形用户界面的 Stage 中，Stage 会退出。
+*   quit_time <float> 在模拟时间达到指定的秒数后停止模拟。在 libstage 中，World::Update() 返回 true。在带有图形用户界面的 Stage 中，模拟被暂停。在没有图形用户界面的 Stage 中，Stage 会退出。
 
 *   resolution <float> 底层位图模型的分辨率（以米为单位）。较大的值可以加快射线追踪速度，但会以碰撞检测和感知精度为代价。通常情况下，默认值是一个合理的选择。
 
-*   show\_clock <int>
+*   show_clock <int>
 
-*   如果非零，每经过 $show\_clock\_interval 次更新就在标准输出上打印模拟时间。这对于观察非 GUI 模拟的进展非常有用。
+*   如果非零，每经过 $show_clock_interval 次更新就在标准输出上打印模拟时间。这对于观察非 GUI 模拟的进展非常有用。
 
-*   show\_clock\_interval <int>
+*   show_clock_interval <int>
 
-*   设置在启用 $show\_clock 的情况下，在标准输出上打印时间之间的更新次数。默认值是每经过 10 秒模拟时间打印一次。较小的值会稍微降低模拟速度。
+*   设置在启用 $show_clock 的情况下，在标准输出上打印时间之间的更新次数。默认值是每经过 10 秒模拟时间打印一次。较小的值会稍微降低模拟速度。
 
 *   threads <int>
 
 *   要生成的工作线程数。一些模型可以并行更新（例如激光器、测距仪），在这里运行 2 个或更多线程可能会使模拟运行更快，取决于可用的 CPU 内核数量和世界文件的情况。如果您有启用并行的高分辨率模型（例如带有数百或数千个样本的激光器或大量模型），则每个内核使用一个线程。
 
-#### stage\_ros2设置窗体
+#### stage_ros2设置窗体
 stage 窗体由菜单栏和模拟世界的视图组成。我们可以放大和缩小视图，并滚动视图以查看模拟世界的更多内容。模拟的机器人设备、障碍物等被渲染为彩色多边形。窗体中还可以实现各种传感器和执行器模型的数据和配置的可视化。菜单则具有用于控制呈现哪些数据和配置的选项。本节我们将介绍如何设置以及操作stage窗体。
 
 1.设置窗体
 
-设置窗体相关参数，可以在stage\_sim.launch.py文件中添加如下内容：
+设置窗体相关参数，可以在stage_sim.launch.py文件中添加如下内容：
 
 ```bash
 
@@ -254,15 +254,15 @@ window
 
 *   世界坐标到像素坐标的比例（窗口缩放）。
 
-*   pcam\_loc \[<x:int><y:int><z:int> \]
+*   pcam_loc \[<x:int><y:int><z:int> \]
 
 *   透视摄像机的位置（以米为单位）。
 
-*   pcam\_angle \[<pitch:float><yaw:float> \]
+*   pcam_angle \[<pitch:float><yaw:float> \]
 
 *   透视摄像机的垂直和水平角度。
 
-*   pcam\_on<int>
+*   pcam_on<int>
 
 *   是否启用透视摄像机（0/1）。
 
@@ -302,14 +302,14 @@ window
 
 要保存世界的一系列截图，从视图菜单中选择“Save screenshots”选项以开始录制图像，然后再次从菜单中选择该选项以停止。
 
-#### stage\_ros2基本模型
+#### stage_ros2基本模型
 基本模型（model）模拟具有基本属性的对象；位置、大小、速度、颜色、对各种传感器的可见性等。基本模型还具有由线性列表组成的主体。在内部，基本模型被用作所有其他模型类型的基类。我们可以使用基本模型来模拟环境对象。在stage中，底盘模型、雷达模型、相机模型等都可以看作是基本模型的子类。
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1621.webp)
 
 1.添加基本模型
 
-在stage\_sim.launch.py文件中添加如下内容：
+在stage_sim.launch.py文件中添加如下内容：
 
 ```bash
 
@@ -331,7 +331,7 @@ define my_block model
 my_block( pose [ 0 4 0 90 ] color "red" bitmap "maps/ghost.png")
 ```
 
-上述代码中，直接使用默认的基础model创建了一个绿色模型对象，并且还自定义了继承自model的my\_block模型，然后创建了该模型对象。
+上述代码中，直接使用默认的基础model创建了一个绿色模型对象，并且还自定义了继承自model的my_block模型，然后创建了该模型对象。
 
 2.编译执行
 
@@ -388,7 +388,7 @@ model (
 
 *   velocity \[ x:<float> y:<float> z:<float> heading:<float> omega:<float> \] 指定模型的初始速度。请注意，如果模型撞到障碍物，其速度将被设置为零。
 
-*   velocity\_enable int (默认为0) 大多数模型忽略其速度状态。这样可以节省处理时间，因为大多数模型的速度永远不会被设置为非零值。一些子类（例如ModelPosition）会改变这个默认值，因为它们期望移动。用户可以在这里指定一个非零值来启用对该模型的速度控制。这与调用Model::VelocityEnable()的效果相同。
+*   velocity_enable int (默认为0) 大多数模型忽略其速度状态。这样可以节省处理时间，因为大多数模型的速度永远不会被设置为非零值。一些子类（例如ModelPosition）会改变这个默认值，因为它们期望移动。用户可以在这里指定一个非零值来启用对该模型的速度控制。这与调用Model::VelocityEnable()的效果相同。
 
 *   color <string> 使用X11数据库（rgb.txt）中的颜色名称指定对象的颜色。
 
@@ -396,34 +396,34 @@ model (
 
 *   ctrl <string> 指定模型的控制器模块及其参数字符串。例如，字符串"foo bar bash"将加载libfoo.so，其Init()函数将以整个字符串作为参数进行调用（包括库名称）。控制器需要解析字符串（如果需要参数）。
 
-*   fiducial\_return fiducial\_id <int> 如果非零，则通过fiducialfinder传感器检测到此模型。该值用作基准标识符。
+*   fiducial_return fiducial_id <int> 如果非零，则通过fiducialfinder传感器检测到此模型。该值用作基准标识符。
 
-*   fiducial\_key <int> 仅当模型和fiducialfinder的fiducial\_key值匹配时，fiducial\_id模型才会被fiducialfinder检测到。这允许您在同一环境中拥有几种独立类型的基准标识，每种类型只显示在为其"调谐"的fiducialfinders中。
+*   fiducial_key <int> 仅当模型和fiducialfinder的fiducial_key值匹配时，fiducial_id模型才会被fiducialfinder检测到。这允许您在同一环境中拥有几种独立类型的基准标识，每种类型只显示在为其"调谐"的fiducialfinders中。
 
-*   obstacle\_return <int> 如果为1，则此模型可以与具有此属性设置的其他模型发生碰撞。
+*   obstacle_return <int> 如果为1，则此模型可以与具有此属性设置的其他模型发生碰撞。
 
-*   ranger\_return <int> 如果为1，则该模型可以被ranger传感器检测到。
+*   ranger_return <int> 如果为1，则该模型可以被ranger传感器检测到。
 
-*   blob\_return <int> 如果为1，则该模型可以在blob\_finder中被检测到（取决于其颜色）。
+*   blob_return <int> 如果为1，则该模型可以在blob_finder中被检测到（取决于其颜色）。
 
-*   laser\_return <int> 如果为0，则此模型不会被激光传感器检测到。如果为1，则该模型在激光传感器中显示为正常（0）反射。如果为2，则显示为高（1）反射。
+*   laser_return <int> 如果为0，则此模型不会被激光传感器检测到。如果为1，则该模型在激光传感器中显示为正常（0）反射。如果为2，则显示为高（1）反射。
 
-*   gripper\_return <int> 如果为1，则该模型可以被夹爪夹取，并且可以通过与具有非零obstacle\_return的任何东西的碰撞来推动。
+*   gripper_return <int> 如果为1，则该模型可以被夹爪夹取，并且可以通过与具有非零obstacle_return的任何东西的碰撞来推动。
 
-*   gui\_nose <int> 如果为1，则在模型上绘制显示其朝向的鼻子（正X轴）。
+*   gui_nose <int> 如果为1，则在模型上绘制显示其朝向的鼻子（正X轴）。
 
-*   gui\_grid <int> 如果为1，则在模型上绘制比例网格。
+*   gui_grid <int> 如果为1，则在模型上绘制比例网格。
 
-*   gui\_outline <int> 如果为1，则在模型周围绘制边界框，指示其大小。
+*   gui_outline <int> 如果为1，则在模型周围绘制边界框，指示其大小。
 
-*   gui\_move <int> 如果为1，则模型可以在GUI窗口中通过鼠标移动。
+*   gui_move <int> 如果为1，则模型可以在GUI窗口中通过鼠标移动。
 
-#### stage\_ros2添加地图
+#### stage_ros2添加地图
 本节我们将在仿真环境中，添加一张全局地图，请先准备一张作为全局地图的图片。
 
 1.添加地图
 
-在stage\_sim.launch.py文件中添加如下内容：
+在stage_sim.launch.py文件中添加如下内容：
 
 ```bash
 
@@ -463,14 +463,14 @@ floorplan
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1623.webp)
 
-#### stage\_ros2添加机器人
+#### stage_ros2添加机器人
 本节将在仿真环境中添加一个由底盘、摄像头以及激光雷达组成的虚拟机器人。
 
 1.代码框架搭建
 
-在world目录下新建robot目录，robot目录中再创建car\_base.inc、camera.inc、laser.inc以及mycar.inc等文件，各文件作用如下：
+在world目录下新建robot目录，robot目录中再创建car_base.inc、camera.inc、laser.inc以及mycar.inc等文件，各文件作用如下：
 
-*   car\_base.inc：用于设置机器人底盘模块；
+*   car_base.inc：用于设置机器人底盘模块；
 
 *   camera.inc：用于设置机器人相机模块；
 
@@ -482,7 +482,7 @@ floorplan
 
 2.设置机器人底盘
 
-stage中的position模型可以以差速、全向或阿克曼的方式模拟移动机器人底盘。在car\_base.inc中输入如下代码：
+stage中的position模型可以以差速、全向或阿克曼的方式模拟移动机器人底盘。在car_base.inc中输入如下代码：
 
 ```bash
 
@@ -542,11 +542,11 @@ position(
 
 *   drive "diff", "omni" 或 "car" 选择差速转向模型、全向模式或类似汽车的阿克曼模式。
 
-*   localization "gps" 或 "odom" 如果选择 “gps”，位置模型将以完全准确的精度报告位置。如果选择 “odom”，将使用简单的里程计模型，并且位置数据会随时间与真实位置的差异而漂移。里程计模型由 odom\_error 属性参数化。
+*   localization "gps" 或 "odom" 如果选择 “gps”，位置模型将以完全准确的精度报告位置。如果选择 “odom”，将使用简单的里程计模型，并且位置数据会随时间与真实位置的差异而漂移。里程计模型由 odom_error 属性参数化。
 
-*   localization\_origin \[x y z theta\] 您可以使用 localization\_origin 参数来设置定位坐标系的原点。默认情况下，它将复制模型的初始姿态，因此机器人将报告相对于起始位置的位置。提示: 如果将 localization\_origin 设置为 \[0 0 0 0\] 并且定位方式为 “gps”，模型将返回其真实的全局位置。这种设置是不现实的，但在希望抽象定位细节的研究中很有用。
+*   localization_origin \[x y z theta\] 您可以使用 localization_origin 参数来设置定位坐标系的原点。默认情况下，它将复制模型的初始姿态，因此机器人将报告相对于起始位置的位置。提示: 如果将 localization_origin 设置为 \[0 0 0 0\] 并且定位方式为 “gps”，模型将返回其真实的全局位置。这种设置是不现实的，但在希望抽象定位细节的研究中很有用。
 
-*   odom\_error \[x y z theta\] 在选择 “odom” 定位方式时用到的里程计误差模型参数，每个值是计算里程计位置估计时积分 x、y 和 theta 速度的误差比例的最大值。对于每个轴，如果在此处指定的值为 E，则实际比例在启动时在 -E/2 到 +E/2 的范围内随机选择。请注意，由于舍入误差，将这些值设置为零并不能让定位完美无误 - 为了实现这一点，您需要选择 “gps” 定位方式。
+*   odom_error \[x y z theta\] 在选择 “odom” 定位方式时用到的里程计误差模型参数，每个值是计算里程计位置估计时积分 x、y 和 theta 速度的误差比例的最大值。对于每个轴，如果在此处指定的值为 E，则实际比例在启动时在 -E/2 到 +E/2 的范围内随机选择。请注意，由于舍入误差，将这些值设置为零并不能让定位完美无误 - 为了实现这一点，您需要选择 “gps” 定位方式。
 
 3.设置摄像头
 
@@ -629,7 +629,7 @@ define my_laser ranger
 
 *   samples <int> 每次扫描的激光样本数量。
 
-*   range\_max <float> 激光扫描仪所报告的最大距离，以米为单位。扫描仪将不会检测超出此范围的物体。
+*   range_max <float> 激光扫描仪所报告的最大距离，以米为单位。扫描仪将不会检测超出此范围的物体。
 
 *   fov <float> 激光扫描仪的角度视野。
 
@@ -652,7 +652,7 @@ define my_car car_base(
 )
 ```
 
-my\_car模型是在car\_base模型之上，集成了my\_camera和my\_laser模型。
+my_car模型是在car_base模型之上，集成了my_camera和my_laser模型。
 
 6.在仿真环境中生成机器人
 
@@ -684,12 +684,12 @@ my_car(
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1625.webp)
 
-#### stage\_ros2添加多机器人
-在stage\_ros2中也可以很方便的生成多个机器人。
+#### stage_ros2添加多机器人
+在stage_ros2中也可以很方便的生成多个机器人。
 
 1.生成多个机器人
 
-在sim.world中还可以继续创建my\_car对象以生成新的机器人模型，添加代码如下：
+在sim.world中还可以继续创建my_car对象以生成新的机器人模型，添加代码如下：
 
 ```bash
 my_car(

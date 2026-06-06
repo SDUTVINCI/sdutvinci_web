@@ -38,7 +38,7 @@ title: "ROS2其他通信机制"
 
 分布式通信是指可以通过网络在不同主机之间实现数据交互的一种通信策略。
 
-ROS2本身是一个分布式通信框架，可以很方便的实现不同设备之间的通信，ROS2所基于的中间件是DDS，当处于同一网络中时，通过DDS的域ID机制(ROS\_DOMAIN\_ID)可以实现分布式通信，大致流程是：在启动节点之前，可以设置域ID的值，不同节点如果域ID相同，那么可以自由发现并通信，反之，如果域ID值不同，则不能实现。默认情况下，所有节点启动时所使用的域ID为0，换言之，只要保证在同一网络，你不需要做任何配置，不同ROS2设备上的不同节点即可实现分布式通信。
+ROS2本身是一个分布式通信框架，可以很方便的实现不同设备之间的通信，ROS2所基于的中间件是DDS，当处于同一网络中时，通过DDS的域ID机制(ROS_DOMAIN_ID)可以实现分布式通信，大致流程是：在启动节点之前，可以设置域ID的值，不同节点如果域ID相同，那么可以自由发现并通信，反之，如果域ID值不同，则不能实现。默认情况下，所有节点启动时所使用的域ID为0，换言之，只要保证在同一网络，你不需要做任何配置，不同ROS2设备上的不同节点即可实现分布式通信。
 
 **作用**
 
@@ -76,9 +76,9 @@ ID不一样就无法正常通信，和在ROS1内需要指定ROS Master一样。
 
 **注意**
 
-在设置ROS\_DOMAIN\_ID的值时并不是随意的，也是有一定约束的：
+在设置ROS_DOMAIN_ID的值时并不是随意的，也是有一定约束的：
 
-1.  建议ROS\_DOMAIN\_ID的取值在\[0,101\] 之间，包含0和101；
+1.  建议ROS_DOMAIN_ID的取值在\[0,101\] 之间，包含0和101；
 
 2.  每个域ID内的节点总数是有限制的，需要小于等于120个；
 
@@ -203,7 +203,7 @@ CmakeLists无需修改
 
 先把12，13行删除
 
-<exec\_depend>xxxxxx</exec\_depend>
+<exec_depend>xxxxxx</exec_depend>
 
 所要依赖的功能包名
 
@@ -280,7 +280,7 @@ rqt_graph
 ros2 run turtlesim turtlesim_node --ros-args --remap __ns:=/t1
 ```
 
-ros2 run 功能包名 节点名 --ros-args --remap \_\_ns:=/命名空间
+ros2 run 功能包名 节点名 --ros-args --remap __ns:=/命名空间
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image895.webp)
 
@@ -290,11 +290,11 @@ ros2 run 功能包名 节点名 --ros-args --remap \_\_ns:=/命名空间
 ros2 run turtlesim turtlesim_node --ros-args --remap __name:=turtlesim2
 ```
 
-ros2 run 功能包名 节点名 --ros-args --remap \_\_name:=别名
+ros2 run 功能包名 节点名 --ros-args --remap __name:=别名
 
 or
 
-ros2 run 功能包名 节点名 --ros-args --remap \_\_node:=别名
+ros2 run 功能包名 节点名 --ros-args --remap __node:=别名
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image897.webp)
 
@@ -525,7 +525,7 @@ int main(int argc, char ** argv)
 ros2 run turtlesim turtlesim_node --ros-args --remap __ns:=/t1
 ```
 
-ros2 run 功能包名 节点名 --ros-args --remap \_\_ns:=/命名空间
+ros2 run 功能包名 节点名 --ros-args --remap __ns:=/命名空间
 
 这种加命名空间的方式，不仅对节点重名生效，当然对话题名称依然生效。
 
@@ -545,7 +545,7 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard
 
 这个是打开控制机器人运动的节点
 
-ros2 run teleop\_twist\_keyboard teleop\_twist\_keyboard
+ros2 run teleop_twist_keyboard teleop_twist_keyboard
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image944.webp)
 
@@ -559,9 +559,9 @@ ros2 run teleop\_twist\_keyboard teleop\_twist\_keyboard
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image947.webp)
 
-乌龟接收的话题是/turtle1/cmd\_vel，命名空间是/turtle1
+乌龟接收的话题是/turtle1/cmd_vel，命名空间是/turtle1
 
-而控制乌龟运动的是/cmd\_vel，命名空间不同，
+而控制乌龟运动的是/cmd_vel，命名空间不同，
 
 所以我们要把两者命名空间弄成一样的。
 
@@ -813,7 +813,7 @@ int main(int argc, char ** argv)
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image991.webp)
 
-因为是int64\_t类型的，所以我们后面加个L，这是5亿纳秒，也就是0.5秒。
+因为是int64_t类型的，所以我们后面加个L，这是5亿纳秒，也就是0.5秒。
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image992.webp)
 
@@ -821,7 +821,7 @@ int main(int argc, char ** argv)
 
 获取当前时刻有两种方式，
 
-一个是this->get\_clock()->now()，
+一个是this->get_clock()->now()，
 
 另一个是this->now();
 

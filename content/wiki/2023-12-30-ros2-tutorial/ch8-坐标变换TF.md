@@ -75,7 +75,7 @@ sudo apt install python3-transforms3d
 ros2 launch turtle_tf2_py turtle_tf2_demo.launch.py
 ```
 
-该命令会启动 turtlesim\_node 节点，turtlesim\_node 节点中自带一只小乌龟 turtle1，除此之外还会新生成一只乌龟 turtle2，turtle2 会运行至 turtle1 的位置。
+该命令会启动 turtlesim_node 节点，turtlesim_node 节点中自带一只小乌龟 turtle1，除此之外还会新生成一只乌龟 turtle2，turtle2 会运行至 turtle1 的位置。
 
 终端2输入如下命令：
 
@@ -94,7 +94,7 @@ ros2 run turtlesim turtle_teleop_key
 
 前者用于描述某一时刻两个坐标系之间相对关系的接口，后者用于描述某一时刻坐标系内某个坐标点的位置的接口。在坐标变换中，会经常性的使用到坐标系相对关系以及坐标点信息。
 
-##### geometry\_msgs/msg/TransformStamped
+##### geometry_msgs/msg/TransformStamped
 通过如下命令查看接口定义：
 
 ```bash
@@ -158,7 +158,7 @@ https://x-io.co.uk/open-source-imu-and-ahrs-algorithms/
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1280.webp)
 
-##### geometry\_msgs/msg/PointStamped
+##### geometry_msgs/msg/PointStamped
 通过如下命令查看接口定义：
 
 ```bash
@@ -200,7 +200,7 @@ Point point                          # 三维坐标
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1282.webp)
 
-**案例2：** 启动 turtlesim\_node，设该节点中窗体有一个世界坐标系(左下角为坐标系原点)，乌龟是另一个坐标系，乌龟可以通过键盘控制运动，请动态发布乌龟坐标系与世界坐标系的相对关系。
+**案例2：** 启动 turtlesim_node，设该节点中窗体有一个世界坐标系(左下角为坐标系原点)，乌龟是另一个坐标系，乌龟可以通过键盘控制运动，请动态发布乌龟坐标系与世界坐标系的相对关系。
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1283.webp)
 
@@ -237,13 +237,13 @@ ros2 pkg create cpp03_tf_broadcaster --build-type ament_cmake --dependencies rcl
 
 tf2功能包内包含了四元数与欧拉角的转换算法。
 
-tf2\_ros功能包内包含了广播对象。
+tf2_ros功能包内包含了广播对象。
 
-geometry\_msgs功能包消息载体
+geometry_msgs功能包消息载体
 
 turtlesim功能包是获取乌龟🐢位姿
 
-#### 静态广播器\_命令行实现
+#### 静态广播器_命令行实现
 ##### 1.静态广播器工具
 在 `tf2_ros`功能包中提供了一个名为`static_transform_publisher`的可执行文件，通过该文件可以直接广播静态坐标系关系，其使用语法如下。
 
@@ -280,7 +280,7 @@ ros2 run tf2_ros static_transform_publisher --x x --y y --z z --qx qx --qy qy --
 注意：在上述两种格式中除了用于表示父级坐标系的`--frame-id`和用于表示子级坐标系的`--child-frame-id`之外，其他参数都是可选的，如果未指定特定选项，那么将直接使用默认值。
 
 ##### 2.静态广播器工具使用
-打开两个终端，终端1输入如下命令发布雷达（laser）相对于底盘（base\_link）的静态坐标变换（重合）：
+打开两个终端，终端1输入如下命令发布雷达（laser）相对于底盘（base_link）的静态坐标变换（重合）：
 
 ```bash
 ros2 run tf2_ros static_transform_publisher --frame-id base_link --child-frame-id laser
@@ -290,7 +290,7 @@ ros2 run tf2_ros static_transform_publisher --frame-id base_link --child-frame-i
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1287.webp)
 
-base\_link是父级参考系
+base_link是父级参考系
 
 laser是子级参考系
 
@@ -299,7 +299,7 @@ laser是子级参考系
 ##### 3.rviz2 查看坐标系关系
 新建终端，通过命令`rviz2`打开 rviz2 并配置相关插件查看坐标变换消息：
 
-1.  将 Global Options 中的 Fixed Frame 设置为 base\_link；
+1.  将 Global Options 中的 Fixed Frame 设置为 base_link；
 
 2.  点击 add 按钮添加 TF 插件；
 
@@ -311,13 +311,13 @@ laser是子级参考系
 
 如图，两个参考系重合。
 
-打开两个终端，终端1输入如下命令发布雷达（laser）相对于底盘（base\_link）的静态坐标变换：
+打开两个终端，终端1输入如下命令发布雷达（laser）相对于底盘（base_link）的静态坐标变换：
 
 ```bash
 ros2 run tf2_ros static_transform_publisher --x 0.4 --y 0 --z 0.2 --yaw 0.5 --roll 0 --pitch 0 --frame-id base_link --child-frame-id laser
 ```
 
-终端2输入如下命令发布摄像头（camera）相对于底盘（base\_link）的静态坐标变换：
+终端2输入如下命令发布摄像头（camera）相对于底盘（base_link）的静态坐标变换：
 
 ```bash
 ros2 run tf2_ros static_transform_publisher --x -0.5 --y 0 --z 0.4 --yaw 0 --roll 0 --pitch 0 --frame-id base_link --child-frame-id camera
@@ -325,7 +325,7 @@ ros2 run tf2_ros static_transform_publisher --x -0.5 --y 0 --z 0.4 --yaw 0 --rol
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1289.webp)
 
-#### 静态广播器\_C++实现
+#### 静态广播器_C++实现
 ##### 框架搭建
 ```cmake
 find_package(ament_cmake REQUIRED)
@@ -475,7 +475,7 @@ x()和getx()都是获取四元数x。（y，z，w以此类推）
 colcon build --packages-select cpp03_tf_broadcaster
 ```
 
-当前工作空间下，启动两个终端，终端1输入如下命令发布雷达（laser）相对于底盘（base\_link）的静态坐标变换：
+当前工作空间下，启动两个终端，终端1输入如下命令发布雷达（laser）相对于底盘（base_link）的静态坐标变换：
 
 ```bash
 . install/setup.bash 
@@ -492,7 +492,7 @@ ros2 run cpp03_tf_broadcaster demo01_static_tf_broadcaster 0.4 0 0.2 0 0 0 base_
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1300.webp)
 
-通过查看该类源码，就得知，话题为/tf\_static
+通过查看该类源码，就得知，话题为/tf_static
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1301.webp)
 
@@ -508,7 +508,7 @@ ros2 run cpp03_tf_broadcaster demo01_static_tf_broadcaster 0.4 0 0.2 0 0 0 base_
 
 这个是订阅方
 
-#### 动态广播器\_C++实现
+#### 动态广播器_C++实现
 ##### 框架搭建
 CMakeLists.txt 文件需要添加如下内容：
 
@@ -639,7 +639,7 @@ int main(int argc, char * argv[])
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1309.webp)
 
-#### 坐标点发布\_C++实现
+#### 坐标点发布_C++实现
 ##### 案例与分析
 **案例需求**
 
@@ -751,13 +751,13 @@ int main(int argc, char const *argv[])
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1311.webp)
 
-创建定时器用create\_wall\_time()函数，要填时间间隔和对应的回调函数。
+创建定时器用create_wall_time()函数，要填时间间隔和对应的回调函数。
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1312.webp)
 
 **执行**
 
-当前工作空间下，启动两个终端，终端1输入如下命令发布雷达（laser）相对于底盘（base\_link）的静态坐标变换：
+当前工作空间下，启动两个终端，终端1输入如下命令发布雷达（laser）相对于底盘（base_link）的静态坐标变换：
 
 ```bash
 . install/setup.bash 
@@ -792,11 +792,11 @@ ros2 run cpp03_tf_broadcaster demo03_point_publisher
 
 ### 坐标变换监听
 #### 案例与分析
-**案例1：** 在 **5.3 坐标变换广播** 中发布了laser相对于base\_link和camra相对于base\_link的坐标系关系，请求解laser相对于camera的坐标系关系。
+**案例1：** 在 **5.3 坐标变换广播** 中发布了laser相对于base_link和camra相对于base_link的坐标系关系，请求解laser相对于camera的坐标系关系。
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1316.webp)
 
-**案例2：** 在 **5.3 坐标变换广播** 中发布了laser相对于base\_link的坐标系关系且发布了laser坐标系下的障碍物的坐标点数据，请求解base\_link坐标系下该障碍物的坐标。
+**案例2：** 在 **5.3 坐标变换广播** 中发布了laser相对于base_link的坐标系关系且发布了laser坐标系下的障碍物的坐标点数据，请求解base_link坐标系下该障碍物的坐标。
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1317.webp)
 
@@ -826,7 +826,7 @@ ros2 run cpp03_tf_broadcaster demo03_point_publisher
 ros2 pkg create cpp04_tf_listener --build-type ament_cmake --dependencies rclcpp tf2 tf2_ros geometry_msgs --node-name demo01_tf_listener
 ```
 
-#### 坐标 **系** 变换监听\_C++
+#### 坐标 **系** 变换监听_C++
 ##### 实例分析
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1318.webp)
 
@@ -929,9 +929,9 @@ int main(int argc, char const *argv[])
 
 实现坐标系转换的核心函数就是lookuptransform()
 
-target\_frame就是父级
+target_frame就是父级
 
-source\_frame就是子级
+source_frame就是子级
 
 time是时间，一般都写最新时刻的
 
@@ -957,13 +957,13 @@ time是时间，一般都写最新时刻的
 
 这种报错要改为C风格字符串
 
-启动三个终端，终端1输入如下命令发布雷达（laser）相对于底盘（base\_link）的静态坐标变换：
+启动三个终端，终端1输入如下命令发布雷达（laser）相对于底盘（base_link）的静态坐标变换：
 
 ```bash
 ros2 run tf2_ros static_transform_publisher --frame-id base_link --child-frame-id camera --x -0.5 --z -0.4
 ```
 
-终端2输入如下命令发布摄像头（camera）相对于底盘（base\_link）的静态坐标变换：
+终端2输入如下命令发布摄像头（camera）相对于底盘（base_link）的静态坐标变换：
 
 ```bash
 ros2 run tf2_ros static_transform_publisher --frame-id base_link --child-frame-id laser--x 0.4 --z 0.2
@@ -990,11 +990,11 @@ ros2 run cpp04_tf_listener demo01_tf_listener
 
 当所有广播都跑起来时，才会正常转换。
 
-#### 坐标 **点** 变换监听\_C++
+#### 坐标 **点** 变换监听_C++
 ##### 实现框架
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1334.webp)
 
-求laser测得的坐标点到base\_link的距离
+求laser测得的坐标点到base_link的距离
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1335.webp)
 
@@ -1153,7 +1153,7 @@ int main(int argc, char * argv[]){
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1342.webp)
 
-在当前工作空间下，启动三个终端，终端1输入如下命令发布雷达（laser）相对于底盘（base\_link）的静态坐标变换：
+在当前工作空间下，启动三个终端，终端1输入如下命令发布雷达（laser）相对于底盘（base_link）的静态坐标变换：
 
 ```bash
 . install/setup.bash 
@@ -1174,7 +1174,7 @@ ros2 run cpp03_tf_broadcaster demo03_point_publisher
 ros2 run cpp04_tf_listener demo02_message_filter
 ```
 
-终端3将输出坐标点相对于 base\_link 的坐标，具体结果请参考案例2。
+终端3将输出坐标点相对于 base_link 的坐标，具体结果请参考案例2。
 
 按顺序依次发布
 
@@ -1187,15 +1187,15 @@ ros2 run cpp04_tf_listener demo02_message_filter
 
 `tf2_ros`包中提供的常用节点如下：
 
-*   static\_transform\_publisher：该节点用于广播静态坐标变换；（用过很多次了）
+*   static_transform_publisher：该节点用于广播静态坐标变换；（用过很多次了）
 
-*   tf2\_monitor：该节点用于打印所有或特定坐标系的发布频率与网络延迟；
+*   tf2_monitor：该节点用于打印所有或特定坐标系的发布频率与网络延迟；
 
-*   tf2\_echo：该节点用于打印特定坐标系的平移旋转关系。
+*   tf2_echo：该节点用于打印特定坐标系的平移旋转关系。
 
 `tf2_tools`包中提供的节点如下：
 
-*   view\_frames：该节点可以生成显示坐标系关系的 pdf 文件，该文件包含树形结构的坐标系图谱。
+*   view_frames：该节点可以生成显示坐标系关系的 pdf 文件，该文件包含树形结构的坐标系图谱。
 
 上述诸多工具中，功能包`tf2_ros`中的`static_transform_publisher`节点在 **静态广播器（命令）** 一节中已有详细说明，本节不再介绍。
 
@@ -1238,7 +1238,7 @@ ros2 run cpp03_tf_broadcaster demo02_dynamic_tf_broadcaster
 
 以上是准备工作
 
-##### 1.tf2\_monitor
+##### 1.tf2_monitor
 ###### 1.1打印所有坐标系的发布频率与网络延迟
 终端执行命令：
 
@@ -1269,7 +1269,7 @@ ros2 run tf2_ros tf2_monitor camera laser
 
 刚开始在缓存里拿不到数据抛错很正常。
 
-##### 2.tf2\_echo
+##### 2.tf2_echo
 打印两个坐标系的平移旋转关系。
 
 终端执行命令：
@@ -1290,7 +1290,7 @@ ros2 run tf2_ros tf2_echo world turtle1
 
 当龟男🐢🚹动弹的时候，数值也会发生改变。
 
-##### 3.view\_frames（常用）
+##### 3.view_frames（常用）
 以图形化的方式显示坐标系关系。
 
 终端执行命令：
@@ -1299,7 +1299,7 @@ ros2 run tf2_ros tf2_echo world turtle1
 ros2 run tf2_tools view_frames
 ```
 
-运行结果：将会在**当前目录**下生成 frames\_xxxx.gv 与 frames\_xxxx.pdf 文件，其中 xxxx 为时间戳。打开 pdf 文件显示如下内容：
+运行结果：将会在**当前目录**下生成 frames_xxxx.gv 与 frames_xxxx.pdf 文件，其中 xxxx 为时间戳。打开 pdf 文件显示如下内容：
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1350.webp)
 

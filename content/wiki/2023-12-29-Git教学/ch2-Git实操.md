@@ -198,7 +198,7 @@ ls
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/29/image23.webp)
 
-可以发现，在route2分支中被删掉的test.md文件回来了，但是同样被删掉的vinci\_sercet.py文件没回来，是因为该文件在提交时被.gitignore文件屏蔽了，不会被提交到本地仓库
+可以发现，在route2分支中被删掉的test.md文件回来了，但是同样被删掉的vinci_sercet.py文件没回来，是因为该文件在提交时被.gitignore文件屏蔽了，不会被提交到本地仓库
 
 8.  删除分支
 

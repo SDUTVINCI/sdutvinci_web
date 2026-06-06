@@ -138,7 +138,7 @@ su -
 
 上面下载key的时候如果卡住了，那就是github又抽风了，很正常的问题，可以选择科学\*上网([科学机场教程](https://sdutvincirobot.feishu.cn/wiki/HnjswlR8NiVjVgkbn6hcAlwzn2e))解决，如果还解决不了，可以通过下方教程修改hosts。
 
-https://blog.csdn.net/qq\_40584960/article/details/117963644?sharetype=blog&shareId=117963644&sharerefer=APP&sharesource=qq\_33274985&sharefrom=link
+https://blog.csdn.net/qq_40584960/article/details/117963644?sharetype=blog&shareId=117963644&sharerefer=APP&sharesource=qq_33274985&sharefrom=link
 
 成功下载key之后，继续往下弄。
 
@@ -526,7 +526,7 @@ rosdep install --from-paths src --ignore-src -y --skip-keys "fastcdr rti-connext
 
 6.  编译ROS2
 
-在ros\_jazzy目录下，打开终端，跑下面命令。
+在ros_jazzy目录下，打开终端，跑下面命令。
 
 ```bash
 colcon build --symlink-install
@@ -585,7 +585,7 @@ source ~/.bashrc
 
 也可以不安装进阶得东西，学到啥再安装啥就可以，当然也有想一劳永逸的同学，所以下面也会列出来最常用的ros2包和环境配置供大家一次性安装。
 
-https://index.ros.org/?search\_packages=true
+https://index.ros.org/?search_packages=true
 
 #### 安装进阶的包
 以下是一些ROS2自带的导航算法和仿真环境等等的包，下方将列出这些包。
@@ -676,9 +676,9 @@ sudo apt update && sudo apt install \
 ###### 黄色的包
 以安装ros-jazzy-xacro，ros-jazzy-joint-state-publisher，ros-jazzy-joint-state-publisher-gui这三个包为例，其他的包一样操作。
 
-https://index.ros.org/?search\_packages=true
+https://index.ros.org/?search_packages=true
 
-进入上面的网站，在下图中选择对应版本，比如我是JAZZY，然后在搜索框中搜索xacro，joint\_state\_publisher，joint\_state\_publisher\_gui
+进入上面的网站，在下图中选择对应版本，比如我是JAZZY，然后在搜索框中搜索xacro，joint_state_publisher，joint_state_publisher_gui
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image64.webp)
 
@@ -690,11 +690,11 @@ https://index.ros.org/?search\_packages=true
 
 找到对应版本的xacro，然后仓库地址是checkout URI，分支是vcs version,你可以使用git clone一个一个克隆下来，但这是巨麻烦的一件事，所以我们选择ROS2提供给我们的vcs命令进行下载包的源码。
 
-首先，进入自己的ros2\_jazzy文件并打开一个终端
+首先，进入自己的ros2_jazzy文件并打开一个终端
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image67.webp)
 
-并创建一个.repos文件，文件名随便起，比如我的叫my\_ros2\_jazzy\_packages.repos
+并创建一个.repos文件，文件名随便起，比如我的叫my_ros2_jazzy_packages.repos
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image68.webp)
 
@@ -716,7 +716,7 @@ repositories:
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image70.webp)
 
-上图说明joint\_state\_publisher和joint\_state\_publisher\_gui其实是一个仓库，所以我们只需要克隆一个仓库。
+上图说明joint_state_publisher和joint_state_publisher_gui其实是一个仓库，所以我们只需要克隆一个仓库。
 
 然后vcs version也就是git的分支是ros2。
 
@@ -736,7 +736,7 @@ repositories:
 
 但我先以这俩包做个例子。
 
-在ros2\_jazzy目录下的终端：
+在ros2_jazzy目录下的终端：
 
 ```bash
 vcs import src < my_ros2_jazzy_packages.repos
@@ -797,20 +797,20 @@ https://github.com/tungchiahui/ros-docker/tree/main/repos
 ###### 蓝色的包
 蓝色的包大体的方式是和黄色一样的，只不过蓝色的包在下载完源码后，还需要修改下源码里的文件，再进行编译。
 
-如vision\_opencv的cv\_bridge:请看下方OpenCV章节的CV\_Bridge。
+如vision_opencv的cv_bridge:请看下方OpenCV章节的CV_Bridge。
 
 ##### 常见问题
 1.  libogre-dev找不到
 
 Gazebo的渲染引擎，在debian12中用libogre-dev搜不到，必须用libogre-1.12-dev才能搜到。
 
-2.  nav2\_mppi\_controller里有个被当成空指针了，警告成错误了。
+2.  nav2_mppi_controller里有个被当成空指针了，警告成错误了。
 
-解决在nav2\_mppi\_controller的cmakelists里添加上`add_compile_options(-Wno-error=null-dereference)`即可。
+解决在nav2_mppi_controller的cmakelists里添加上`add_compile_options(-Wno-error=null-dereference)`即可。
 
-3.  nav2\_system\_tests里有个内存重叠警告。
+3.  nav2_system_tests里有个内存重叠警告。
 
-解决在nav2\_system\_tests的cmakelists里添加上下面的几行即可。
+解决在nav2_system_tests的cmakelists里添加上下面的几行即可。
 
 ```bash
 if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
@@ -867,7 +867,7 @@ export ROS_DOMAIN_ID=6
 #export GZ_SIM_RESOURCE_PATH=$GZ_SIM_RESOURCE_PATH:/home/tungchiahui/UserFloder/MySource/ROS_WS/gazebo_models:/home/tungchiahui/UserFloder/MySource/ROS_WS/ign_models
 ```
 
-注意，Gazebo资源包在不同ROS2版本可能宏的名称不同，如在ROS2Humble里是IGN\_GAZEBO\_RESOURCE\_PATH，在ROS2Jazzy里是GZ\_SIM\_RESOURCE\_PATH。（往后的ROS2版本估计都是GZ\_SIM\_RESOURCE\_PATH）（详见下方Gazebo教程）
+注意，Gazebo资源包在不同ROS2版本可能宏的名称不同，如在ROS2Humble里是IGN_GAZEBO_RESOURCE_PATH，在ROS2Jazzy里是GZ_SIM_RESOURCE_PATH。（往后的ROS2版本估计都是GZ_SIM_RESOURCE_PATH）（详见下方Gazebo教程）
 
 ##### 源码方式
 与apt方式相同，但是需要把加载ROS2环境的那个setup.bash路径设置为你的ros2安装路径。

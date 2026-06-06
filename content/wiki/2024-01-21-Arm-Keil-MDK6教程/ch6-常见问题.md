@@ -25,7 +25,7 @@ title: "常见问题"
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2024/01/21/image119.webp)
 
-将这个GCC文件夹里的ARM\_CM3文件夹复制到 **工程文件夹** 对应的RVDS文件夹下。
+将这个GCC文件夹里的ARM_CM3文件夹复制到 **工程文件夹** 对应的RVDS文件夹下。
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2024/01/21/image120.webp)
 

@@ -210,7 +210,7 @@ https://www.ventoy.net/cn/
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2024/03/30/image46.webp)
 
-##### X86\_64(amd64)
+##### X86_64(amd64)
 1.  Ubuntu KDE 22.04（Kubuntu）更推荐
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2024/03/30/image47.webp)

@@ -6,7 +6,7 @@ title: "Webots仿真平台"
 
 可以SolidWorks转URDF（ROS官方提供sw2udfo工具），再URDF转Webots（webots官方提供urdf2webots工具）。
 
-https://github.com/ros/solidworks\_urdf\_exporter
+https://github.com/ros/solidworks_urdf_exporter
 
 https://github.com/cyberbotics/urdf2webots
 

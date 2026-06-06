@@ -451,15 +451,15 @@ cv::Mat cv::imread(const String &filename,
 表2-3 imread()函数读取图像形式参数
 | 标志参数                          | 简记  | 作用                                                           |
 | :---------------------------- | :-- | :----------------------------------------------------------- |
-| IMREAD\_UNCHANGED             | -1  | 按照图像原样读取，保留Alpha通道（第4通道）                                     |
-| IMREAD\_GRAYSCALE             | 0   | 将图像转成单通道灰度图像后读取                                              |
-| IMREAD\_COLOR                 | 1   | 将图像转换成3通道BGR彩色图像                                             |
-| IMREAD\_ANYDEPTH              | 2   | 保留原图像的16位、32位深度，不声明该参数则转成8位读取                                |
-| IMREAD\_ANYCOLOR              | 4   | 以任何可能的颜色读取图像                                                 |
-| IMREAD\_LOAD\_GDAL            | 8   | 使用gdal驱动程序加载图像                                               |
-| IMREAD\_REDUCED\_GRAYSCALE\_2 | 16  | 将图像转成单通道灰度图像，尺寸缩小1/2。可以更改最后一位数字实现缩小1/4（最后一位改为4）和1/8（最后一位改为8） |
-| IMREAD\_REDUCED\_COLOR\_2     | 17  | 将图像转成3通道彩色图像，尺寸缩小1/2。可以更改最后一位数字实现缩小1/4（最后一位改为4）和1/8（最后一位改为8） |
-| IMREAD\_IGNORE\_ORIENTATION   | 128 | 不以EXIF的方向旋转图像                                                |
+| IMREAD_UNCHANGED             | -1  | 按照图像原样读取，保留Alpha通道（第4通道）                                     |
+| IMREAD_GRAYSCALE             | 0   | 将图像转成单通道灰度图像后读取                                              |
+| IMREAD_COLOR                 | 1   | 将图像转换成3通道BGR彩色图像                                             |
+| IMREAD_ANYDEPTH              | 2   | 保留原图像的16位、32位深度，不声明该参数则转成8位读取                                |
+| IMREAD_ANYCOLOR              | 4   | 以任何可能的颜色读取图像                                                 |
+| IMREAD_LOAD_GDAL            | 8   | 使用gdal驱动程序加载图像                                               |
+| IMREAD_REDUCED_GRAYSCALE_2 | 16  | 将图像转成单通道灰度图像，尺寸缩小1/2。可以更改最后一位数字实现缩小1/4（最后一位改为4）和1/8（最后一位改为8） |
+| IMREAD_REDUCED_COLOR_2     | 17  | 将图像转成3通道彩色图像，尺寸缩小1/2。可以更改最后一位数字实现缩小1/4（最后一位改为4）和1/8（最后一位改为8） |
+| IMREAD_IGNORE_ORIENTATION   | 128 | 不以EXIF的方向旋转图像                                                |
 
 注意：在默认情况下，读取图像的像素数目必须小于2³⁰，这个要求在绝大多数图像处理领域是不受影响的，但是卫星遥感图像、超高分辨率图像的像素数目可能会超过这个阈值。可以通过修改系统变量中的OPENCV_IO_MAX_IMAGE_PIXELS参数调整能够读取的最大像素数目。
 
@@ -485,14 +485,14 @@ void cv::namedWindow(const String &winname,
 表2-4 namedWindow()函数窗口属性标志参数
 | 标志参数                  | 简记         | 作用                   |
 | :-------------------- | :--------- | :------------------- |
-| WINDOW\_NORMAL        | 0x00000000 | 显示图像后，允许用户随意调整窗口大小   |
-| WINDOW\_AUTOSIZE      | 0x00000001 | 根据图像大小显示窗口，不允许用户调整大小 |
-| WINDOW\_OPENGL        | 0x00001000 | 创建窗口的时候会支持OpenGL     |
-| WINDOW\_FULLSCREEN    | 1          | 全屏显示窗口               |
-| WINDOW\_FREERATIO     | 0x00000100 | 调整图像尺寸以充满窗口          |
-| WINDOW\_KEEPRATIO     | 0x00000000 | 保持图像的比例              |
-| WINDOW\_GUI\_EXPANDED | 0x00000000 | 创建的窗口允许添加工具栏和状态栏     |
-| WINDOW\_GUI\_NORMAL   | 0x00000010 | 创建没有状态栏和工具栏的窗口       |
+| WINDOW_NORMAL        | 0x00000000 | 显示图像后，允许用户随意调整窗口大小   |
+| WINDOW_AUTOSIZE      | 0x00000001 | 根据图像大小显示窗口，不允许用户调整大小 |
+| WINDOW_OPENGL        | 0x00001000 | 创建窗口的时候会支持OpenGL     |
+| WINDOW_FULLSCREEN    | 1          | 全屏显示窗口               |
+| WINDOW_FREERATIO     | 0x00000100 | 调整图像尺寸以充满窗口          |
+| WINDOW_KEEPRATIO     | 0x00000000 | 保持图像的比例              |
+| WINDOW_GUI_EXPANDED | 0x00000000 | 创建的窗口允许添加工具栏和状态栏     |
+| WINDOW_GUI_NORMAL   | 0x00000010 | 创建没有状态栏和工具栏的窗口       |
 
 #### 图像显示函数imshow
 
@@ -590,18 +590,18 @@ VideoCapture类变量同时提供了可以查看视频属性的get()函数，通
 表2-5 VideoCapture类中get()方法中的标志参数
 | 标志参数                     | 简记 | 作用                |
 | :----------------------- | :- | :---------------- |
-| CAP\_PROP\_POS\_MSEC     | 0  | 视频文件的当前位置（以毫秒为单位） |
-| CAP\_PROP\_FRAME\_WIDTH  | 3  | 视频流中图像的宽度         |
-| CAP\_PROP\_FRAME\_HEIGHT | 4  | 视频流中图像的高度         |
-| CAP\_PROP\_FPS           | 5  | 视频流中图像的帧率（每秒帧数）   |
-| CAP\_PROP\_FOURCC        | 6  | 编解码器的4字符代码        |
-| CAP\_PROP\_FRAME\_COUNT  | 7  | 视频流中图像的帧数         |
-| CAP\_PROP\_FORMAT        | 8  | 返回的Mat对象的格式       |
-| CAP\_PROP\_BRIGHTNESS    | 10 | 图像的亮度（仅适用于支持的相机）  |
-| CAP\_PROP\_CONTRAST      | 11 | 图像对比度（仅适用于相机）     |
-| CAP\_PROP\_SATURATION    | 12 | 图像饱和度（仅适用于相机）     |
-| CAP\_PROP\_HUE           | 13 | 图像的色调（仅适用于相机）     |
-| CAP\_PROP\_GAIN          | 14 | 图像的增益（仅适用于支持的相机）  |
+| CAP_PROP_POS_MSEC     | 0  | 视频文件的当前位置（以毫秒为单位） |
+| CAP_PROP_FRAME_WIDTH  | 3  | 视频流中图像的宽度         |
+| CAP_PROP_FRAME_HEIGHT | 4  | 视频流中图像的高度         |
+| CAP_PROP_FPS           | 5  | 视频流中图像的帧率（每秒帧数）   |
+| CAP_PROP_FOURCC        | 6  | 编解码器的4字符代码        |
+| CAP_PROP_FRAME_COUNT  | 7  | 视频流中图像的帧数         |
+| CAP_PROP_FORMAT        | 8  | 返回的Mat对象的格式       |
+| CAP_PROP_BRIGHTNESS    | 10 | 图像的亮度（仅适用于支持的相机）  |
+| CAP_PROP_CONTRAST      | 11 | 图像对比度（仅适用于相机）     |
+| CAP_PROP_SATURATION    | 12 | 图像饱和度（仅适用于相机）     |
+| CAP_PROP_HUE           | 13 | 图像的色调（仅适用于相机）     |
+| CAP_PROP_GAIN          | 14 | 图像的增益（仅适用于支持的相机）  |
 
 为了更加熟悉VideoCapture类，在代码清单2-28中给出了读取视频、输出视频属性并按照原帧率显示视频的程序，运行结果在图2-6中给出。
 
@@ -712,13 +712,13 @@ imwrite(filename, img, compression_params);
 表2-6 imwrite()函数第三个参数可选择的标志及作用
 | 标志参数                           | 简记  | 作用                                                  |
 | :----------------------------- | :-- | :-------------------------------------------------- |
-| IMWRITE\_JPEG\_QUALITY         | 1   | 保存成JPEG格式的文件的图像质量，分成0～100等级，默认95                    |
-| IMWRITE\_JPEG\_PROGRESSIVE     | 2   | 增强JPEG格式，启用为1，默认值为0 (False)                         |
-| IMWRITE\_JPEG\_OPTIMIZE        | 3   | 对JPEG格式进行优化，启用为1，默认参数为0 (False)                     |
-| IMWRITE\_JPEG\_LUMA\_QUALITY   | 5   | JPEG格式文件单独的亮度质量等级，分成0～100，默认为0                      |
-| IMWRITE\_JPEG\_CHROMA\_QUALITY | 6   | JPEG格式文件单独的色度质量等级，分成0～100，默认为0                      |
-| IMWRITE\_PNG\_COMPRESSION      | 16  | 保存成PNG格式文件压缩级别，0～9，值越大意味着更小尺寸和更长的压缩时间，默认值为1（最佳速度设置） |
-| IMWRITE\_TIFF\_COMPRESSION     | 259 | 保存成TIFF格式文件压缩方案                                     |
+| IMWRITE_JPEG_QUALITY         | 1   | 保存成JPEG格式的文件的图像质量，分成0～100等级，默认95                    |
+| IMWRITE_JPEG_PROGRESSIVE     | 2   | 增强JPEG格式，启用为1，默认值为0 (False)                         |
+| IMWRITE_JPEG_OPTIMIZE        | 3   | 对JPEG格式进行优化，启用为1，默认参数为0 (False)                     |
+| IMWRITE_JPEG_LUMA_QUALITY   | 5   | JPEG格式文件单独的亮度质量等级，分成0～100，默认为0                      |
+| IMWRITE_JPEG_CHROMA_QUALITY | 6   | JPEG格式文件单独的色度质量等级，分成0～100，默认为0                      |
+| IMWRITE_PNG_COMPRESSION      | 16  | 保存成PNG格式文件压缩级别，0～9，值越大意味着更小尺寸和更长的压缩时间，默认值为1（最佳速度设置） |
+| IMWRITE_TIFF_COMPRESSION     | 259 | 保存成TIFF格式文件压缩方案                                     |
 
 
 为了更好地理解imwrite()函数的使用方式，在代码清单2-32中给出了生成带有Alpha通道的矩阵，并保存成PNG格式图像的程序。程序运行后会生成一个保存了4通道的PNG格式图像，为了更直观地看到图像结果，我们在图2-8中给出了Image Watch插件中看到的图像和保存成PNG格式的图像。

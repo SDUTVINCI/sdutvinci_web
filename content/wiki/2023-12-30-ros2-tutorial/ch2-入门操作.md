@@ -149,7 +149,7 @@ ros2 bag play + 文件夹名称
 
 指令就是创建ros2的功能包
 
-ros2 pkg create + 功能包名 + --build-type(构建类型) + ament\_cmake / ament\_python + --dependencies（依赖） + rclcpp(ROS2的CPP客户端) + --node-name（节点名） + 节点名
+ros2 pkg create + 功能包名 + --build-type(构建类型) + ament_cmake / ament_python + --dependencies（依赖） + rclcpp(ROS2的CPP客户端) + --node-name（节点名） + 节点名
 
 ```bash
 ros2 pkg create pkg01_helloworld_cpp --build-type ament_cmake --dependencies rclcpp --node-name helloworld
@@ -183,7 +183,7 @@ xxx
 
 12行是添加可执行的
 
-add\_executable 的第一个参数是 可执行文件的名字（默认和节点名一致，默认和源文件名一致） 第二个参数是源文件的名字
+add_executable 的第一个参数是 可执行文件的名字（默认和节点名一致，默认和源文件名一致） 第二个参数是源文件的名字
 
 17行是为我们的可执行程序添加依赖 我们的可执行程序依赖于RCLCPP这个库
 
@@ -257,7 +257,7 @@ int main(int argc, char ** argv)
 ros2 pkg create pkg02_helloworld_py --build-type ament_python --dependencies rclpy --node-name helloworld
 ```
 
-ros2 pkg create + 功能包名 + --build-type(构建类型) + ament\_cmake / ament\_python + --dependencies（依赖） + rclpy(ROS2的Python客户端) + --node-name（节点名） + 节点名
+ros2 pkg create + 功能包名 + --build-type(构建类型) + ament_cmake / ament_python + --dependencies（依赖） + rclpy(ROS2的Python客户端) + --node-name（节点名） + 节点名
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image139.webp)
 
@@ -536,7 +536,7 @@ build:
 
 按下`ESC`，并按下`:wq`,然后按下`Enter(回车)`即可成功保存。
 
-在编译的时候正常用`colcon build`就可以自动启用CMAKE\_EXPORT\_COMPILE\_COMMANDS=ON参数了。
+在编译的时候正常用`colcon build`就可以自动启用CMAKE_EXPORT_COMPILE_COMMANDS=ON参数了。
 
 2.  然后再来配置clangd插件
 

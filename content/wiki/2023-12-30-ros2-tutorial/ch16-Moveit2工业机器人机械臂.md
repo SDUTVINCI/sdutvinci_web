@@ -199,7 +199,7 @@ ABR就是A为参考坐标系，B相对于A的旋转矩阵。
 #### 机械臂描述方式
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1869.webp)
 
-Link 0一般也叫base\_Link
+Link 0一般也叫base_Link
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1870.webp)
 
@@ -265,7 +265,7 @@ Xi与Zi+1和Zi都垂直。
 
 原点是Z和X的交点。
 
-若是建立base\_link(link0)与link1的话，则是特殊情况。（base\_link是immobile不动的）
+若是建立base_link(link0)与link1的话，则是特殊情况。（base_link是immobile不动的）
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1882.webp)
 
@@ -361,7 +361,7 @@ Xn取Xn-1的方向。也就是framen和framen-1是延长的。
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1893.webp)
 
-对于连续的杆件，我们可以从base\_link一直算到linkx，x想是几就是几。
+对于连续的杆件，我们可以从base_link一直算到linkx，x想是几就是几。
 
 比如说，现在有三个杆件，我们找到T23（3对2的），T12（1对2的）T01（地对1的），就可以找到T03（地对3的）
 

@@ -7,9 +7,9 @@ title: "Linux"
 
 1.  系统：Fedora 42 KDE Edition Linux
 
-2.  系统内核：Linux 6.15.6-200.fc42.x86\_64
+2.  系统内核：Linux 6.15.6-200.fc42.x86_64
 
-3.  架构：X86\_64
+3.  架构：X86_64
 
 其他Linux环境也可以。
 
@@ -347,7 +347,7 @@ https://www.segger.com/downloads/jlink/
 
 是RHEL系下载64位RPM
 
-（这里的64位指的是amd64和X86\_64,如果你是ARM64请下载下方那个Linux ARM里的64位）
+（这里的64位指的是amd64和X86_64,如果你是ARM64请下载下方那个Linux ARM里的64位）
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2025/07/18/image42.webp)
 
@@ -390,7 +390,7 @@ https://www.segger.com/products/development-tools/ozone-j-link-debugger/
 
 是RHEL系下载64位RPM
 
-（这里的64位指的是amd64和X86\_64,如果你是ARM64请下载下方那个Linux ARM里的64位）
+（这里的64位指的是amd64和X86_64,如果你是ARM64请下载下方那个Linux ARM里的64位）
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2025/07/18/image49.webp)
 
@@ -414,7 +414,7 @@ ozone
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2025/07/18/image51.webp)
 
 #### 下载SVD
-https://www.st.com.cn/content/st\_com/zh.html
+https://www.st.com.cn/content/st_com/zh.html
 
 在搜索里搜索芯片型号，如stm32f103c8t6
 
@@ -585,7 +585,7 @@ make -j16
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2025/07/18/image86.webp)
 
-⚠️注意：Clangd 默认找的是 **本机系统的 libc/include 路径（比如 x86\_64 的 `/usr/include`）** ，而我们工程里面实际使用的是 **ARM 工具链的头文件路径** ，这就有概率导致包含C/C++库函数的头文件报错
+⚠️注意：Clangd 默认找的是 **本机系统的 libc/include 路径（比如 x86_64 的 `/usr/include`）** ，而我们工程里面实际使用的是 **ARM 工具链的头文件路径** ，这就有概率导致包含C/C++库函数的头文件报错
 
 例如：
 
@@ -652,7 +652,7 @@ void StartDefaultTask(void *argument)
 }
 ```
 
-led\_task.h:
+led_task.h:
 
 ```cpp
 #ifndef __LED_TASK_H_
@@ -673,7 +673,7 @@ extern "C"
 
 ```
 
-然后打开`cmake/user`文件夹下的`CMakeLists.txt`，把刚才新建的led\_task.cpp添加上去。
+然后打开`cmake/user`文件夹下的`CMakeLists.txt`，把刚才新建的led_task.cpp添加上去。
 
 详细介绍（可以不看）：这里的`cmake/stm32cubemx`下的`CMakeLists.txt`是被CubeMX管理的，你重新用CubeMX生成新代码后，这个文件里的东西会被覆盖。而工作区根目录下的`CMakeLists.txt`是不会被重新覆盖的，而且给我们留了一些区域加源文件和头文件，但是这样会让这个文件太过于嘈杂。所以我们选择新建一个user文件夹，然后在这里面弄一个`CMakeLists.txt`，再用顶层`CMakeLists.txt`去加载这个子`CMakeLists.txt`，这个子`CMakeLists.txt`方便咱们修改，文件结构也更加明显。（这些都不需要咱们自己创建，我已经给创建到 **工程文件移植** 里了，你在上面复制的时候已经复制过来了）
 
@@ -698,13 +698,13 @@ make
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2025/07/18/image94.webp)
 
-然后去main.c中引用cpp\_interface.h头文件，并将cpp\_main()函数在main函数的这个地方调用。(我这里是开RTOS了，所以需要在启动RTOS之前调用cpp\_main函数，如果你是没有用RTOS的裸机程序，则在while (1)的上方调用cpp\_main即可)
+然后去main.c中引用cpp_interface.h头文件，并将cpp_main()函数在main函数的这个地方调用。(我这里是开RTOS了，所以需要在启动RTOS之前调用cpp_main函数，如果你是没有用RTOS的裸机程序，则在while (1)的上方调用cpp_main即可)
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2025/07/18/image95.webp)
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2025/07/18/image96.webp)
 
-然后在cpp\_interface.h里修改isRTOS这个宏来让程序知道你是否开启了RTOS，如果开启了，宏就为1，裸机就填0。
+然后在cpp_interface.h里修改isRTOS这个宏来让程序知道你是否开启了RTOS，如果开启了，宏就为1，裸机就填0。
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2025/07/18/image97.webp)
 
@@ -899,7 +899,7 @@ make
 
 **你不用担心每次新建工程都需要配置那么多东西。**
 
-以上大多数配置文件全部都已经包含在https://github.com/tungchiahui/CubeMX\_MDK5to6\_Template仓库下的***`工程文件移植(创建新模板请看这里)`***文件夹了，到时候新建一个工程后，直接把这个文件夹下的所有文件全部复制过来即可。
+以上大多数配置文件全部都已经包含在https://github.com/tungchiahui/CubeMX_MDK5to6_Template仓库下的***`工程文件移植(创建新模板请看这里)`***文件夹了，到时候新建一个工程后，直接把这个文件夹下的所有文件全部复制过来即可。
 
 #### 使用ozone进行Flash烧录和Debug调试
 ##### 基础配置
@@ -970,6 +970,6 @@ https://www.bilibili.com/video/BV1yrLHzZEoE
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2025/07/18/image133.webp)
 
-找到led\_task.cpp点击就可以打开这个源文件啦。
+找到led_task.cpp点击就可以打开这个源文件啦。
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2025/07/18/image134.webp)

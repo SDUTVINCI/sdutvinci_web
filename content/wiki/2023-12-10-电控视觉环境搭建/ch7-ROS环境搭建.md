@@ -34,7 +34,7 @@ ROS1已经EOF了，官方鼓励使用ROS2.
 #### 方案三(可以用)
 1.  系统发行版:Kubuntu 22.04 Jammy LTS / Kubuntu 24.04 Jammy LTS
 
-2.  ROS1Noetic安装方式:西南交通大佬的ppa(详见上面ROS文档中，仅amd64(x86\_64))
+2.  ROS1Noetic安装方式:西南交通大佬的ppa(详见上面ROS文档中，仅amd64(x86_64))
 
 3.  ROS2Humble / ROS2Jazzy安装方式:官方二进制安装方式(详见上面的ROS2文档中)
 
@@ -43,6 +43,6 @@ ROS1已经EOF了，官方鼓励使用ROS2.
 
 2.  WSL2发行版:Ubuntu24.04 Noble LTS
 
-3.  ROS1Noetic安装方式:西南交通大佬的ppa(详见上面ROS文档中，仅amd64(x86\_64))
+3.  ROS1Noetic安装方式:西南交通大佬的ppa(详见上面ROS文档中，仅amd64(x86_64))
 
 4.  ROS2Jazzy安装方式:官方二进制安装方式(详见上面的ROS2文档中)

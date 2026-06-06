@@ -42,13 +42,13 @@ https://www.bilibili.com/video/BV18T411r7Yu
 
     4.  Keil MDK 5 破解注册机(请关闭杀毒软件再下载)： [keygen.iso](https://sdutvincirobot.feishu.cn/file/SBbTbvSQ5o3dvExZ49UcGvYen8d) or https://www.duote.com/soft/907739.html
 
-    5.  Java\_JRE下载(一般下载[Windows Offline (64-bit)](https://javadl.oracle.com/webapps/download/AutoDL?BundleId=250129_d8aa705069af427f9b83e66b34f5e380),需要安装JRE才可以打开CubeMX)：https://www.java.com/en/download/manual.jsp
+    5.  Java_JRE下载(一般下载[Windows Offline (64-bit)](https://javadl.oracle.com/webapps/download/AutoDL?BundleId=250129_d8aa705069af427f9b83e66b34f5e380),需要安装JRE才可以打开CubeMX)：https://www.java.com/en/download/manual.jsp
 
     6.  CubeMX官网：https://www.st.com.cn/zh/development-tools/stm32cubemx.html
 
-    7.  正点原子配套资料1(A盘资料F1):http://www.openedv.com/docs/boards/stm32/zdyz\_stm32f103\_warshipV4.html
+    7.  正点原子配套资料1(A盘资料F1):http://www.openedv.com/docs/boards/stm32/zdyz_stm32f103_warshipV4.html
 
-    8.  正点原子配套资料2(A盘资料F4):http://www.openedv.com/docs/boards/stm32/zdyz\_stm32f407\_explorerV3.html
+    8.  正点原子配套资料2(A盘资料F4):http://www.openedv.com/docs/boards/stm32/zdyz_stm32f407_explorerV3.html
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/10/image2.webp)
 
