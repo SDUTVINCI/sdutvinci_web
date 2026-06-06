@@ -4,7 +4,7 @@ title: "前言"
 
 **本文只负责指导一些问题，学****单片机****MCU****还是以下列视频为主:**
 
-单片机MCU环境配置:[电控组环境搭建大全](https://sdutvincirobot.feishu.cn/wiki/FQszwXIR5iQgCfk7pRwc9rYpnqg)
+单片机MCU环境配置:[电控组环境搭建大全](/wiki/2023-12-10-dian-kong-shi-jue-huan-jing-da-jian)
 
 1.  正点原子HAL库视频：
 

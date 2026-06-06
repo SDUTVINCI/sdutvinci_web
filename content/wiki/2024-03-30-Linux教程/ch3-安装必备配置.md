@@ -3,7 +3,7 @@ title: "安装必备配置"
 ---
 
 ###   软件包换源（以Debian系的发行版为例）
-打开下方网站（注意，该Ubuntu仓库版本是X86、amd64的仓库，ARM的仓库并非该网站（99.9%的人的电脑是X86的，很多工控机是ARM的，但工控机也有X86的，请看[Vinci机器人队单片机教程](https://sdutvincirobot.feishu.cn/docx/PRAodvrWvoXTrVxP1EDcMKM7nXb)中讲的了解一下，或者自行百度。）
+打开下方网站（注意，该Ubuntu仓库版本是X86、amd64的仓库，ARM的仓库并非该网站（99.9%的人的电脑是X86的，很多工控机是ARM的，但工控机也有X86的，请看[Vinci机器人队单片机教程](/wiki/2023-10-09-stm32-freertos-jiao-cheng)中讲的了解一下，或者自行百度。）
 
 下方这几个镜像源选一个即可。
 
@@ -800,7 +800,7 @@ https://developer.nvidia.com/cuda-toolkit-archive
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2024/03/30/image245.webp)
 
-我这里是Intel CPU(X86\_64架构或者叫amd64架构)，所以选择X86\_64。（AMD和Intel全是X86的，如果分不清，请看[Vinci机器人队单片机教程](https://sdutvincirobot.feishu.cn/wiki/PqsGwcPCuidbN6k13jfcGWtWn0b)）
+我这里是Intel CPU(X86\_64架构或者叫amd64架构)，所以选择X86\_64。（AMD和Intel全是X86的，如果分不清，请看[Vinci机器人队单片机教程](/wiki/2023-10-09-stm32-freertos-jiao-cheng)）
 
 我是Fedora41，所以选择了Fedora41 ,(你是RockyLinux要选择RockyLinux)如下图所示:
 
@@ -941,7 +941,7 @@ https://developer.nvidia.com/cuda-toolkit-archive
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2024/03/30/image254.webp)
 
-我这里是Intel CPU(X86\_64架构或者叫amd64架构)，所以选择X86\_64。（AMD和Intel全是X86的，如果分不清，请看[Vinci机器人队单片机教程](https://sdutvincirobot.feishu.cn/wiki/PqsGwcPCuidbN6k13jfcGWtWn0b)）
+我这里是Intel CPU(X86\_64架构或者叫amd64架构)，所以选择X86\_64。（AMD和Intel全是X86的，如果分不清，请看[Vinci机器人队单片机教程](/wiki/2023-10-09-stm32-freertos-jiao-cheng)）
 
 我是Debian12，所以选择了Debian12 ,(你是Ubuntu要选择Ubuntu)如下图所示，建议选择runfile文件进行安装。
 

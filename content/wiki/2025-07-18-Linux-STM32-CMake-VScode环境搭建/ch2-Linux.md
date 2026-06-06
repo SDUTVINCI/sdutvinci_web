@@ -142,7 +142,7 @@ sudo ./SetupSTM32CubeMX-6.15.0
 
 下载好就行了。
 
-接下来可以把CubeMX应用配置一个桌面快捷方式等可以快速打开，教程详见[Vinci机器人队Linux入门教程](https://sdutvincirobot.feishu.cn/wiki/GIKnwJo39iREkHkFGvqcy5Osntc)的Appimage章节，可以用ctrl+F快速定位该章节。
+接下来可以把CubeMX应用配置一个桌面快捷方式等可以快速打开，教程详见[Vinci机器人队Linux入门教程](/wiki/2024-03-30-linux-jiao-cheng/ch6-qi-ta-ke-xuan-pei-zhi#appimage)的Appimage章节，可以用ctrl+F快速定位该章节。
 
 桌面快捷方式如下：
 
@@ -710,7 +710,7 @@ make
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2025/07/18/image98.webp)
 
-其他更加详细的关于STM32的C/C++工程介绍请看[Vinci机器人队单片机教程](https://sdutvincirobot.feishu.cn/wiki/PqsGwcPCuidbN6k13jfcGWtWn0b)。
+其他更加详细的关于STM32的C/C++工程介绍请看[Vinci机器人队单片机教程](/wiki/2023-10-09-stm32-freertos-jiao-cheng)。
 
 此时在build文件夹下进行编译程序，发现成功!
 

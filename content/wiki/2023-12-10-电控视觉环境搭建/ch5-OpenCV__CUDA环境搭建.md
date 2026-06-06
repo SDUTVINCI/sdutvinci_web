@@ -403,13 +403,13 @@ opencv_version
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/10/image56.webp)
 
 #### 测试OpenCV\_CUDA(CMake程序示例)
-1.  CMake是一定要掌握的，请看下方文档学习:[CMake C/C++编译环境配置](https://sdutvincirobot.feishu.cn/wiki/Dosvw46BtiBBLEkTdO4cPOt8nVb)
+1.  CMake是一定要掌握的，请看下方文档学习:[CMake C/C++编译环境配置](/wiki/2023-10-05-cplusplus-jiao-xue/ch21-cmake-gong-cheng-mu-ban)
 
 2.  如图测试完毕：
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/10/image57.webp)
 
-3.  下方是实例工程我已上传至GitHub供大家下载：(下方示例工程里的CMake模板不是最新的，可能不如新版功能齐全，不如新版各方面设计的更周到，如果想找最新版模板请看[CMake C/C++编译环境配置](https://sdutvincirobot.feishu.cn/wiki/Dosvw46BtiBBLEkTdO4cPOt8nVb))
+3.  下方是实例工程我已上传至GitHub供大家下载：(下方示例工程里的CMake模板不是最新的，可能不如新版功能齐全，不如新版各方面设计的更周到，如果想找最新版模板请看[CMake C/C++编译环境配置](/wiki/2023-10-05-cplusplus-jiao-xue/ch21-cmake-gong-cheng-mu-ban))
 
 https://github.com/tungchiahui/opencv\_cuda\_test
 

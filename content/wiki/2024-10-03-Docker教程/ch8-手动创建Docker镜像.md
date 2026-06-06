@@ -22,7 +22,7 @@ title: "手动创建Docker镜像"
 | USER | 设置后续命令执行的用户 | USER appuser |
 | ONBUILD | 当镜像作为其他镜像基础镜像时触发的构建指令 | ONBUILD COPY . /src |
 | SHELL | 更改默认 shell，比如将 sh -c 改为 bash -c | SHELL ["/bin/bash", "-c"] |
-| HEALTHCHECK | 定义容器运行时的健康检查命令 | `HEALTHCHECK CMD curl --fail http://localhost:8080 |
+| HEALTHCHECK | 定义容器运行时的健康检查命令 | `HEALTHCHECK CMD curl --fail http://localhost:8080` |
 | STOPSIGNAL | 容器停止时发送的信号 | STOPSIGNAL SIGKILL |
 
 ### 自己创建容器

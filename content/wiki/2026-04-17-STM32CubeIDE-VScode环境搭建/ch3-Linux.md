@@ -74,7 +74,7 @@ sudo ./SetupSTM32CubeMX-6.15.0
 
 下载好就行了。
 
-接下来可以把CubeMX应用配置一个桌面快捷方式等可以快速打开，教程详见[Vinci机器人队Linux入门教程](https://sdutvincirobot.feishu.cn/wiki/GIKnwJo39iREkHkFGvqcy5Osntc)的Appimage章节，可以用ctrl+F快速定位该章节。
+接下来可以把CubeMX应用配置一个桌面快捷方式等可以快速打开，教程详见[Vinci机器人队Linux入门教程](/wiki/2024-03-30-linux-jiao-cheng/ch6-qi-ta-ke-xuan-pei-zhi#appimage)的Appimage章节，可以用ctrl+F快速定位该章节。
 
 桌面快捷方式如下：
 

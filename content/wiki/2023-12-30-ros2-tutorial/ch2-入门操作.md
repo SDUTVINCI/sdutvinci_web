@@ -579,7 +579,9 @@ build:
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image213.webp)
 
 ### 安装其他工具
-安装terminator(建议装，选装,因人而异)
+
+#### terminal
+##### 安装terminator(选装,因人而异,有更好用的Warp,请往下看)
 
 ```bash
 sudo apt install terminator
@@ -660,9 +662,86 @@ vim ~/.config/terminator/config
 4. 绿色/黄色/青色：也整体提亮
 5. 顶部红色标题条：改成灰色，不再那么刺眼
 
+##### Warp Terminal（推荐，更好看，也支持分屏）
+
+相比 Terminator，Warp Terminal 的默认外观更现代，字体更清楚，界面也更亮堂。
+
+最重要的是，它也支持类似 Terminator 的多 pane 分屏，所以可以作为 Terminator 的现代平替。
+
+不过需要注意，Warp 的快捷键和 Terminator 不完全一样。
+
+1. 安装
+
+   1. Ubuntu / Debian 安装
+
+      ```bash
+      wget -O warp-terminal.deb "https://app.warp.dev/download?package=deb"
+      sudo apt install ./warp-terminal.deb
+      ```
+
+      安装完成后，可以在应用菜单里打开 Warp，也可以在终端里输入：
+
+      ```bash
+      warp-terminal
+      ```
+
+   2. Fedora / RHEL 安装
+
+      如果你用的是 Fedora、RHEL、CentOS 这类发行版，可以安装 rpm 包：
+
+      ```bash
+      wget -O warp-terminal.rpm "https://app.warp.dev/download?package=rpm"
+      sudo dnf install ./warp-terminal.rpm
+      ```
+
+      启动方式同样是：
+
+      ```bash
+      warp-terminal
+      ```
+
+
+
+2. Warp 常用快捷键
+
+| 快捷键 | 功能 | 记忆方法 |
+|---|---|---|
+| `Ctrl + Shift + D` | 向右分屏 | **D = Divide**，分割出一个新的 pane，默认往右边开 |
+| `Ctrl + Shift + E` | 向下分屏 | **E = Extend Down**，向下面扩展一个新的 pane |
+| `Ctrl + Alt + 方向键` | 按方向切换 pane | 想去哪边就按哪个方向键 |
+| `Ctrl + Shift + [` | 切换到上一个 pane | `[` 可以理解成往前切 |
+| `Ctrl + Shift + ]` | 切换到下一个 pane | `]` 可以理解成往后切 |
+| `Ctrl + Shift + Enter` | 最大化/还原当前 pane | Enter 进入当前 pane 的专注模式 |
+| `Ctrl + Shift + W` | 关闭当前 pane | **W = Window**，关闭当前小窗口 |
+| `Ctrl + Shift + T` | 新建标签页 | **T = Tab**，新开一个标签页 |
+| `Ctrl + PageUp` | 切换到上一个标签页 | 类似浏览器切换标签 |
+| `Ctrl + PageDown` | 切换到下一个标签页 | 类似浏览器切换标签 |
+| `Ctrl + L` | 清屏 | **L = clear 里的 L**，相当于翻到一个新页面 |
+| `Ctrl + =` | 放大字体 | 等号旁边通常也是加号，表示放大 |
+| `Ctrl + -` | 缩小字体 | 减号，表示缩小 |
+| `Ctrl + 0` | 恢复默认字体大小 | 归零，恢复默认 |
+
+
+
+3. Warp 的特点
+
+   1. 默认颜值比 Terminator 高，不需要额外折腾配色
+   2. 支持一直分屏，适合大屏幕开发
+   3. 字体渲染比较清楚，观感比 Terminator 亮堂
+   4. 支持命令块，长命令输出看起来更清晰
+   5. 支持 AI 功能，但不使用 AI 也可以当普通终端使用
+
+首次打开 Warp 时可能需要联网初始化。之后即使离线也可以作为普通终端使用，只是 AI、协作等云端功能不能用。
+
+如果只是想要一个传统、稳定、轻量的终端，可以继续用 Terminator。
+
+如果想要更好看的界面、更现代的交互体验，并且也需要分屏，那么 Warp 是一个很不错的选择。
+
+
+#### git
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image215.webp)
 
-咱们的Git入门教程：[Vinci机器人队Git入门教程](https://sdutvincirobot.feishu.cn/docx/B7arde6u0ob5tsxk5QOcFLG7nYd)
+咱们的Git入门教程：[Vinci机器人队Git入门教程](/wiki/2023-12-29-git-jiao-xue)
 
 ### ROS2体系框架
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image216.webp)

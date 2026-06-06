@@ -30,23 +30,23 @@ https://www.bilibili.com/video/BV1VB4y137ys
 
     1.  Linux基本操作与Shell脚本语言
 
-      [Linux基本教程](https://sdutvincirobot.feishu.cn/docx/ZD0bd33RRovEoIxeBzncdmQEnSg)
+      [Linux基本教程](/wiki/2024-03-30-linux-jiao-cheng)
 
     https://www.runoob.com/linux/linux-tutorial.html
 
     4.  Cmake基本使用
 
-      [Linux C++编译环境配置](https://sdutvincirobot.feishu.cn/docx/ANgFdRtvKoCcKDxZ2ehc5Rocnwh)
+      [Linux C++编译环境配置](/wiki/2023-10-05-cplusplus-jiao-xue/ch1-c-kai-fa-huan-jing-yu-di-yi-ge-gong-cheng)
 
     6.  Git基本操作
 
-      [Vinci机器人队Git入门教程](https://sdutvincirobot.feishu.cn/docx/B7arde6u0ob5tsxk5QOcFLG7nYd)
+      [Vinci机器人队Git入门教程](/wiki/2023-12-29-git-jiao-xue)
 
     8.  C/C++语言
 
-      [Vinci机器人队电控组入门指导](https://sdutvincirobot.feishu.cn/docx/XfSud40MgoxZkQxup0acTf6Znwb)
+      [Vinci机器人队电控组入门指导](/wiki/2023-09-29-ji-qi-ren-gong-cheng-shi-cheng-zhang-ji-hua)
 
-      [Vinci机器人队C/C++资料](https://sdutvincirobot.feishu.cn/docx/N0GAdx6IDoqnRnx1q0TcX1Wfnvc)
+      [Vinci机器人队C/C++资料](/wiki/2023-10-05-cplusplus-jiao-xue)
 
     11.  Python3语言
 
@@ -63,7 +63,7 @@ https://www.bilibili.com/video/BV1VB4y137ys
     http://www.noobyard.com/article/p-saghdsms-mn.html
 
 ### 安装ROS2
-ROS1安装请看[ROS机器人操作系统教程](https://sdutvincirobot.feishu.cn/wiki/W976wTlonibALVkmfIhcdUKYnUV)
+ROS1安装请看[ROS机器人操作系统教程](/wiki/2024-07-13-ros1-ji-qi-ren-cao-zuo-xi-tong-jiao-cheng)
 
 ** 建议使用Kubuntu 24.04 LTS **
 ** 建议学习 ROS2 Jazzy 版本，本教程将基于ROS2 Jazzy **
@@ -576,7 +576,7 @@ source ~/.bashrc
 请往下翻到**`测试ROS2`**章节
 
 #### Docker安装ROS2
-[Docker教程](https://sdutvincirobot.feishu.cn/wiki/KRSMwKmTvivWRskSRszc2vfNnoc)
+[Docker教程](/wiki/2024-10-03-docker-jiao-cheng)
 
 ### ROS2安装进阶(可选)
 上面只是安装了最基本的ROS2包和配置了最基本的ROS2环境。

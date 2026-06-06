@@ -2,4 +2,4 @@
 title: "CMake工程搭建"
 ---
 
-[CMake C/C++编译环境配置](https://sdutvincirobot.feishu.cn/wiki/Dosvw46BtiBBLEkTdO4cPOt8nVb)
+[CMake C/C++编译环境配置](/wiki/2023-10-05-cplusplus-jiao-xue/ch21-cmake-gong-cheng-mu-ban)

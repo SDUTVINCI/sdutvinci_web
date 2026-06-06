@@ -3,7 +3,7 @@ title: "OpenCV"
 ---
 
 ### OpenCV
-[基础视觉算法-OpenCV实现](https://sdutvincirobot.feishu.cn/wiki/D50twQJ2UiVvaDky8Sic3aPOnEh)
+[基础视觉算法-OpenCV实现](/wiki/2026-04-13-opencv-jiao-cheng)
 
 ### CV_Bridge
 cv_bridge维基百科介绍:
@@ -19,7 +19,7 @@ https://github.com/ros-perception/vision_opencv/tree/humble
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1953.webp)![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image1954.webp)
 
 #### 安装
-提前自己编译好带CUDA的OpenCV4,详见[电控组环境搭建大全](https://sdutvincirobot.feishu.cn/wiki/FQszwXIR5iQgCfk7pRwc9rYpnqg)
+提前自己编译好带CUDA的OpenCV4,详见[电控组环境搭建大全](/wiki/2023-12-10-dian-kong-shi-jue-huan-jing-da-jian)
 
 1.  apt安装(不建议)
 

@@ -116,7 +116,7 @@ int main(int argc,char *argv[])
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image244.webp)
 
-智能指针忘记的可以看[Vinci机器人队C/C++资料](https://sdutvincirobot.feishu.cn/docx/N0GAdx6IDoqnRnx1q0TcX1Wfnvc)
+智能指针忘记的可以看[Vinci机器人队C/C++资料](/wiki/2023-10-05-cplusplus-jiao-xue)
 
 智能指针是一种自动管理内存的指针，它会在不需要对象时自动释放内存。使用智能指针可以避免内存泄漏和空悬指针等问题。
 
@@ -406,7 +406,7 @@ OpenCV官网：
 
 https://opencv.org/
 
-教程：[OpenCV教程](https://sdutvincirobot.feishu.cn/docx/K7gxdJjSFoAjerxTzaNcH3ufnpb)
+教程：[OpenCV教程](/wiki/2026-04-13-opencv-jiao-cheng)
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/12/30/image324.webp)
 

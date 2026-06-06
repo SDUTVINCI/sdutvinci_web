@@ -168,7 +168,7 @@ title: "stm32单片机(重点)"
 
 2.  开发软件介绍：
 
-    1.  搭建环境教程:[STM32 Windows开发环境软件安装教程](https://sdutvincirobot.feishu.cn/wiki/FQszwXIR5iQgCfk7pRwc9rYpnqg)
+    1.  搭建环境教程:[STM32 Windows开发环境软件安装教程](/wiki/2023-12-10-dian-kong-shi-jue-huan-jing-da-jian)
 
     2.  ARM Keil MDK
 
@@ -210,7 +210,7 @@ title: "stm32单片机(重点)"
 
         5.  插件：
 
-            1.  Keil Studio Pack(Keil MDK 6，截止2024年1月2日，推荐熟练使用keil5后再使用) MDK6已经基本完善了，可以使用，但是不建议使用。MDK6学习成本比较高，对新手不友好，且MDK5还在更新维护，所以建议使用MDK5.3及以上。但MDK 6基于MS VScode编辑器开发，实现了跨平台，可在Windows，Linux，MacOS上进行开发，且界面非常优美，所以未来可期。[ARM Keil MDK6使用教程](https://sdutvincirobot.feishu.cn/docx/SJ9FdnLXwoR3cTx93eOc4lZfnzh)
+            1.  Keil Studio Pack(Keil MDK 6，截止2024年1月2日，推荐熟练使用keil5后再使用) MDK6已经基本完善了，可以使用，但是不建议使用。MDK6学习成本比较高，对新手不友好，且MDK5还在更新维护，所以建议使用MDK5.3及以上。但MDK 6基于MS VScode编辑器开发，实现了跨平台，可在Windows，Linux，MacOS上进行开发，且界面非常优美，所以未来可期。[ARM Keil MDK6使用教程](/wiki/2024-01-21-arm-keil-mdk6-jiao-cheng)
 
             ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2023/10/09/image52.webp)
 
@@ -806,7 +806,7 @@ extern BSP_Delay bsp_delay;
 
 ```
 
-条件编译肯定不能少，一个是防止头文件重复引用的条件编译，一个是把C++链接为C语言的条件编译。（如果忘了，请看[Vinci机器人队C/C++资料](https://sdutvincirobot.feishu.cn/docx/N0GAdx6IDoqnRnx1q0TcX1Wfnvc)）
+条件编译肯定不能少，一个是防止头文件重复引用的条件编译，一个是把C++链接为C语言的条件编译。（如果忘了，请看[Vinci机器人队C/C++资料](/wiki/2023-10-05-cplusplus-jiao-xue)）
 
 然后引用startup\_main.h头文件
 
@@ -1730,7 +1730,7 @@ https://www.bilibili.com/video/BV19g411p7UT
 
 **堆区（heap）**：一般由程序员分配和释放，若程序员不释放，程序结束时可能由操作系统回收。分配方式类似于数据结构中的链表。
 
-(详细请看[Vinci机器人队C/C++资料](https://sdutvincirobot.feishu.cn/docx/N0GAdx6IDoqnRnx1q0TcX1Wfnvc))
+(详细请看[Vinci机器人队C/C++资料](/wiki/2023-10-05-cplusplus-jiao-xue))
 
 ###### 修改stm32的栈区和堆区大小
 #######   stm32本身的堆区和栈区大小修改
