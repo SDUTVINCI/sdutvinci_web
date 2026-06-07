@@ -1,11 +1,14 @@
 <script setup lang="ts">
+import { compareWikiChapters, numberWikiChapters } from '~~/utils/wiki-chapters'
+
 interface WikiListItem {
   path: string
   stem?: string
   title?: string
   date?: string
   chapter?: string
-  chapterSort?: number
+  chapterOrder?: string
+  chapterDepth?: number
   docKey?: string
   docRoot?: string
   docTitle?: string
@@ -36,8 +39,8 @@ const { data: wikis, pending } = await useAsyncData<WikiListItem[]>('wiki-list-m
       'stem',
       'title',
       'date',
-      'chapter',
-      'chapterSort',
+      'chapterOrder',
+      'chapterDepth',
       'docKey',
       'docRoot',
       'docTitle',
@@ -90,14 +93,19 @@ const docGroups = computed<WikiDocGroup[]>(() => {
 
       group.chapters.push({
         ...wiki,
-        depth: Math.max(0, (wiki.chapter || '').split('.').filter(Boolean).length - 1)
+        depth: wiki.chapterDepth || 0
       })
     })
 
   return [...groups.values()]
     .map((group) => ({
       ...group,
-      chapters: group.chapters.sort(sortByChapter)
+      chapters: numberWikiChapters(group.chapters)
+        .sort(compareWikiChapters)
+        .map((chapter) => ({
+          ...chapter,
+          depth: chapter.chapterDepth
+        }))
     }))
     .sort((a, b) =>
       String(b.date || '').localeCompare(String(a.date || '')) ||
@@ -131,11 +139,6 @@ const filteredDocGroups = computed(() => {
 
   return list
 })
-
-function sortByChapter(a: WikiListItem, b: WikiListItem) {
-  return Number(a.chapterSort || 0) - Number(b.chapterSort || 0) ||
-    String(a.title || '').localeCompare(String(b.title || ''), 'zh-CN')
-}
 
 function isDocExpanded(doc: WikiDocGroup) {
   return Boolean(searchQuery.value.trim()) || expandedDocs.value.has(doc.key)

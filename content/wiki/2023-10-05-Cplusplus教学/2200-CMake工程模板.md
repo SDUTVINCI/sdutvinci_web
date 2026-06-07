@@ -204,14 +204,14 @@ build/linux-debug/src/cmake_template
 5. 选择 `cmake_template` 作为运行/调试 target。
 6. 点击 CMake Tools 提供的运行按钮或 Debug 按钮。
 
-更详细的图形界面操作步骤见 [CMakePresets与构建安装](/wiki/2023-10-05-cplusplus-jiao-xue/ch21-1-cmakepresets-yu-gou-jian-an-zhuang)。
+更详细的图形界面操作步骤见 [CMakePresets与构建安装](/wiki/2023-10-05-cplusplus-jiao-xue/2200-0100-cmakepresets-yu-gou-jian-an-zhuang)。
 
 ## 本章建议阅读顺序
 
-1. [CMakePresets与构建安装](/wiki/2023-10-05-cplusplus-jiao-xue/ch21-1-cmakepresets-yu-gou-jian-an-zhuang)：先理解 preset 工作流。
-2. [顶层CMake与公共编译选项](/wiki/2023-10-05-cplusplus-jiao-xue/ch21-2-ding-ceng-cmake-yu-gong-gong-bian-yi-xuan-xiang)：理解顶层入口和公共配置。
-3. [src与lib模块CMake详解](/wiki/2023-10-05-cplusplus-jiao-xue/ch21-3-src-yu-lib-mo-kuai-cmake-xiang-jie)：理解可执行文件、库、include、install。
-4. [第三方库依赖写法](/wiki/2023-10-05-cplusplus-jiao-xue/ch21-4-di-san-fang-ku-yi-lai-xie-fa)：学习 Eigen、OpenCV、Boost、PCL 等库如何引入。
+1. [CMakePresets与构建安装](/wiki/2023-10-05-cplusplus-jiao-xue/2200-0100-cmakepresets-yu-gou-jian-an-zhuang)：先理解 preset 工作流。
+2. [顶层CMake与公共编译选项](/wiki/2023-10-05-cplusplus-jiao-xue/2200-0200-ding-ceng-cmake-yu-gong-gong-bian-yi-xuan-xiang)：理解顶层入口和公共配置。
+3. [src与lib模块CMake详解](/wiki/2023-10-05-cplusplus-jiao-xue/2200-0300-src-yu-lib-mo-kuai-cmake-xiang-jie)：理解可执行文件、库、include、install。
+4. [第三方库依赖写法](/wiki/2023-10-05-cplusplus-jiao-xue/2200-0400-di-san-fang-ku-yi-lai-xie-fa)：学习 Eigen、OpenCV、Boost、PCL 等库如何引入。
 
 学完后，你应该能做到：
 

@@ -119,7 +119,7 @@ sudo usermod -aG dialout $USER
 newgrp dialout
 ```
 
-有关Linux的USB设备的更多操作请看[Vinci机器人队Linux入门教程](/wiki/2024-03-30-linux-jiao-cheng/ch9-qi-ta-cao-zuo#usb端口设置)
+有关Linux的USB设备的更多操作请看[Vinci机器人队Linux入门教程](/wiki/2024-03-30-linux-jiao-cheng/0900-qi-ta-cao-zuo#usb端口设置)
 
 #### 初始化详解
 1.  创建功能包
@@ -156,7 +156,7 @@ device_name是个字符串，是填`/dev`下的设备名
 ls /dev | grep USB
 ```
 
-有关Linux的USB设备的更多操作请看[Vinci机器人队Linux入门教程](/wiki/2024-03-30-linux-jiao-cheng/ch9-qi-ta-cao-zuo#usb端口设置)
+有关Linux的USB设备的更多操作请看[Vinci机器人队Linux入门教程](/wiki/2024-03-30-linux-jiao-cheng/0900-qi-ta-cao-zuo#usb端口设置)
 
 config是个类对象，所以要创建一下这个类对象如下：
 

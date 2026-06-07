@@ -6,6 +6,9 @@
     "dev": "nuxt dev --host 0.0.0.0",
     "build": "nuxt build",
     "generate": "nuxt generate",
+    "wiki:check": "node scripts/wiki-check.mjs",
+    "prebuild": "npm run wiki:check",
+    "pregenerate": "npm run wiki:check",
     "preview": "nuxt preview"
   },
   "dependencies": {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import mediumZoom from 'medium-zoom'
+import { compareWikiChapters, numberWikiChapters } from '~~/utils/wiki-chapters'
 
 interface TocDisplayLink {
   id: string
@@ -16,7 +17,8 @@ interface WikiPage {
   title: string
   date?: string
   chapter?: string
-  chapterSort?: number
+  chapterOrder?: string
+  chapterDepth?: number
   docKey?: string
   docRoot?: string
   docTitle?: string
@@ -61,8 +63,8 @@ const { data: docItems } = await useAsyncData<WikiPage[]>(
         'stem',
         'title',
         'date',
-        'chapter',
-        'chapterSort',
+        'chapterOrder',
+        'chapterDepth',
         'docKey',
         'docRoot',
         'docTitle',
@@ -76,14 +78,16 @@ const { data: docItems } = await useAsyncData<WikiPage[]>(
 
 const docIndex = computed(() => docItems.value?.find((item) => item.isWikiIndex) || null)
 const chapterItems = computed(() =>
-  (docItems.value || [])
-    .filter((item) => !item.isWikiIndex)
-    .sort(sortByChapter)
+  numberWikiChapters((docItems.value || []).filter((item) => !item.isWikiIndex))
+    .sort(compareWikiChapters)
 )
 const docNavigationItems = computed(() => [
   ...(docIndex.value ? [docIndex.value] : []),
   ...chapterItems.value
 ])
+const currentChapter = computed(() =>
+  chapterItems.value.find((item) => normalizePath(item.path) === normalizePath(cleanPath.value))?.chapter
+)
 
 const currentNavIndex = computed(() =>
   docNavigationItems.value.findIndex((item) => normalizePath(item.path) === normalizePath(cleanPath.value))
@@ -107,7 +111,7 @@ const docTitle = computed(() =>
 
 const pageTitle = computed(() => {
   if (!page.value) return '加载中...'
-  return page.value.chapter ? `${page.value.chapter} ${page.value.title}` : page.value.title
+  return currentChapter.value ? `${currentChapter.value} ${page.value.title}` : page.value.title
 })
 
 useHead(() => ({
@@ -623,11 +627,6 @@ onUnmounted(() => {
   }
 })
 
-function sortByChapter(a: WikiPage, b: WikiPage) {
-  return Number(a.chapterSort || 0) - Number(b.chapterSort || 0) ||
-    a.title.localeCompare(b.title, 'zh-CN')
-}
-
 function normalizePath(path: string) {
   return path.replace(/\/$/, '') || '/'
 }
@@ -673,7 +672,7 @@ function normalizePath(path: string) {
             :to="item.path"
             class="doc-nav-link"
             :class="{ 'is-active': isCurrentPath(item.path), 'is-index': item.isWikiIndex }"
-            :style="{ '--doc-depth': String(Math.max(0, (item.chapter || '').split('.').filter(Boolean).length - 1)) }"
+            :style="{ '--doc-depth': String(item.chapterDepth || 0) }"
             @click="closeDrawers"
           >
             <span v-if="item.chapter" class="doc-nav-number">{{ item.chapter }}</span>
@@ -713,8 +712,8 @@ function normalizePath(path: string) {
 
         <article class="wiki-article">
           <header class="wiki-article-header">
-            <div v-if="page.chapter" class="chapter-kicker">
-              第 {{ page.chapter }} 节
+            <div v-if="currentChapter" class="chapter-kicker">
+              第 {{ currentChapter }} 节
             </div>
             <h1>{{ page.title }}</h1>
           </header>

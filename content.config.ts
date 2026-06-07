@@ -36,8 +36,8 @@ export default defineContentConfig({
       schema: z.object({
         title: z.string(),
         date: z.string().nullable().optional(),
-        chapter: z.string().nullable().optional(),
-        chapterSort: z.number().nullable().optional(),
+        chapterOrder: z.string().nullable().optional(),
+        chapterDepth: z.number().nullable().optional(),
         docKey: z.string().nullable().optional(),
         docRoot: z.string().nullable().optional(),
         docTitle: z.string().nullable().optional(),

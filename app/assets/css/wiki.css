@@ -546,6 +546,25 @@
   min-width: max-content;
   padding: 1rem;
   background: transparent;
+  color: var(--ink-soft);
+}
+
+:root[data-theme="dark"] .wiki-content-body .shiki span {
+  color: var(--shiki-dark);
+  background-color: var(--shiki-dark-bg);
+  font-style: var(--shiki-dark-font-style);
+  font-weight: var(--shiki-dark-font-weight);
+  text-decoration: var(--shiki-dark-text-decoration);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .wiki-content-body .shiki span {
+    color: var(--shiki-dark);
+    background-color: var(--shiki-dark-bg);
+    font-style: var(--shiki-dark-font-style);
+    font-weight: var(--shiki-dark-font-weight);
+    text-decoration: var(--shiki-dark-text-decoration);
+  }
 }
 
 .code-toolbar {
