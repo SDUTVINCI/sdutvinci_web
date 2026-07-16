@@ -55,9 +55,14 @@ const stats = computed(() => [
       <div v-if="newsList.length" class="news-list">
         <article v-for="item in newsList" :key="item.path" class="news-card">
           <NuxtLink class="news-card-main" :to="item.path">
-            <span class="news-date">{{ formatDate(item.date) }}</span>
-            <h3>{{ item.title }}</h3>
-            <p>{{ item.summary || item.description || '查看完整新闻内容。' }}</p>
+            <span v-if="item.image" class="news-card-media">
+              <img :src="item.image" :alt="item.title" loading="lazy">
+            </span>
+            <span class="news-card-copy">
+              <span class="news-date">{{ formatDate(item.date) }}</span>
+              <h3>{{ item.title }}</h3>
+              <span class="news-card-summary">{{ item.summary || item.description || '查看完整新闻内容。' }}</span>
+            </span>
           </NuxtLink>
 
           <div v-if="item.tags?.length" class="news-tags">

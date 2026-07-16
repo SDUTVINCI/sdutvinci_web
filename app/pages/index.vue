@@ -1,7 +1,18 @@
 <script setup lang="ts">
+import { homePromoAutoplayMs, homePromoSlides } from '~/data/home-promos'
+import { roboconRecordedYearCount } from '~/data/robocon-achievements'
+
+type Member = Record<string, any>
+
 useHead({
   title: '山东理工大学 Vinci 机器人队'
 })
+
+const { data: rawMembers } = await useAsyncData<Member[]>('members:home-total', () =>
+  queryCollection('members').all() as Promise<Member[]>
+)
+
+const totalMemberCount = computed(() => rawMembers.value?.length ?? 0)
 
 const heroLinks = [
   { label: 'Bilibili', href: 'https://space.bilibili.com/471524675', external: true },
@@ -27,8 +38,8 @@ const featureSections = [
     kicker: '高光时刻',
     title: '从省赛到国赛，持续打磨稳定的赛场表现',
     text: [
-      '2016 至 2025 年，团队围绕 Robocon 主赛、技能赛、马术赛、排球赛持续参赛。',
-      '近年多次获得国赛二等奖、三等奖，并在 2018 年获得 Robocon 国赛一等奖。'
+      '2016 至 2026 年，团队围绕 Robocon 主赛、技能赛、马术赛、排球赛持续参赛。',
+      '近年多次获得国赛二等奖、三等奖，并在 2026 年获得 Robocon 排球赛国赛一等奖。'
     ],
     image: '/images/cheer.png',
     imageAlt: 'Vinci 机器人队赛场合影',
@@ -85,12 +96,12 @@ const featureSections = [
   }
 ]
 
-const stats = [
-  { value: '10 年', label: 'Robocon 参赛积累' },
+const stats = computed(() => [
+  { value: `${roboconRecordedYearCount} 年`, label: 'Robocon 参赛积累' },
   { value: '5 类', label: '机械、电控、算法等方向' },
-  { value: '20+', label: '当前展示成员' },
-  { value: '2018', label: 'Robocon 国赛一等奖' }
-]
+  { value: String(totalMemberCount.value), label: '历史累计成员' },
+  { value: '2026', label: 'Robocon 排球赛国赛一等奖' }
+])
 </script>
 
 <template>
@@ -136,6 +147,8 @@ const stats = [
         <span>{{ stat.label }}</span>
       </div>
     </section>
+
+    <HomePromoCarousel :slides="homePromoSlides" :autoplay-ms="homePromoAutoplayMs" />
 
     <section class="feature-stack" aria-label="首页内容">
       <article
