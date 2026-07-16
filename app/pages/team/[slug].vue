@@ -115,7 +115,7 @@ const relatedMembers = computed(() => {
         <p v-if="roleText" class="profile-role">{{ roleText }}</p>
 
         <div class="profile-tags">
-          <span v-if="member.time">{{ member.time }} 赛季</span>
+          <span v-if="member.time">{{ formatSeasonList(member.time) }} 赛季</span>
           <span v-if="member.advisor">顾问 {{ formatSeasonList(member.advisor) }}</span>
           <span v-if="member.grade">{{ member.grade }} 级</span>
           <span v-if="member.affiliation">{{ member.affiliation }}</span>

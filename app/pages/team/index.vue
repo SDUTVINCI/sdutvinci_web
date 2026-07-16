@@ -10,7 +10,6 @@ const { data: rawMembers } = await useAsyncData<Member[]>('members:list', () =>
 )
 
 const search = ref('')
-const selectedSeason = ref('25')
 const selectedGroup = ref('all')
 
 const groupDefs = [
@@ -45,7 +44,7 @@ const allMembers = computed(() =>
   })
 )
 
-const seasonTabs = computed(() => {
+const availableSeasons = computed(() => {
   const seasons = new Set<string>()
 
   for (const member of allMembers.value) {
@@ -53,19 +52,27 @@ const seasonTabs = computed(() => {
     splitSeason(member.advisor).forEach((season) => seasons.add(season))
   }
 
+  return [...seasons].sort((a, b) => Number(b) - Number(a))
+})
+
+const latestSeason = computed(() => availableSeasons.value[0] ?? 'all')
+const selectedSeason = ref(latestSeason.value)
+
+const seasonTabs = computed(() => {
   return [
     { label: '全部赛季', value: 'all' },
-    ...[...seasons]
-      .sort((a, b) => Number(b) - Number(a))
-      .map((season) => ({ label: `${season} 赛季`, value: season }))
+    ...availableSeasons.value.map((season) => ({ label: `${season} 赛季`, value: season }))
   ]
 })
 
 const hasSeason = (member: Member, season: string) => {
   if (season === 'all') return true
-  if (normalize(member.type).includes('指导老师') || normalize(member.role).includes('指导老师')) return true
 
-  return splitSeason(member.time).includes(season) || splitSeason(member.advisor).includes(season)
+  const memberSeasons = [...splitSeason(member.time), ...splitSeason(member.advisor)]
+  const isTeacher = normalize(member.type).includes('指导老师') || normalize(member.role).includes('指导老师')
+  if (isTeacher && !memberSeasons.length) return true
+
+  return memberSeasons.includes(season)
 }
 
 const isAdvisorForSeason = (member: Member, season: string) => {
@@ -133,12 +140,27 @@ const groupedMembers = computed(() =>
     .filter((group) => group.members.length)
 )
 
-const stats = computed(() => [
-  { value: allMembers.value.length, label: '成员档案' },
-  { value: filteredMembers.value.length, label: selectedSeason.value === 'all' ? '当前筛选' : `${selectedSeason.value} 赛季展示` },
-  { value: allMembers.value.filter((member) => member.type === '指导老师').length, label: '指导老师' },
-  { value: allMembers.value.filter((member) => member.advisor).length, label: '顾问记录' }
-])
+const isTeacher = (member: Member) =>
+  normalize(member.type).includes('指导老师') || normalize(member.role).includes('指导老师')
+
+const stats = computed(() => {
+  const season = selectedSeason.value
+  const teachers = allMembers.value.filter((member) =>
+    isTeacher(member) && hasSeason(member, season)
+  )
+  const advisors = allMembers.value.filter((member) =>
+    season === 'all'
+      ? splitSeason(member.advisor).length > 0
+      : splitSeason(member.advisor).includes(season)
+  )
+
+  return [
+    { value: allMembers.value.length, label: '成员档案' },
+    { value: filteredMembers.value.length, label: season === 'all' ? '当前筛选' : `${season} 赛季展示` },
+    { value: teachers.length, label: season === 'all' ? '全部赛季指导老师' : `${season} 赛季指导老师` },
+    { value: advisors.length, label: season === 'all' ? '全部赛季顾问记录' : `${season} 赛季顾问` }
+  ]
+})
 </script>
 
 <template>

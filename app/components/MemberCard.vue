@@ -32,7 +32,7 @@ const displayName = computed(() => String(props.member.name || '成员'))
 const memberPath = computed(() => `/team/${encodeURIComponent(displayName.value)}`)
 
 const seasonText = computed(() => {
-  const time = props.member.time ? `${props.member.time} 赛季` : ''
+  const time = props.member.time ? `${formatSeasonList(props.member.time)} 赛季` : ''
   const advisor = props.member.advisor ? `顾问 ${formatSeasonList(props.member.advisor)}` : ''
   return [time, advisor].filter(Boolean).join(' / ')
 })
