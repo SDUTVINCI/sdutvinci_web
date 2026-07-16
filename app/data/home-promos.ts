@@ -23,7 +23,7 @@ export const homePromoSlides: HomePromoSlide[] = [
     image: '/images/news/2026-robocon-volleyball/competition.jpg',
     imageAlt: 'Vinci 机器人队参加 2026 Robocon 排球赛',
     href: '/news/2026-07-16-robocon-volleyball-national-first-prize',
-    cta: '阅读夺冠新闻',
+    cta: '阅读比赛新闻',
     tone: 'victory',
     position: 'center 56%'
   },
