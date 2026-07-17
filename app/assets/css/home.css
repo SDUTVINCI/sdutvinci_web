@@ -428,8 +428,21 @@
   }
 
   .promo-viewport {
+    display: grid;
     min-height: 590px;
     border-radius: 9px;
+  }
+
+  /*
+   * 手机端让三张幻灯片共同参与高度计算，轮播会以内容最多的一张为准。
+   * 这样标题或摘要变长时，按钮也不会被挤进底部的进度控制区。
+   */
+  .promo-slide {
+    position: relative;
+    inset: auto;
+    grid-area: 1 / 1;
+    min-width: 0;
+    min-height: 590px;
   }
 
   .promo-viewport::before {
