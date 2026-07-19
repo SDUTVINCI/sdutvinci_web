@@ -10,15 +10,19 @@ image: /images/news/2026-robocon-volleyball/round-of-16-nanchang-8-6.jpg
 summary: 山东理工大学 Vinci 机器人队在 2026 年全国大学生机器人大赛 Robocon 排球赛中获得国赛一等奖。
 ---
 
-2026 年 7 月 16 日，山东理工大学 Vinci 机器人队在全国大学生机器人大赛 Robocon 排球赛中获得**国赛一等奖**。这是属于每一位参赛队员、指导老师与历届团队成员的共同荣誉，也为 Vinci 的 Robocon 参赛历程写下了新的高光时刻。
 
-![山东理工大学 8 比 6 战胜南昌大学](/images/news/2026-robocon-volleyball/round-of-16-nanchang-8-6.jpg)
+
+2026 年 7 月 16 日，山东理工大学 Vinci 机器人队在全国大学生机器人大赛 Robocon 排球赛中获得**国赛一等奖**。这是属于每一位参赛队员、指导老师与历届团队成员的共同荣誉，也为 Vinci 的 Robocon 参赛历程写下了新的高光时刻。
+![Vinci 机器人队荣获 2026 Robocon 排球赛国赛一等奖](/images/news/2026-robocon-volleyball/national-first-prize.jpg)
+
+
 
 ## 8:6 战胜南昌大学，晋级全国八强
 
 在 7 月 16 日进行的机器人排球挑战赛 16 进 8 淘汰赛中，山东理工大学迎战南昌大学。经过场上较量，Vinci 机器人队以 **8:6** 获胜，成功晋级全国八强。
-
 ![2026 Robocon 排球赛 16 进 8 赛程](/images/news/2026-robocon-volleyball/knockout-schedule.jpg)
+![山东理工大学 8 比 6 战胜南昌大学](/images/news/2026-robocon-volleyball/round-of-16-nanchang-8-6.jpg)
+
 
 ## 7:8 惜败西安交通大学
 
