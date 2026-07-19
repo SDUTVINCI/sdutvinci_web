@@ -55,8 +55,7 @@ const availableSeasons = computed(() => {
   return [...seasons].sort((a, b) => Number(b) - Number(a))
 })
 
-const latestSeason = computed(() => availableSeasons.value[0] ?? 'all')
-const selectedSeason = ref(latestSeason.value)
+const selectedSeason = ref('all')
 
 const seasonTabs = computed(() => {
   return [
