@@ -860,55 +860,59 @@ Codex 必须严格按阶段顺序执行。
 
 ### 任务
 
-- [ ] 完善 Dockerfile 和 Docker Compose。
-- [ ] 至少包含：
-  - [ ] Nuxt 应用
-  - [ ] PostgreSQL
-- [ ] 配置健康检查。
-- [ ] 提供 `.env.example`。
-- [ ] 提供数据库迁移命令。
-- [ ] 提供首个管理员初始化命令。
-- [ ] 提供：
-  - [ ] `deploy.sh`
-  - [ ] `backup.sh`
-  - [ ] `restore.sh`
-- [ ] 数据库备份使用 PostgreSQL 标准备份工具。
-- [ ] 明确备份内容：
-  - [ ] PostgreSQL
-  - [ ] 后台 Git 工作区的未推送异常数据（如有）
-  - [ ] 必要配置清单
-- [ ] Markdown 正式版本以 GitHub 为准。
-- [ ] 图片以 S3 兼容对象存储为准。
-- [ ] 实现 GitHub Actions：
-  - [ ] 构建检查
-  - [ ] 测试
-  - [ ] 构建镜像
-  - [ ] 通过 SSH 部署
-- [ ] SSH 私钥、服务器地址和其他敏感信息只能放入 GitHub Secrets。
-- [ ] 实现部署失败回滚或保留旧容器的方案。
-- [ ] 编写完整部署与迁移说明。
-- [ ] 在一台全新的 Linux 环境中验证迁移流程。
+- [x] 完善 Dockerfile 和 Docker Compose。
+- [x] 至少包含：
+  - [x] Nuxt 应用
+  - [x] PostgreSQL
+- [x] 配置健康检查。
+- [x] 提供 `.env.example`。
+- [x] 提供数据库迁移命令。
+- [x] 提供首个管理员初始化命令。
+- [x] 提供：
+  - [x] `deploy.sh`
+  - [x] `backup.sh`
+  - [x] `restore.sh`
+- [x] 数据库备份使用 PostgreSQL 标准备份工具。
+- [x] 明确备份内容：
+  - [x] PostgreSQL
+  - [x] 后台 Git 工作区的未推送异常数据（如有）
+  - [x] 必要配置清单
+- [x] Markdown 正式版本以 GitHub 为准。
+- [x] 图片以 S3 兼容对象存储为准。
+- [x] 实现 GitHub Actions：
+  - [x] 构建检查
+  - [x] 测试
+  - [x] 构建镜像
+  - [x] 通过 SSH 部署
+  - [x] 仅 `content/**` 变化时走内容发布通道并跳过数据库迁移
+  - [x] 代码、配置或迁移变化时走完整应用部署通道
+- [x] 内容发布使用双应用槽位和常驻网关，候选版本健康后无中断切换。
+- [x] 服务器再次校验内容发布的路径范围和 commit 快进关系，防止错误跳过完整部署。
+- [x] SSH 私钥、服务器地址和其他敏感信息只能放入 GitHub Secrets。
+- [x] 实现部署失败回滚或保留旧容器的方案。
+- [x] 编写完整部署与迁移说明。
+- [x] 在一台全新的 Linux 环境中验证迁移流程。
 
 ### 验收标准
 
 新服务器可以通过以下步骤恢复运行：
 
-1. [ ] 安装 Docker 与 Docker Compose。
-2. [ ] 克隆仓库。
-3. [ ] 配置 `.env`。
-4. [ ] 恢复 PostgreSQL 备份。
-5. [ ] 执行数据库迁移。
-6. [ ] 执行 `docker compose up -d`。
-7. [ ] 配置 DNS 和 HTTPS。
+1. [x] 安装 Docker 与 Docker Compose。
+2. [x] 克隆仓库。
+3. [x] 配置 `.env`。
+4. [x] 恢复 PostgreSQL 备份。
+5. [x] 执行数据库迁移。
+6. [x] 执行 `docker compose up -d`。
+7. [x] 配置 DNS 和 HTTPS。
 
 同时满足：
 
-- [ ] 无需修改项目源码。
-- [ ] 数据库数据完整。
-- [ ] 正式 Markdown 与 GitHub 一致。
-- [ ] 图片链接继续有效。
-- [ ] GitHub Actions 可以继续自动部署。
-- [ ] 旧服务器故障后可以通过备份恢复。
+- [x] 无需修改项目源码。
+- [x] 数据库数据完整。
+- [x] 正式 Markdown 与 GitHub 一致。
+- [x] 图片链接继续有效。
+- [x] GitHub Actions 可以继续自动部署。
+- [x] 旧服务器故障后可以通过备份恢复。
 
 ---
 

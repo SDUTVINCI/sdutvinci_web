@@ -1,0 +1,165 @@
+name: ${COMPOSE_PROJECT_NAME:-vinci-cms}
+
+x-app: &app
+  image: ${APP_IMAGE:-sdutvinci-web}:${APP_IMAGE_TAG:-local}
+  build:
+    context: .
+    target: runtime
+  restart: unless-stopped
+  depends_on:
+    postgres:
+      condition: service_healthy
+  environment:
+    NODE_ENV: production
+    HOST: 0.0.0.0
+    PORT: 3000
+    NUXT_PUBLIC_SITE_URL: ${NUXT_PUBLIC_SITE_URL:?NUXT_PUBLIC_SITE_URL is required}
+    DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+    DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
+    DATABASE_SSL: ${DATABASE_SSL:-false}
+    CMS_AUTH_SECRET: ${CMS_AUTH_SECRET:?CMS_AUTH_SECRET is required}
+    CMS_SESSION_COOKIE: ${CMS_SESSION_COOKIE:-vinci_cms_session}
+    CMS_SESSION_TTL_HOURS: ${CMS_SESSION_TTL_HOURS:-168}
+    CMS_SECURE_COOKIES: ${CMS_SECURE_COOKIES:-true}
+    CMS_CONTENT_ROOT: /app/content
+    CMS_GIT_WORKTREE: /var/lib/vinci-cms/worktree
+    CMS_GIT_REMOTE_URL: ${CMS_GIT_REMOTE_URL:?CMS_GIT_REMOTE_URL is required}
+    CMS_GIT_REMOTE: ${CMS_GIT_REMOTE:-origin}
+    CMS_GIT_BRANCH: ${CMS_GIT_BRANCH:-main}
+    CMS_GIT_AUTHOR_NAME: ${CMS_GIT_AUTHOR_NAME:-Vinci CMS}
+    CMS_GIT_AUTHOR_EMAIL: ${CMS_GIT_AUTHOR_EMAIL:-cms@localhost}
+    S3_ENDPOINT: ${S3_ENDPOINT:?S3_ENDPOINT is required}
+    S3_REGION: ${S3_REGION:?S3_REGION is required}
+    S3_BUCKET: ${S3_BUCKET:?S3_BUCKET is required}
+    S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?S3_ACCESS_KEY_ID is required}
+    S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?S3_SECRET_ACCESS_KEY is required}
+    S3_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL:?S3_PUBLIC_BASE_URL is required}
+    S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-false}
+    S3_KEY_PREFIX: ${S3_KEY_PREFIX:-images}
+    CMS_IMAGE_MAX_BYTES: ${CMS_IMAGE_MAX_BYTES:-10485760}
+    CMS_IMAGE_MAX_WIDTH: ${CMS_IMAGE_MAX_WIDTH:-2560}
+    CMS_IMAGE_MAX_HEIGHT: ${CMS_IMAGE_MAX_HEIGHT:-2560}
+    CMS_IMAGE_WEBP_QUALITY: ${CMS_IMAGE_WEBP_QUALITY:-82}
+  healthcheck:
+    test:
+      [
+        "CMD",
+        "node",
+        "-e",
+        "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+      ]
+    interval: 10s
+    timeout: 5s
+    retries: 12
+    start_period: 30s
+  volumes:
+    - cms_git_worktree:/var/lib/vinci-cms/worktree
+    - type: bind
+      source: ${CMS_GIT_SSH_KEY_FILE:?CMS_GIT_SSH_KEY_FILE is required}
+      target: /run/secrets/cms_git_ssh_key
+      read_only: true
+    - type: bind
+      source: ${CMS_GIT_KNOWN_HOSTS_FILE:?CMS_GIT_KNOWN_HOSTS_FILE is required}
+      target: /run/secrets/cms_git_known_hosts
+      read_only: true
+  networks:
+    - frontend
+    - backend
+
+services:
+  postgres:
+    image: postgres:17-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+
+  app-blue:
+    <<: *app
+
+  app-green:
+    <<: *app
+
+  gateway:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    depends_on:
+      app-blue:
+        condition: service_healthy
+    entrypoint: ["/usr/local/bin/vinci-gateway-entrypoint.sh"]
+    ports:
+      - "${APP_BIND_ADDRESS:-127.0.0.1}:${APP_PORT:-3000}:8080"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8080/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    volumes:
+      - gateway_config:/config
+      - type: bind
+        source: ./docker/gateway-entrypoint.sh
+        target: /usr/local/bin/vinci-gateway-entrypoint.sh
+        read_only: true
+      - type: bind
+        source: ./docker/Caddyfile.default
+        target: /etc/caddy/Caddyfile.default
+        read_only: true
+    networks:
+      - frontend
+
+  migrate:
+    image: ${APP_OPS_IMAGE:-sdutvinci-web-ops}:${APP_IMAGE_TAG:-local}
+    build:
+      context: .
+      target: operations
+    profiles: ["tools"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
+      DATABASE_SSL: ${DATABASE_SSL:-false}
+    command: ["npm", "run", "db:migrate"]
+    networks:
+      - backend
+
+  admin:
+    image: ${APP_OPS_IMAGE:-sdutvinci-web-ops}:${APP_IMAGE_TAG:-local}
+    build:
+      context: .
+      target: operations
+    profiles: ["tools"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
+      DATABASE_SSL: ${DATABASE_SSL:-false}
+      CMS_AUTH_SECRET: ${CMS_AUTH_SECRET:?CMS_AUTH_SECRET is required}
+    command: ["npm", "run", "cms:admin"]
+    networks:
+      - backend
+
+volumes:
+  postgres_data:
+  cms_git_worktree:
+  gateway_config:
+
+networks:
+  frontend:
+  backend:
+    internal: true

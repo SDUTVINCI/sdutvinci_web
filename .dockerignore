@@ -1,0 +1,11 @@
+.git
+.github
+.data
+.env
+.nuxt
+.output
+.deploy
+backups
+node_modules
+npm-debug.log*
+*.log

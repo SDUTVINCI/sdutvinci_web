@@ -738,3 +738,102 @@
 - 阶段 7 总体进度已勾选；阶段 8 尚未启动。
 - 阶段 7 实现提交为 `7aef3d7`；本次验收记录单独提交，未推送 GitHub。
 - 后续如启动新工作，应先明确进入阶段 8；不得在阶段 7 收尾提交中提前加入 Docker、自动部署、备份、恢复或迁移内容。
+
+## 2026-07-26：阶段 8——Docker、自动部署、备份与迁移
+
+### 完成状态
+
+- 阶段 8 的实现、隔离容器演练、脚本检查、CMS 回归、类型检查和生产构建已完成，等待维护者人工验收。
+- 需求文档中阶段 8 的任务和验收标准已勾选；总体进度保持未勾选，人工验收通过后再更新。
+- 没有开始阶段 9 的安全专项、最终渗透检查或最终验收。
+- 启动核对时发现 `main` 和 `origin/main` 实际均为 `925779b`，而不是交接说明中的本地超前 2 个提交；维护者已明确确认按实际同步状态继续。
+
+### Docker 与运行架构
+
+- 新增多阶段 `Dockerfile`：`runtime` 镜像只包含 Nitro 输出、构建时 Markdown、Git/SSH 运行工具；`operations` 镜像包含 migration 与首个管理员命令所需源码和依赖。
+- runtime 入口以 root 准备持久 Git volume 和 SSH 文件权限，随后通过 `gosu` 以 `node` 用户运行应用。
+- `compose.yaml` 包含 Nuxt 应用、PostgreSQL 17、按需 `migrate` 和 `admin` services；PostgreSQL 仅在 internal network，不向宿主机暴露端口。
+- `postgres_data` 与 `cms_git_worktree` 是持久 volumes。正式 Markdown 只使用镜像内构建副本，运行时没有第二份宿主机 Markdown mount。
+- PostgreSQL 使用 `pg_isready`；新增 `/api/health` 只执行 `select 1`，应用 Docker healthcheck 使用该接口。
+- `.env.example` 增加 Compose、PostgreSQL、镜像、宿主机 Git key/known_hosts、部署校验和备份路径约定，没有真实凭据。
+
+### 部署与 GitHub Actions
+
+- `scripts/deploy.sh` 要求完整 commit SHA、干净部署仓库、匹配的 `origin`，并验证目标属于远端目标分支；应用镜像 tag 必须与 commit 相同。
+- 部署依次拉取 runtime/operations 镜像、等待 PostgreSQL、执行 migration、更新应用和检查健康。
+- 成功状态写入忽略跟踪的 `.deploy/current`。健康失败时恢复旧镜像和旧 commit；旧镜像不自动 prune。数据库 migration 不自动 down，文档明确要求 expand/contract 向后兼容。
+- `.github/workflows/deploy.yml` 在 PR/main push 上使用隔离 PostgreSQL 执行测试、脚本/Compose 检查、类型检查和 production build；构建两个 commit SHA 镜像，main push 后通过 SSH 部署。
+- Actions 只从 GitHub Secrets 读取服务器地址、用户、端口、路径、SSH 私钥和固定 known_hosts。数据库、S3、CMS Auth 和 CMS Git 凭据保留在服务器。
+
+### 备份、恢复与防误操作
+
+- `scripts/backup.sh` 校验项目外绝对路径、Compose project/service labels、数据库名和用户，使用 PostgreSQL `pg_dump --format=custom`，并运行 `pg_restore --list` 与 SHA-256 校验。
+- 备份包含 PostgreSQL、非敏感 manifest/config checklist；CMS Git 工作区已初始化时还包含全 refs bundle、tracked binary patch、untracked tar、status 和 HEAD。
+- 正式 Markdown 明确以 GitHub 为准，图片以 S3 兼容存储为准；普通备份不复制 `.env`、私钥或 S3 图片。
+- `scripts/restore.sh` 要求绝对非 symlink 备份目录、checksum/格式校验、Compose/数据库目标校验，以及精确 `RESTORE_CONFIRM=<project>:<database>`。
+- restore 只接受完全空的目标库，不执行 drop、clean 或覆盖。Git 异常资料只供隔离人工审查，不自动覆盖正式 CMS Git volume。
+- 三个运维脚本共用不可并发的 `.deploy/operation.lock`，异常退出会释放。
+
+### 文档与命令
+
+- 新增 `docs/DEPLOYMENT.md`，覆盖 Linux 前置、首次安装、Docker 初始化、Actions Secrets、回滚、备份、恢复、DNS/HTTPS 和全新服务器迁移。
+- `docs/ARCHITECTURE.md` 记录 Docker/部署/备份长期边界；`docs/CMS_SETUP.md` 更新到阶段 8。
+- `db:migrate`、`cms:admin`、`cms:content:sync` 改为 `.env` 存在时读取；运维容器中使用 Compose 注入环境，不要求镜像包含 `.env`。
+- 新增 `npm run docker:migrate` 与 `npm run docker:admin`。
+- 没有数据库 schema 或 migration 变更，没有新增 npm 依赖。
+
+### 自动化验证
+
+- runtime 与 operations 两个 Docker target 构建成功；容器中的 Nuxt production build、Wiki 226 文件检查和 Nitro node-server 构建成功。
+- 独立 Compose 项目完成：空库 migration、应用/数据库健康、custom-format backup、非空目标 restore 拒绝、第二个空库 restore、再次 migration 与恢复后应用健康。
+- CMS Git 异常备份用临时 volume 和本地未推送测试 commit 验证，bundle 可列出 HEAD/branch，patch 与 untracked archive 均生成。
+- 另用一次性 `docker:29-cli` Linux controller、只读源码 mount、独立 Compose project 和独立 volumes 验证全新 Linux 控制环境中的 Compose 解析、PostgreSQL、migration、应用启动与健康。
+- 所有演练只使用测试凭据、`.invalid` S3/Git 地址和隔离 Docker volumes；没有连接正常 `DATABASE_URL`、真实 S3、GitHub 发布工作区或生产服务器。演练容器与 volumes 已移除。
+- `TEST_DATABASE_URL=postgresql://.../vinci_cms_test`：7 个测试文件、33 项全部通过；普通 `DATABASE_URL` 从测试进程中移除。
+- ShellCheck 0.11.0、`bash -n`、Compose config、GitHub Actions YAML 解析、`git diff --check`：通过。
+- `npm run typecheck`：通过。
+- `npm run build`：通过；保留阶段 1～7 已知的静态图片解析、chunk 和 Git bigint target warning。
+
+### 人工验收前置
+
+1. 只在测试服务器或隔离虚拟机按 `docs/DEPLOYMENT.md` 准备 Docker、`.env`、测试数据库、测试 S3、测试 Deploy Key 和固定 known_hosts。
+2. 验证 PostgreSQL/migration/admin/app 健康，再验证阶段 1～7 登录、草稿、审核、发布、历史、图片和删除恢复功能。
+3. 运行备份，检查 dump、manifest、config checklist、checksum 和 CMS Git 异常文件。
+4. 在另一个空数据库/Compose project 使用精确确认令牌恢复；确认非空库会被拒绝且正常数据未改变。
+5. 在测试仓库或 fork 配置测试用 `production` environment Secrets 后，通过其 `main` 和临时测试服务器验证镜像发布、SSH 部署和故障回滚；普通测试分支只验证、不部署，不得直接用真实生产环境做首次演练。
+6. 按迁移章节在新测试 Linux 环境恢复数据库，确认 GitHub Markdown 和测试 S3 图片继续有效，并验证 DNS/HTTPS 配置。
+7. 人工验收通过后，只勾选阶段 8 总体进度并追加验收记录；阶段 9 必须等待维护者明确启动。
+
+## 2026-07-26：阶段 8 部署方案调整——同仓库内容分流与无中断切换
+
+用户确认 Markdown 继续保留在同一仓库的 `content/`，不拆分仓库；阶段 8 改为按目录自动分流。以下内容覆盖本文件前一节中“单 app 容器替换”和“总是构建两个镜像”的描述。
+
+### 设计结论
+
+- Nuxt Content 3 的 SQLite 索引和 540 条前台路由在构建期生成，不能只替换运行中容器的 Markdown 文件，否则文件、索引和预渲染输出可能不一致。
+- 纯 `content/**` commit 仍构建不可变 runtime 镜像，但不构建 operations 镜像、不执行数据库 migration。
+- 任何 Vue、TypeScript、配置、依赖、Docker、workflow、migration 或 `content/` 外变化都保守走 `application` 模式，构建 runtime/operations 并执行完整部署；混合 commit 也属于 `application`。
+- Compose 现在包含 `app-blue`、`app-green` 与常驻 Caddy `gateway`。候选槽位先通过应用健康检查，Caddy graceful reload 后再通过网关健康检查；原活动槽位保留到下一次发布。
+- `gateway_config` volume 保存活动 upstream，网关重启后不回到默认槽位。公网仍只连接宿主机回环端口，两个 Nuxt 槽位不暴露宿主机端口。
+
+### 防误操作
+
+- 新增 `scripts/classify-deployment.sh`，CI 使用完整历史比较起始与目标 commit；空差异、首次 push、workflow dispatch 或非 `content/**` 变化都返回 `application`。
+- `scripts/deploy.sh` 不信任 CI 分类：`content` 模式必须已有双槽位状态，并在服务器用 `--no-renames` 再次检查从当前线上 commit 到目标 commit 的全部路径。
+- 所有部署要求当前线上 commit 是目标 commit 的祖先，拒绝倒序、分叉和并发乱序发布；镜像 tag 继续必须等于完整目标 SHA。
+- 第一次从阶段 8 原单 `app` 容器迁移时必须走 `application`。候选槽位健康后才停止旧容器释放端口；网关失败会尝试重新启动旧容器。该一次性迁移可能有短暂中断。
+- 备份脚本按 `.deploy/current` 选择活动槽位读取共享 CMS Git 工作区；备份、恢复和数据库保护边界未放宽。
+
+### 本轮自动化验证
+
+- 合成 Git commit 验证分类：仅 `content/**` 返回 `content`；仅文档或空差异返回 `application`。
+- ShellCheck、`bash -n`/`sh -n`、Compose config、GitHub Actions YAML 和 `git diff --check` 均通过。
+- 使用仅含测试库的 `TEST_DATABASE_URL`，并从测试进程移除普通 `DATABASE_URL`：CMS 7 个测试文件、33 项全部通过。
+- `npm run typecheck` 和 `npm run build` 通过；production build 处理 260 个内容文件并预渲染 540 条路由，保留既有静态图片、chunk 和 bigint target warning。
+- 最终源码的 runtime 与 operations Docker targets 均构建成功；最终镜像在隔离 PostgreSQL 17、`.invalid` Git/S3 地址和临时测试凭据下完成 migration、非 root 应用启动、网关健康检查。
+- 隔离双槽位演练从 blue 切到 green，停止旧槽位后网站继续健康，gateway 重启后仍指向 green；反向切换期间连续 120 次健康请求为 0 失败。
+- 所有测试 Compose 项目的容器、网络和 volumes 已清理；没有连接正常 `DATABASE_URL`、真实 Git、S3、GitHub package 或服务器，没有 push 或外部部署。
+
+### 人工验收
+
+按 `docs/DEPLOYMENT.md` 的教程五、教程六、教程十一和第 13 节清单，在测试仓库/测试服务器验证 `content` 与 `application` 两条流水线、连续请求、模式二次校验和候选失败保护。验收通过前阶段 8 总体进度继续保持未勾选，阶段 9 不得启动。
