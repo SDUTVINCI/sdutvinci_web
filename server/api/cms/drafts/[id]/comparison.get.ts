@@ -1,7 +1,9 @@
 import { createError, getRouterParam } from 'h3'
 import { z } from 'zod'
-import { getCmsDraft } from '../../../services/cms-drafts'
-import { requireCmsRequestAuth } from '../../../utils/cms-http'
+import { getCmsDraft } from '../../../../services/cms-drafts'
+import { getCmsDraftComparison } from '../../../../services/cms-reviews'
+import { requireCmsRequestAuth } from '../../../../utils/cms-http'
+import { throwCmsWorkflowError } from '../../../../utils/cms-workflow-http'
 
 export default defineEventHandler(async (event) => {
   const auth = await requireCmsRequestAuth(event)
@@ -12,5 +14,9 @@ export default defineEventHandler(async (event) => {
     auth.user.roles.includes('admin')
   )
   if (!draft) throw createError({ statusCode: 404, message: '草稿不存在' })
-  return { draft }
+  try {
+    return { comparison: await getCmsDraftComparison(id) }
+  } catch (error) {
+    throwCmsWorkflowError(error)
+  }
 })

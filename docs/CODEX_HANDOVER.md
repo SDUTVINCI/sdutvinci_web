@@ -411,3 +411,77 @@
 - 需求文档中的阶段 3 总体进度和通用模板“等待本阶段验收通过”已勾选。
 - 阶段 3 实现以提交 `23d838e` 为基础，并包含测试数据库隔离 `e7698a3`、编辑器挂载修正 `9f8f7f0` 和所有文章混合可视化 `4fa5fc5`。
 - 阶段 4 尚未开始；下一个 Codex 对话应直接从审核流程、编辑锁与版本冲突开始，不再重复阶段 3 工作，也不得提前实现阶段 5 的正式发布和 Git 写入。
+
+## 2026-07-25：阶段 4——审核流程、编辑锁与版本冲突
+
+### 完成状态
+
+- 阶段 4 实现、migration 和自动化验证已完成，等待维护者人工验收。
+- 阶段 4 任务、范围约束和验收标准已勾选；总体进度及通用模板“等待本阶段验收通过”保持未勾选。
+- 未开始阶段 5；没有正式 Markdown 写入、Git Commit/Push、发布记录或历史版本恢复。
+
+### 数据库与状态机
+
+- migration `0006_sturdy_thunderball.sql` 将草稿状态约束扩展为 `draft`、`pending_review`、`rejected`、`approved`、`published`、`withdrawn`。
+- 新增 `review_events`，只追加记录提交、撤回、驳回、通过、恢复编辑和手动重新同步，保留操作者、前后状态、驳回原因、元数据和时间。
+- 新增 `edit_locks`，保存锁目标、持有人、独立租约 ID、获取时间、心跳时间和过期时间；已有文章按 `articleId` 互斥，新文章按 `draftId` 互斥。
+- 状态流为 `draft → pending_review → approved/rejected/withdrawn`；`rejected` 和 `withdrawn` 必须显式恢复为 `draft`。`published` 只为阶段 5 预留，本阶段没有进入该状态的入口。
+- `pending_review` 和 `approved` 不允许保存。提交时释放编辑锁；管理员审核页面不直接修改待审核内容。
+
+### 审核、冲突与编辑锁
+
+- 普通成员可保存、提交审核，并在管理员作出决定前撤回；驳回原因会在草稿页展示。
+- 管理员可在 `/cms/reviews` 查看待审核列表，并在详情页比较 `title`、`description`、`authors` 和正文行差异，填写原因驳回或审核通过。
+- 管理员可审核自己提交的内容，适配只有一名管理员的第一版部署；所有决定仍进入 `review_events`。
+- 编辑页挂载后获取租约，每 20 秒心跳，90 秒未续期自动失效。站内离开主动等待释放，浏览器完成关闭时使用 keepalive 请求尽力释放。
+- 其他用户持锁时页面保持只读并显示持有人。管理员接管会轮换租约，使旧页面无法心跳或保存，并向 `audit_logs` 写入原持有人、接管人、目标和可选原因。
+- 草稿保存必须同时通过乐观版本号和有效编辑租约校验，旧页面或被接管页面不能覆盖新内容。
+- 提交和审核通过前直接读取正式 Markdown 重新计算 SHA-256，不依赖可能过期的 `articles.content_hash`。
+- 冲突时返回“当前文章已有更新，请重新同步后再发布。”，保持草稿和正式 Markdown 不变。用户需撤回、手动对照差异整理，然后明确确认当前正式哈希为新基线；系统不自动合并。
+- 阶段 5 在真正写入前仍必须再次执行实时基线检查，不能把阶段 4 的审核检查当作发布锁。
+
+### 页面与 API
+
+- 页面：更新 `/cms/drafts` 和 `/cms/drafts/:id`；新增 `/cms/reviews`、`/cms/reviews/:id`。
+- 草稿流程 API：`submit`、`withdraw`、`reopen`、`resync`、`comparison`、`review-events`。
+- 编辑锁 API：`GET|POST|PUT|DELETE /api/cms/drafts/:id/lock` 与 `POST /api/cms/drafts/:id/lock/takeover`。
+- 审核 API：`GET /api/cms/reviews`、`GET /api/cms/reviews/:id`、`approve`、`reject`；列表、详情和决定接口都在服务端要求 `admin`。
+- `POST /api/cms/drafts/:id/publish` 不存在；普通成员不能绕过阶段 5 发布。
+
+### 新增和修改文件
+
+- 数据库：`server/db/schema.ts`、`server/db/migrations/0006_sturdy_thunderball.sql` 及 Drizzle meta。
+- 服务与类型：`server/services/cms-edit-locks.ts`、`server/services/cms-reviews.ts`、`server/services/cms-drafts.ts`、`server/services/cms-articles.ts`、`server/utils/cms-workflow-http.ts`、`server/utils/cms-draft-validation.ts`、`shared/types/cms-edit-locks.ts`、`shared/types/cms-reviews.ts`、`shared/types/cms-drafts.ts`。
+- API：`server/api/cms/drafts/[id]/*` 的锁与工作流路由、`server/api/cms/reviews/*`，以及既有草稿读取/保存路由。
+- 页面与样式：`app/pages/cms/drafts/*`、`app/pages/cms/reviews/*`、`app/layouts/cms.vue`、`app/assets/css/cms.css`。
+- 测试：新增 `tests/cms-workflow.integration.test.ts`，并更新阶段 1～3 数据库测试的清理表和草稿锁前置条件。
+- 配置与文档：`.env.example`、`package.json`、`package-lock.json`、`docs/ARCHITECTURE.md`、`docs/CMS_SETUP.md`、本文件和需求进度清单。
+
+### 依赖与环境
+
+- 新增直接依赖 `diff` 8.0.x，用于服务端生成逐行正文差异。
+- 应用运行没有新增强制环境变量。`.env.example` 现在明确列出仅用于集成测试的 `TEST_DATABASE_URL`。
+- 集成测试继续只接受 `TEST_DATABASE_URL`，且数据库名称必须包含独立的 `test` 单词；本阶段所有清理都只在 `vinci_cms_test` 中执行。
+
+### 自动化验证
+
+- PostgreSQL 17 隔离库中的 `npm run test:cms`：5 个测试文件、21 项全部通过。
+- 覆盖完整状态流、驳回原因、待审核列表、编辑互斥、管理员接管审计、旧租约失效、主动释放、超时释放、实时哈希冲突、手动重新同步、审核期间再次冲突，以及正式 Markdown 不被业务流程修改。
+- `npm run typecheck`：通过。
+- `npm run build`：通过；Wiki 226 个文件检查正常，Nuxt Content 260 个文件正常，Nitro node-server 构建完成。
+- 真实构建 HTTP 冒烟：成员提交后为 `pending_review`；成员访问审核列表和审核通过接口均为 403；发布路由为 404；管理员看到待审核记录并成功改为 `approved`。
+- HTTP 冒烟和集成测试只使用端口 55432 的临时 `vinci_cms_test`，未连接普通 `DATABASE_URL`。
+
+### 人工验收前置
+
+1. 使用开发数据库执行 `npm run db:migrate`，应用 migration `0006_sturdy_thunderball.sql`。
+2. 执行 `npm run dev`，准备一个普通成员账号和一个管理员账号；同一管理员也允许自行提交并审核。
+3. 按最终回复中的步骤验证保存、提交、撤回、驳回、继续编辑、审核通过、双浏览器锁、管理员接管和版本冲突。
+4. 验收通过后勾选阶段 4 总体进度和通用模板“等待本阶段验收通过”，再启动阶段 5。
+
+### 下一阶段注意事项
+
+- 阶段 5 只能发布 `approved` 草稿，并且写入前必须重新读取正式 Markdown 校验 `base_content_hash`。
+- 只有 Markdown 原子写入、Git Commit 和 Git Push 全部成功后才能进入 `published`；失败时保留 `approved` 草稿并记录原因。
+- 不要绕过阶段 4 的状态机、审核事件或锁租约校验；不要把 PostgreSQL 草稿正文当作正式内容源。
+- 阶段 5 才实现 `publishedAt`、`updatedAt`、`contributors`、独立 Git 工作区、发布记录和历史恢复。

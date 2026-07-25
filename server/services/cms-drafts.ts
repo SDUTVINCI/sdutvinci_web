@@ -4,6 +4,7 @@ import type {
   CmsDraft,
   CmsDraftAuthor,
   CmsDraftSaveInput,
+  CmsDraftStatus,
   CmsDraftSummary
 } from '../../shared/types/cms-drafts'
 import { assessMarkdownVisualSafety } from '../../shared/utils/cms-markdown-safety'
@@ -16,6 +17,7 @@ import {
   userMembers
 } from '../db/schema'
 import { getCmsArticle } from './cms-articles'
+import { assertCmsDraftEditLease } from './cms-edit-locks'
 
 export class CmsDraftConflictError extends Error {
   constructor() {
@@ -26,6 +28,12 @@ export class CmsDraftConflictError extends Error {
 export class CmsDraftNotFoundError extends Error {
   constructor() {
     super('DRAFT_NOT_FOUND')
+  }
+}
+
+export class CmsDraftStateError extends Error {
+  constructor() {
+    super('DRAFT_STATE_INVALID')
   }
 }
 
@@ -86,7 +94,7 @@ const rowsToDrafts = async (rows: Array<typeof drafts.$inferSelect>): Promise<Cm
     preservedFrontmatter: row.preservedFrontmatter,
     systemFrontmatter: systemFrontmatterFrom(row.preservedFrontmatter),
     baseContentHash: row.baseContentHash,
-    status: 'draft',
+    status: row.status as CmsDraftStatus,
     version: row.version,
     visualMode: assessMarkdownVisualSafety(row.body),
     createdAt: row.createdAt.toISOString(),
@@ -95,11 +103,17 @@ const rowsToDrafts = async (rows: Array<typeof drafts.$inferSelect>): Promise<Cm
   }))
 }
 
-const loadDraftRow = async (draftId: string, ownerUserId: string) => {
+const loadDraftRow = async (
+  draftId: string,
+  requesterUserId: string,
+  allowAdmin = false
+) => {
   const [row] = await getDatabase()
     .select()
     .from(drafts)
-    .where(and(eq(drafts.id, draftId), eq(drafts.ownerUserId, ownerUserId)))
+    .where(allowAdmin
+      ? eq(drafts.id, draftId)
+      : and(eq(drafts.id, draftId), eq(drafts.ownerUserId, requesterUserId)))
     .limit(1)
   return row || null
 }
@@ -146,8 +160,21 @@ const replaceDraftAuthors = async (
   }
 }
 
-export const getCmsDraft = async (draftId: string, ownerUserId: string) => {
-  const row = await loadDraftRow(draftId, ownerUserId)
+export const getCmsDraft = async (
+  draftId: string,
+  requesterUserId: string,
+  allowAdmin = false
+) => {
+  const row = await loadDraftRow(draftId, requesterUserId, allowAdmin)
+  return row ? (await rowsToDrafts([row]))[0]! : null
+}
+
+export const getCmsDraftForReview = async (draftId: string) => {
+  const [row] = await getDatabase()
+    .select()
+    .from(drafts)
+    .where(eq(drafts.id, draftId))
+    .limit(1)
   return row ? (await rowsToDrafts([row]))[0]! : null
 }
 
@@ -177,6 +204,7 @@ export const listCmsDrafts = async (ownerUserId: string): Promise<CmsDraftSummar
     articleId: row.articleId,
     collection: row.collection as CmsArticleCollection,
     title: row.title,
+    status: row.status as CmsDraftStatus,
     version: row.version,
     updatedAt: row.updatedAt.toISOString()
   }))
@@ -267,16 +295,18 @@ export const createCmsNewArticleDraft = async (
 
 export const saveCmsDraft = async (
   draftId: string,
-  ownerUserId: string,
-  input: CmsDraftSaveInput
+  requesterUserId: string,
+  input: CmsDraftSaveInput,
+  allowAdmin = false
 ) => {
-  if (!await loadDraftRow(draftId, ownerUserId)) {
+  if (!await loadDraftRow(draftId, requesterUserId, allowAdmin)) {
     throw new CmsDraftNotFoundError()
   }
   const authorKeys = [...new Set(input.authorKeys)]
   await resolveAuthorMembers(authorKeys)
 
   const updated = await getDatabase().transaction(async (tx) => {
+    await assertCmsDraftEditLease(tx, draftId, requesterUserId, input.lockLeaseId)
     const [row] = await tx
       .update(drafts)
       .set({
@@ -289,11 +319,20 @@ export const saveCmsDraft = async (
       })
       .where(and(
         eq(drafts.id, draftId),
-        eq(drafts.ownerUserId, ownerUserId),
+        ...(allowAdmin ? [] : [eq(drafts.ownerUserId, requesterUserId)]),
+        eq(drafts.status, 'draft'),
         eq(drafts.version, input.version)
       ))
       .returning()
-    if (!row) throw new CmsDraftConflictError()
+    if (!row) {
+      const [current] = await tx
+        .select({ status: drafts.status, version: drafts.version })
+        .from(drafts)
+        .where(eq(drafts.id, draftId))
+        .limit(1)
+      if (current && current.status !== 'draft') throw new CmsDraftStateError()
+      throw new CmsDraftConflictError()
+    }
     await replaceDraftAuthors(tx, draftId, authorKeys)
     return row
   })

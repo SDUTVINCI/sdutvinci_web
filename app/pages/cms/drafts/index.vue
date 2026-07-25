@@ -7,6 +7,15 @@ const requestFetch = import.meta.server ? useRequestFetch() : $fetch
 const { data } = await useAsyncData('cms:drafts:list', () =>
   requestFetch<{ drafts: CmsDraftSummary[] }>('/api/cms/drafts')
 )
+
+const statusLabels: Record<CmsDraftSummary['status'], string> = {
+  draft: '草稿',
+  pending_review: '待审核',
+  rejected: '已驳回',
+  approved: '已通过',
+  published: '已发布',
+  withdrawn: '已撤回'
+}
 </script>
 
 <template>
@@ -29,6 +38,7 @@ const { data } = await useAsyncData('cms:drafts:list', () =>
             <th>标题</th>
             <th>类型</th>
             <th>集合</th>
+            <th>状态</th>
             <th>草稿版本</th>
             <th>最后保存</th>
           </tr>
@@ -38,6 +48,7 @@ const { data } = await useAsyncData('cms:drafts:list', () =>
             <td><NuxtLink :to="`/cms/drafts/${draft.id}`">{{ draft.title }}</NuxtLink></td>
             <td>{{ draft.articleId ? '已有文章修改' : '新文章' }}</td>
             <td><span class="cms-badge">{{ draft.collection }}</span></td>
+            <td><span class="cms-badge">{{ statusLabels[draft.status] }}</span></td>
             <td>{{ draft.version }}</td>
             <td>{{ new Date(draft.updatedAt).toLocaleString('zh-CN') }}</td>
           </tr>

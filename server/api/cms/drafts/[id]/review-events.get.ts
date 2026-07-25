@@ -1,7 +1,8 @@
 import { createError, getRouterParam } from 'h3'
 import { z } from 'zod'
-import { getCmsDraft } from '../../../services/cms-drafts'
-import { requireCmsRequestAuth } from '../../../utils/cms-http'
+import { getCmsDraft } from '../../../../services/cms-drafts'
+import { listCmsDraftReviewEvents } from '../../../../services/cms-reviews'
+import { requireCmsRequestAuth } from '../../../../utils/cms-http'
 
 export default defineEventHandler(async (event) => {
   const auth = await requireCmsRequestAuth(event)
@@ -12,5 +13,5 @@ export default defineEventHandler(async (event) => {
     auth.user.roles.includes('admin')
   )
   if (!draft) throw createError({ statusCode: 404, message: '草稿不存在' })
-  return { draft }
+  return { events: await listCmsDraftReviewEvents(id) }
 })

@@ -4,7 +4,7 @@
 
 本文记录网站与 CMS 的长期架构约束。阶段 0 于 2026-07-25 完成首次技术方案确认，阶段 1 于同日落地数据库与身份认证基础，阶段 2 落地成员管理和文章只读索引。后续只有在发生重大架构调整时才修改本文，并应同步在 `docs/CODEX_HANDOVER.md` 追加说明。
 
-当前已接入 PostgreSQL、登录、权限骨架、成员管理、文章只读浏览、Milkdown 编辑器和数据库草稿；尚未接入审核、对象存储或 Git 发布。
+当前已接入 PostgreSQL、登录、权限骨架、成员管理、文章只读浏览、Milkdown 编辑器、数据库草稿、审核流程、编辑锁和正式版本冲突检查；尚未接入对象存储或 Git 发布。
 
 ## 2. 当前项目审查结论
 
@@ -197,12 +197,12 @@ GitHub 是代码和正式 Markdown 的唯一权威来源。恢复旧版本通过
 
 用户禁用使用状态字段，不级联删除审计记录。审计 metadata 使用 JSONB，但常用检索字段必须单独成列。
 
-### 6.2 后续阶段实体
+### 6.2 阶段 3～4 已落地及后续实体
 
 | 阶段 | 表 | 用途 |
 | --- | --- | --- |
 | 3 | `drafts`、`draft_authors` | 正文、保留 Frontmatter、基线内容哈希、创建者、作者关系和乐观保存版本号；阶段 3 状态仅为 `draft` |
-| 4 | `review_events`、`edit_locks` | 审核状态流转、驳回原因、心跳、接管审计 |
+| 4 | `review_events`、`edit_locks` | 只追加的审核状态流转与驳回原因；按文章或新草稿目标建立带租约 ID、心跳与过期时间的独占编辑锁 |
 | 5 | `publish_records` | 操作者、审核者、commit hash、路径、操作类型、失败原因 |
 | 6 | `media_assets` | 对象 key、URL、上传者、关联草稿、图片元数据 |
 | 7 | `article_deletion_events` | 软删除、恢复及其审计关联 |
@@ -263,11 +263,18 @@ description:
 
 - `POST /api/cms/drafts/:id/submit`
 - `POST /api/cms/drafts/:id/withdraw`
+- `POST /api/cms/drafts/:id/reopen`
+- `POST /api/cms/drafts/:id/resync`
+- `GET /api/cms/drafts/:id/comparison`
+- `GET /api/cms/drafts/:id/review-events`
+- `GET|POST|PUT|DELETE /api/cms/drafts/:id/lock`
+- `POST /api/cms/drafts/:id/lock/takeover`
+- `GET /api/cms/reviews`
+- `GET /api/cms/reviews/:id`
 - `POST /api/cms/reviews/:id/approve`
 - `POST /api/cms/reviews/:id/reject`
-- `POST /api/cms/articles/:id/lock`
-- `PUT|DELETE /api/cms/articles/:id/lock`
-- `POST /api/cms/articles/:id/lock/takeover`
+
+锁接口以草稿 ID 作为安全入口，服务端再解析实际锁目标：已有文章统一锁定 `articleId`，因此不同用户的草稿不能同时编辑同一篇正式文章；尚无 `articleId` 的新文章锁定自身 `draftId`。客户端不能自行指定锁目标。
 
 ### 阶段 5 以后
 
@@ -327,6 +334,18 @@ description:
 
 草稿保存从不写 `content/`，也不产生 Git commit。
 
+阶段 4 状态机为：
+
+```text
+draft → pending_review
+pending_review → withdrawn → draft
+pending_review → rejected → draft
+pending_review → approved
+approved → published（仅阶段 5）
+```
+
+`pending_review` 与 `approved` 不可编辑。重新编辑驳回或撤回内容必须显式恢复为 `draft`。提交和审核通过都会读取正式 Markdown 计算实时 SHA-256；不能只信任文章索引中的缓存哈希。发现冲突后保持原状态和内容不变，用户在差异视图中手动整理，再明确确认新正式版本为草稿基线；系统不自动合并。
+
 ### 11.2 发布
 
 ```text
@@ -339,6 +358,8 @@ approved 草稿
   → GitHub Actions 部署
   → 前台读取新的正式 Markdown
 ```
+
+阶段 4 的“审核通过”只把草稿标为 `approved`，不会写 Markdown、执行 Git 或进入 `published`。阶段 5 在真正写入前必须再次读取正式 Markdown 校验基线，不能复用较早的审核结果代替发布前检查。
 
 ### 11.3 图片
 

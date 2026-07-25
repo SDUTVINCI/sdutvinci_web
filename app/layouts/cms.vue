@@ -38,13 +38,16 @@ const handleLogout = async () => {
         <NuxtLink to="/cms/drafts">
           草稿
         </NuxtLink>
+        <NuxtLink v-if="isAdmin" to="/cms/reviews">
+          审核
+        </NuxtLink>
         <NuxtLink to="/cms/members">
           成员
         </NuxtLink>
         <NuxtLink to="/cms/profile">
           个人资料
         </NuxtLink>
-        <span class="cms-nav-hint">{{ isAdmin ? '管理员可维护成员资料' : '成员资料和文章只读开放' }}</span>
+        <span class="cms-nav-hint">{{ isAdmin ? '管理员可审核内容、接管编辑锁并维护成员资料' : '成员可以保存草稿、提交审核并在审核前撤回' }}</span>
       </nav>
 
       <div class="cms-sidebar-user">

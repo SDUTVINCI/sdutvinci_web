@@ -112,11 +112,15 @@ export const drafts = pgTable('drafts', {
   ...timestamps
 }, table => [
   check('drafts_collection_check', sql`${table.collection} in ('news', 'wiki')`),
-  check('drafts_status_check', sql`${table.status} = 'draft'`),
+  check(
+    'drafts_status_check',
+    sql`${table.status} in ('draft', 'pending_review', 'rejected', 'approved', 'published', 'withdrawn')`
+  ),
   check('drafts_version_check', sql`${table.version} >= 1`),
   uniqueIndex('drafts_article_owner_unique').on(table.articleId, table.ownerUserId),
   index('drafts_owner_user_id_index').on(table.ownerUserId),
   index('drafts_article_id_index').on(table.articleId),
+  index('drafts_status_index').on(table.status),
   index('drafts_updated_at_index').on(table.updatedAt)
 ])
 
@@ -133,6 +137,48 @@ export const draftAuthors = pgTable('draft_authors', {
   primaryKey({ columns: [table.draftId, table.memberId], name: 'draft_authors_primary_key' }),
   uniqueIndex('draft_authors_position_unique').on(table.draftId, table.position),
   index('draft_authors_member_id_index').on(table.memberId)
+])
+
+export const reviewEvents = pgTable('review_events', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  draftId: uuid('draft_id')
+    .notNull()
+    .references(() => drafts.id, { onDelete: 'cascade' }),
+  actorUserId: uuid('actor_user_id')
+    .references(() => users.id, { onDelete: 'set null' }),
+  action: varchar('action', { length: 32 }).notNull(),
+  fromStatus: varchar('from_status', { length: 32 }).notNull(),
+  toStatus: varchar('to_status', { length: 32 }).notNull(),
+  reason: text('reason'),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
+}, table => [
+  check(
+    'review_events_action_check',
+    sql`${table.action} in ('submitted', 'withdrawn', 'rejected', 'approved', 'reopened', 'resynced')`
+  ),
+  index('review_events_draft_id_index').on(table.draftId),
+  index('review_events_actor_user_id_index').on(table.actorUserId),
+  index('review_events_created_at_index').on(table.createdAt)
+])
+
+export const editLocks = pgTable('edit_locks', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  targetType: varchar('target_type', { length: 32 }).notNull(),
+  targetId: uuid('target_id').notNull(),
+  holderUserId: uuid('holder_user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  leaseId: uuid('lease_id').defaultRandom().notNull(),
+  acquiredAt: timestamp('acquired_at', { withTimezone: true }).defaultNow().notNull(),
+  heartbeatAt: timestamp('heartbeat_at', { withTimezone: true }).defaultNow().notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull()
+}, table => [
+  check('edit_locks_target_type_check', sql`${table.targetType} in ('article', 'draft')`),
+  uniqueIndex('edit_locks_target_unique').on(table.targetType, table.targetId),
+  uniqueIndex('edit_locks_lease_id_unique').on(table.leaseId),
+  index('edit_locks_holder_user_id_index').on(table.holderUserId),
+  index('edit_locks_expires_at_index').on(table.expiresAt)
 ])
 
 export const userMembers = pgTable('user_members', {
@@ -188,4 +234,6 @@ export type Session = typeof sessions.$inferSelect
 export type Member = typeof members.$inferSelect
 export type Article = typeof articles.$inferSelect
 export type Draft = typeof drafts.$inferSelect
+export type ReviewEvent = typeof reviewEvents.$inferSelect
+export type EditLock = typeof editLocks.$inferSelect
 export type AuditLog = typeof auditLogs.$inferSelect

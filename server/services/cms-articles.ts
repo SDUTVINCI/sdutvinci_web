@@ -143,5 +143,14 @@ export const getCmsArticle = async (id: string): Promise<CmsArticleDetail | null
   const collection = row.collection as CmsArticleCollection
   const { source } = await readContentFile(collection, row.relativePath)
   const parsed = parseCmsMarkdown(source)
-  return { ...toSummary(row), frontmatter: parsed.frontmatter, body: parsed.body }
+  const title = typeof parsed.frontmatter.title === 'string'
+    ? parsed.frontmatter.title.trim()
+    : basename(row.relativePath, extname(row.relativePath))
+  return {
+    ...toSummary(row),
+    title,
+    frontmatter: parsed.frontmatter,
+    body: parsed.body,
+    contentHash: createHash('sha256').update(source).digest('hex')
+  }
 }

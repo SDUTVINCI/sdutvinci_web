@@ -1,4 +1,5 @@
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { sql } from 'drizzle-orm'
@@ -18,6 +19,7 @@ import { bootstrapCmsAdmin, createCmsUser } from '../server/services/cms-auth'
 import { listCmsArticles, synchronizeCmsArticles } from '../server/services/cms-articles'
 import { synchronizeCmsMembers } from '../server/services/cms-members'
 import { cmsDraftSaveSchema } from '../server/utils/cms-draft-validation'
+import { acquireCmsDraftEditLock } from '../server/services/cms-edit-locks'
 import {
   assessMarkdownVisualSafety,
   normalizeMarkdownRoundTrip
@@ -27,6 +29,11 @@ import { configureCmsTestDatabase } from './helpers/cms-test-database'
 const integration = configureCmsTestDatabase() ? describe : describe.skip
 let contentRoot = ''
 let userId = ''
+
+const acquireLease = async (draftId: string) => {
+  const result = await acquireCmsDraftEditLock(draftId, userId, true)
+  return result.lock.leaseId!
+}
 
 const markdown = (frontmatter: string, body = '') =>
   `---\n${frontmatter.trim()}\n---\n${body}`
@@ -44,7 +51,7 @@ integration('CMS Markdown 编辑器与草稿系统', () => {
 
   beforeEach(async () => {
     await getDatabase().execute(sql`
-      truncate table audit_logs, sessions, draft_authors, drafts, user_members, user_roles, articles, members, users
+      truncate table edit_locks, review_events, audit_logs, sessions, draft_authors, drafts, user_members, user_roles, articles, members, users
       restart identity cascade
     `)
     await Promise.all(['members', 'news', 'wiki'].map(async (path) => {
@@ -82,12 +89,14 @@ integration('CMS Markdown 编辑器与草稿系统', () => {
     expect(draft.authors.map(author => author.memberKey)).toEqual(['dongjiahui'])
 
     const body = '# 标题\n\n- [x] 任务\n\n| A | B |\n| - | - |\n| 1 | 2 |\n'
+    const lockLeaseId = await acquireLease(draft.id)
     const saved = await saveCmsDraft(draft.id, userId, {
       title: '已自动保存',
       description: '摘要',
       body,
       authorKeys: ['dongjiahui'],
-      version: draft.version
+      version: draft.version,
+      lockLeaseId
     })
     expect(saved.version).toBe(2)
     expect((await getCmsDraft(draft.id, userId))?.body).toBe(body)
@@ -113,12 +122,14 @@ integration('CMS Markdown 编辑器与草稿系统', () => {
       updatedAt: '2026-01-01',
       publishedAt: '2025-01-01'
     })
+    const lockLeaseId = await acquireLease(draft.id)
     await saveCmsDraft(draft.id, userId, {
       title: '草稿标题',
       description: '草稿摘要',
       body: '草稿正文',
       authorKeys: ['dongjiahui'],
-      version: draft.version
+      version: draft.version,
+      lockLeaseId
     })
     expect(await readFile(articlePath, 'utf8')).toBe(source)
     expect((await listCmsArticles()).articles[0]).toMatchObject({
@@ -129,19 +140,22 @@ integration('CMS Markdown 编辑器与草稿系统', () => {
 
   it('使用乐观版本号阻止旧页面覆盖较新的自动保存', async () => {
     const draft = await createCmsNewArticleDraft('wiki', '并发测试', userId)
+    const lockLeaseId = await acquireLease(draft.id)
     await saveCmsDraft(draft.id, userId, {
       title: draft.title,
       description: '',
       body: '较新内容',
       authorKeys: ['dongjiahui'],
-      version: 1
+      version: 1,
+      lockLeaseId
     })
     await expect(saveCmsDraft(draft.id, userId, {
       title: draft.title,
       description: '',
       body: '旧页面内容',
       authorKeys: ['dongjiahui'],
-      version: 1
+      version: 1,
+      lockLeaseId
     })).rejects.toBeInstanceOf(CmsDraftConflictError)
     expect((await getCmsDraft(draft.id, userId))?.body).toBe('较新内容')
   })
@@ -159,7 +173,8 @@ integration('CMS Markdown 编辑器与草稿系统', () => {
       description: '',
       body: '越权正文',
       authorKeys: [],
-      version: 1
+      version: 1,
+      lockLeaseId: randomUUID()
     })).rejects.toBeInstanceOf(CmsDraftNotFoundError)
   })
 
@@ -169,7 +184,8 @@ integration('CMS Markdown 编辑器与草稿系统', () => {
       description: '',
       body: '正文',
       authorKeys: ['dongjiahui'],
-      version: 1
+      version: 1,
+      lockLeaseId: randomUUID()
     }
     for (const field of ['contributors', 'updatedAt', 'publishedAt']) {
       expect(cmsDraftSaveSchema.safeParse({ ...base, [field]: 'forged' }).success).toBe(false)

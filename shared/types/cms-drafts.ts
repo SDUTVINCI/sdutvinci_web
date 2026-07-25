@@ -1,5 +1,16 @@
 import type { CmsArticleCollection } from './cms-articles'
 
+export const cmsDraftStatuses = [
+  'draft',
+  'pending_review',
+  'rejected',
+  'approved',
+  'published',
+  'withdrawn'
+] as const
+
+export type CmsDraftStatus = typeof cmsDraftStatuses[number]
+
 export interface CmsDraftAuthor {
   memberId: string
   memberKey: string
@@ -23,7 +34,7 @@ export interface CmsDraft {
     publishedAt: unknown
   }
   baseContentHash: string | null
-  status: 'draft'
+  status: CmsDraftStatus
   version: number
   visualMode: {
     allowed: boolean
@@ -39,6 +50,7 @@ export interface CmsDraftSummary {
   articleId: string | null
   collection: CmsArticleCollection
   title: string
+  status: CmsDraftStatus
   version: number
   updatedAt: string
 }
@@ -49,4 +61,5 @@ export interface CmsDraftSaveInput {
   body: string
   authorKeys: string[]
   version: number
+  lockLeaseId: string
 }

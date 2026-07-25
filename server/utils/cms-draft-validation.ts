@@ -8,5 +8,6 @@ export const cmsDraftSaveSchema = z.object({
   authorKeys: z.array(
     z.string().trim().toLowerCase().regex(cmsAccountPattern)
   ).max(30),
-  version: z.number().int().positive()
+  version: z.number().int().positive(),
+  lockLeaseId: z.string().uuid()
 }).strict()
