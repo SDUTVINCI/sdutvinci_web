@@ -162,6 +162,34 @@ export const reviewEvents = pgTable('review_events', {
   index('review_events_created_at_index').on(table.createdAt)
 ])
 
+export const publishRecords = pgTable('publish_records', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  draftId: uuid('draft_id')
+    .references(() => drafts.id, { onDelete: 'set null' }),
+  articleId: uuid('article_id')
+    .references(() => articles.id, { onDelete: 'set null' }),
+  operatorUserId: uuid('operator_user_id')
+    .references(() => users.id, { onDelete: 'set null' }),
+  reviewerUserId: uuid('reviewer_user_id')
+    .references(() => users.id, { onDelete: 'set null' }),
+  operation: varchar('operation', { length: 32 }).notNull(),
+  status: varchar('status', { length: 32 }).default('pending').notNull(),
+  commitHash: varchar('commit_hash', { length: 64 }),
+  articlePath: text('article_path').notNull(),
+  message: text('message').notNull(),
+  failureReason: text('failure_reason'),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  completedAt: timestamp('completed_at', { withTimezone: true })
+}, table => [
+  check('publish_records_operation_check', sql`${table.operation} in ('publish', 'restore')`),
+  check('publish_records_status_check', sql`${table.status} in ('pending', 'succeeded', 'failed')`),
+  index('publish_records_draft_id_index').on(table.draftId),
+  index('publish_records_article_id_index').on(table.articleId),
+  index('publish_records_operator_user_id_index').on(table.operatorUserId),
+  index('publish_records_created_at_index').on(table.createdAt)
+])
+
 export const editLocks = pgTable('edit_locks', {
   id: uuid('id').defaultRandom().primaryKey(),
   targetType: varchar('target_type', { length: 32 }).notNull(),
@@ -235,5 +263,6 @@ export type Member = typeof members.$inferSelect
 export type Article = typeof articles.$inferSelect
 export type Draft = typeof drafts.$inferSelect
 export type ReviewEvent = typeof reviewEvents.$inferSelect
+export type PublishRecord = typeof publishRecords.$inferSelect
 export type EditLock = typeof editLocks.$inferSelect
 export type AuditLog = typeof auditLogs.$inferSelect

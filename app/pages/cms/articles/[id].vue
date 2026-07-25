@@ -54,9 +54,14 @@ const openDraft = async () => {
         <h1>{{ article.title }}</h1>
         <p><code>{{ article.relativePath }}</code> · 稳定 ID：<code>{{ article.id }}</code></p>
       </div>
-      <button class="cms-button cms-button-primary" type="button" :disabled="openingDraft" @click="openDraft">
-        {{ openingDraft ? '正在打开…' : '编辑草稿' }}
-      </button>
+      <div class="cms-header-buttons">
+        <NuxtLink class="cms-button cms-button-link cms-button-quiet" :to="`/cms/articles/${id}/history`">
+          版本历史
+        </NuxtLink>
+        <button class="cms-button cms-button-primary" type="button" :disabled="openingDraft" @click="openDraft">
+          {{ openingDraft ? '正在打开…' : '编辑草稿' }}
+        </button>
+      </div>
     </header>
     <p v-if="draftError" class="cms-alert cms-alert-error">{{ draftError }}</p>
 

@@ -1,6 +1,6 @@
-# CMS 阶段 1～4 运行说明
+# CMS 阶段 1～5 运行说明
 
-本文覆盖 PostgreSQL、身份认证、成员管理、文章只读索引、Markdown 编辑器、数据库草稿、审核流程、编辑锁和正式版本冲突检查。正式发布、Git 写入和图片上传尚未开放。
+本文覆盖 PostgreSQL、身份认证、成员管理、文章索引、Markdown 编辑器、数据库草稿、审核流程、编辑锁、正式版本冲突检查，以及隔离 Git 工作区中的正式发布和历史恢复。图片上传尚未开放，生产自动部署属于后续阶段。
 
 ## 1. 环境变量
 
@@ -16,6 +16,14 @@ CMS_SESSION_COOKIE=vinci_cms_session
 CMS_SESSION_TTL_HOURS=168
 CMS_SECURE_COOKIES=false
 NUXT_PUBLIC_SITE_URL=http://localhost:3000
+CMS_CONTENT_ROOT=content
+CMS_GIT_WORKTREE=/var/lib/vinci-cms/worktree
+CMS_GIT_REMOTE_URL=git@github.com:SDUTVINCI/sdutvinci_web.git
+CMS_GIT_REMOTE=origin
+CMS_GIT_BRANCH=main
+CMS_GIT_AUTHOR_NAME=Vinci CMS
+CMS_GIT_AUTHOR_EMAIL=cms@localhost
+CMS_GIT_SSH_KEY_PATH=/run/secrets/cms_git_ssh_key
 ```
 
 可使用 `openssl rand -base64 48` 生成 `CMS_AUTH_SECRET`。生产环境必须把 `CMS_SECURE_COOKIES` 设为 `true`，并把 `NUXT_PUBLIC_SITE_URL` 设为实际 HTTPS Origin。真实密钥不得提交到 Git。
@@ -66,11 +74,33 @@ npm run dev
 - 编辑页约 1.2 秒无操作后自动保存，也可以手动保存。
 - 所有文章都可以进入基于 Milkdown Crepe 的混合可视化模式；原始 HTML、Vue 组件、Jekyll/MDC 等扩展语法显示为标明类型的只读保护区域，周围的普通 Markdown 仍可编辑。保护区域本身需要切换到源码模式修改。
 - 草稿可提交审核；待审核内容不可编辑，提交者可在审核结束前撤回。被驳回或撤回的草稿需要显式点击“继续编辑”才能恢复。
-- 管理员在 `/cms/reviews` 查看 Frontmatter 和正文差异，填写原因驳回或审核通过。审核通过只产生 `approved` 状态，不会正式发布。
+- 管理员在 `/cms/reviews` 查看 Frontmatter 和正文差异，填写原因驳回或审核通过。审核通过后可确认新文章路径并正式发布。
 - 提交和审核通过前都会读取当前正式 Markdown 计算实时哈希。发现冲突时必须撤回并手动整理差异，再明确确认最新正式版本为新基线；系统不会自动合并。
-- 本阶段没有正式发布、Markdown 写入、Git 操作或图片上传按钮。
+- 正式发布会再次同步远端并校验基线，在独立工作区原子写入 Markdown，再 commit 和 push。只有 push 成功才将草稿标为 `published`。
+- Push 失败会记录原因，草稿保持 `approved`，管理员修复 Git 或网络问题后可在原审核页重试。
+- 文章详情的“版本历史”可查看和比较历史 Markdown；管理员恢复历史版本时会产生一个新提交，不删除已有历史。
+- `CMS_GIT_WORKTREE` 必须是部署目录之外的独立 clone。服务账号需要该目录的读写权限和目标分支的非强制推送权限；SSH 私钥建议只读挂载并由 `CMS_GIT_SSH_KEY_PATH` 指向。
+- 阶段 5 不自动更新正在运行的网站目录。Push 后由现有人工部署方式拉取远端最新提交；生产 GitHub Actions 自动部署在阶段 8 实现。
+- 本阶段没有图片上传入口。
 
-## 6. 验证
+## 6. 首次准备发布工作区
+
+首次发布时服务会在 `CMS_GIT_WORKTREE` 不存在的情况下自动 clone。若目录已存在，则必须满足：
+
+- 是独立 Git clone，且工作区无未提交修改；
+- 配置的 remote URL 与 `CMS_GIT_REMOTE_URL` 完全一致；
+- 目标分支可 fetch，并允许以 fast-forward 方式 push；
+- 与 `CMS_CONTENT_ROOT` 不相同且互不包含。
+
+生产环境建议提前用运行 CMS 的同一系统账号执行一次只读连通性检查：
+
+```bash
+git ls-remote "$CMS_GIT_REMOTE_URL" "$CMS_GIT_BRANCH"
+```
+
+不要把私钥、访问令牌或真实远端凭据写入仓库。
+
+## 7. 验证
 
 类型检查和构建不需要连接数据库：
 
@@ -87,4 +117,4 @@ CMS_AUTH_SECRET=test-only-secret-with-at-least-32-characters \
 npm run test:cms
 ```
 
-测试只读取 `TEST_DATABASE_URL`，并要求数据库名称包含独立的 `test` 单词；未提供时全部数据库集成测试会跳过。即使当前环境中存在普通 `DATABASE_URL`，测试也不会使用它。
+测试只读取 `TEST_DATABASE_URL`，并要求数据库名称包含独立的 `test` 单词；未提供时全部数据库集成测试会跳过。即使当前环境中存在普通 `DATABASE_URL`，测试也不会使用它。阶段 5 测试会自行创建临时本地裸 Git 远端、独立工作区和拒绝推送 hook，不会连接或推送真实 GitHub 仓库。

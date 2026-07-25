@@ -11,7 +11,7 @@
     "db:migrate": "tsx --env-file=.env scripts/cms-migrate.ts",
     "generate": "nuxt generate",
     "test": "vitest run",
-    "test:cms": "vitest run tests/cms-auth.integration.test.ts tests/cms-content.integration.test.ts tests/cms-drafts.integration.test.ts tests/cms-workflow.integration.test.ts tests/cms-protected-markdown.test.ts",
+    "test:cms": "vitest run tests/cms-auth.integration.test.ts tests/cms-content.integration.test.ts tests/cms-drafts.integration.test.ts tests/cms-workflow.integration.test.ts tests/cms-publishing.integration.test.ts tests/cms-protected-markdown.test.ts",
     "wiki:check": "node scripts/wiki-check.mjs",
     "typecheck": "nuxt typecheck",
     "prebuild": "npm run wiki:check",

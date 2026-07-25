@@ -215,7 +215,38 @@ export const createCmsDraftForArticle = async (
   ownerUserId: string
 ) => {
   const existing = await findCmsDraftForArticle(articleId, ownerUserId)
-  if (existing) return existing
+  if (existing && existing.status !== 'published') return existing
+  if (existing?.status === 'published') {
+    const [reopened] = await getDatabase().transaction(async (tx) => {
+      const result = await tx
+        .update(drafts)
+        .set({
+          status: 'draft',
+          version: sql`${drafts.version} + 1`,
+          lastSavedAt: new Date(),
+          updatedAt: new Date()
+        })
+        .where(and(
+          eq(drafts.id, existing.id),
+          eq(drafts.ownerUserId, ownerUserId),
+          eq(drafts.status, 'published')
+        ))
+        .returning()
+      if (!result[0]) throw new CmsDraftConflictError()
+      await tx.insert(auditLogs).values({
+        actorUserId: ownerUserId,
+        action: 'draft.reopen_after_publish',
+        targetType: 'draft',
+        targetId: existing.id,
+        metadata: {
+          articleId,
+          baseContentHash: existing.baseContentHash
+        }
+      })
+      return result
+    })
+    return (await rowsToDrafts([reopened!]))[0]!
+  }
 
   const article = await getCmsArticle(articleId)
   if (!article) throw new Error('ARTICLE_NOT_FOUND')

@@ -26,13 +26,19 @@ interface ScannedArticle {
   contentHash: string
 }
 
-const articlePublicPath = (collection: CmsArticleCollection, relativePath: string) => {
+export const getCmsArticlePublicPath = (
+  collection: CmsArticleCollection,
+  relativePath: string
+) => {
   const stem = `${collection}/${relativePath.slice(0, -extname(relativePath).length)}`
   if (collection === 'wiki') return getWikiContentMeta(stem)?.path || `/${stem}`
   return `/${stem}`
 }
 
-const articleDirectory = (collection: CmsArticleCollection, relativePath: string) => {
+export const getCmsArticleDirectory = (
+  collection: CmsArticleCollection,
+  relativePath: string
+) => {
   const parent = dirname(relativePath).replaceAll('\\', '/')
   return parent === '.' ? collection : `${collection}/${parent}`
 }
@@ -51,8 +57,8 @@ export const synchronizeCmsArticles = async () => {
       scanned.push({
         collection,
         relativePath,
-        publicPath: articlePublicPath(collection, relativePath),
-        directory: articleDirectory(collection, relativePath),
+        publicPath: getCmsArticlePublicPath(collection, relativePath),
+        directory: getCmsArticleDirectory(collection, relativePath),
         title,
         frontmatter: parsed.frontmatter,
         searchText: `${title}\n${relativePath}\n${parsed.body}`.toLowerCase(),

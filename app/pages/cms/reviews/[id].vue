@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { CmsDraft } from '../../../../shared/types/cms-drafts'
 import type { CmsReviewDetail } from '../../../../shared/types/cms-reviews'
+import type { CmsPublishResult } from '../../../../shared/types/cms-publishing'
 
 definePageMeta({ layout: 'cms', middleware: ['cms-auth', 'cms-admin'] })
 const route = useRoute()
@@ -21,6 +22,8 @@ const rejectReason = ref('')
 const busy = ref(false)
 const message = ref('')
 const errorMessage = ref('')
+const publishPath = ref('')
+const publishResult = ref<CmsPublishResult | null>(null)
 
 useHead(() => ({
   title: `${review.value.draft.title} · 内容审核 · Vinci 内容管理后台`
@@ -41,11 +44,46 @@ const approve = async () => {
     )
     await refresh()
     message.value = result.draft.status === 'approved'
-      ? '审核已通过。正式发布与 Git 写入将在阶段 5 实现。'
+      ? '审核已通过，可以在右侧确认路径并发布。'
       : '审核状态已更新。'
   } catch (error: any) {
     errorMessage.value = error?.data?.message || '审核通过失败'
     await refresh()
+  } finally {
+    busy.value = false
+  }
+}
+
+const publish = async () => {
+  if (
+    !review.value.draft.articleId
+    && publishPath.value
+    && !publishPath.value.trim().endsWith('.md')
+  ) {
+    errorMessage.value = '发布路径必须以 .md 结尾。'
+    return
+  }
+  busy.value = true
+  message.value = ''
+  errorMessage.value = ''
+  try {
+    const response = await $fetch<{ result: CmsPublishResult }>(
+      `/api/cms/drafts/${id}/publish`,
+      {
+        method: 'POST',
+        headers: csrfHeaders(),
+        body: {
+          version: review.value.draft.version,
+          ...(publishPath.value.trim()
+            ? { relativePath: publishPath.value.trim() }
+            : {})
+        }
+      }
+    )
+    publishResult.value = response.result
+    message.value = `发布成功，Git 提交 ${response.result.commitHash.slice(0, 12)} 已推送。`
+  } catch (error: any) {
+    errorMessage.value = error?.data?.message || '发布失败；草稿仍保持已通过，可重试。'
   } finally {
     busy.value = false
   }
@@ -148,6 +186,46 @@ const reject = async () => {
           </button>
         </section>
 
+        <section
+          v-if="review.draft.status === 'approved' && !publishResult"
+          class="cms-panel cms-review-actions"
+        >
+          <h2>正式发布</h2>
+          <p class="cms-muted">
+            发布会同步独立 Git 工作区、生成并校验 Markdown，然后提交和推送。只有推送成功才会更新发布状态。
+          </p>
+          <label v-if="!review.draft.articleId">
+            <span>新文章相对路径（可留空自动生成）</span>
+            <input
+              v-model="publishPath"
+              type="text"
+              maxlength="500"
+              placeholder="例如：2026-07-25-news-title.md"
+            >
+          </label>
+          <p v-else class="cms-muted">现有文章沿用原路径，不允许在发布时移动。</p>
+          <button
+            class="cms-button cms-button-primary"
+            type="button"
+            :disabled="busy"
+            @click="publish"
+          >
+            {{ busy ? '正在发布…' : '确认发布到 Git' }}
+          </button>
+        </section>
+
+        <section v-if="publishResult" class="cms-panel">
+          <h2>发布完成</h2>
+          <p><code>{{ publishResult.collection }}/{{ publishResult.relativePath }}</code></p>
+          <p><code>{{ publishResult.commitHash }}</code></p>
+          <NuxtLink
+            class="cms-button cms-button-link cms-button-quiet"
+            :to="`/cms/articles/${publishResult.articleId}/history`"
+          >
+            查看版本历史
+          </NuxtLink>
+        </section>
+
         <section class="cms-panel cms-review-history">
           <h2>审核记录</h2>
           <ol>
@@ -163,7 +241,7 @@ const reject = async () => {
     </div>
 
     <footer class="cms-draft-scope-note">
-      本页没有正式发布按钮；阶段 4 审核通过不会写入 Markdown 或执行 Git 操作。
+      发布只写入隔离的 CMS Git 工作区；网站部署目录由后续部署流程更新。
     </footer>
   </section>
 </template>

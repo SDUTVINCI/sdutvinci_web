@@ -4,7 +4,7 @@
 
 本文记录网站与 CMS 的长期架构约束。阶段 0 于 2026-07-25 完成首次技术方案确认，阶段 1 于同日落地数据库与身份认证基础，阶段 2 落地成员管理和文章只读索引。后续只有在发生重大架构调整时才修改本文，并应同步在 `docs/CODEX_HANDOVER.md` 追加说明。
 
-当前已接入 PostgreSQL、登录、权限骨架、成员管理、文章只读浏览、Milkdown 编辑器、数据库草稿、审核流程、编辑锁和正式版本冲突检查；尚未接入对象存储或 Git 发布。
+当前已接入 PostgreSQL、登录、权限骨架、成员管理、文章浏览、Milkdown 编辑器、数据库草稿、审核流程、编辑锁、正式版本冲突检查、隔离 Git 发布和历史恢复；尚未接入对象存储或生产自动部署。
 
 ## 2. 当前项目审查结论
 
@@ -197,13 +197,13 @@ GitHub 是代码和正式 Markdown 的唯一权威来源。恢复旧版本通过
 
 用户禁用使用状态字段，不级联删除审计记录。审计 metadata 使用 JSONB，但常用检索字段必须单独成列。
 
-### 6.2 阶段 3～4 已落地及后续实体
+### 6.2 阶段 3～5 已落地及后续实体
 
 | 阶段 | 表 | 用途 |
 | --- | --- | --- |
 | 3 | `drafts`、`draft_authors` | 正文、保留 Frontmatter、基线内容哈希、创建者、作者关系和乐观保存版本号；阶段 3 状态仅为 `draft` |
 | 4 | `review_events`、`edit_locks` | 只追加的审核状态流转与驳回原因；按文章或新草稿目标建立带租约 ID、心跳与过期时间的独占编辑锁 |
-| 5 | `publish_records` | 操作者、审核者、commit hash、路径、操作类型、失败原因 |
+| 5 | `publish_records` | 发布/恢复尝试的操作者、审核者、commit hash、路径、状态、时间和失败原因 |
 | 6 | `media_assets` | 对象 key、URL、上传者、关联草稿、图片元数据 |
 | 7 | `article_deletion_events` | 软删除、恢复及其审计关联 |
 
@@ -276,13 +276,16 @@ description:
 
 锁接口以草稿 ID 作为安全入口，服务端再解析实际锁目标：已有文章统一锁定 `articleId`，因此不同用户的草稿不能同时编辑同一篇正式文章；尚无 `articleId` 的新文章锁定自身 `draftId`。客户端不能自行指定锁目标。
 
-### 阶段 5 以后
+### 阶段 5 已落地
 
 - `POST /api/cms/drafts/:id/publish`
 - `GET /api/cms/articles/:id/history`
-- `GET /api/cms/articles/:id/history/:commit`
+- `GET /api/cms/articles/:id/versions/:commit`
 - `GET /api/cms/articles/:id/diff`
-- `POST /api/cms/articles/:id/restore`
+- `POST /api/cms/articles/:id/versions/:commit/restore`
+
+### 阶段 6 以后
+
 - `POST /api/cms/media`
 - `POST /api/cms/articles/:id/delete`
 - `POST /api/cms/articles/:id/restore-deleted`

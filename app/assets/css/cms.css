@@ -135,6 +135,45 @@
   color: var(--ink-soft);
 }
 
+.cms-header-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.cms-history-compare {
+  align-items: end;
+}
+
+.cms-history-compare label {
+  display: grid;
+  flex: 1 1 260px;
+  gap: 7px;
+}
+
+.cms-history-list {
+  display: grid;
+  gap: 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.cms-history-list li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.cms-history-list p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
 .cms-alert {
   margin: 0;
   padding: 11px 13px;

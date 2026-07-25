@@ -493,3 +493,60 @@
 - 需求文档中的阶段 4 总体进度已勾选；通用模板“等待本阶段验收通过”此前已是完成状态。
 - 阶段 4 实现以提交 `27a2cda` 为准。
 - 阶段 5 尚未启动，必须等待维护者明确指令；不得提前写 Markdown、执行 Git Push 或实现历史版本恢复。
+
+## 2026-07-25：阶段 5——正式发布、Git 历史与版本恢复
+
+### 完成状态
+
+- 阶段 5 实现、migration 和自动化验证已完成，等待维护者人工验收。
+- 阶段 5 任务、范围约束和验收标准已勾选；总体进度保持未勾选，人工验收通过后再更新。
+- 未开始阶段 6；没有图片上传、S3 SDK、媒体表或生产自动部署。
+
+### 发布事务与安全边界
+
+- migration `0007_bizarre_night_thrasher.sql` 新增 `publish_records`，记录草稿/文章、操作人、审核人、操作类型、状态、commit hash、文章路径、提交信息、失败原因和完成时间。
+- 发布 API 仅允许管理员发布 `approved` 且版本匹配的草稿；审批人取最近一次 `approved` 审核事件，操作人与审核人分别入库。
+- `CMS_GIT_WORKTREE` 是部署目录之外的独立 clone。服务在 PostgreSQL advisory lock 内串行执行 fetch、分支同步、实时基线校验、原子写文件、commit 和非强制 push。
+- 工作区存在未提交修改、remote URL 不匹配、路径越界、现有文章基线变化或新文章目标冲突时都会停止发布。
+- Git Push 成功后才在同一数据库事务中登记/更新文章、把草稿改为 `published`、保存 commit hash 和审计日志。
+- Push 失败时远端不变，失败原因写入 `publish_records`，草稿保持 `approved`；隔离工作区重置到远端分支后可直接重试。
+- 阶段 5 集成测试使用临时本地裸 Git 仓库和 `pre-receive` 拒绝 hook，没有读取或推送真实 GitHub 远端。
+
+### Markdown 与 Frontmatter
+
+- 正式 Markdown 由保留字段、草稿 `title`/`description`/`authors` 和正文组合生成，写入后再次完整解析校验。
+- 第一次发布生成 `publishedAt`，后续发布保留原值；每次发布更新 `updatedAt`。
+- 草稿创建者不是作者时，其稳定成员 key 自动追加到 `contributors`；现有 contributors 去重保留。
+- 空 description 从去除常见 Markdown 标记后的首个非空段落生成；未知 Frontmatter 字段保留。
+- 新文章可由管理员指定 collection 内相对 `.md` 路径；留空时按日期/标题/草稿短 ID 生成不易冲突的安全路径。现有文章不允许借发布操作移动或改名。
+
+### 历史与恢复
+
+- 文章详情新增“版本历史”，支持提交列表、查看完整历史 Markdown、任意两个提交的逐行差异。
+- 管理员可恢复非当前历史版本。服务读取指定历史文件内容，创建并推送一个新的 restore commit；不删除提交、不 force push。
+- 历史和恢复 API：
+  - `GET /api/cms/articles/:id/history`
+  - `GET /api/cms/articles/:id/versions/:commit`
+  - `GET /api/cms/articles/:id/diff?from=...&to=...`
+  - `POST /api/cms/articles/:id/versions/:commit/restore`
+- 正式发布入口为 `POST /api/cms/drafts/:id/publish`，服务端要求管理员、同源与 CSRF。
+
+### 验证结果
+
+- PostgreSQL 17 隔离库中的 `npm run test:cms`：6 个测试文件、26 项全部通过。
+- 阶段 5 覆盖发布成功、首次发布时间保留、更新时间与 contributors、未知 Frontmatter、部署目录隔离、远端拒绝 Push、失败状态与原因、管理员重试、新文章默认路径、历史查看、版本差异、恢复新提交和已发布文章进入下一轮编辑。
+- `npm run typecheck`：通过。
+- `npm run build`：通过；Wiki 226 个文件检查正常，Nuxt Content 260 个文件处理正常，Nitro node-server 构建完成。
+- 所有数据库清理只发生在 `TEST_DATABASE_URL` 指向的 `vinci_cms_test`；普通 `DATABASE_URL` 未连接或修改。
+
+### 人工验收前置与步骤
+
+1. 在开发/验收数据库执行 `npm run db:migrate`，应用 migration `0007_bizarre_night_thrasher.sql`。
+2. 确认 `.env` 的 `CMS_GIT_WORKTREE` 是部署目录之外、CMS 服务账号可写的路径；`CMS_GIT_REMOTE_URL`、remote、branch 和 Git 作者配置正确。
+3. 若使用 SSH，准备只供 CMS 服务读取且对仓库有 push 权限的私钥，并使 `CMS_GIT_SSH_KEY_PATH` 指向它；先用同一系统账号执行 `git ls-remote` 验证连通性。
+4. 启动后台，把一篇草稿提交并审核通过；在审核详情点击正式发布，确认显示 commit hash，远端目标分支出现同一 Markdown。
+5. 检查 `publishedAt`、`updatedAt`、`contributors` 和保留字段；确认草稿状态为 `published`。
+6. 从文章详情进入版本历史，查看内容并比较两个提交；恢复一个旧版本，确认远端新增 restore commit 且后续历史仍存在。
+7. Push 失败场景可选：临时撤销验收仓库写权限或使用拒绝 Push 的测试分支，确认页面提示失败、草稿仍为 `approved`；恢复权限后在同页重试成功。
+8. 阶段 5 不含自动部署。用现有人工部署方式拉取刚推送的提交并启动前台，确认对应新闻/Wiki 路由展示最新内容。
+9. 验收通过后只勾选阶段 5 总体进度，再启动阶段 6。

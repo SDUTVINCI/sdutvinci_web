@@ -40,7 +40,7 @@ integration('CMS 成员与文章只读管理', () => {
 
   beforeEach(async () => {
     await getDatabase().execute(sql`
-      truncate table edit_locks, review_events, audit_logs, sessions, draft_authors, drafts, user_members, user_roles, articles, members, users
+      truncate table publish_records, edit_locks, review_events, audit_logs, sessions, draft_authors, drafts, user_members, user_roles, articles, members, users
       restart identity cascade
     `)
     await Promise.all(['members', 'news', 'wiki'].map(async (path) => {

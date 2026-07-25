@@ -50,6 +50,13 @@
       "when": 1784970874737,
       "tag": "0006_sturdy_thunderball",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1784976046162,
+      "tag": "0007_bizarre_night_thrasher",
+      "breakpoints": true
     }
   ]
 }
