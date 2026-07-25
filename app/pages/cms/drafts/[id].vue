@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { CmsDraft } from '../../../../shared/types/cms-drafts'
 import type { CmsMember } from '../../../../shared/types/cms-members'
+import CmsMarkdownVisualEditor from '../../../components/cms/CmsMarkdownVisualEditor.client.vue'
 import {
   assessMarkdownVisualSafety,
   normalizeMarkdownRoundTrip
@@ -41,6 +42,7 @@ const saveState = ref<'saved' | 'dirty' | 'saving' | 'error' | 'conflict'>('save
 const message = ref('')
 const mounted = ref(false)
 let saveTimer: ReturnType<typeof setTimeout> | undefined
+let visualCheckTimer: ReturnType<typeof setTimeout> | undefined
 let saving = false
 let saveQueued = false
 
@@ -120,6 +122,7 @@ watch([title, description, body, authorKeys], scheduleSave, { deep: true })
 
 const switchMode = (next: 'source' | 'visual') => {
   message.value = ''
+  clearTimeout(visualCheckTimer)
   if (next === 'source') {
     mode.value = 'source'
     visualChecking.value = false
@@ -136,9 +139,13 @@ const switchMode = (next: 'source' | 'visual') => {
   visualChecking.value = true
   visualKey.value += 1
   mode.value = 'visual'
+  visualCheckTimer = setTimeout(() => {
+    handleVisualError('初始化超时')
+  }, 15_000)
 }
 
 const handleVisualReady = (serialized: string) => {
+  clearTimeout(visualCheckTimer)
   if (
     normalizeMarkdownRoundTrip(serialized)
     !== normalizeMarkdownRoundTrip(visualSource.value)
@@ -151,6 +158,7 @@ const handleVisualReady = (serialized: string) => {
 }
 
 const handleVisualError = (error: string) => {
+  clearTimeout(visualCheckTimer)
   body.value = visualSource.value
   mode.value = 'source'
   visualChecking.value = false
@@ -165,6 +173,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   clearTimeout(saveTimer)
+  clearTimeout(visualCheckTimer)
   window.removeEventListener('beforeunload', handleBeforeUnload)
 })
 </script>
@@ -244,7 +253,7 @@ onBeforeUnmount(() => {
         <div v-if="mode === 'visual'" class="cms-visual-editor">
           <p v-if="visualChecking" class="cms-editor-checking">正在执行无损往返检查…</p>
           <ClientOnly>
-            <CmsCmsMarkdownVisualEditor
+            <CmsMarkdownVisualEditor
               :key="visualKey"
               v-model="body"
               @ready="handleVisualReady"

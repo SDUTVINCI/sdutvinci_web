@@ -390,3 +390,9 @@
 - 已从仓库内容重新同步 32 名成员和 228 篇正式文章索引。管理员需由维护者通过 `npm run cms:admin` 重新创建并设置新密码，再执行一次 `npm run cms:content:sync` 建立账号与同 ID 成员的关联。
 - 所有 CMS 集成测试现在只接受 `TEST_DATABASE_URL`，数据库名称必须包含独立的 `test` 单词；仅有普通 `DATABASE_URL` 时 15 项测试全部跳过。
 - 修正后在 `vinci_cms_test` 隔离库中重新执行 15 项测试并全部通过；随后删除测试库。再次带普通开发库环境运行时，15 项测试全部跳过，开发库的 32 名成员和 228 篇文章计数保持不变。
+
+## 2026-07-25：阶段 3 验收修正——可视化编辑器初始化
+
+- 草稿页误用了不存在的 `CmsCmsMarkdownVisualEditor` 组件名，导致可视化编辑器未挂载，界面一直停留在无损往返检查。
+- 已改为显式导入和挂载 `CmsMarkdownVisualEditor`，并增加 15 秒初始化超时；失败时恢复原 Markdown 并安全返回源码模式。
+- 修正后 `npm run typecheck` 和 `npm run build` 均通过。
