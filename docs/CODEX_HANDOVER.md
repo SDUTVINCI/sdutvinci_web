@@ -563,3 +563,11 @@
 - 第一次人工发布尚未执行 Git clone/push：配置解析先因 `CMS_GIT_AUTHOR_EMAIL=cms@localhost` 被过严的公网邮箱校验拒绝，草稿按设计保持 `approved`。
 - 已修正 Git 作者邮箱校验：接受 Git 常用的 `local-part@host` 格式，包括项目 `.env.example` 的默认值 `cms@localhost`，同时继续拒绝空白、尖括号或缺少 `@` 的值；集成测试改用该默认值防止回归。
 - 验收前还需先同步代码分支：GitHub `main` 当前为 `ad0ebca`，本地阶段 3～5 提交位于其后且本地 HEAD 为 `e471889`。在本地阶段提交推送到 GitHub 之前，不要重试 CMS 发布，以免内容提交先落到旧远端基线。
+
+## 2026-07-25：阶段 5 验收修正——版本历史页面路由
+
+- 维护者成功重试正式发布：`wiki/2025-07-01-Nuxt.js网站框架/index.md` 已由 CMS 推送为提交 `00c0867`，`publish_records` 成功记录包含相同 commit hash；此前邮箱校验失败记录仍按设计保留。
+- 人工验收发现文章详情的“版本历史”入口无法打开。Git 历史服务本身可正常返回该文件的两个提交，API 路由也存在；问题位于 Nuxt 页面路由生成。
+- 原目录同时使用叶子页面 `app/pages/cms/articles/[id].vue` 和子页面 `app/pages/cms/articles/[id]/history.vue`，Nuxt 只注册了详情路由，没有注册历史页面路由。
+- 已把详情页面移动为 `app/pages/cms/articles/[id]/index.vue`。文章详情 URL 保持 `/cms/articles/:id` 不变，同时构建路由表现在明确包含 `cms-articles-id-history` → `/cms/articles/:id/history`。
+- 修正后 `npm run typecheck` 与 `npm run build` 均通过。开发服务器需要完整重启，才能重新扫描新增的嵌套页面结构。

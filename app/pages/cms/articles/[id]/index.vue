@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { CmsArticleDetail } from '../../../../shared/types/cms-articles'
+import type { CmsArticleDetail } from '../../../../../shared/types/cms-articles'
 
 definePageMeta({ layout: 'cms', middleware: 'cms-auth' })
 const route = useRoute()
