@@ -5,6 +5,9 @@ definePageMeta({ layout: 'cms', middleware: 'cms-auth' })
 const route = useRoute()
 const id = String(route.params.id)
 const requestFetch = import.meta.server ? useRequestFetch() : $fetch
+const { csrfHeaders } = useCmsSession()
+const openingDraft = ref(false)
+const draftError = ref('')
 
 const { data } = await useAsyncData(`cms:article:${id}`, () =>
   requestFetch<{ article: CmsArticleDetail }>(`/api/cms/articles/${id}`)
@@ -23,16 +26,39 @@ const { data: rendered } = await useAsyncData(`cms:article:rendered:${id}`, asyn
 })
 
 useHead(() => ({ title: `${article.value?.title || '文章'} · Vinci 内容管理后台` }))
+
+const openDraft = async () => {
+  openingDraft.value = true
+  draftError.value = ''
+  try {
+    const result = await $fetch<{ draft: { id: string } }>('/api/cms/drafts', {
+      method: 'POST',
+      headers: csrfHeaders(),
+      body: { kind: 'existing', articleId: id }
+    })
+    await navigateTo(`/cms/drafts/${result.draft.id}`)
+  } catch (error: any) {
+    draftError.value = error?.data?.message || '打开草稿失败'
+  } finally {
+    openingDraft.value = false
+  }
+}
 </script>
 
 <template>
   <section v-if="article" class="cms-page">
-    <header class="cms-page-header">
-      <NuxtLink class="cms-back-link" to="/cms/articles">← 返回文章列表</NuxtLink>
-      <p class="cms-eyebrow">READ ONLY · {{ article.collection }}</p>
-      <h1>{{ article.title }}</h1>
-      <p><code>{{ article.relativePath }}</code> · 稳定 ID：<code>{{ article.id }}</code></p>
+    <header class="cms-page-header cms-page-header-actions">
+      <div>
+        <NuxtLink class="cms-back-link" to="/cms/articles">← 返回文章列表</NuxtLink>
+        <p class="cms-eyebrow">PUBLISHED · {{ article.collection }}</p>
+        <h1>{{ article.title }}</h1>
+        <p><code>{{ article.relativePath }}</code> · 稳定 ID：<code>{{ article.id }}</code></p>
+      </div>
+      <button class="cms-button cms-button-primary" type="button" :disabled="openingDraft" @click="openDraft">
+        {{ openingDraft ? '正在打开…' : '编辑草稿' }}
+      </button>
     </header>
+    <p v-if="draftError" class="cms-alert cms-alert-error">{{ draftError }}</p>
 
     <div class="cms-detail-grid">
       <article class="cms-panel cms-preview">

@@ -15,7 +15,7 @@ const { session } = useCmsSession()
         DASHBOARD
       </p>
       <h1>你好，{{ session?.user.account }}</h1>
-      <p>成员资料维护和 Markdown 文章只读浏览已经开放。</p>
+      <p>Markdown 双模式编辑和 PostgreSQL 草稿自动保存已经开放，正式内容仍保持只读。</p>
     </header>
 
     <div class="cms-card-grid">
@@ -29,7 +29,7 @@ const { session } = useCmsSession()
       </article>
       <article class="cms-card">
         <span>当前阶段</span>
-        <strong>阶段 2 · 成员与文章只读管理</strong>
+        <strong>阶段 3 · Markdown 编辑器与草稿</strong>
       </article>
     </div>
   </section>

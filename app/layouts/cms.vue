@@ -35,6 +35,9 @@ const handleLogout = async () => {
         <NuxtLink to="/cms/articles">
           文章
         </NuxtLink>
+        <NuxtLink to="/cms/drafts">
+          草稿
+        </NuxtLink>
         <NuxtLink to="/cms/members">
           成员
         </NuxtLink>

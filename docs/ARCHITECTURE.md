@@ -4,7 +4,7 @@
 
 本文记录网站与 CMS 的长期架构约束。阶段 0 于 2026-07-25 完成首次技术方案确认，阶段 1 于同日落地数据库与身份认证基础，阶段 2 落地成员管理和文章只读索引。后续只有在发生重大架构调整时才修改本文，并应同步在 `docs/CODEX_HANDOVER.md` 追加说明。
 
-当前已接入 PostgreSQL、登录、权限骨架、成员管理和文章只读浏览；尚未接入编辑器、对象存储或 Git 发布。
+当前已接入 PostgreSQL、登录、权限骨架、成员管理、文章只读浏览、Milkdown 编辑器和数据库草稿；尚未接入审核、对象存储或 Git 发布。
 
 ## 2. 当前项目审查结论
 
@@ -201,7 +201,7 @@ GitHub 是代码和正式 Markdown 的唯一权威来源。恢复旧版本通过
 
 | 阶段 | 表 | 用途 |
 | --- | --- | --- |
-| 3 | `drafts`、`draft_authors` | 正文、可编辑 Frontmatter、状态、基线版本、创建者、自动保存版本号 |
+| 3 | `drafts`、`draft_authors` | 正文、保留 Frontmatter、基线内容哈希、创建者、作者关系和乐观保存版本号；阶段 3 状态仅为 `draft` |
 | 4 | `review_events`、`edit_locks` | 审核状态流转、驳回原因、心跳、接管审计 |
 | 5 | `publish_records` | 操作者、审核者、commit hash、路径、操作类型、失败原因 |
 | 6 | `media_assets` | 对象 key、URL、上传者、关联草稿、图片元数据 |
@@ -254,6 +254,7 @@ description:
 
 ### 阶段 3
 
+- `GET /api/cms/drafts`
 - `POST /api/cms/drafts`
 - `GET|PUT /api/cms/drafts/:id`
 - `GET /api/cms/articles/:id/draft`

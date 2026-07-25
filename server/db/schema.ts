@@ -1,6 +1,7 @@
 import {
   check,
   index,
+  integer,
   jsonb,
   pgEnum,
   pgTable,
@@ -89,6 +90,51 @@ export const articles = pgTable('articles', {
   index('articles_present_index').on(table.isPresent)
 ])
 
+export const drafts = pgTable('drafts', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  articleId: uuid('article_id')
+    .references(() => articles.id, { onDelete: 'restrict' }),
+  ownerUserId: uuid('owner_user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'restrict' }),
+  collection: varchar('collection', { length: 32 }).notNull(),
+  title: text('title').notNull(),
+  description: text('description').default('').notNull(),
+  body: text('body').default('').notNull(),
+  preservedFrontmatter: jsonb('preserved_frontmatter')
+    .$type<Record<string, unknown>>()
+    .default({})
+    .notNull(),
+  baseContentHash: varchar('base_content_hash', { length: 64 }),
+  status: varchar('status', { length: 32 }).default('draft').notNull(),
+  version: integer('version').default(1).notNull(),
+  lastSavedAt: timestamp('last_saved_at', { withTimezone: true }).defaultNow().notNull(),
+  ...timestamps
+}, table => [
+  check('drafts_collection_check', sql`${table.collection} in ('news', 'wiki')`),
+  check('drafts_status_check', sql`${table.status} = 'draft'`),
+  check('drafts_version_check', sql`${table.version} >= 1`),
+  uniqueIndex('drafts_article_owner_unique').on(table.articleId, table.ownerUserId),
+  index('drafts_owner_user_id_index').on(table.ownerUserId),
+  index('drafts_article_id_index').on(table.articleId),
+  index('drafts_updated_at_index').on(table.updatedAt)
+])
+
+export const draftAuthors = pgTable('draft_authors', {
+  draftId: uuid('draft_id')
+    .notNull()
+    .references(() => drafts.id, { onDelete: 'cascade' }),
+  memberId: uuid('member_id')
+    .notNull()
+    .references(() => members.id, { onDelete: 'restrict' }),
+  position: integer('position').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
+}, table => [
+  primaryKey({ columns: [table.draftId, table.memberId], name: 'draft_authors_primary_key' }),
+  uniqueIndex('draft_authors_position_unique').on(table.draftId, table.position),
+  index('draft_authors_member_id_index').on(table.memberId)
+])
+
 export const userMembers = pgTable('user_members', {
   userId: uuid('user_id')
     .primaryKey()
@@ -141,4 +187,5 @@ export type Role = typeof roles.$inferSelect
 export type Session = typeof sessions.$inferSelect
 export type Member = typeof members.$inferSelect
 export type Article = typeof articles.$inferSelect
+export type Draft = typeof drafts.$inferSelect
 export type AuditLog = typeof auditLogs.$inferSelect

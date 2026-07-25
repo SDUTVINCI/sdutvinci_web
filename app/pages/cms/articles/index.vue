@@ -29,10 +29,15 @@ const applySearch = () => {
 
 <template>
   <section class="cms-page">
-    <header class="cms-page-header">
-      <p class="cms-eyebrow">ARTICLES</p>
-      <h1>文章只读管理</h1>
-      <p>当前索引 {{ data?.total ?? 0 }} 篇文章。这里不会修改 Markdown 或执行 Git 操作。</p>
+    <header class="cms-page-header cms-page-header-actions">
+      <div>
+        <p class="cms-eyebrow">ARTICLES</p>
+        <h1>文章与草稿</h1>
+        <p>当前索引 {{ data?.total ?? 0 }} 篇正式文章。编辑只保存草稿，不影响前台。</p>
+      </div>
+      <NuxtLink class="cms-button cms-button-primary cms-button-link" to="/cms/articles/new">
+        新建文章草稿
+      </NuxtLink>
     </header>
 
     <form class="cms-toolbar" @submit.prevent="applySearch">

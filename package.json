@@ -11,7 +11,7 @@
     "db:migrate": "tsx --env-file=.env scripts/cms-migrate.ts",
     "generate": "nuxt generate",
     "test": "vitest run",
-    "test:cms": "vitest run tests/cms-auth.integration.test.ts tests/cms-content.integration.test.ts",
+    "test:cms": "vitest run tests/cms-auth.integration.test.ts tests/cms-content.integration.test.ts tests/cms-drafts.integration.test.ts",
     "wiki:check": "node scripts/wiki-check.mjs",
     "typecheck": "nuxt typecheck",
     "prebuild": "npm run wiki:check",
@@ -19,6 +19,7 @@
     "preview": "nuxt preview"
   },
   "dependencies": {
+    "@milkdown/crepe": "^7.21.3",
     "@nuxt/content": "^3.15.2",
     "argon2": "^0.45.1",
     "better-sqlite3": "^12.9.0",
