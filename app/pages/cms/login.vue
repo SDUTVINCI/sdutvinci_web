@@ -3,7 +3,7 @@ definePageMeta({ layout: 'cms-auth' })
 useHead({ title: '登录 · Vinci 内容管理后台' })
 
 const { loadSession, login } = useCmsSession()
-const email = ref('')
+const account = ref('')
 const password = ref('')
 const submitting = ref(false)
 const errorMessage = ref('')
@@ -19,7 +19,7 @@ const submit = async () => {
   errorMessage.value = ''
 
   try {
-    await login(email.value, password.value)
+    await login(account.value, password.value)
     await navigateTo('/cms')
   } catch (error: any) {
     errorMessage.value = error?.data?.message
@@ -46,12 +46,14 @@ const submit = async () => {
       @submit.prevent="submit"
     >
       <label>
-        <span>邮箱</span>
+        <span>账号</span>
         <input
-          v-model.trim="email"
-          type="email"
+          v-model.trim="account"
+          type="text"
           autocomplete="username"
-          maxlength="320"
+          maxlength="32"
+          autocapitalize="none"
+          spellcheck="false"
           required
         >
       </label>

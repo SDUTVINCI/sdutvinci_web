@@ -1,4 +1,5 @@
 import {
+  check,
   index,
   jsonb,
   pgEnum,
@@ -10,6 +11,7 @@ import {
   uuid,
   varchar
 } from 'drizzle-orm/pg-core'
+import { sql } from 'drizzle-orm'
 
 const timestamps = {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -29,12 +31,15 @@ export const roles = pgTable('roles', {
 
 export const users = pgTable('users', {
   id: uuid('id').defaultRandom().primaryKey(),
+  account: varchar('account', { length: 32 }).notNull(),
   email: varchar('email', { length: 320 }).notNull(),
   displayName: varchar('display_name', { length: 100 }).notNull(),
   passwordHash: text('password_hash').notNull(),
   status: userStatusEnum('status').default('active').notNull(),
   ...timestamps
 }, table => [
+  check('users_account_format_check', sql`${table.account} ~ '^[a-z][a-z0-9]{2,31}$'`),
+  uniqueIndex('users_account_unique').on(table.account),
   uniqueIndex('users_email_unique').on(table.email),
   index('users_status_index').on(table.status)
 ])

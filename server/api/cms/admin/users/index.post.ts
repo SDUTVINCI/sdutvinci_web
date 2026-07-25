@@ -1,6 +1,9 @@
 import { createError, readValidatedBody } from 'h3'
 import { z } from 'zod'
-import { cmsRoleCodes } from '../../../../../shared/types/cms-auth'
+import {
+  cmsAccountPattern,
+  cmsRoleCodes
+} from '../../../../../shared/types/cms-auth'
 import { createCmsUser } from '../../../../services/cms-auth'
 import {
   requireCmsCsrf,
@@ -8,6 +11,7 @@ import {
 } from '../../../../utils/cms-http'
 
 const createUserSchema = z.object({
+  account: z.string().trim().toLowerCase().regex(cmsAccountPattern),
   email: z.email().max(320),
   displayName: z.string().trim().min(1).max(100),
   password: z.string().min(12).max(1024),
@@ -29,7 +33,7 @@ export default defineEventHandler(async (event) => {
       && 'code' in error
       && error.code === '23505'
     ) {
-      throw createError({ statusCode: 409, message: '该邮箱已存在' })
+      throw createError({ statusCode: 409, message: '该账号或邮箱已存在' })
     }
 
     throw error

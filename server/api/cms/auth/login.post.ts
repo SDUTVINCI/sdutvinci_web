@@ -1,5 +1,6 @@
 import { createError, getHeader, readValidatedBody } from 'h3'
 import { z } from 'zod'
+import { cmsAccountPattern } from '../../../../shared/types/cms-auth'
 import { authenticateCmsUser, createCmsSession } from '../../../services/cms-auth'
 import { getCmsServerConfig } from '../../../utils/cms-config'
 import {
@@ -10,17 +11,17 @@ import {
 import { createCsrfToken, hashClientIp } from '../../../utils/cms-security'
 
 const loginSchema = z.object({
-  email: z.email().max(320),
+  account: z.string().trim().toLowerCase().regex(cmsAccountPattern),
   password: z.string().min(1).max(1024)
 })
 
 export default defineEventHandler(async (event) => {
   requireSameOrigin(event)
   const input = await readValidatedBody(event, loginSchema.parse)
-  const user = await authenticateCmsUser(input.email, input.password)
+  const user = await authenticateCmsUser(input.account, input.password)
 
   if (!user) {
-    throw createError({ statusCode: 401, message: '邮箱或密码错误' })
+    throw createError({ statusCode: 401, message: '账号或密码错误' })
   }
 
   const config = getCmsServerConfig()

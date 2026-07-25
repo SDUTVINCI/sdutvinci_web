@@ -45,6 +45,7 @@ const handleLogout = async () => {
 
       <div class="cms-sidebar-user">
         <strong>{{ session?.user.displayName }}</strong>
+        <span>@{{ session?.user.account }}</span>
         <span>{{ session?.user.email }}</span>
         <button
           class="cms-button cms-button-quiet"

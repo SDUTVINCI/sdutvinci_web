@@ -230,3 +230,27 @@
 - `db:migrate` 和 `cms:admin` 已增加 `tsx --env-file=.env`，现在会自动读取项目根目录的 `.env`。
 - 管理员密码仍只通过隐藏的交互式输入读取，不会写入 `.env`、命令参数或日志。
 - 同步更新 `docs/CMS_SETUP.md`。
+
+## 2026-07-25：阶段 1 验收修正——使用稳定账号 ID 登录
+
+### 需求调整
+
+- 维护者确认登录账号应为稳定用户 ID，例如 `dongjiahui`、`dongjiahui1`，而不是邮箱。
+- `users` 新增唯一且不可为空的 `account`；允许 3～32 位小写字母或数字，并要求以字母开头。
+- 邮箱继续作为唯一联系资料保留，但登录 API 和登录页只接收 `account` 与密码。
+- 阶段 2 绑定成员资料时，应优先让 `users.account` 与 `members.member_key` 一致。
+
+### 数据兼容
+
+- 新 migration 会优先使用符合规则的现有显示名称生成账号，其次使用邮箱前缀，最后使用 UUID 派生的安全回退值。
+- 发生重名时自动追加数字后缀，形成 `dongjiahui1`、`dongjiahui2`。
+- 现有开发数据库已迁移，原管理员的账号为 `dongjiahui`；用户 ID、密码哈希、角色、会话和审计记录均保留。
+
+### 验证
+
+- 空 PostgreSQL 17 数据库中的 migration 与 CMS 身份认证集成测试：4 项全部通过。
+- 既有开发数据库 migration：通过，重复执行安全。
+- `npm run typecheck`：通过。
+- `npm run build`：通过，Wiki 226 个文件检查正常。
+- Nitro HTTP 回归：邮箱格式登录请求返回 400；账号登录返回 200 且会话用户携带稳定账号；普通成员访问管理员 API 返回 403。
+- 人工验收需改为使用账号 `dongjiahui` 和原密码登录，不再使用邮箱登录。

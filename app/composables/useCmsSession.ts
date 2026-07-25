@@ -21,10 +21,10 @@ export const useCmsSession = () => {
     return session.value
   }
 
-  const login = async (email: string, password: string) => {
+  const login = async (account: string, password: string) => {
     session.value = await $fetch<CmsSessionResponse>('/api/cms/auth/login', {
       method: 'POST',
-      body: { email, password }
+      body: { account, password }
     })
     loaded.value = true
     return session.value

@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD CONSTRAINT "users_account_format_check" CHECK ("users"."account" ~ '^[a-z][a-z0-9]{2,31}$');

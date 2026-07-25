@@ -57,7 +57,7 @@ const save = async () => {
         PROFILE
       </p>
       <h1>个人资料</h1>
-      <p>更新后台中显示的名称。登录邮箱和权限由管理员维护。</p>
+      <p>更新后台中显示的名称。账号 ID、邮箱和权限由管理员维护。</p>
     </header>
 
     <form
@@ -65,7 +65,16 @@ const save = async () => {
       @submit.prevent="save"
     >
       <label>
-        <span>登录邮箱</span>
+        <span>账号 ID</span>
+        <input
+          :value="session?.user.account"
+          type="text"
+          disabled
+        >
+      </label>
+
+      <label>
+        <span>联系邮箱</span>
         <input
           :value="session?.user.email"
           type="email"

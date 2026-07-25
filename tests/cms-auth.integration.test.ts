@@ -45,6 +45,7 @@ integration('CMS 身份认证与数据库', () => {
 
   it('只允许首次引导创建一个管理员，并使用 Argon2id 保存密码', async () => {
     const admin = await bootstrapCmsAdmin({
+      account: 'admin',
       email: 'ADMIN@EXAMPLE.COM',
       displayName: '首位管理员',
       password: 'AdminPassword123'
@@ -52,6 +53,7 @@ integration('CMS 身份认证与数据库', () => {
 
     expect(admin).toMatchObject({
       email: 'admin@example.com',
+      account: 'admin',
       roles: ['admin'],
       status: 'active'
     })
@@ -65,6 +67,7 @@ integration('CMS 身份认证与数据库', () => {
     expect(await verifyCmsPassword(stored!.hash, 'AdminPassword123')).toBe(true)
 
     await expect(bootstrapCmsAdmin({
+      account: 'secondadmin',
       email: 'second@example.com',
       displayName: '第二位管理员',
       password: 'OtherPassword123'
@@ -73,11 +76,13 @@ integration('CMS 身份认证与数据库', () => {
 
   it('管理员和普通成员均可登录、创建会话并退出或被停用', async () => {
     const admin = await bootstrapCmsAdmin({
+      account: 'admin',
       email: 'admin@example.com',
       displayName: '管理员',
       password: 'AdminPassword123'
     })
     const member = await createCmsUser({
+      account: 'dongjiahui',
       email: 'member@example.com',
       displayName: '普通成员',
       password: 'MemberPassword123',
@@ -85,16 +90,17 @@ integration('CMS 身份认证与数据库', () => {
     }, admin!.id)
 
     const authenticatedAdmin = await authenticateCmsUser(
-      'ADMIN@example.com',
+      'ADMIN',
       'AdminPassword123'
     )
     const authenticatedMember = await authenticateCmsUser(
-      'member@example.com',
+      'dongjiahui',
       'MemberPassword123'
     )
     expect(authenticatedAdmin?.roles).toEqual(['admin'])
     expect(authenticatedMember?.roles).toEqual(['member'])
-    expect(await authenticateCmsUser('member@example.com', 'wrong')).toBeNull()
+    expect(authenticatedMember?.account).toBe('dongjiahui')
+    expect(await authenticateCmsUser('dongjiahui', 'wrong')).toBeNull()
 
     const session = await createCmsSession(
       authenticatedMember!,
@@ -109,16 +115,18 @@ integration('CMS 身份认证与数据库', () => {
 
     await updateCmsUser(member!.id, { status: 'disabled' }, admin!.id)
     expect(await getCmsSessionUser(session.token)).toBeNull()
-    expect(await authenticateCmsUser('member@example.com', 'MemberPassword123')).toBeNull()
+    expect(await authenticateCmsUser('dongjiahui', 'MemberPassword123')).toBeNull()
   })
 
   it('记录管理员引导、用户创建、登录和资料修改审计事件', async () => {
     const admin = await bootstrapCmsAdmin({
+      account: 'auditadmin',
       email: `${randomUUID()}@example.com`,
       displayName: '审计管理员',
       password: 'AdminPassword123'
     })
     const member = await createCmsUser({
+      account: 'auditmember',
       email: `${randomUUID()}@example.com`,
       displayName: '审计成员',
       password: 'MemberPassword123',
