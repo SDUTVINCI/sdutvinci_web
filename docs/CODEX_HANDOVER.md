@@ -282,3 +282,46 @@
 - 维护者已确认阶段 1 验证完毕，并授权启动阶段 2。
 - 需求文档中的阶段 1 总体进度和通用模板“等待本阶段验收通过”已勾选。
 - 阶段 1 最终认证模型以提交 `05830f1` 为准：账号 ID + 密码，成员展示资料留给阶段 2 一对一绑定。
+
+## 2026-07-25：阶段 2——成员管理与文章只读管理
+
+### 完成状态
+
+- 阶段 2 的实现、迁移和自动化验证已完成，等待维护者人工验收。
+- 阶段 2 任务、范围约束和验收标准已勾选；总体进度及通用模板“等待本阶段验收通过”保持未勾选。
+- 未开始阶段 3，未实现文章写入、删除、编辑器、草稿、审核或 Git 写操作。
+
+### 成员资料
+
+- 32 份现有成员 Markdown 均新增稳定 `id`。ID 使用姓名全拼小写；重名依次追加 `1`、`2`，已有 ID 永远优先保留。
+- `董佳辉.md` 的稳定 ID 为 `dongjiahui`，开发数据库中的同 ID 管理员已通过 `user_members` 自动绑定。
+- 前台成员详情路由改为稳定 ID，例如 `/team/dongjiahui`；旧的姓名路由查询仍作为兼容回退。
+- 管理员可在 `/cms/members` 创建成员，并在详情页修改姓名和头像；普通成员只读。稳定 ID 在编辑时不可修改。
+- 成员写接口要求 admin、有效会话、同源和 CSRF 校验，并写入审计日志。
+
+### 文章只读索引
+
+- migration `0004_faithful_vindicator.sql` 新增 `articles`，并为 `members` 增加完整 Frontmatter JSONB 元数据。
+- 扫描 `content/news` 的 2 篇新闻与 `content/wiki` 的 226 篇 Wiki，共 228 篇文章；列表支持正文/标题搜索、collection 和目录筛选。
+- 文章数据库 UUID 与标题分离，同一路径重新扫描或修改标题后 UUID 不变；内容哈希使用 SHA-256。
+- `/cms/articles/:id` 先按 UUID 查数据库，再从受控 collection 读取 Markdown，展示 Nuxt Content 渲染预览和 Frontmatter。
+- 文件读取使用 `realpath` 并校验目标仍位于 `members`、`news` 或 `wiki` 根目录，忽略符号链接，拒绝绝对路径、`..` 和非 Markdown 文件。
+
+### 命令、依赖与验证
+
+- 新增 `yaml` 直接依赖，用于兼容解析既有 Frontmatter；旧成员文件中的 Tab 缩进只在解析副本中规范化，不会静默改写源文件。
+- 新增 `npm run cms:content:sync`，自动读取 `.env`，执行 migration、补充缺失成员 ID 并重建只读文章索引。
+- 隔离 PostgreSQL 测试库中的 `npm run test:cms`：2 个测试文件、9 项测试全部通过。
+- `npm run typecheck`：通过。
+- `npm run build`：通过；Nuxt Content 全量解析 260 个文件，Wiki 检查 226 个文件正常，稳定成员路由成功预渲染。
+- 正式开发数据库同步结果：32 名成员、228 篇文章，`dongjiahui` 账号绑定 `dongjiahui` 成员。
+- Nitro HTTP 冒烟：`/team/dongjiahui` 返回 200；未登录 `/cms/articles` 跳转登录；未登录文章 API 返回 401。
+
+### 人工验收
+
+1. 执行 `npm run dev`，使用现有账号 `dongjiahui` 和原密码登录。
+2. 打开 `/cms/members`，确认可看到 32 名成员，“董佳辉”显示“已绑定 @dongjiahui”。
+3. 打开任一成员详情，修改姓名或头像后保存，再刷新确认稳定 ID 不变；如不想改真实资料，可只查看，不必提交。
+4. 打开 `/cms/articles`，确认显示 228 篇文章；分别搜索一个新闻正文关键词，并选择 `wiki/...` 目录筛选。
+5. 打开任一文章，确认正文为只读渲染预览，右侧 Frontmatter 与源文件一致。
+6. 验收通过后勾选阶段 2 总体进度和通用模板“等待本阶段验收通过”，再启动阶段 3。

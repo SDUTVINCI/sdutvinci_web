@@ -32,15 +32,16 @@ const handleLogout = async () => {
         <NuxtLink to="/cms">
           工作台
         </NuxtLink>
+        <NuxtLink to="/cms/articles">
+          文章
+        </NuxtLink>
+        <NuxtLink to="/cms/members">
+          成员
+        </NuxtLink>
         <NuxtLink to="/cms/profile">
           个人资料
         </NuxtLink>
-        <span
-          v-if="isAdmin"
-          class="cms-nav-hint"
-        >
-          管理员功能将在后续阶段逐项开放
-        </span>
+        <span class="cms-nav-hint">{{ isAdmin ? '管理员可维护成员资料' : '成员资料和文章只读开放' }}</span>
       </nav>
 
       <div class="cms-sidebar-user">

@@ -2,9 +2,9 @@
 
 ## 1. 文档状态
 
-本文记录网站与 CMS 的长期架构约束。阶段 0 于 2026-07-25 完成首次技术方案确认，阶段 1 于同日落地数据库与身份认证基础。后续只有在发生重大架构调整时才修改本文，并应同步在 `docs/CODEX_HANDOVER.md` 追加说明。
+本文记录网站与 CMS 的长期架构约束。阶段 0 于 2026-07-25 完成首次技术方案确认，阶段 1 于同日落地数据库与身份认证基础，阶段 2 落地成员管理和文章只读索引。后续只有在发生重大架构调整时才修改本文，并应同步在 `docs/CODEX_HANDOVER.md` 追加说明。
 
-当前已接入 PostgreSQL、登录和权限骨架；尚未接入编辑器、对象存储或 Git 发布。
+当前已接入 PostgreSQL、登录、权限骨架、成员管理和文章只读浏览；尚未接入编辑器、对象存储或 Git 发布。
 
 ## 2. 当前项目审查结论
 
@@ -25,7 +25,7 @@
   - `news`：2 个新闻文件；
   - `wiki`：226 个 Wiki 文件。
 - Wiki 路径通过 `transformers/wiki-pinyin-path.ts` 和 `utils/wiki-content-meta.ts` 派生；CMS 不得自行复制一套不同的路径算法。
-- 成员文件目前以中文姓名作为文件名及前台查找依据，Frontmatter 还没有稳定成员 ID。
+- 每份成员文件均有稳定 `id`，前台成员路由按该 ID 查找；中文文件名和姓名不再承担身份标识职责。
 - 当前文章 Frontmatter 并不统一：
   - Wiki 主要只有 `title`；
   - 新闻使用 `title`、`date`、`author`、`tags`、`image`、`bvid`、`summary`；
@@ -182,7 +182,7 @@ GitHub 是代码和正式 Markdown 的唯一权威来源。恢复旧版本通过
 
 表名采用复数 snake_case。字段会在对应阶段通过 migration 最终确定。
 
-### 6.1 阶段 1 基础实体
+### 6.1 阶段 1～2 已落地实体
 
 | 表 | 关键字段 | 说明 |
 | --- | --- | --- |
@@ -190,9 +190,10 @@ GitHub 是代码和正式 Markdown 的唯一权威来源。恢复旧版本通过
 | `users` | `id`, `account`, `password_hash`, `status`, timestamps | 只保存认证信息；`account` 是唯一稳定登录 ID |
 | `user_roles` | `user_id`, `role_id` | 多对多，权限只从服务端读取 |
 | `sessions` | `id`, `user_id`, `token_hash`, `expires_at`, `last_seen_at`, `revoked_at`, `ip_hash`, `user_agent` | 可撤销会话；`token_hash` 唯一 |
-| `members` | `id`, `member_key`, `name`, `avatar_url`, `source_path`, timestamps | `member_key` 是文章引用的稳定 ID；可选关联用户 |
+| `members` | `id`, `member_key`, `name`, `avatar_url`, `source_path`, `metadata`, timestamps | `member_key` 是文章引用的稳定 ID；可选关联同 ID 用户 |
 | `user_members` | `user_id`, `member_id` | 一个用户至多绑定一个成员，成员也至多绑定一个用户 |
 | `audit_logs` | `id`, `actor_user_id`, `action`, `target_type`, `target_id`, `metadata`, `created_at` | 只追加，不允许业务层更新或删除 |
+| `articles` | `id`, `collection`, `relative_path`, `public_path`, `directory`, `title`, `frontmatter`, `search_text`, `content_hash`, `is_present`, timestamps | 阶段 2 只读索引；正文仍以 Markdown 为唯一来源 |
 
 用户禁用使用状态字段，不级联删除审计记录。审计 metadata 使用 JSONB，但常用检索字段必须单独成列。
 
@@ -200,7 +201,6 @@ GitHub 是代码和正式 Markdown 的唯一权威来源。恢复旧版本通过
 
 | 阶段 | 表 | 用途 |
 | --- | --- | --- |
-| 2 | `articles` | UUID 稳定标识、collection、规范化相对路径、当前 Git blob/commit、软删除状态 |
 | 3 | `drafts`、`draft_authors` | 正文、可编辑 Frontmatter、状态、基线版本、创建者、自动保存版本号 |
 | 4 | `review_events`、`edit_locks` | 审核状态流转、驳回原因、心跳、接管审计 |
 | 5 | `publish_records` | 操作者、审核者、commit hash、路径、操作类型、失败原因 |

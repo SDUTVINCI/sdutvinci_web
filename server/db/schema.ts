@@ -60,10 +60,33 @@ export const members = pgTable('members', {
   name: varchar('name', { length: 100 }).notNull(),
   avatarUrl: text('avatar_url'),
   sourcePath: text('source_path'),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}).notNull(),
   ...timestamps
 }, table => [
   uniqueIndex('members_member_key_unique').on(table.memberKey),
   uniqueIndex('members_source_path_unique').on(table.sourcePath)
+])
+
+export const articles = pgTable('articles', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  collection: varchar('collection', { length: 32 }).notNull(),
+  relativePath: text('relative_path').notNull(),
+  publicPath: text('public_path').notNull(),
+  directory: text('directory').notNull(),
+  title: text('title').notNull(),
+  frontmatter: jsonb('frontmatter').$type<Record<string, unknown>>().default({}).notNull(),
+  searchText: text('search_text').notNull(),
+  contentHash: varchar('content_hash', { length: 64 }).notNull(),
+  isPresent: varchar('is_present', { length: 5 }).default('true').notNull(),
+  scannedAt: timestamp('scanned_at', { withTimezone: true }).defaultNow().notNull(),
+  ...timestamps
+}, table => [
+  check('articles_collection_check', sql`${table.collection} in ('news', 'wiki')`),
+  check('articles_is_present_check', sql`${table.isPresent} in ('true', 'false')`),
+  uniqueIndex('articles_source_unique').on(table.collection, table.relativePath),
+  index('articles_collection_index').on(table.collection),
+  index('articles_directory_index').on(table.directory),
+  index('articles_present_index').on(table.isPresent)
 ])
 
 export const userMembers = pgTable('user_members', {
@@ -117,4 +140,5 @@ export type NewUser = typeof users.$inferInsert
 export type Role = typeof roles.$inferSelect
 export type Session = typeof sessions.$inferSelect
 export type Member = typeof members.$inferSelect
+export type Article = typeof articles.$inferSelect
 export type AuditLog = typeof auditLogs.$inferSelect

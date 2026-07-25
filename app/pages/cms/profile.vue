@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { CmsMember } from '../../../shared/types/cms-members'
+
 definePageMeta({
   layout: 'cms',
   middleware: 'cms-auth'
@@ -6,6 +8,14 @@ definePageMeta({
 useHead({ title: '个人资料 · Vinci 内容管理后台' })
 
 const { session } = useCmsSession()
+const requestFetch = import.meta.server ? useRequestFetch() : $fetch
+const { data: memberData } = await useAsyncData('cms:profile:member', async () => {
+  if (!session.value?.user.memberId) return null
+  return requestFetch<{ member: CmsMember }>(
+    `/api/cms/members/${session.value.user.memberId}`
+  )
+})
+const member = computed(() => memberData.value?.member)
 </script>
 
 <template>
@@ -15,10 +25,19 @@ const { session } = useCmsSession()
         PROFILE
       </p>
       <h1>个人资料</h1>
-      <p>账号只负责身份认证；姓名、头像等资料将在阶段 2 从对应成员档案读取。</p>
+      <p>账号只负责身份认证；相同稳定 ID 的成员档案会自动与账号关联。</p>
     </header>
 
     <div class="cms-panel cms-form">
+      <div v-if="member" class="cms-profile-member">
+        <img :src="member.avatarUrl || '/images/logo.png'" :alt="`${member.name} 头像`">
+        <div>
+          <span class="cms-muted">关联成员资料</span>
+          <h2>{{ member.name }}</h2>
+          <NuxtLink :to="`/cms/members/${member.id}`">查看成员档案</NuxtLink>
+        </div>
+      </div>
+
       <label>
         <span>账号 ID</span>
         <input

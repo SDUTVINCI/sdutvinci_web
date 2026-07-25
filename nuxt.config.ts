@@ -1,4 +1,4 @@
-import { existsSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { getWikiContentMeta } from './utils/wiki-content-meta'
 
@@ -15,7 +15,11 @@ const getMarkdownFiles = (dir: string): string[] =>
 
 const memberRoutes = existsSync('content/members')
   ? getMarkdownFiles('content/members')
-    .map((file) => `/team/${basename(file, '.md')}`)
+    .map((file) => {
+      const source = readFileSync(file, 'utf8')
+      const id = source.match(/^id:\s*([a-z][a-z0-9]{2,31})\s*$/m)?.[1]
+      return `/team/${id || basename(file, '.md')}`
+    })
   : []
 
 export default defineNuxtConfig({
@@ -72,6 +76,16 @@ export default defineNuxtConfig({
     }
   },
   hooks: {
+    'content:file:beforeParse'({ file }) {
+      if (typeof file.body !== 'string') return
+      const memberKey = file.body.match(/^id:\s*([a-z][a-z0-9]{2,31})\s*$/m)?.[1]
+      if (memberKey && !/^memberKey:/m.test(file.body)) {
+        file.body = file.body.replace(
+          /^id:\s*[a-z][a-z0-9]{2,31}\s*$/m,
+          line => `${line}\nmemberKey: ${memberKey}`
+        )
+      }
+    },
     'content:file:afterParse'({ content }) {
       const wikiMeta = getWikiContentMeta(
         typeof content.stem === 'string' ? content.stem : undefined

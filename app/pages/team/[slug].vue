@@ -5,7 +5,8 @@ const route = useRoute()
 const slug = decodeURIComponent(String(route.params.slug ?? ''))
 
 const { data: member } = await useAsyncData<Member | null>(`members:${slug}`, async () => {
-  return queryCollection('members').where('name', '=', slug).first() as Promise<Member | null>
+  const byId = await queryCollection('members').where('memberKey', '=', slug).first() as Member | null
+  return byId || queryCollection('members').where('name', '=', slug).first() as Promise<Member | null>
 })
 
 if (!member.value) {
@@ -88,7 +89,7 @@ const relatedMembers = computed(() => {
   const currentGroup = groupLabel(current)
 
   return [...(rawMembers.value ?? [])]
-    .filter((item) => item.name !== current.name)
+    .filter((item) => item.memberKey !== current.memberKey)
     .map((item) => {
       const seasons = [...splitSeason(item.time), ...splitSeason(item.advisor)]
       const seasonScore = seasons.some((season) => currentSeasons.has(season)) ? 2 : 0
@@ -148,7 +149,7 @@ const relatedMembers = computed(() => {
         <div class="related-member-list">
           <MemberCard
             v-for="item in relatedMembers"
-            :key="item.name"
+            :key="item.memberKey || item.name"
             :member="item"
             compact
           />

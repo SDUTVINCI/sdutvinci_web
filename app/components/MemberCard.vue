@@ -29,7 +29,9 @@ const splitSeason = (value: unknown) =>
 const formatSeasonList = (value: unknown) => splitSeason(value).join('、')
 
 const displayName = computed(() => String(props.member.name || '成员'))
-const memberPath = computed(() => `/team/${encodeURIComponent(displayName.value)}`)
+const memberPath = computed(() =>
+  `/team/${encodeURIComponent(String(props.member.memberKey || displayName.value))}`
+)
 
 const seasonText = computed(() => {
   const time = props.member.time ? `${formatSeasonList(props.member.time)} 赛季` : ''

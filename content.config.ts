@@ -6,6 +6,8 @@ export default defineContentConfig({
       type: 'page',
       source: 'members/**/*.md',
       schema: z.object({
+        id: z.string(),
+        memberKey: z.string().optional(),
         name: z.string(),
         image: z.string().optional(),
         role: z.string().nullable().optional(),

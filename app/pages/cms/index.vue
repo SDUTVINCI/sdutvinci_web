@@ -15,7 +15,7 @@ const { session } = useCmsSession()
         DASHBOARD
       </p>
       <h1>你好，{{ session?.user.account }}</h1>
-      <p>后台基础能力已经就绪，内容编辑和发布能力会在后续阶段依次开放。</p>
+      <p>成员资料维护和 Markdown 文章只读浏览已经开放。</p>
     </header>
 
     <div class="cms-card-grid">
@@ -29,7 +29,7 @@ const { session } = useCmsSession()
       </article>
       <article class="cms-card">
         <span>当前阶段</span>
-        <strong>阶段 1 · 基础设施与身份认证</strong>
+        <strong>阶段 2 · 成员与文章只读管理</strong>
       </article>
     </div>
   </section>
