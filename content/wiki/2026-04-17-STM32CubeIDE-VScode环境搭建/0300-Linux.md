@@ -1,26 +1,35 @@
 ---
-title: "Linux"
+title: Linux
+chapterDepth: 0
+chapterOrder: "0300"
+date: 2026-04-17
+docKey: 2026-04-17-stm32cubeide-vscode-huan-jing-da-jian
+docRoot: /wiki/2026-04-17-stm32cubeide-vscode-huan-jing-da-jian
+docTitle: STM32CubeIDE VScode环境搭建
+isWikiDoc: true
+isWikiIndex: false
+wikiDepth: 1
 ---
 
 ### 环境介绍
+
 本教程环境介绍：
 
-1.  系统：Fedora 43 KDE Edition Linux
-
-2.  系统内核：Linux 6.19.12-200.fc43.x86_64
-
-3.  架构：X86_64(amd64)
+1. 系统：Fedora 43 KDE Edition Linux
+2. 系统内核：Linux 6.19.12-200.fc43.x86\_64
+3. 架构：X86\_64(amd64)
 
 其他Linux环境也可以。
 
 ### 安装各种软件与环境
 
 #### 安装CubeMX
+
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2025/07/18/image9.webp)
 
 下载地址：
 
-https://www.st.com.cn/zh/development-tools/stm32cubemx.html
+<https://www.st.com.cn/zh/development-tools/stm32cubemx.html>
 
 **推荐下载6.14.1版本（不要下载6.15.0,这个版本有bug，不知道后续何时会修复）**
 
@@ -96,7 +105,8 @@ Terminal=false
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2025/07/18/image22.webp)
 
 #### 安装VScode
-https://code.visualstudio.com/Download
+
+<https://code.visualstudio.com/Download>
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2025/07/18/image23.webp)
 
@@ -126,7 +136,6 @@ code
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2025/07/18/image26.webp)
 
-
 然后可以配置一个环境单独给CubeIDE插件使用，避免和默认环境冲突。
 
 ![alt text](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2026/04/17/1776420070033.webp)
@@ -138,8 +147,6 @@ code
 选中STM32
 
 ![alt text](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2026/04/17/1776420490177.webp)
-
-
 
 然后安装一些插件
 
@@ -153,7 +160,6 @@ code
 
 ![alt text](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2026/04/17/1776420688705.webp)
 
-
 紧接着会进行一些环境的安装
 
 ![alt text](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2026/04/17/1776420710467.webp)
@@ -163,10 +169,10 @@ code
 
 ![alt text](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2026/04/17/1776420944068.webp)
 
-
 ### 工程创建与测试
 
 #### 使用CubeMX创建工程
+
 点击进入单片机挑选的按钮
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2025/07/18/image60.webp)
@@ -201,7 +207,6 @@ FreeRTOS也要配置一下。
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2025/07/18/image69.webp)
 
-
 #### 对工程进行配置与编译
 
 在工程文件夹打开终端
@@ -212,7 +217,7 @@ FreeRTOS也要配置一下。
 code .
 ```
 
-打开VScode后记得切到`STM32·的配置
+打开VScode后记得切到\`STM32·的配置
 
 ![alt text](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2026/04/17/1776421689049.webp)
 
@@ -238,21 +243,21 @@ code .
 
 #### 移植作者tungchiahui的标准C/C++工程模板
 
-用git clone命令克隆仓库:https://github.com/tungchiahui/STM32HAL_CMake_CPP_Template
+用git clone命令克隆仓库:<https://github.com/tungchiahui/STM32HAL_CMake_CPP_Template>
 
 ```bash
 git clone https://github.com/tungchiahui/STM32HAL_CMake_CPP_Template.git
 ```
 
-把仓库里的 **所有文件与文件夹（除了`.git`以外）** 复制到我们的STM32工程的目录里。
+把仓库里的 **所有文件与文件夹（除了**\*\*`.git`\*\***以外）** 复制到我们的STM32工程的目录里。
 
 ![alt text](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2026/04/17/1776427498924.webp)
 
-然后打开applications文件夹，在Src和Inc文件夹分别创建led_task.cpp和led_task.h，内容分别如下:
+然后打开applications文件夹，在Src和Inc文件夹分别创建led\_task.cpp和led\_task.h，内容分别如下:
 
 ![](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2025/07/18/image91.webp)
 
-led_task.cpp:
+led\_task.cpp:
 
 ```cpp
 #include "led_task.h"
@@ -273,7 +278,7 @@ void StartDefaultTask(void *argument)
 }
 ```
 
-led_task.h:
+led\_task.h:
 
 ```cpp
 #ifndef __LED_TASK_H_
@@ -294,7 +299,7 @@ extern "C"
 
 ```
 
-然后打开`cmake/user`文件夹下的`CMakeLists.txt`，把刚才新建的led_task.cpp添加上去。
+然后打开`cmake/user`文件夹下的`CMakeLists.txt`，把刚才新建的led\_task.cpp添加上去。
 
 详细介绍（可以不看）：这里的`cmake/stm32cubemx`下的`CMakeLists.txt`是被CubeMX管理的，你重新用CubeMX生成新代码后，这个文件里的东西会被覆盖。而工作区根目录下的`CMakeLists.txt`是不会被重新覆盖的，而且给我们留了一些区域加源文件和头文件，但是这样会让这个文件太过于嘈杂。所以我们选择新建一个user文件夹，然后在这里面弄一个`CMakeLists.txt`，再用顶层`CMakeLists.txt`去加载这个子`CMakeLists.txt`，这个子`CMakeLists.txt`方便咱们修改，文件结构也更加明显。（这些都不需要咱们自己创建，我已经给创建到**模板**里了，你在上面复制的时候已经复制过来了）
 
@@ -318,7 +323,7 @@ add_subdirectory(cmake/user)
 
 #### 下载程序到板子
 
-下载之前首先要先配置 <br>
+下载之前首先要先配置 :br
 
 ST-Link就不用配置了，直接开始debug就完事了。
 
@@ -330,7 +335,7 @@ ST-Link就不用配置了，直接开始debug就完事了。
 
 无需任何配置
 
-![alt text](/images/2026-04-17-STM32CubeIDE-VScode环境搭建/1776435639185.png)
+![alt text](/images/2026-04-17-STM32CubeIDE-VScode%E7%8E%AF%E5%A2%83%E6%90%AD%E5%BB%BA/1776435639185.png)
 
 ###### JLink
 
@@ -338,10 +343,9 @@ ST-Link就不用配置了，直接开始debug就完事了。
 
 ![alt text](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2026/04/17/1776431910132.webp)
 
-
 然后还要配置下launch：
 
-问题解决方案：https://community.st.com/t5/stm32cubeide-for-visual-studio/stm32h7a3vg-debugging-with-j-link-under-vscode/m-p/826188#M960
+问题解决方案：<https://community.st.com/t5/stm32cubeide-for-visual-studio/stm32h7a3vg-debugging-with-j-link-under-vscode/m-p/826188#M960>
 
 在`.vscode`文件夹下创建一个`launch.json`，然后输入以下内容：
 
@@ -379,10 +383,7 @@ ST-Link就不用配置了，直接开始debug就完事了。
 
 ![alt text](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2026/04/17/1776432039560.webp)
 
-
 然后会出现这个条，他会下载程序到板子
 ![alt text](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2026/04/17/1776432143180.webp)
 
 然后就成功下载了程序并进入了Debug
-
-![alt text](https://cdn.tungchiahui.cn/tungwebsite/assets/images/2026/04/17/1776432211211.webp)

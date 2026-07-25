@@ -19,7 +19,7 @@ const memberRoutes = existsSync('content/members')
   : []
 
 export default defineNuxtConfig({
-  modules: ['@nuxt/content'],
+  modules: ['@nuxt/content', 'nuxt-studio'],
   compatibilityDate: '2026-05-12',
   css: ['~/assets/css/main.css'],
   content: {

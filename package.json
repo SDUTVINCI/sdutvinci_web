@@ -3,7 +3,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "nuxt dev --host 0.0.0.0",
+    "dev": "nuxt dev",
     "build": "nuxt build",
     "generate": "nuxt generate",
     "wiki:check": "node scripts/wiki-check.mjs",
@@ -16,6 +16,7 @@
     "better-sqlite3": "^12.9.0",
     "medium-zoom": "^1.1.0",
     "nuxt": "^4.4.0",
+    "nuxt-studio": "^1.7.0",
     "pinyin-pro": "^3.28.1",
     "vue": "^3.5.0"
   }
