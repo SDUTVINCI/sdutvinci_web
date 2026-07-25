@@ -190,6 +190,33 @@ export const publishRecords = pgTable('publish_records', {
   index('publish_records_created_at_index').on(table.createdAt)
 ])
 
+export const mediaAssets = pgTable('media_assets', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  draftId: uuid('draft_id')
+    .notNull()
+    .references(() => drafts.id, { onDelete: 'restrict' }),
+  uploaderUserId: uuid('uploader_user_id')
+    .references(() => users.id, { onDelete: 'set null' }),
+  objectKey: text('object_key').notNull(),
+  publicUrl: text('public_url').notNull(),
+  originalFilename: text('original_filename').notNull(),
+  originalMimeType: varchar('original_mime_type', { length: 100 }).notNull(),
+  originalByteSize: integer('original_byte_size').notNull(),
+  width: integer('width').notNull(),
+  height: integer('height').notNull(),
+  byteSize: integer('byte_size').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
+}, table => [
+  check('media_assets_original_byte_size_check', sql`${table.originalByteSize} > 0`),
+  check('media_assets_width_check', sql`${table.width} > 0`),
+  check('media_assets_height_check', sql`${table.height} > 0`),
+  check('media_assets_byte_size_check', sql`${table.byteSize} > 0`),
+  uniqueIndex('media_assets_object_key_unique').on(table.objectKey),
+  index('media_assets_draft_id_index').on(table.draftId),
+  index('media_assets_uploader_user_id_index').on(table.uploaderUserId),
+  index('media_assets_created_at_index').on(table.createdAt)
+])
+
 export const editLocks = pgTable('edit_locks', {
   id: uuid('id').defaultRandom().primaryKey(),
   targetType: varchar('target_type', { length: 32 }).notNull(),
@@ -264,5 +291,6 @@ export type Article = typeof articles.$inferSelect
 export type Draft = typeof drafts.$inferSelect
 export type ReviewEvent = typeof reviewEvents.$inferSelect
 export type PublishRecord = typeof publishRecords.$inferSelect
+export type MediaAsset = typeof mediaAssets.$inferSelect
 export type EditLock = typeof editLocks.$inferSelect
 export type AuditLog = typeof auditLogs.$inferSelect

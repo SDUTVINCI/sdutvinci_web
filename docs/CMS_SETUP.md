@@ -1,6 +1,6 @@
-# CMS 阶段 1～5 运行说明
+# CMS 阶段 1～6 运行说明
 
-本文覆盖 PostgreSQL、身份认证、成员管理、文章索引、Markdown 编辑器、数据库草稿、审核流程、编辑锁、正式版本冲突检查，以及隔离 Git 工作区中的正式发布和历史恢复。图片上传尚未开放，生产自动部署属于后续阶段。
+本文覆盖 PostgreSQL、身份认证、成员管理、文章索引、Markdown 编辑器、数据库草稿、审核流程、编辑锁、正式版本冲突检查、隔离 Git 工作区中的正式发布和历史恢复，以及 WebP 图片处理和 S3 兼容对象存储。生产自动部署属于后续阶段。
 
 ## 1. 环境变量
 
@@ -24,9 +24,21 @@ CMS_GIT_BRANCH=main
 CMS_GIT_AUTHOR_NAME=Vinci CMS
 CMS_GIT_AUTHOR_EMAIL=cms@localhost
 CMS_GIT_SSH_KEY_PATH=/run/secrets/cms_git_ssh_key
+S3_ENDPOINT=https://replace-with-s3-endpoint
+S3_REGION=replace-with-region
+S3_BUCKET=replace-with-bucket
+S3_ACCESS_KEY_ID=replace-with-access-key
+S3_SECRET_ACCESS_KEY=replace-with-secret-key
+S3_PUBLIC_BASE_URL=https://replace-with-public-image-domain
+S3_FORCE_PATH_STYLE=false
+S3_KEY_PREFIX=images
+CMS_IMAGE_MAX_BYTES=10485760
+CMS_IMAGE_MAX_WIDTH=2560
+CMS_IMAGE_MAX_HEIGHT=2560
+CMS_IMAGE_WEBP_QUALITY=82
 ```
 
-可使用 `openssl rand -base64 48` 生成 `CMS_AUTH_SECRET`。生产环境必须把 `CMS_SECURE_COOKIES` 设为 `true`，并把 `NUXT_PUBLIC_SITE_URL` 设为实际 HTTPS Origin。真实密钥不得提交到 Git。
+可使用 `openssl rand -base64 48` 生成 `CMS_AUTH_SECRET`。生产环境必须把 `CMS_SECURE_COOKIES` 设为 `true`，并把 `NUXT_PUBLIC_SITE_URL` 设为实际 HTTPS Origin。`S3_PUBLIC_BASE_URL` 应指向能公开读取对象的 Bucket 域名、CDN 域名或包含 Bucket 的路径前缀；API Endpoint 与公开访问域名必须分开配置。真实密钥不得提交到 Git。
 
 ## 2. 初始化数据库
 
@@ -81,7 +93,8 @@ npm run dev
 - 文章详情的“版本历史”可查看和比较历史 Markdown；管理员恢复历史版本时会产生一个新提交，不删除已有历史。
 - `CMS_GIT_WORKTREE` 必须是部署目录之外的独立 clone。服务账号需要该目录的读写权限和目标分支的非强制推送权限；SSH 私钥建议只读挂载并由 `CMS_GIT_SSH_KEY_PATH` 指向。
 - 阶段 5 不自动更新正在运行的网站目录。Push 后由现有人工部署方式拉取远端最新提交；生产 GitHub Actions 自动部署在阶段 8 实现。
-- 本阶段没有图片上传入口。
+- 草稿为可编辑状态且当前页面持有有效编辑锁时，可选择图片、把图片拖入编辑区，或直接粘贴截图。服务端接受 JPEG/JPG、PNG、WebP、GIF，并统一转换为 WebP；动态 GIF 会保留动画。若这些格式的文件扩展名标错，以服务端安全解码出的真实格式为准。
+- 图片成功上传后会直接插入 Markdown；正文变化继续沿用自动保存。图片关联草稿，但二进制只保存在 S3 兼容对象存储中。
 
 ## 6. 首次准备发布工作区
 
@@ -100,7 +113,19 @@ git ls-remote "$CMS_GIT_REMOTE_URL" "$CMS_GIT_BRANCH"
 
 不要把私钥、访问令牌或真实远端凭据写入仓库。
 
-## 7. 验证
+## 7. S3 兼容图片存储
+
+对象存储凭据至少需要对配置 Bucket 的 `PutObject` 权限。服务在数据库记录失败或上传后编辑租约失效时会尝试 `DeleteObject`，因此建议同时授予受控图片前缀的 `DeleteObject` 权限。Bucket 或 CDN 必须允许通过 `S3_PUBLIC_BASE_URL/<对象 key>` 公开读取图片。
+
+- AWS S3、腾讯云 COS 等虚拟主机风格服务通常使用 `S3_FORCE_PATH_STYLE=false`。
+- MinIO 等本地兼容服务常使用 `S3_FORCE_PATH_STYLE=true`，并把 `S3_PUBLIC_BASE_URL` 配置为包含 Bucket 的公开路径。
+- `S3_KEY_PREFIX` 只允许安全路径分段，不接受 `/` 开头、尾随 `/`、`.` 或 `..`。
+- 默认最大原图为 10 MiB，输出最长边为 2560 px、WebP 质量为 82；可按部署资源和图片策略调整对应环境变量。
+- 第一版不提供媒体列表、搜索、删除或复用界面；这些不属于阶段 6。
+
+应用 migration `0008_aberrant_titanium_man.sql` 后会创建 `media_assets`，记录 URL、对象 key、上传者、上传时间、关联草稿和必要的图片元数据，不保存图片二进制。
+
+## 8. 验证
 
 类型检查和构建不需要连接数据库：
 
@@ -117,4 +142,4 @@ CMS_AUTH_SECRET=test-only-secret-with-at-least-32-characters \
 npm run test:cms
 ```
 
-测试只读取 `TEST_DATABASE_URL`，并要求数据库名称包含独立的 `test` 单词；未提供时全部数据库集成测试会跳过。即使当前环境中存在普通 `DATABASE_URL`，测试也不会使用它。阶段 5 测试会自行创建临时本地裸 Git 远端、独立工作区和拒绝推送 hook，不会连接或推送真实 GitHub 仓库。
+测试只读取 `TEST_DATABASE_URL`，并要求数据库名称包含独立的 `test` 单词；未提供时全部数据库集成测试会跳过。即使当前环境中存在普通 `DATABASE_URL`，测试也不会使用它。阶段 5 测试会自行创建临时本地裸 Git 远端、独立工作区和拒绝推送 hook，不会连接或推送真实 GitHub 仓库。阶段 6 测试使用内存中的模拟 S3 客户端验证转换、上传参数、失败补偿和密钥隔离，不会访问真实对象存储。

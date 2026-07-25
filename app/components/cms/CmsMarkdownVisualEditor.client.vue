@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Crepe } from '@milkdown/crepe'
+import { insert } from '@milkdown/kit/utils'
 import '@milkdown/crepe/theme/common/style.css'
 import '@milkdown/crepe/theme/frame.css'
 import {
@@ -20,6 +21,14 @@ const emit = defineEmits<{
 const root = ref<HTMLElement | null>(null)
 let crepe: Crepe | null = null
 let acceptsUpdates = false
+
+const insertMarkdown = (markdown: string) => {
+  if (!crepe || !acceptsUpdates) return false
+  crepe.editor.action(insert(markdown, false))
+  return true
+}
+
+defineExpose({ insertMarkdown })
 
 onMounted(async () => {
   if (!root.value) return

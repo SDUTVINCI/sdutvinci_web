@@ -4,7 +4,7 @@
 
 本文记录网站与 CMS 的长期架构约束。阶段 0 于 2026-07-25 完成首次技术方案确认，阶段 1 于同日落地数据库与身份认证基础，阶段 2 落地成员管理和文章只读索引。后续只有在发生重大架构调整时才修改本文，并应同步在 `docs/CODEX_HANDOVER.md` 追加说明。
 
-当前已接入 PostgreSQL、登录、权限骨架、成员管理、文章浏览、Milkdown 编辑器、数据库草稿、审核流程、编辑锁、正式版本冲突检查、隔离 Git 发布和历史恢复；尚未接入对象存储或生产自动部署。
+当前已接入 PostgreSQL、登录、权限骨架、成员管理、文章浏览、Milkdown 编辑器、数据库草稿、审核流程、编辑锁、正式版本冲突检查、隔离 Git 发布、历史恢复，以及服务端 WebP 图片处理和 S3 兼容对象存储；尚未接入生产自动部署。
 
 ## 2. 当前项目审查结论
 
@@ -154,9 +154,12 @@ scripts/
 约束：
 
 - 浏览器永远拿不到 Access Key 和 Secret Key。
-- 上传 API 不信任扩展名，校验实际 MIME/图片解码结果、大小和尺寸。
+- 上传 API 不信任扩展名，校验 Sharp 实际解码结果、大小和尺寸。浏览器声明只用于限制可接受的主流图片类别；当 JPEG/JPG、PNG、WebP、GIF 之间的扩展名或声明 MIME 标错时，以安全解码出的真实格式为准。
 - 对象 key 由系统生成，不拼接用户文件名；公开 URL 与 API endpoint 分开配置。
 - 数据库记录对象 key、公开 URL、上传者、草稿和时间，但不保存图片二进制。
+- 阶段 6 已实现 JPEG/JPG、PNG、WebP、GIF 输入，统一输出 WebP；动态 GIF 会保留动画帧、播放延迟和循环设置。最大字节数、宽高和质量均可由服务端环境变量调整。
+- 上传必须关联处于 `draft` 状态的草稿，并同时通过资源权限和有效编辑租约校验。对象上传后若租约失效或数据库记录失败，服务会尽力删除刚上传的对象。
+- `S3_PUBLIC_BASE_URL` 指向可公开读取的 Bucket 域名或 CDN/路径前缀；业务代码只拼接系统生成的对象 key，不依赖特定厂商 URL 规则。
 
 ### 5.5 Git 发布
 
@@ -197,14 +200,14 @@ GitHub 是代码和正式 Markdown 的唯一权威来源。恢复旧版本通过
 
 用户禁用使用状态字段，不级联删除审计记录。审计 metadata 使用 JSONB，但常用检索字段必须单独成列。
 
-### 6.2 阶段 3～5 已落地及后续实体
+### 6.2 阶段 3～6 已落地及后续实体
 
 | 阶段 | 表 | 用途 |
 | --- | --- | --- |
 | 3 | `drafts`、`draft_authors` | 正文、保留 Frontmatter、基线内容哈希、创建者、作者关系和乐观保存版本号；阶段 3 状态仅为 `draft` |
 | 4 | `review_events`、`edit_locks` | 只追加的审核状态流转与驳回原因；按文章或新草稿目标建立带租约 ID、心跳与过期时间的独占编辑锁 |
 | 5 | `publish_records` | 发布/恢复尝试的操作者、审核者、commit hash、路径、状态、时间和失败原因 |
-| 6 | `media_assets` | 对象 key、URL、上传者、关联草稿、图片元数据 |
+| 6 | `media_assets` | 已落地：对象 key、URL、上传者、关联草稿、原始格式/大小及 WebP 宽高/大小 |
 | 7 | `article_deletion_events` | 软删除、恢复及其审计关联 |
 
 文章 ID 使用数据库 UUID，与可变标题和路径分离。初次扫描按规范化相对路径建档；CMS 内发生路径变化时更新同一行，从而保留稳定 ID。所有文件读取都先 `realpath`，再验证结果仍位于允许的 collection 根目录内。
@@ -284,9 +287,12 @@ description:
 - `GET /api/cms/articles/:id/diff`
 - `POST /api/cms/articles/:id/versions/:commit/restore`
 
-### 阶段 6 以后
+### 阶段 6 已落地
 
 - `POST /api/cms/media`
+
+### 阶段 7 以后
+
 - `POST /api/cms/articles/:id/delete`
 - `POST /api/cms/articles/:id/restore-deleted`
 

@@ -6,6 +6,7 @@ import type {
   CmsReviewEvent
 } from '../../../../shared/types/cms-reviews'
 import type { CmsMember } from '../../../../shared/types/cms-members'
+import type { CmsMediaUploadResponse } from '../../../../shared/types/cms-media'
 import CmsMarkdownVisualEditor from '../../../components/cms/CmsMarkdownVisualEditor.client.vue'
 
 definePageMeta({ layout: 'cms', middleware: 'cms-auth' })
@@ -65,6 +66,23 @@ const workflowBusy = ref(false)
 const lockState = ref<'idle' | 'loading' | 'acquired' | 'blocked' | 'lost' | 'error'>('idle')
 const lockResponse = ref<CmsEditLockResponse | null>(null)
 const takeoverReason = ref('')
+const visualEditor = ref<InstanceType<typeof CmsMarkdownVisualEditor> | null>(null)
+const sourceEditor = ref<HTMLTextAreaElement | null>(null)
+const imageInput = ref<HTMLInputElement | null>(null)
+const imageUploading = ref(false)
+const imageDragging = ref(false)
+const imageUploadMessage = ref('')
+const imageUploadFailed = ref(false)
+type CmsImageUploadState = 'queued' | 'uploading' | 'uploaded' | 'failed'
+interface CmsImageUploadItem {
+  id: number
+  filename: string
+  previewUrl: string
+  state: CmsImageUploadState
+}
+const imageUploadItems = ref<CmsImageUploadItem[]>([])
+const imageUploadRemovalTimers = new Map<number, ReturnType<typeof setTimeout>>()
+let imageUploadSequence = 0
 let saveTimer: ReturnType<typeof setTimeout> | undefined
 let visualCheckTimer: ReturnType<typeof setTimeout> | undefined
 let heartbeatTimer: ReturnType<typeof setInterval> | undefined
@@ -301,6 +319,162 @@ const switchMode = (next: 'source' | 'visual') => {
   }, 15_000)
 }
 
+const appendMarkdown = (markdown: string) => {
+  const prefix = body.value && !body.value.endsWith('\n\n')
+    ? body.value.endsWith('\n') ? '\n' : '\n\n'
+    : ''
+  const suffix = body.value ? '\n' : ''
+  body.value = `${body.value}${prefix}${markdown}${suffix}`
+}
+
+const insertUploadedMarkdown = async (markdown: string) => {
+  if (mode.value === 'visual' && visualEditor.value?.insertMarkdown(markdown)) {
+    return
+  }
+
+  if (mode.value === 'source' && sourceEditor.value) {
+    const editor = sourceEditor.value
+    const start = editor.selectionStart
+    const end = editor.selectionEnd
+    const before = body.value.slice(0, start)
+    const after = body.value.slice(end)
+    const prefix = before && !before.endsWith('\n\n')
+      ? before.endsWith('\n') ? '\n' : '\n\n'
+      : ''
+    const suffix = after && !after.startsWith('\n')
+      ? '\n\n'
+      : after.startsWith('\n\n') || !after ? '' : '\n'
+    const inserted = `${prefix}${markdown}${suffix}`
+    body.value = `${before}${inserted}${after}`
+    await nextTick()
+    const cursor = start + inserted.length
+    editor.focus()
+    editor.setSelectionRange(cursor, cursor)
+    return
+  }
+
+  appendMarkdown(markdown)
+}
+
+const imageUploadStateLabel = (state: CmsImageUploadState) => ({
+  queued: '等待处理',
+  uploading: '正在转换并上传…',
+  uploaded: '上传完成',
+  failed: '上传失败'
+})[state]
+
+const releaseImagePreview = (url: string) => {
+  if (url.startsWith('blob:')) URL.revokeObjectURL(url)
+}
+
+const removeImageUploadItem = (itemId: number, delay: number) => {
+  const existingTimer = imageUploadRemovalTimers.get(itemId)
+  if (existingTimer) clearTimeout(existingTimer)
+  const timer = setTimeout(() => {
+    const item = imageUploadItems.value.find(candidate => candidate.id === itemId)
+    if (item) releaseImagePreview(item.previewUrl)
+    imageUploadItems.value = imageUploadItems.value.filter(candidate => candidate.id !== itemId)
+    imageUploadRemovalTimers.delete(itemId)
+  }, delay)
+  imageUploadRemovalTimers.set(itemId, timer)
+}
+
+const uploadImages = async (files: File[]) => {
+  if (!canEdit.value || !leaseId.value || imageUploading.value || !files.length) return
+  imageUploading.value = true
+  imageUploadMessage.value = ''
+  imageUploadFailed.value = false
+  let uploaded = 0
+  let failed = 0
+  let lastError = ''
+  const queue = files.map(file => ({
+    file,
+    item: {
+      id: ++imageUploadSequence,
+      filename: file.name || '粘贴图片',
+      previewUrl: URL.createObjectURL(file),
+      state: 'queued' as CmsImageUploadState
+    }
+  }))
+  imageUploadItems.value.push(...queue.map(entry => entry.item))
+
+  for (const { file, item: queuedItem } of queue) {
+    const item = imageUploadItems.value.find(candidate => candidate.id === queuedItem.id)
+    if (!item) continue
+    try {
+      if (!['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'].includes(file.type.toLowerCase())) {
+        throw new Error(`“${item.filename}”不是支持的 JPEG、PNG、WebP 或 GIF 图片`)
+      }
+      item.state = 'uploading'
+      const form = new FormData()
+      form.append('draftId', id)
+      form.append('lockLeaseId', leaseId.value)
+      form.append('altText', file.name.replace(/\.[^.]+$/, '') || '图片')
+      form.append('image', file, file.name || 'clipboard-image.png')
+      const result = await $fetch<CmsMediaUploadResponse>('/api/cms/media', {
+        method: 'POST',
+        headers: csrfHeaders(),
+        body: form
+      })
+      await insertUploadedMarkdown(result.markdown)
+      releaseImagePreview(item.previewUrl)
+      item.previewUrl = result.asset.url
+      item.state = 'uploaded'
+      removeImageUploadItem(item.id, 2400)
+      uploaded += 1
+    } catch (error: any) {
+      item.state = 'failed'
+      failed += 1
+      lastError = error?.data?.message || error?.message || '图片上传失败'
+      removeImageUploadItem(item.id, 6000)
+    }
+  }
+
+  imageUploadFailed.value = failed > 0
+  imageUploadMessage.value = failed
+    ? `${uploaded} 张图片已上传，${failed} 张失败：${lastError}`
+    : `${uploaded} 张图片已转换为 WebP、上传并插入正文。`
+  imageUploading.value = false
+  if (imageInput.value) imageInput.value.value = ''
+}
+
+const handleImageSelection = (event: Event) => {
+  const input = event.target as HTMLInputElement
+  void uploadImages([...input.files || []])
+}
+
+const filesFromTransfer = (transfer: DataTransfer | null) =>
+  transfer
+    ? [...transfer.files].filter(file => file.type.startsWith('image/'))
+    : []
+
+const handleImageDrop = (event: DragEvent) => {
+  imageDragging.value = false
+  const files = filesFromTransfer(event.dataTransfer)
+  if (!files.length) return
+  event.preventDefault()
+  event.stopPropagation()
+  event.stopImmediatePropagation()
+  void uploadImages(files)
+}
+
+const handleImageDragLeave = (event: DragEvent) => {
+  const current = event.currentTarget as HTMLElement | null
+  const next = event.relatedTarget as Node | null
+  if (!current || !next || !current.contains(next)) {
+    imageDragging.value = false
+  }
+}
+
+const handleImagePaste = (event: ClipboardEvent) => {
+  const files = filesFromTransfer(event.clipboardData)
+  if (!files.length) return
+  event.preventDefault()
+  event.stopPropagation()
+  event.stopImmediatePropagation()
+  void uploadImages(files)
+}
+
 const handleVisualReady = (serialized: string) => {
   clearTimeout(visualCheckTimer)
   if (serialized !== visualSource.value) {
@@ -464,6 +638,8 @@ onBeforeUnmount(() => {
   clearTimeout(saveTimer)
   clearTimeout(visualCheckTimer)
   clearHeartbeat()
+  for (const timer of imageUploadRemovalTimers.values()) clearTimeout(timer)
+  for (const item of imageUploadItems.value) releaseImagePreview(item.previewUrl)
   window.removeEventListener('beforeunload', handleBeforeUnload)
   window.removeEventListener('pagehide', handlePageHide)
   if (!leaving) releaseLock(true)
@@ -616,7 +792,73 @@ onBeforeUnmount(() => {
         </p>
       </aside>
 
-      <main class="cms-editor-workspace">
+      <main
+        class="cms-editor-workspace"
+        :class="{ 'cms-image-dragging': imageDragging }"
+        @dragenter.prevent="imageDragging = canEdit"
+        @dragover.prevent="imageDragging = canEdit"
+        @dragleave="handleImageDragLeave"
+        @drop.capture="handleImageDrop"
+        @paste.capture="handleImagePaste"
+      >
+        <section class="cms-image-upload" :class="{ 'cms-image-upload-disabled': !canEdit }">
+          <div>
+            <strong>文章图片</strong>
+            <span>支持选择、拖入编辑区或粘贴截图；JPEG / PNG / WebP / GIF 将由服务端转换和压缩。</span>
+          </div>
+          <input
+            ref="imageInput"
+            class="cms-visually-hidden"
+            type="file"
+            accept=".jpg,.jpeg,.png,.webp,.gif,image/jpeg,image/png,image/webp,image/gif"
+            multiple
+            :disabled="!canEdit || imageUploading"
+            @change="handleImageSelection"
+          >
+          <button
+            class="cms-button cms-button-quiet"
+            type="button"
+            :disabled="!canEdit || imageUploading"
+            @click="imageInput?.click()"
+          >
+            {{ imageUploading ? '正在处理图片…' : '选择图片' }}
+          </button>
+        </section>
+        <p
+          v-if="imageUploadMessage"
+          class="cms-image-upload-message"
+          :class="{ 'cms-alert-error': imageUploadFailed }"
+        >
+          {{ imageUploadMessage }}
+        </p>
+        <section
+          v-if="imageUploadItems.length"
+          class="cms-image-upload-progress"
+          aria-label="图片上传进度"
+          aria-live="polite"
+        >
+          <figure
+            v-for="item in imageUploadItems"
+            :key="item.id"
+            class="cms-image-upload-preview"
+            :class="`cms-image-upload-preview-${item.state}`"
+          >
+            <img :src="item.previewUrl" :alt="item.filename">
+            <figcaption>
+              <span
+                v-if="item.state === 'queued' || item.state === 'uploading'"
+                class="cms-image-upload-spinner"
+                aria-hidden="true"
+              />
+              <strong>{{ imageUploadStateLabel(item.state) }}</strong>
+              <small>{{ item.filename }}</small>
+            </figcaption>
+          </figure>
+        </section>
+        <div v-if="imageDragging && canEdit" class="cms-image-drop-overlay">
+          松开即可上传图片
+        </div>
+
         <div class="cms-editor-tabs" role="tablist" aria-label="编辑模式">
           <button type="button" :class="{ active: mode === 'visual' }" @click="switchMode('visual')">
             可视化编辑
@@ -630,6 +872,7 @@ onBeforeUnmount(() => {
           <p v-if="visualChecking" class="cms-editor-checking">正在执行无损往返检查…</p>
           <ClientOnly>
             <CmsMarkdownVisualEditor
+              ref="visualEditor"
               :key="visualKey"
               v-model="body"
               @ready="handleVisualReady"
@@ -642,6 +885,7 @@ onBeforeUnmount(() => {
         </div>
         <textarea
           v-else
+          ref="sourceEditor"
           v-model="body"
           class="cms-markdown-source"
           spellcheck="false"
@@ -652,7 +896,7 @@ onBeforeUnmount(() => {
     </div>
 
     <footer class="cms-draft-scope-note">
-      审核通过只改变 PostgreSQL 状态；阶段 4 不写 Markdown、不发布，也不执行 Git 操作。
+      图片仅上传到已配置的 S3 兼容对象存储并关联当前草稿；正式发布仍沿用既有审核与 Git 流程。
     </footer>
   </section>
 </template>

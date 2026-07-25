@@ -580,3 +580,84 @@
 - 正式发布提交 `00c0867` 证明 Git Push 成功后数据库发布记录、远端内容和 commit hash 一致；最初失败记录仍保留用于审计。
 - 需求文档中的阶段 5 总体进度已勾选。阶段 5 实现以 `e471889` 为基础，包含验收修正 `99bcf2e` 和 `2ed7b83`。
 - 阶段 6 尚未启动；不得提前实现图片上传、WebP 转换、S3 兼容对象存储或媒体记录。
+
+## 2026-07-25：阶段 6——图片处理与 S3 兼容对象存储
+
+### 完成状态
+
+- 阶段 6 实现、migration 和自动化验证已完成，等待维护者人工验收。
+- 阶段 6 任务与验收标准已勾选；总体进度保持未勾选，人工验收通过后再更新。
+- 未开始阶段 7；没有前台“编辑本文”、软删除、后台统计完善或完整媒体库。
+
+### 对象存储与图片安全
+
+- 新增直接依赖 `@aws-sdk/client-s3` 和 `sharp`。服务端通过 Endpoint、Region、Bucket、凭据、`forcePathStyle` 和公开 URL 前缀适配 AWS S3、腾讯云 COS、MinIO 等 S3 兼容实现，业务代码没有厂商分支。
+- 上传 API 只接受 JPEG、PNG、WebP。声明 MIME 必须与 Sharp 实际解码格式一致；空文件、损坏图片、不支持格式和超限文件均会被拒绝。
+- 图片在 Nitro 服务端自动旋转、限制宽高、禁止放大并转为 WebP。默认最大原图 10 MiB、最大宽高 2560 px、质量 82，均可通过环境变量调整。
+- 对象 key 使用安全前缀、UTC 年月、草稿 UUID 和随机 UUID 生成，不拼接用户文件名；原文件名只作为经过控制字符和路径分隔符清理后的审计元数据保存。
+- S3 Access Key 和 Secret Key 只由服务端配置读取，响应只包含公开 URL 和必要图片元数据。对象使用不可变一年缓存头。
+- 图片上传前后都校验草稿处于 `draft`、资源权限和有效编辑租约。若 S3 成功后租约失效或数据库写入失败，会尽力执行 `DeleteObject` 清理刚上传的对象。
+
+### 数据库、API 与编辑器
+
+- migration `0008_aberrant_titanium_man.sql` 新增 `media_assets`，记录对象 key、公开 URL、上传者、上传时间、关联草稿、原始文件名/MIME/大小，以及输出 WebP 的宽高和大小；数据库不保存二进制。
+- 新增 `POST /api/cms/media`，使用登录会话、同源和 CSRF 校验；请求为单图片 `multipart/form-data`，必须携带草稿 ID 和编辑租约 ID。
+- 草稿编辑页支持文件选择、多图顺序上传、拖拽图片和粘贴截图。上传成功后，源码模式插入当前光标位置，可视化模式通过 Milkdown selection 插入，并继续触发现有草稿自动保存。
+- 第一版没有媒体列表、媒体搜索、复用或删除界面，符合阶段 6 的范围限制。
+
+### 新增和修改文件
+
+- 依赖与配置：`package.json`、`package-lock.json`、`.env.example`。
+- 数据库：`server/db/schema.ts`、`server/db/migrations/0008_aberrant_titanium_man.sql` 及对应 Drizzle meta。
+- 服务端：`server/utils/cms-media-config.ts`、`server/services/cms-media.ts`、`server/api/cms/media.post.ts`。
+- 共享类型：`shared/types/cms-media.ts`。
+- 编辑器与样式：`app/components/cms/CmsMarkdownVisualEditor.client.vue`、`app/pages/cms/drafts/[id].vue`、`app/assets/css/cms.css`。
+- 测试：`tests/cms-media.integration.test.ts`，并把它加入 `npm run test:cms`。
+- 文档：`.env.example`、`docs/ARCHITECTURE.md`、`docs/CMS_SETUP.md`、本文件和需求进度清单。
+
+### 新增环境变量
+
+- 必需：`S3_ENDPOINT`、`S3_REGION`、`S3_BUCKET`、`S3_ACCESS_KEY_ID`、`S3_SECRET_ACCESS_KEY`、`S3_PUBLIC_BASE_URL`。
+- 有默认值：`S3_FORCE_PATH_STYLE=false`、`S3_KEY_PREFIX=images`、`CMS_IMAGE_MAX_BYTES=10485760`、`CMS_IMAGE_MAX_WIDTH=2560`、`CMS_IMAGE_MAX_HEIGHT=2560`、`CMS_IMAGE_WEBP_QUALITY=82`。
+- 图片配置独立延迟解析；没有配置 S3 时，阶段 1～5 的登录、浏览、草稿、审核和 Git 发布功能仍可运行，只有图片上传返回明确的配置错误。
+
+### 自动化验证
+
+- PostgreSQL 17 临时隔离库中的 `npm run test:cms`：7 个测试文件、29 项全部通过。
+- 阶段 6 覆盖真实 PNG/JPEG 解码、WebP 转换、1600×900 限制为 800×450、随机安全 key、公开 URL、数据库媒体记录、密钥不出现在响应、不支持 MIME、声明/实际格式不一致、损坏图片、超限文件、S3 失败不写库，以及上传后租约失效的对象删除补偿。
+- 测试只使用 `TEST_DATABASE_URL` 指向的 `vinci_cms_test`，对象存储使用内存模拟客户端；普通 `DATABASE_URL` 和真实 S3 均未连接或修改。
+- `npm run typecheck`：通过。
+- `npm run build`：通过；Wiki 226 个文件检查正常，Nuxt Content 260 个文件正常，Nitro node-server 构建完成。构建中的静态图片解析、计时标签和既有 Git bigint target warning 均为阶段 6 前已有警告。
+
+### 人工验收前置
+
+1. 在开发/验收数据库执行 `npm run db:migrate`，应用 migration `0008_aberrant_titanium_man.sql`。
+2. 按 `docs/CMS_SETUP.md` 配置测试 Bucket、服务端 S3 凭据和可公开读取的 `S3_PUBLIC_BASE_URL`；不要使用生产 Bucket。
+3. 重启应用，打开处于 `draft` 且已取得编辑锁的草稿，依次验证选择、拖拽、粘贴、WebP URL、自动插入、自动保存和前台发布后显示。
+4. 验证 GIF/文本伪装图片和超过 `CMS_IMAGE_MAX_BYTES` 的文件被拒绝，浏览器网络响应中没有 Access Key 或 Secret Key。
+5. 人工验收通过后只勾选阶段 6 总体进度，再等待维护者明确启动阶段 7。
+
+## 2026-07-25：阶段 6 验收修正——阻止粘贴图片重复插入
+
+- 人工验收发现，在可视化编辑器中粘贴截图时，Milkdown 内置粘贴逻辑会先插入本地 `blob:` 图片，页面上传流程随后再插入 S3 URL，导致正文中出现两张图片。
+- 图片粘贴与拖拽事件现改为在编辑工作区的捕获阶段处理；识别到图片文件后，在事件到达 Milkdown 前阻止默认行为和后续传播，只保留服务端上传完成后插入的 S3 WebP URL。
+- 文件选择上传不受影响；非图片剪贴板内容继续由编辑器正常处理。
+
+## 2026-07-25：阶段 6 验收修正——兼容主流图片扩展名与真实编码不一致
+
+- 人工验收文件 `D9CB99404DEDEA62C30A6A1A754204C4.png` 的扩展名和浏览器声明为 PNG，但 `file` 与 Sharp 均确认真实内容是 1072×1070 的标准 JPEG；原先“声明 MIME 必须与实际编码完全一致”的规则因此误拒绝了可安全处理的图片。
+- 上传仍只接受浏览器声明属于 JPEG/JPG、PNG、WebP 的文件，但最终格式以 Sharp 的实际解码结果为准。JPEG/JPG、PNG、WebP 之间扩展名或 MIME 标错时可以正常转为 WebP；文本伪装图片、损坏内容和其他不支持格式仍会被拒绝。
+- 文件选择器显式接受 `.jpg`、`.jpeg`、`.png`、`.webp`，服务端同时兼容少数客户端使用的 `image/jpg` 别名。
+- 新增“JPEG 内容以 PNG 文件名/MIME 上传”的回归测试；隔离 `TEST_DATABASE_URL` 中完整 CMS 测试现为 7 个文件、30 项全部通过，类型检查和生产构建通过。
+
+## 2026-07-25：阶段 6 验收修正——支持静态和动态 GIF
+
+- GIF 已加入文件选择、拖拽、粘贴和服务端实际格式白名单，统一转为 WebP。
+- Sharp 以 `animated: true` 读取 GIF；动态 GIF 输出继续保留帧数、每帧延迟和循环设置，数据库宽高记录单帧尺寸而不是所有帧垂直拼接后的总高度。
+- 新增双帧动态 GIF 转换回归测试，确认输出仍为双帧动态 WebP；隔离 `TEST_DATABASE_URL` 中完整 CMS 测试现为 7 个文件、31 项全部通过，类型检查和生产构建通过。
+
+## 2026-07-25：阶段 6 验收修正——图片处理进度预览
+
+- 选择、拖入或粘贴图片后立即显示本地缩略图，并在图片上覆盖“等待处理”或“正在转换并上传”状态与加载动画。
+- 服务端返回后，预览切换为对象存储中的 WebP 并短暂显示“上传完成”；失败时在对应图片上显示“上传失败”，多图上传会继续处理其余文件。
+- 隔离 `TEST_DATABASE_URL` 中完整 CMS 测试仍为 7 个文件、31 项全部通过，类型检查和生产构建通过。
