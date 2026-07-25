@@ -105,7 +105,8 @@ suite('CMS 阶段 5 Git 发布与历史集成', () => {
     process.env.CMS_GIT_REMOTE = 'origin'
     process.env.CMS_GIT_BRANCH = 'main'
     process.env.CMS_GIT_AUTHOR_NAME = 'Vinci CMS Test'
-    process.env.CMS_GIT_AUTHOR_EMAIL = 'cms@example.test'
+    // Git 允许本机身份使用 cms@localhost；配置校验不得误按公网邮箱拒绝。
+    process.env.CMS_GIT_AUTHOR_EMAIL = 'cms@localhost'
     delete process.env.CMS_GIT_SSH_KEY_PATH
     process.env.CMS_CONTENT_ROOT = deploymentRoot
     resetCmsGitConfigForTests()

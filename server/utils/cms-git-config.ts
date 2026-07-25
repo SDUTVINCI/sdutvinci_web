@@ -7,7 +7,15 @@ const gitConfigSchema = z.object({
   CMS_GIT_REMOTE: z.string().regex(/^[A-Za-z0-9._-]+$/).default('origin'),
   CMS_GIT_BRANCH: z.string().regex(/^[A-Za-z0-9._/-]+$/).default('main'),
   CMS_GIT_AUTHOR_NAME: z.string().min(1).default('Vinci CMS'),
-  CMS_GIT_AUTHOR_EMAIL: z.string().email().default('cms@localhost'),
+  CMS_GIT_AUTHOR_EMAIL: z
+    .string()
+    .min(3)
+    .max(254)
+    .regex(
+      /^[^\s<>@]+@[^\s<>@]+$/,
+      'CMS_GIT_AUTHOR_EMAIL 必须是有效的 Git 作者邮箱格式'
+    )
+    .default('cms@localhost'),
   CMS_GIT_SSH_KEY_PATH: z.string().min(1).optional(),
   CMS_CONTENT_ROOT: z.string().min(1).default('content')
 })

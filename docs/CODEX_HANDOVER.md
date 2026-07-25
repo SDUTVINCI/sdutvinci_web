@@ -550,3 +550,16 @@
 7. Push 失败场景可选：临时撤销验收仓库写权限或使用拒绝 Push 的测试分支，确认页面提示失败、草稿仍为 `approved`；恢复权限后在同页重试成功。
 8. 阶段 5 不含自动部署。用现有人工部署方式拉取刚推送的提交并启动前台，确认对应新闻/Wiki 路由展示最新内容。
 9. 验收通过后只勾选阶段 5 总体进度，再启动阶段 6。
+
+## 2026-07-25：阶段 5 验收配置——本地 Git 发布身份
+
+- 维护者已完全按照阶段 5 指引完成本机发布环境配置：
+  - 为 `SDUTVINCI/sdutvinci_web` 创建并添加带写权限的专用 GitHub Deploy Key。
+  - 私钥保存为 `/home/tungchiahui/.ssh/vinci_cms_deploy`，`.env` 的 `CMS_GIT_SSH_KEY_PATH` 已指向该文件。
+  - GitHub 主机密钥已加入当前用户的 `known_hosts`。
+  - `CMS_GIT_WORKTREE` 已改为部署目录之外的 `/home/tungchiahui/.local/share/vinci-cms/worktree`，父目录存在且当前用户可写。
+  - `ssh -T` 已返回 `Hi SDUTVINCI/sdutvinci_web! You've successfully authenticated`。
+  - 使用同一私钥执行 `git ls-remote` 已成功读取 `refs/heads/main`。
+- 第一次人工发布尚未执行 Git clone/push：配置解析先因 `CMS_GIT_AUTHOR_EMAIL=cms@localhost` 被过严的公网邮箱校验拒绝，草稿按设计保持 `approved`。
+- 已修正 Git 作者邮箱校验：接受 Git 常用的 `local-part@host` 格式，包括项目 `.env.example` 的默认值 `cms@localhost`，同时继续拒绝空白、尖括号或缺少 `@` 的值；集成测试改用该默认值防止回归。
+- 验收前还需先同步代码分支：GitHub `main` 当前为 `ad0ebca`，本地阶段 3～5 提交位于其后且本地 HEAD 为 `e471889`。在本地阶段提交推送到 GitHub 之前，不要重试 CMS 发布，以免内容提交先落到旧远端基线。
