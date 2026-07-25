@@ -169,6 +169,19 @@ export const readCmsGitArticle = async (
   relativePath: string
 ) => readFile(cmsGitArticlePath(collection, relativePath).target, 'utf8')
 
+export const removeCmsGitArticle = async (
+  collection: CmsArticleCollection,
+  relativePath: string
+) => {
+  const resolved = cmsGitArticlePath(collection, relativePath)
+  const stat = await lstat(resolved.target)
+  if (!stat.isFile() || stat.isSymbolicLink()) {
+    throw new Error('文章目标不是普通文件')
+  }
+  await rm(resolved.target)
+  return resolved
+}
+
 export const assertCmsGitCommit = (commit: string) => {
   if (!gitCommitPattern.test(commit)) throw new Error('无效的 Git 提交 ID')
   return commit

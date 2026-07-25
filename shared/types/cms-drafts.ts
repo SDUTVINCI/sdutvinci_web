@@ -35,6 +35,8 @@ export interface CmsDraft {
   }
   baseContentHash: string | null
   status: CmsDraftStatus
+  isDeleted: boolean
+  deletedAt: string | null
   version: number
   visualMode: {
     allowed: boolean
@@ -48,9 +50,13 @@ export interface CmsDraft {
 export interface CmsDraftSummary {
   id: string
   articleId: string | null
+  ownerUserId: string
+  ownerAccount: string
   collection: CmsArticleCollection
   title: string
   status: CmsDraftStatus
+  isDeleted: boolean
+  deletedAt: string | null
   version: number
   updatedAt: string
 }

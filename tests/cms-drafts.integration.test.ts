@@ -11,8 +11,10 @@ import {
   CmsDraftNotFoundError,
   createCmsDraftForArticle,
   createCmsNewArticleDraft,
+  deleteCmsDraft,
   getCmsDraft,
   listCmsDrafts,
+  restoreCmsDraft,
   saveCmsDraft
 } from '../server/services/cms-drafts'
 import { bootstrapCmsAdmin, createCmsUser } from '../server/services/cms-auth'
@@ -20,6 +22,7 @@ import { listCmsArticles, synchronizeCmsArticles } from '../server/services/cms-
 import { synchronizeCmsMembers } from '../server/services/cms-members'
 import { cmsDraftSaveSchema } from '../server/utils/cms-draft-validation'
 import { acquireCmsDraftEditLock } from '../server/services/cms-edit-locks'
+import { getCmsDashboardStats } from '../server/services/cms-dashboard'
 import {
   assessMarkdownVisualSafety,
   normalizeMarkdownRoundTrip
@@ -51,7 +54,7 @@ integration('CMS Markdown 编辑器与草稿系统', () => {
 
   beforeEach(async () => {
     await getDatabase().execute(sql`
-      truncate table publish_records, edit_locks, review_events, audit_logs, sessions, draft_authors, drafts, user_members, user_roles, articles, members, users
+      truncate table article_deletion_events, publish_records, edit_locks, review_events, audit_logs, sessions, draft_authors, drafts, user_members, user_roles, articles, members, users
       restart identity cascade
     `)
     await Promise.all(['members', 'news', 'wiki'].map(async (path) => {
@@ -176,6 +179,30 @@ integration('CMS Markdown 编辑器与草稿系统', () => {
       version: 1,
       lockLeaseId: randomUUID()
     })).rejects.toBeInstanceOf(CmsDraftNotFoundError)
+  })
+
+  it('草稿由本人软删除后可恢复，并记录审计', async () => {
+    const draft = await createCmsNewArticleDraft('news', '可删除草稿', userId)
+    expect(await getCmsDashboardStats(userId, false)).toMatchObject({
+      drafts: { total: 1, scope: 'mine' },
+      members: 1
+    })
+    const deleted = await deleteCmsDraft(draft.id, userId)
+    expect(deleted.id).toBe(draft.id)
+    expect(await getCmsDraft(draft.id, userId)).toBeNull()
+    expect(await listCmsDrafts(userId)).toHaveLength(0)
+    expect(await listCmsDrafts(userId, { deleted: true })).toMatchObject([
+      { id: draft.id, isDeleted: true }
+    ])
+    const restored = await restoreCmsDraft(draft.id, userId)
+    expect(restored).toMatchObject({ id: draft.id, isDeleted: false })
+    expect(await getCmsDraft(draft.id, userId)).toMatchObject({ id: draft.id })
+    const audits = await getDatabase().execute(sql`
+      select action from audit_logs where target_id = ${draft.id}
+    `)
+    expect(audits.rows.map((row: any) => row.action)).toEqual(
+      expect.arrayContaining(['draft.delete', 'draft.restore'])
+    )
   })
 
   it('严格拒绝伪造系统 Frontmatter 字段', () => {

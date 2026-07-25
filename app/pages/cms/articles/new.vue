@@ -39,7 +39,7 @@ const createDraft = async () => {
       <NuxtLink class="cms-back-link" to="/cms/articles">← 返回文章列表</NuxtLink>
       <p class="cms-eyebrow">NEW DRAFT</p>
       <h1>新建文章草稿</h1>
-      <p>新文章只保存在 PostgreSQL；本阶段不会在 <code>content/</code> 创建文件。</p>
+      <p>新文章先保存在 PostgreSQL 草稿中，管理员审核发布后才会写入正式 Markdown。</p>
     </header>
 
     <form class="cms-panel cms-form" @submit.prevent="createDraft">

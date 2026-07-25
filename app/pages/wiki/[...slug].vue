@@ -717,6 +717,7 @@ function normalizePath(path: string) {
               第 {{ currentChapter }} 节
             </div>
             <h1>{{ page.title }}</h1>
+            <CmsArticleEditButton :public-path="cleanPath" />
           </header>
 
           <div class="wiki-content-body">

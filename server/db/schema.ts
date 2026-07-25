@@ -79,6 +79,9 @@ export const articles = pgTable('articles', {
   searchText: text('search_text').notNull(),
   contentHash: varchar('content_hash', { length: 64 }).notNull(),
   isPresent: varchar('is_present', { length: 5 }).default('true').notNull(),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  deletedByUserId: uuid('deleted_by_user_id')
+    .references(() => users.id, { onDelete: 'set null' }),
   scannedAt: timestamp('scanned_at', { withTimezone: true }).defaultNow().notNull(),
   ...timestamps
 }, table => [
@@ -87,7 +90,8 @@ export const articles = pgTable('articles', {
   uniqueIndex('articles_source_unique').on(table.collection, table.relativePath),
   index('articles_collection_index').on(table.collection),
   index('articles_directory_index').on(table.directory),
-  index('articles_present_index').on(table.isPresent)
+  index('articles_present_index').on(table.isPresent),
+  index('articles_deleted_at_index').on(table.deletedAt)
 ])
 
 export const drafts = pgTable('drafts', {
@@ -108,6 +112,9 @@ export const drafts = pgTable('drafts', {
   baseContentHash: varchar('base_content_hash', { length: 64 }),
   status: varchar('status', { length: 32 }).default('draft').notNull(),
   version: integer('version').default(1).notNull(),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  deletedByUserId: uuid('deleted_by_user_id')
+    .references(() => users.id, { onDelete: 'set null' }),
   lastSavedAt: timestamp('last_saved_at', { withTimezone: true }).defaultNow().notNull(),
   ...timestamps
 }, table => [
@@ -117,10 +124,13 @@ export const drafts = pgTable('drafts', {
     sql`${table.status} in ('draft', 'pending_review', 'rejected', 'approved', 'published', 'withdrawn')`
   ),
   check('drafts_version_check', sql`${table.version} >= 1`),
-  uniqueIndex('drafts_article_owner_unique').on(table.articleId, table.ownerUserId),
+  uniqueIndex('drafts_article_owner_unique')
+    .on(table.articleId, table.ownerUserId)
+    .where(sql`${table.deletedAt} is null`),
   index('drafts_owner_user_id_index').on(table.ownerUserId),
   index('drafts_article_id_index').on(table.articleId),
   index('drafts_status_index').on(table.status),
+  index('drafts_deleted_at_index').on(table.deletedAt),
   index('drafts_updated_at_index').on(table.updatedAt)
 ])
 
@@ -217,6 +227,29 @@ export const mediaAssets = pgTable('media_assets', {
   index('media_assets_created_at_index').on(table.createdAt)
 ])
 
+export const articleDeletionEvents = pgTable('article_deletion_events', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  articleId: uuid('article_id')
+    .notNull()
+    .references(() => articles.id, { onDelete: 'restrict' }),
+  actorUserId: uuid('actor_user_id')
+    .references(() => users.id, { onDelete: 'set null' }),
+  operation: varchar('operation', { length: 16 }).notNull(),
+  articlePath: text('article_path').notNull(),
+  sourceCommitHash: varchar('source_commit_hash', { length: 64 }).notNull(),
+  commitHash: varchar('commit_hash', { length: 64 }).notNull(),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
+}, table => [
+  check(
+    'article_deletion_events_operation_check',
+    sql`${table.operation} in ('delete', 'restore')`
+  ),
+  index('article_deletion_events_article_id_index').on(table.articleId),
+  index('article_deletion_events_actor_user_id_index').on(table.actorUserId),
+  index('article_deletion_events_created_at_index').on(table.createdAt)
+])
+
 export const editLocks = pgTable('edit_locks', {
   id: uuid('id').defaultRandom().primaryKey(),
   targetType: varchar('target_type', { length: 32 }).notNull(),
@@ -292,5 +325,6 @@ export type Draft = typeof drafts.$inferSelect
 export type ReviewEvent = typeof reviewEvents.$inferSelect
 export type PublishRecord = typeof publishRecords.$inferSelect
 export type MediaAsset = typeof mediaAssets.$inferSelect
+export type ArticleDeletionEvent = typeof articleDeletionEvents.$inferSelect
 export type EditLock = typeof editLocks.$inferSelect
 export type AuditLog = typeof auditLogs.$inferSelect

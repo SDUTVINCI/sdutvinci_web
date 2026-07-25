@@ -3,14 +3,22 @@ definePageMeta({ layout: 'cms-auth' })
 useHead({ title: '登录 · Vinci 内容管理后台' })
 
 const { loadSession, login } = useCmsSession()
+const route = useRoute()
 const account = ref('')
 const password = ref('')
 const submitting = ref(false)
 const errorMessage = ref('')
 
+const safeRedirect = computed(() => {
+  const value = typeof route.query.redirect === 'string' ? route.query.redirect : ''
+  return value.startsWith('/cms') && !value.startsWith('//') && !value.includes('\\')
+    ? value
+    : '/cms'
+})
+
 onMounted(async () => {
   if (await loadSession(true)) {
-    await navigateTo('/cms')
+    await navigateTo(safeRedirect.value)
   }
 })
 
@@ -20,7 +28,7 @@ const submit = async () => {
 
   try {
     await login(account.value, password.value)
-    await navigateTo('/cms')
+    await navigateTo(safeRedirect.value)
   } catch (error: any) {
     errorMessage.value = error?.data?.message
       ?? error?.data?.statusMessage

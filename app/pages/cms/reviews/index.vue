@@ -16,7 +16,7 @@ const { data, status, error, refresh } = await useAsyncData(
       <div>
         <p class="cms-eyebrow">REVIEWS</p>
         <h1>待审核内容</h1>
-        <p>审核通过只记录状态，阶段 4 不会写入 Markdown 或执行 Git 操作。</p>
+        <p>审核通过后由管理员在文章详情执行正式发布；此处只处理审核决定。</p>
       </div>
       <button class="cms-button cms-button-quiet" type="button" @click="refresh()">
         刷新

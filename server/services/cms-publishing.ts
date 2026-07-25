@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { access } from 'node:fs/promises'
-import { and, desc, eq } from 'drizzle-orm'
+import { and, desc, eq, isNull } from 'drizzle-orm'
 import type { CmsArticleCollection } from '../../shared/types/cms-articles'
 import type { CmsPublishResult } from '../../shared/types/cms-publishing'
 import { getDatabase } from '../db/client'
@@ -192,6 +192,8 @@ export const upsertPublishedArticle = async (
     searchText: `${input.title}\n${input.relativePath}\n${input.body}`.toLowerCase(),
     contentHash: input.contentHash,
     isPresent: 'true',
+    deletedAt: null,
+    deletedByUserId: null,
     scannedAt: new Date(),
     updatedAt: new Date()
   }
@@ -221,7 +223,10 @@ export const publishCmsDraft = async (
   input: { version: number, relativePath?: string }
 ): Promise<CmsPublishResult> => {
   const db = getDatabase()
-  const [draft] = await db.select().from(drafts).where(eq(drafts.id, draftId)).limit(1)
+  const [draft] = await db.select().from(drafts).where(and(
+    eq(drafts.id, draftId),
+    isNull(drafts.deletedAt)
+  )).limit(1)
   if (!draft) throw new CmsPublishNotFoundError()
   if (draft.status !== 'approved' || draft.version !== input.version) {
     throw new CmsPublishStateError()

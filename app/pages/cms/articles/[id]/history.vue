@@ -12,7 +12,7 @@ const id = String(route.params.id)
 const requestFetch = import.meta.server ? useRequestFetch() : $fetch
 const { session, csrfHeaders } = useCmsSession()
 const isAdmin = computed(() => session.value?.user.roles.includes('admin') ?? false)
-const { data, refresh } = await useAsyncData(`cms:article:${id}:history`, () =>
+const { data, status, error, refresh } = await useAsyncData(`cms:article:${id}:history`, () =>
   requestFetch<{ history: CmsArticleHistoryEntry[] }>(`/api/cms/articles/${id}/history`)
 )
 const history = computed(() => data.value?.history || [])
@@ -96,6 +96,8 @@ const restoreVersion = async (commit: string) => {
 
     <p v-if="message" class="cms-alert">{{ message }}</p>
     <p v-if="errorMessage" class="cms-alert cms-alert-error">{{ errorMessage }}</p>
+    <p v-if="status === 'pending'" class="cms-muted">正在读取 Git 历史…</p>
+    <p v-else-if="error" class="cms-alert cms-alert-error">{{ error.message || 'Git 历史读取失败' }}</p>
 
     <section class="cms-panel">
       <h2>版本比较</h2>

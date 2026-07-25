@@ -5,14 +5,23 @@ definePageMeta({ layout: 'cms', middleware: 'cms-auth' })
 const route = useRoute()
 const id = String(route.params.id)
 const requestFetch = import.meta.server ? useRequestFetch() : $fetch
-const { csrfHeaders } = useCmsSession()
+const { session, csrfHeaders } = useCmsSession()
 const openingDraft = ref(false)
 const draftError = ref('')
+const actionMessage = ref('')
+const actionError = ref('')
+const actionBusy = ref(false)
+const autoOpening = ref(false)
+const returnTo = computed(() => {
+  const value = typeof route.query.returnTo === 'string' ? route.query.returnTo : ''
+  return /^\/(news|wiki)(\/|$)/.test(value) && !value.includes('\\') ? value : ''
+})
 
-const { data } = await useAsyncData(`cms:article:${id}`, () =>
+const { data, refresh } = await useAsyncData(`cms:article:${id}`, () =>
   requestFetch<{ article: CmsArticleDetail }>(`/api/cms/articles/${id}`)
 )
 const article = computed(() => data.value?.article)
+const isAdmin = computed(() => session.value?.user.roles.includes('admin') ?? false)
 
 if (!article.value) {
   throw createError({ statusCode: 404, statusMessage: '文章不存在' })
@@ -28,6 +37,7 @@ const { data: rendered } = await useAsyncData(`cms:article:rendered:${id}`, asyn
 useHead(() => ({ title: `${article.value?.title || '文章'} · Vinci 内容管理后台` }))
 
 const openDraft = async () => {
+  if (article.value?.isDeleted) return
   openingDraft.value = true
   draftError.value = ''
   try {
@@ -36,21 +46,56 @@ const openDraft = async () => {
       headers: csrfHeaders(),
       body: { kind: 'existing', articleId: id }
     })
-    await navigateTo(`/cms/drafts/${result.draft.id}`)
+    await navigateTo({
+      path: `/cms/drafts/${result.draft.id}`,
+      query: returnTo.value ? { returnTo: returnTo.value } : undefined
+    })
   } catch (error: any) {
     draftError.value = error?.data?.message || '打开草稿失败'
   } finally {
     openingDraft.value = false
   }
 }
+
+const changeDeletionState = async (restore: boolean) => {
+  if (!isAdmin.value || actionBusy.value) return
+  if (!restore && !window.confirm('删除后前台文章将下线，并生成 Git Commit。确定继续吗？')) return
+  actionBusy.value = true
+  actionMessage.value = ''
+  actionError.value = ''
+  try {
+    const endpoint = restore
+      ? `/api/cms/articles/${id}/restore-deleted`
+      : `/api/cms/articles/${id}/delete`
+    const result = await $fetch<{ result: { commitHash: string } }>(endpoint, {
+      method: 'POST',
+      headers: csrfHeaders()
+    })
+    actionMessage.value = `${restore ? '文章已恢复' : '文章已删除'}，Git Commit：${result.result.commitHash}`
+    await refresh()
+  } catch (error: any) {
+    actionError.value = error?.data?.message || `${restore ? '恢复' : '删除'}失败`
+  } finally {
+    actionBusy.value = false
+  }
+}
+
+onMounted(async () => {
+  if (route.query.edit === '1' && !autoOpening.value) {
+    autoOpening.value = true
+    await openDraft()
+  }
+})
 </script>
 
 <template>
   <section v-if="article" class="cms-page">
     <header class="cms-page-header cms-page-header-actions">
       <div>
-        <NuxtLink class="cms-back-link" to="/cms/articles">← 返回文章列表</NuxtLink>
-        <p class="cms-eyebrow">PUBLISHED · {{ article.collection }}</p>
+        <NuxtLink class="cms-back-link" :to="returnTo || '/cms/articles'">
+          ← {{ returnTo ? '返回原文章' : '返回文章列表' }}
+        </NuxtLink>
+        <p class="cms-eyebrow">{{ article.isDeleted ? 'DELETED' : 'PUBLISHED' }} · {{ article.collection }}</p>
         <h1>{{ article.title }}</h1>
         <p><code>{{ article.relativePath }}</code> · 稳定 ID：<code>{{ article.id }}</code></p>
       </div>
@@ -58,17 +103,38 @@ const openDraft = async () => {
         <NuxtLink class="cms-button cms-button-link cms-button-quiet" :to="`/cms/articles/${id}/history`">
           版本历史
         </NuxtLink>
-        <button class="cms-button cms-button-primary" type="button" :disabled="openingDraft" @click="openDraft">
+        <button
+          v-if="!article.isDeleted"
+          class="cms-button cms-button-primary"
+          type="button"
+          :disabled="openingDraft"
+          @click="openDraft"
+        >
           {{ openingDraft ? '正在打开…' : '编辑草稿' }}
+        </button>
+        <button
+          v-if="isAdmin"
+          class="cms-button"
+          :class="article.isDeleted ? 'cms-button-primary' : 'cms-button-danger'"
+          type="button"
+          :disabled="actionBusy"
+          @click="changeDeletionState(article.isDeleted)"
+        >
+          {{ actionBusy ? '正在处理…' : article.isDeleted ? '恢复正式文章' : '删除正式文章' }}
         </button>
       </div>
     </header>
     <p v-if="draftError" class="cms-alert cms-alert-error">{{ draftError }}</p>
+    <p v-if="actionMessage" class="cms-alert">{{ actionMessage }}</p>
+    <p v-if="actionError" class="cms-alert cms-alert-error">{{ actionError }}</p>
+    <p v-if="article.isDeleted" class="cms-alert cms-alert-error">
+      此正式文章已从 Git 当前版本删除；历史记录仍保留，管理员可以恢复。
+    </p>
 
     <div class="cms-detail-grid">
       <article class="cms-panel cms-preview">
         <h2>渲染预览</h2>
-        <ContentRenderer v-if="rendered" :value="rendered" />
+        <ContentRenderer v-if="rendered && !article.isDeleted" :value="rendered" />
         <pre v-else class="cms-source">{{ article.body }}</pre>
       </article>
       <aside class="cms-panel cms-frontmatter">

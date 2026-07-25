@@ -15,7 +15,9 @@ import { promisify } from 'node:util'
 import { eq } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { closeDatabase, getDatabase } from '../server/db/client'
+import { runMigrations } from '../server/db/migrate'
 import {
+  articleDeletionEvents,
   articles,
   draftAuthors,
   drafts,
@@ -35,6 +37,11 @@ import {
   CmsPublishGitError,
   publishCmsDraft
 } from '../server/services/cms-publishing'
+import {
+  CmsArticleDeletionGitError,
+  deleteCmsArticle,
+  restoreCmsArticle
+} from '../server/services/cms-deletions'
 import { createCmsDraftForArticle } from '../server/services/cms-drafts'
 import { parseCmsMarkdown, writeCmsMarkdown } from '../server/utils/cms-frontmatter'
 import { resetCmsGitConfigForTests } from '../server/utils/cms-git-config'
@@ -64,6 +71,7 @@ suite('CMS 阶段 5 Git 发布与历史集成', () => {
     (await exec('git', args, { cwd })).stdout.trim()
 
   beforeAll(async () => {
+    await runMigrations()
     temporaryRoot = await mkdtemp(join(tmpdir(), 'vinci-cms-publish-test-'))
     seedRepository = join(temporaryRoot, 'seed')
     remoteRepository = join(temporaryRoot, 'remote.git')
@@ -113,7 +121,7 @@ suite('CMS 阶段 5 Git 发布与历史集成', () => {
 
     const db = getDatabase()
     await db.execute(`
-      truncate table publish_records, edit_locks, review_events, audit_logs, sessions,
+      truncate table article_deletion_events, publish_records, edit_locks, review_events, audit_logs, sessions,
       draft_authors, drafts, user_members, user_roles, articles, members, users
       restart identity cascade
     `)
@@ -284,6 +292,39 @@ suite('CMS 阶段 5 Git 发布与历史集成', () => {
       ['--git-dir', remoteRepository, 'show', 'main:content/news/phase-five.md']
     )).stdout
     expect(parseCmsMarkdown(remoteSource).body).toBe('旧正文\n')
+  })
+
+  it('软删除正式文章会下线文件，并可通过新提交恢复', async () => {
+    const hook = join(remoteRepository, 'hooks', 'pre-receive')
+    await writeFile(hook, '#!/bin/sh\nexit 1\n')
+    await chmod(hook, 0o755)
+    await expect(deleteCmsArticle(articleId, operatorUserId))
+      .rejects.toBeInstanceOf(CmsArticleDeletionGitError)
+    const [notDeleted] = await getDatabase().select().from(articles).where(eq(articles.id, articleId))
+    expect(notDeleted?.deletedAt).toBeNull()
+    await unlink(hook)
+
+    const deleted = await deleteCmsArticle(articleId, operatorUserId)
+    expect(deleted.commitHash).toMatch(/^[0-9a-f]{7,40}$/)
+    await expect(
+      exec('git', ['--git-dir', remoteRepository, 'show', 'main:content/news/phase-five.md'])
+    ).rejects.toBeTruthy()
+    const [deletedRow] = await getDatabase().select().from(articles).where(eq(articles.id, articleId))
+    expect(deletedRow?.deletedAt).toBeTruthy()
+    expect((await getDatabase().select().from(articleDeletionEvents).where(eq(articleDeletionEvents.articleId, articleId)))
+      .some(event => event.operation === 'delete')).toBe(true)
+
+    const restored = await restoreCmsArticle(articleId, operatorUserId)
+    expect(restored.commitHash).not.toBe(deleted.commitHash)
+    const restoredSource = (await exec(
+      'git',
+      ['--git-dir', remoteRepository, 'show', 'main:content/news/phase-five.md']
+    )).stdout
+    expect(parseCmsMarkdown(restoredSource).body).toBe('旧正文\n')
+    const [restoredRow] = await getDatabase().select().from(articles).where(eq(articles.id, articleId))
+    expect(restoredRow?.deletedAt).toBeNull()
+    expect((await getDatabase().select().from(articleDeletionEvents).where(eq(articleDeletionEvents.articleId, articleId)))
+      .some(event => event.operation === 'restore')).toBe(true)
   })
 
   it('为新文章生成安全且不冲突的默认路径并登记正式文章', async () => {

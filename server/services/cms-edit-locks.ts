@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { and, eq, gt, sql } from 'drizzle-orm'
+import { and, eq, gt, isNull, sql } from 'drizzle-orm'
 import type {
   CmsEditLock,
   CmsEditLockResponse,
@@ -50,7 +50,7 @@ const resolveLockTarget = async (
       ownerUserId: drafts.ownerUserId
     })
     .from(drafts)
-    .where(eq(drafts.id, draftId))
+    .where(and(eq(drafts.id, draftId), isNull(drafts.deletedAt)))
     .limit(1)
   if (!draft) return null
   return {

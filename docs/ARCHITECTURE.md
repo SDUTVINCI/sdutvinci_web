@@ -208,7 +208,7 @@ GitHub 是代码和正式 Markdown 的唯一权威来源。恢复旧版本通过
 | 4 | `review_events`、`edit_locks` | 只追加的审核状态流转与驳回原因；按文章或新草稿目标建立带租约 ID、心跳与过期时间的独占编辑锁 |
 | 5 | `publish_records` | 发布/恢复尝试的操作者、审核者、commit hash、路径、状态、时间和失败原因 |
 | 6 | `media_assets` | 已落地：对象 key、URL、上传者、关联草稿、原始格式/大小及 WebP 宽高/大小 |
-| 7 | `article_deletion_events` | 软删除、恢复及其审计关联 |
+| 7 | `article_deletion_events` | 正式文章 Git 删除/恢复 Commit、来源版本及审计关联；`articles.deleted_at` 保存可恢复软删除状态 |
 
 文章 ID 使用数据库 UUID，与可变标题和路径分离。初次扫描按规范化相对路径建档；CMS 内发生路径变化时更新同一行，从而保留稳定 ID。所有文件读取都先 `realpath`，再验证结果仍位于允许的 collection 根目录内。
 
@@ -291,10 +291,18 @@ description:
 
 - `POST /api/cms/media`
 
-### 阶段 7 以后
+### 阶段 7 已落地
 
-- `POST /api/cms/articles/:id/delete`
-- `POST /api/cms/articles/:id/restore-deleted`
+- `GET /api/cms/dashboard`
+- `GET /api/cms/articles/resolve?publicPath=...`
+- `POST /api/cms/articles/:id/delete`（仅管理员；独立 Git 工作区删除并 Push）
+- `POST /api/cms/articles/:id/restore-deleted`（仅管理员；从删除前 Commit 恢复并生成新 Commit）
+- `DELETE /api/cms/drafts/:id`、`POST /api/cms/drafts/:id/delete`（本人或管理员软删除）
+- `POST /api/cms/drafts/:id/restore`（本人或管理员恢复）
+
+正式文章删除不会改写或删除历史 Commit：删除成功后将文章文件从当前分支移除并记录 `article_deletion_events`；恢复读取删除前来源 Commit，写入新文件并创建新的 restore Commit。草稿删除只更新 PostgreSQL 的 `deleted_at`，恢复不会写 Markdown。
+
+### 阶段 8 以后
 
 动态参数永远通过数据库 ID 查找；客户端不能提交任意绝对路径。
 

@@ -8,14 +8,23 @@ definePageMeta({ layout: 'cms', middleware: 'cms-auth' })
 useHead({ title: '文章 · Vinci 内容管理后台' })
 
 const search = ref('')
+const route = useRoute()
+const { session } = useCmsSession()
+const isAdmin = computed(() => session.value?.user.roles.includes('admin') ?? false)
 const collection = ref<'' | CmsArticleCollection>('')
 const directory = ref('')
 const appliedSearch = ref('')
+const articleStatus = ref<'published' | 'deleted' | 'all'>(
+  isAdmin.value && (route.query.status === 'deleted' || route.query.status === 'all')
+    ? route.query.status
+    : 'published'
+)
 
 const query = computed(() => ({
   q: appliedSearch.value || undefined,
   collection: collection.value || undefined,
-  directory: directory.value || undefined
+  directory: directory.value || undefined,
+  status: articleStatus.value
 }))
 const { data, status, error, refresh } = await useFetch<CmsArticleListResponse>(
   '/api/cms/articles',
@@ -44,6 +53,14 @@ const applySearch = () => {
       <label>
         <span>搜索标题、路径和正文</span>
         <input v-model="search" type="search" placeholder="输入关键词">
+      </label>
+      <label v-if="isAdmin">
+        <span>文章状态</span>
+        <select v-model="articleStatus">
+          <option value="published">已发布</option>
+          <option value="deleted">已删除</option>
+          <option value="all">全部</option>
+        </select>
       </label>
       <label>
         <span>内容集合</span>
@@ -79,6 +96,7 @@ const applySearch = () => {
             <th>集合</th>
             <th>目录</th>
             <th>源文件</th>
+            <th>状态</th>
           </tr>
         </thead>
         <tbody>
@@ -87,6 +105,11 @@ const applySearch = () => {
             <td><span class="cms-badge">{{ article.collection }}</span></td>
             <td>{{ article.directory }}</td>
             <td><code>{{ article.relativePath }}</code></td>
+            <td>
+              <span class="cms-badge" :class="{ 'cms-badge-danger': article.isDeleted }">
+                {{ article.isDeleted ? '已删除' : '已发布' }}
+              </span>
+            </td>
           </tr>
         </tbody>
       </table>

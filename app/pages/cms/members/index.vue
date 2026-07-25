@@ -6,9 +6,19 @@ useHead({ title: '成员 · Vinci 内容管理后台' })
 const { session, csrfHeaders } = useCmsSession()
 const isAdmin = computed(() => session.value?.user.roles.includes('admin') ?? false)
 const requestFetch = import.meta.server ? useRequestFetch() : $fetch
-const { data, refresh } = await useAsyncData('cms:members', () =>
+const { data, status, error, refresh } = await useAsyncData('cms:members', () =>
   requestFetch<{ members: CmsMember[] }>('/api/cms/members')
 )
+const search = ref('')
+const filteredMembers = computed(() => {
+  const query = search.value.trim().toLowerCase()
+  if (!query) return data.value?.members || []
+  return (data.value?.members || []).filter(member =>
+    member.name.toLowerCase().includes(query)
+    || member.memberKey.toLowerCase().includes(query)
+    || member.linkedAccount?.toLowerCase().includes(query)
+  )
+})
 
 const showCreate = ref(false)
 const submitting = ref(false)
@@ -62,6 +72,8 @@ const createMember = async () => {
 
     <p v-if="message" class="cms-alert">{{ message }}</p>
     <p v-if="errorMessage" class="cms-alert cms-alert-error">{{ errorMessage }}</p>
+    <p v-if="status === 'pending'" class="cms-muted">正在加载成员档案…</p>
+    <p v-else-if="error" class="cms-alert cms-alert-error">{{ error.message || '成员加载失败' }}</p>
 
     <form v-if="showCreate && isAdmin" class="cms-panel cms-inline-form" @submit.prevent="createMember">
       <h2>创建成员档案</h2>
@@ -82,9 +94,16 @@ const createMember = async () => {
       </button>
     </form>
 
-    <div class="cms-member-grid">
+    <div v-if="status !== 'pending' && !error" class="cms-toolbar cms-toolbar-compact">
+      <label>
+        <span>搜索成员</span>
+        <input v-model.trim="search" type="search" placeholder="姓名、稳定 ID 或绑定账号">
+      </label>
+    </div>
+
+    <div v-if="filteredMembers.length" class="cms-member-grid">
       <NuxtLink
-        v-for="member in data?.members ?? []"
+        v-for="member in filteredMembers"
         :key="member.id"
         class="cms-member-card"
         :to="`/cms/members/${member.id}`"
@@ -97,5 +116,8 @@ const createMember = async () => {
         </div>
       </NuxtLink>
     </div>
+    <p v-else-if="status !== 'pending' && !error" class="cms-empty">
+      {{ search ? '没有符合条件的成员。' : '暂无成员档案。' }}
+    </p>
   </section>
 </template>

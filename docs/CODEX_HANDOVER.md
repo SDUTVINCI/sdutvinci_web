@@ -667,3 +667,67 @@
 - 维护者在真实 S3 兼容对象存储配置下完成了图片选择、粘贴、格式兼容、GIF 和处理进度等验收，并在验收过程中反馈的问题修复后确认收尾。
 - 阶段 6 总体进度已勾选；阶段 7 尚未启动，不得在维护者明确发起新阶段前实现阶段 7 或后续内容。
 - 阶段 6 实现提交为 `0d162ef`，随后已通过合并提交 `b77f738` 纳入后台产生的远端 Wiki 更新；本地分支尚未推送。
+
+## 2026-07-25：阶段 7——前台联动、删除策略与后台完善
+
+### 完成状态
+
+- 阶段 7 的实现、migration、隔离数据库测试、类型检查和生产构建已完成，等待维护者人工验收。
+- 需求文档中阶段 7 的任务、范围约束和验收标准已勾选；阶段 7 总体进度保持未勾选，人工验收通过后再更新。
+- 没有实现阶段 8 的 Docker、自动部署、备份或迁移内容，也没有重复实现阶段 6 的图片处理。
+
+### 删除策略与数据库
+
+- migration `0009_unique_moira_mactaggert.sql` 为 `articles`、`drafts` 增加 `deleted_at` 与删除操作者字段，并把草稿唯一索引改为仅约束未删除草稿。
+- 新增 `article_deletion_events`，记录正式文章删除/恢复操作、来源 Commit、结果 Commit、路径、操作者和元数据。
+- 草稿删除只更新 PostgreSQL 软删除字段；本人或管理员可以恢复，删除/恢复均写入 `audit_logs`，删除时只释放删除草稿持有者或当前管理员持有的编辑锁。
+- 正式文章删除只允许管理员。服务在独立 CMS Git 工作区内校验当前内容哈希、删除 Markdown、Commit、Push 成功后才标记数据库软删除；Push 失败会重置工作区且不改变数据库状态。
+- 正式文章恢复从删除前来源 Commit 读取 Markdown，写入、Commit、Push 后清除软删除状态；历史 Commit 不删除、不 force push。
+
+### API 与页面
+
+- 新增 `GET /api/cms/dashboard`，返回正式文章、删除文章、草稿状态、待审核和成员统计。
+- 新增 `GET /api/cms/articles/resolve?publicPath=...`，供前台编辑按钮把公开路径解析为稳定文章 ID。
+- 新增 `POST /api/cms/articles/:id/delete` 与 `POST /api/cms/articles/:id/restore-deleted`，服务端固定要求管理员、同源和 CSRF。
+- 新增 `DELETE /api/cms/drafts/:id`、`POST /api/cms/drafts/:id/delete` 和 `POST /api/cms/drafts/:id/restore`；草稿删除接口执行资源级本人/管理员校验。
+- 前台新闻和 Wiki 文章页增加“编辑本文”。未登录用户经过带安全回跳参数的登录页，登录后自动打开对应草稿；编辑页保留“返回原文章”路径。
+- 后台首页显示统计卡片；文章页支持已发布/已删除/全部筛选，管理员可恢复正式文章；草稿页支持状态筛选、已删除筛选、本人/全部（管理员）范围及删除/恢复。
+- 成员管理增加搜索、加载/错误/空状态；个人中心增加草稿和前台成员页入口；主要 CMS 页面补齐加载、错误和空状态提示。
+
+### 新增和修改文件
+
+- 数据库：`server/db/schema.ts`、`server/db/migrations/0009_unique_moira_mactaggert.sql` 及 Drizzle meta。
+- 服务与类型：`server/services/cms-deletions.ts`、`server/services/cms-dashboard.ts`、`server/services/cms-articles.ts`、`server/services/cms-drafts.ts`、`server/services/cms-git-worktree.ts`、`server/services/cms-publishing.ts`、`server/services/cms-reviews.ts`、`server/services/cms-edit-locks.ts`、`server/services/cms-media.ts`、`shared/types/cms-articles.ts`、`shared/types/cms-drafts.ts`、`shared/types/cms-dashboard.ts`。
+- API：阶段 7 dashboard、文章路径解析、正式文章删除/恢复、草稿删除/恢复路由，以及文章列表/详情和草稿列表筛选参数。
+- 前端：`app/components/CmsArticleEditButton.vue`、新闻/Wiki 前台文章页、CMS 登录回跳、文章/草稿/首页/成员/个人中心页面和 CMS/前台样式。
+- 测试：阶段 1～6 数据库清理适配新表；新增草稿软删除/恢复、统计、正式文章 Git 删除/恢复和 Push 失败保护回归测试。
+- 文档：`docs/ARCHITECTURE.md`、本文件和需求进度清单。
+
+### 依赖与环境
+
+- 没有新增 npm 依赖，也没有新增强制环境变量；继续使用阶段 5 的 Git 工作区配置。
+- 集成测试只使用 `TEST_DATABASE_URL` 指向的临时 `vinci_cms_test` PostgreSQL，测试结束后删除临时容器；普通 `DATABASE_URL` 未连接或修改。
+
+### 自动化验证
+
+- 隔离 PostgreSQL 17 临时库：7 个测试文件、33 项全部通过。
+- 覆盖草稿本人软删除/恢复、管理员范围查询、删除/恢复审计、正式文章删除/恢复新 Commit、Git Push 失败状态保护和 dashboard 统计。
+- `npm run typecheck`：通过。
+- `npm run build`：通过；Wiki 检查 226 个文件，Nuxt Content 260 个文件，生产 Nitro node-server 构建并预渲染 540 条路由。
+- 构建仍有阶段 0～6 已知的静态图片解析、大 chunk 和 Git bigint target warning，不是阶段 7 引入的构建错误。
+
+### 人工验收前置与步骤
+
+1. 在开发/验收数据库执行 `npm run db:migrate`，应用 `0009_unique_moira_mactaggert.sql`；确认 `.env` 的 `CMS_GIT_WORKTREE` 仍位于部署目录之外。
+2. 启动 `npm run dev`，使用普通成员和管理员账号分别登录；打开新闻或 Wiki 正文，点击“编辑本文”。验证未登录回跳、登录后自动打开草稿，以及编辑页“返回原文章”。
+3. 在草稿页验证状态筛选；本人删除草稿后在“查看已删除草稿”中恢复。用管理员查看全部草稿，确认可删除/恢复其他成员草稿；检查对应审计日志。
+4. 管理员在文章列表切换“已发布/已删除/全部”，删除一篇正式文章，确认 Git 产生删除 Commit、文章进入已删除列表；再恢复并确认产生新的 restore Commit、历史记录仍完整。
+5. 使用普通成员账号请求正式文章删除接口，确认服务端返回 403；普通成员只能删除自己的草稿。
+6. 查看后台首页统计、成员搜索、个人中心入口，以及主要页面的加载失败和空状态表现。
+7. 人工验收通过后，只勾选阶段 7 总体进度，提交后再启动阶段 8。
+
+### 下一阶段注意事项
+
+- 阶段 8 才实现 Docker、Compose、自动部署、备份、恢复和迁移；不要在阶段 7 验收期间提前添加这些内容。
+- 正式文章恢复依赖 `article_deletion_events` 中的来源 Commit 与可写 Git 远端；部署目录的 Nuxt Content 展示仍通过后续部署流程更新。
+- 不要把普通 `DATABASE_URL` 用于测试清理；所有阶段 7 集成测试继续强制 `TEST_DATABASE_URL`。

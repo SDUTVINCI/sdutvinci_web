@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { basename, dirname, extname } from 'node:path'
-import { and, asc, eq, ilike, or } from 'drizzle-orm'
+import { and, asc, eq, ilike, isNotNull, isNull, or } from 'drizzle-orm'
 import type {
   CmsArticleCollection,
   CmsArticleDetail,
@@ -98,6 +98,8 @@ const toSummary = (row: typeof articles.$inferSelect): CmsArticleSummary => ({
   title: row.title,
   frontmatter: row.frontmatter,
   contentHash: row.contentHash,
+  isDeleted: Boolean(row.deletedAt),
+  isPresent: row.isPresent === 'true',
   updatedAt: row.updatedAt.toISOString()
 })
 
@@ -105,13 +107,26 @@ export interface ListCmsArticlesInput {
   query?: string
   collection?: CmsArticleCollection
   directory?: string
+  status?: 'published' | 'deleted' | 'all'
+  includeDeleted?: boolean
 }
 
 export const listCmsArticles = async (
   input: ListCmsArticlesInput = {}
 ): Promise<CmsArticleListResponse> => {
   await synchronizeCmsArticles()
-  const filters = [eq(articles.isPresent, 'true')]
+  const includeDeleted = input.includeDeleted || input.status === 'deleted' || input.status === 'all'
+  const filters = includeDeleted
+    ? [or(
+        isNotNull(articles.deletedAt),
+        and(eq(articles.isPresent, 'true'), isNull(articles.deletedAt))
+      )!]
+    : [eq(articles.isPresent, 'true'), isNull(articles.deletedAt)]
+  if (input.status === 'published') {
+    filters.push(eq(articles.isPresent, 'true'), isNull(articles.deletedAt))
+  } else if (input.status === 'deleted') {
+    filters.push(isNotNull(articles.deletedAt))
+  }
   if (input.collection) filters.push(eq(articles.collection, input.collection))
   if (input.directory) filters.push(eq(articles.directory, input.directory))
   if (input.query?.trim()) {
@@ -127,27 +142,59 @@ export const listCmsArticles = async (
   const directories = await getDatabase()
     .selectDistinct({ directory: articles.directory })
     .from(articles)
-    .where(eq(articles.isPresent, 'true'))
+    .where(and(
+      ...(input.status === 'deleted' || input.includeDeleted
+        ? []
+        : [eq(articles.isPresent, 'true'), isNull(articles.deletedAt)]),
+      ...(input.status === 'deleted' ? [isNotNull(articles.deletedAt)] : [])
+    ))
     .orderBy(asc(articles.directory))
 
   return {
     articles: rows.map(toSummary),
     directories: directories.map(item => item.directory),
-    total: rows.length
+    total: rows.length,
+    deletedTotal: input.includeDeleted
+      ? (await getDatabase()
+          .select({ id: articles.id })
+          .from(articles)
+          .where(isNotNull(articles.deletedAt))).length
+      : undefined
   }
 }
 
-export const getCmsArticle = async (id: string): Promise<CmsArticleDetail | null> => {
+export const getCmsArticle = async (
+  id: string,
+  includeDeleted = false
+): Promise<CmsArticleDetail | null> => {
   const db = getDatabase()
   const [row] = await db
     .select()
     .from(articles)
-    .where(and(eq(articles.id, id), eq(articles.isPresent, 'true')))
+    .where(and(
+      eq(articles.id, id),
+      ...(includeDeleted ? [] : [eq(articles.isPresent, 'true'), isNull(articles.deletedAt)])
+    ))
     .limit(1)
   if (!row) return null
 
   const collection = row.collection as CmsArticleCollection
-  const { source } = await readContentFile(collection, row.relativePath)
+  let source: string
+  try {
+    source = (await readContentFile(collection, row.relativePath)).source
+  } catch (error) {
+    if (!includeDeleted) throw error
+    source = ''
+  }
+  if (!source) {
+    return {
+      ...toSummary(row),
+      title: row.title,
+      frontmatter: row.frontmatter,
+      body: '',
+      contentHash: row.contentHash
+    }
+  }
   const parsed = parseCmsMarkdown(source)
   const title = typeof parsed.frontmatter.title === 'string'
     ? parsed.frontmatter.title.trim()
@@ -159,4 +206,18 @@ export const getCmsArticle = async (id: string): Promise<CmsArticleDetail | null
     body: parsed.body,
     contentHash: createHash('sha256').update(source).digest('hex')
   }
+}
+
+export const resolveCmsArticleByPublicPath = async (publicPath: string) => {
+  const normalized = `/${publicPath.trim().replace(/^\/+|\/+$/g, '')}`
+  const [row] = await getDatabase()
+    .select({ id: articles.id, publicPath: articles.publicPath })
+    .from(articles)
+    .where(and(
+      eq(articles.publicPath, normalized),
+      eq(articles.isPresent, 'true'),
+      isNull(articles.deletedAt)
+    ))
+    .limit(1)
+  return row || null
 }

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm'
 import type { CmsArticleCollection } from '../../shared/types/cms-articles'
 import type {
   CmsDraft,
@@ -13,8 +13,10 @@ import {
   auditLogs,
   draftAuthors,
   drafts,
+  editLocks,
   members,
-  userMembers
+  userMembers,
+  users
 } from '../db/schema'
 import { getCmsArticle } from './cms-articles'
 import { assertCmsDraftEditLease } from './cms-edit-locks'
@@ -95,6 +97,8 @@ const rowsToDrafts = async (rows: Array<typeof drafts.$inferSelect>): Promise<Cm
     systemFrontmatter: systemFrontmatterFrom(row.preservedFrontmatter),
     baseContentHash: row.baseContentHash,
     status: row.status as CmsDraftStatus,
+    isDeleted: Boolean(row.deletedAt),
+    deletedAt: row.deletedAt?.toISOString() || null,
     version: row.version,
     visualMode: assessMarkdownVisualSafety(row.body),
     createdAt: row.createdAt.toISOString(),
@@ -111,9 +115,11 @@ const loadDraftRow = async (
   const [row] = await getDatabase()
     .select()
     .from(drafts)
-    .where(allowAdmin
-      ? eq(drafts.id, draftId)
-      : and(eq(drafts.id, draftId), eq(drafts.ownerUserId, requesterUserId)))
+    .where(and(
+      eq(drafts.id, draftId),
+      isNull(drafts.deletedAt),
+      ...(allowAdmin ? [] : [eq(drafts.ownerUserId, requesterUserId)])
+    ))
     .limit(1)
   return row || null
 }
@@ -173,7 +179,7 @@ export const getCmsDraftForReview = async (draftId: string) => {
   const [row] = await getDatabase()
     .select()
     .from(drafts)
-    .where(eq(drafts.id, draftId))
+    .where(and(eq(drafts.id, draftId), isNull(drafts.deletedAt)))
     .limit(1)
   return row ? (await rowsToDrafts([row]))[0]! : null
 }
@@ -187,27 +193,138 @@ export const findCmsDraftForArticle = async (
     .from(drafts)
     .where(and(
       eq(drafts.articleId, articleId),
-      eq(drafts.ownerUserId, ownerUserId)
+      eq(drafts.ownerUserId, ownerUserId),
+      isNull(drafts.deletedAt)
     ))
     .limit(1)
   return row ? (await rowsToDrafts([row]))[0]! : null
 }
 
-export const listCmsDrafts = async (ownerUserId: string): Promise<CmsDraftSummary[]> => {
+export const listCmsDrafts = async (
+  ownerUserId: string,
+  input: { status?: CmsDraftStatus, deleted?: boolean } = {},
+  allowAll = false
+): Promise<CmsDraftSummary[]> => {
+  const filters = allowAll ? [] : [eq(drafts.ownerUserId, ownerUserId)]
+  filters.push(input.deleted ? isNotNull(drafts.deletedAt) : isNull(drafts.deletedAt))
+  if (input.status) filters.push(eq(drafts.status, input.status))
   const rows = await getDatabase()
-    .select()
+    .select({ draft: drafts, ownerAccount: users.account })
     .from(drafts)
-    .where(eq(drafts.ownerUserId, ownerUserId))
+    .innerJoin(users, eq(drafts.ownerUserId, users.id))
+    .where(and(...filters))
     .orderBy(desc(drafts.updatedAt))
-  return rows.map(row => ({
+  return rows.map(({ draft: row, ownerAccount }) => ({
     id: row.id,
     articleId: row.articleId,
+    ownerUserId: row.ownerUserId,
+    ownerAccount,
     collection: row.collection as CmsArticleCollection,
     title: row.title,
     status: row.status as CmsDraftStatus,
+    isDeleted: Boolean(row.deletedAt),
+    deletedAt: row.deletedAt?.toISOString() || null,
     version: row.version,
     updatedAt: row.updatedAt.toISOString()
   }))
+}
+
+export class CmsDraftDeleteConflictError extends Error {
+  constructor(message = 'DRAFT_DELETE_CONFLICT') {
+    super(message)
+  }
+}
+
+export const deleteCmsDraft = async (
+  draftId: string,
+  actorUserId: string,
+  allowAdmin = false
+) => {
+  const db = getDatabase()
+  return db.transaction(async (tx) => {
+    const [current] = await tx
+      .select()
+      .from(drafts)
+      .where(and(
+        eq(drafts.id, draftId),
+        isNull(drafts.deletedAt),
+        ...(allowAdmin ? [] : [eq(drafts.ownerUserId, actorUserId)])
+      ))
+      .limit(1)
+    if (!current) throw new CmsDraftNotFoundError()
+    const now = new Date()
+    const [deleted] = await tx
+      .update(drafts)
+      .set({ deletedAt: now, deletedByUserId: actorUserId, updatedAt: now })
+      .where(and(eq(drafts.id, draftId), isNull(drafts.deletedAt)))
+      .returning({ id: drafts.id })
+    if (!deleted) throw new CmsDraftDeleteConflictError()
+    await tx.delete(editLocks).where(and(
+      eq(editLocks.targetType, current.articleId ? 'article' : 'draft'),
+      eq(editLocks.targetId, current.articleId || current.id),
+      or(
+        eq(editLocks.holderUserId, current.ownerUserId),
+        eq(editLocks.holderUserId, actorUserId)
+      )
+    ))
+    await tx.insert(auditLogs).values({
+      actorUserId,
+      action: 'draft.delete',
+      targetType: 'draft',
+      targetId: draftId,
+      metadata: {
+        ownerUserId: current.ownerUserId,
+        articleId: current.articleId,
+        status: current.status
+      }
+    })
+    return { id: draftId, deletedAt: now.toISOString() }
+  })
+}
+
+export const restoreCmsDraft = async (
+  draftId: string,
+  actorUserId: string,
+  allowAdmin = false
+) => {
+  const db = getDatabase()
+  try {
+    return await db.transaction(async (tx) => {
+      const [current] = await tx
+        .select()
+        .from(drafts)
+        .where(and(
+          eq(drafts.id, draftId),
+          isNotNull(drafts.deletedAt),
+          ...(allowAdmin ? [] : [eq(drafts.ownerUserId, actorUserId)])
+        ))
+        .limit(1)
+      if (!current) throw new CmsDraftNotFoundError()
+      const [restored] = await tx
+        .update(drafts)
+        .set({ deletedAt: null, deletedByUserId: null, updatedAt: new Date() })
+        .where(and(eq(drafts.id, draftId), isNotNull(drafts.deletedAt)))
+        .returning()
+      if (!restored) throw new CmsDraftDeleteConflictError()
+      await tx.insert(auditLogs).values({
+        actorUserId,
+        action: 'draft.restore',
+        targetType: 'draft',
+        targetId: draftId,
+        metadata: {
+          ownerUserId: current.ownerUserId,
+          articleId: current.articleId,
+          status: current.status
+        }
+      })
+      return (await rowsToDrafts([restored]))[0]!
+    })
+  } catch (error: any) {
+    if (error?.code === '23505') {
+      throw new CmsDraftDeleteConflictError('该文章已有活动草稿，无法恢复此草稿')
+    }
+    throw error
+  }
 }
 
 export const createCmsDraftForArticle = async (

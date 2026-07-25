@@ -66,7 +66,10 @@ const bilibiliSrc = computed(() => {
         <ContentRenderer :value="page" />
       </div>
 
-      <NuxtLink class="text-link" to="/news">返回新闻列表</NuxtLink>
+      <div class="article-footer-actions">
+        <NuxtLink class="text-link" to="/news">返回新闻列表</NuxtLink>
+        <CmsArticleEditButton :public-path="newsPath" />
+      </div>
     </article>
   </main>
 </template>

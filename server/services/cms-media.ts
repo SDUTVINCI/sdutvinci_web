@@ -5,7 +5,7 @@ import {
   S3Client,
   type ServiceOutputTypes
 } from '@aws-sdk/client-s3'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, isNull } from 'drizzle-orm'
 import sharp from 'sharp'
 import type {
   CmsAcceptedImageType,
@@ -138,6 +138,7 @@ const validateDraftLease = async (
     .from(drafts)
     .where(and(
       eq(drafts.id, draftId),
+      isNull(drafts.deletedAt),
       isAdmin ? undefined : eq(drafts.ownerUserId, uploaderUserId)
     ))
     .limit(1)

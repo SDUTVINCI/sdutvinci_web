@@ -122,6 +122,11 @@
   color: #fff;
 }
 
+.cms-button-danger {
+  background: var(--red);
+  color: #fff;
+}
+
 .cms-button-link {
   display: inline-flex;
   align-items: center;
@@ -310,6 +315,17 @@
   align-self: end;
 }
 
+.cms-card-link {
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.cms-card-link:hover {
+  border-color: var(--cyan);
+  transform: translateY(-2px);
+}
+
 .cms-panel {
   padding: clamp(22px, 4vw, 36px);
 }
@@ -331,6 +347,23 @@
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--surface);
+}
+
+.cms-toolbar-compact {
+  grid-template-columns: minmax(220px, 360px) auto;
+  justify-content: start;
+}
+
+.cms-checkbox-label {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  min-height: 46px;
+}
+
+.cms-checkbox-label input {
+  width: 18px;
+  min-height: 18px;
 }
 
 .cms-toolbar label,
@@ -386,6 +419,11 @@
   color: var(--cyan);
   font-size: 0.72rem;
   font-weight: 800;
+}
+
+.cms-badge-danger {
+  background: color-mix(in srgb, var(--red) 12%, transparent);
+  color: var(--red);
 }
 
 .cms-empty {
@@ -518,6 +556,12 @@
 
 .cms-profile-member a {
   color: var(--cyan);
+}
+
+.cms-profile-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .cms-editor-page {

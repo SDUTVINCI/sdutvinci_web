@@ -807,3 +807,6 @@
     font-size: 2.12rem;
   }
 }
+.wiki-article-header .front-edit-action {
+  margin-top: 18px;
+}

@@ -68,6 +68,18 @@ const member = computed(() => memberData.value?.member)
       <p class="cms-muted">
         成员资料将通过相同的稳定 ID 与本账号一对一关联。
       </p>
+      <div class="cms-profile-actions">
+        <NuxtLink class="cms-button cms-button-link cms-button-primary" to="/cms/drafts">
+          查看我的草稿
+        </NuxtLink>
+        <NuxtLink
+          v-if="member"
+          class="cms-button cms-button-link cms-button-quiet"
+          :to="`/team/${member.memberKey}`"
+        >
+          查看前台成员页
+        </NuxtLink>
+      </div>
     </div>
   </section>
 </template>

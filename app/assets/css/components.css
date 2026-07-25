@@ -94,3 +94,39 @@
 .section-heading.compact h2 {
   font-size: 1.7rem;
 }
+.front-edit-action {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.front-edit-action button {
+  min-height: 38px;
+  padding: 8px 14px;
+  border: 1px solid var(--cyan);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--cyan);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 750;
+}
+
+.front-edit-action button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.front-edit-action span {
+  color: var(--red);
+  font-size: 0.82rem;
+}
+
+.article-footer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}

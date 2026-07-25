@@ -9,6 +9,8 @@ export interface CmsArticleSummary {
   title: string
   frontmatter: Record<string, unknown>
   contentHash: string
+  isDeleted: boolean
+  isPresent: boolean
   updatedAt: string
 }
 
@@ -20,4 +22,5 @@ export interface CmsArticleListResponse {
   articles: CmsArticleSummary[]
   directories: string[]
   total: number
+  deletedTotal?: number
 }

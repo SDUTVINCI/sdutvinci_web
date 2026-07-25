@@ -1,5 +1,5 @@
 import { diffLines } from 'diff'
-import { and, asc, desc, eq, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm'
 import type {
   CmsDraftStatus
 } from '../../shared/types/cms-drafts'
@@ -154,7 +154,7 @@ export const listCmsPendingReviews = async (): Promise<CmsReviewSummary[]> => {
     .innerJoin(users, eq(drafts.ownerUserId, users.id))
     .leftJoin(userMembers, eq(users.id, userMembers.userId))
     .leftJoin(members, eq(userMembers.memberId, members.id))
-    .where(eq(drafts.status, 'pending_review'))
+    .where(and(eq(drafts.status, 'pending_review'), isNull(drafts.deletedAt)))
     .orderBy(asc(drafts.updatedAt))
   return rows.map(row => ({
     id: row.id,
@@ -238,7 +238,7 @@ const ensureDraftAccess = async (
   const [row] = await getDatabase()
     .select({ ownerUserId: drafts.ownerUserId })
     .from(drafts)
-    .where(eq(drafts.id, draftId))
+    .where(and(eq(drafts.id, draftId), isNull(drafts.deletedAt)))
     .limit(1)
   if (!row || (!allowAdmin && row.ownerUserId !== requesterUserId)) {
     throw new CmsReviewNotFoundError()

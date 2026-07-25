@@ -14,6 +14,10 @@ const route = useRoute()
 const id = String(route.params.id)
 const { session, csrfHeaders } = useCmsSession()
 const requestFetch = import.meta.server ? useRequestFetch() : $fetch
+const returnTo = computed(() => {
+  const value = typeof route.query.returnTo === 'string' ? route.query.returnTo : ''
+  return /^\/(news|wiki)(\/|$)/.test(value) && !value.includes('\\') ? value : ''
+})
 
 const [
   { data: draftData },
@@ -650,8 +654,11 @@ onBeforeUnmount(() => {
   <section class="cms-page cms-editor-page">
     <header class="cms-editor-header">
       <div>
-        <NuxtLink class="cms-back-link" :to="initial.articleId ? `/cms/articles/${initial.articleId}` : '/cms/articles'">
-          ← 返回文章
+        <NuxtLink
+          class="cms-back-link"
+          :to="returnTo || (initial.articleId ? `/cms/articles/${initial.articleId}` : '/cms/articles')"
+        >
+          ← {{ returnTo ? '返回原文章' : '返回文章' }}
         </NuxtLink>
         <p class="cms-eyebrow">{{ statusLabels[status].toUpperCase() }} · {{ initial.collection }}</p>
         <h1>{{ title || '未命名草稿' }}</h1>
