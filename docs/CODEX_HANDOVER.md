@@ -571,3 +571,12 @@
 - 原目录同时使用叶子页面 `app/pages/cms/articles/[id].vue` 和子页面 `app/pages/cms/articles/[id]/history.vue`，Nuxt 只注册了详情路由，没有注册历史页面路由。
 - 已把详情页面移动为 `app/pages/cms/articles/[id]/index.vue`。文章详情 URL 保持 `/cms/articles/:id` 不变，同时构建路由表现在明确包含 `cms-articles-id-history` → `/cms/articles/:id/history`。
 - 修正后 `npm run typecheck` 与 `npm run build` 均通过。开发服务器需要完整重启，才能重新扫描新增的嵌套页面结构。
+
+## 2026-07-25：阶段 5——人工验收通过
+
+- 维护者已确认阶段 5 全部人工验收成功。
+- 验收覆盖专用 SSH Deploy Key 与隔离工作区、审核通过后的正式 Git 发布、远端 Markdown/commit 一致、发布失败保留草稿与成功重试、前台最新内容、历史列表、历史 Markdown、版本差异和恢复旧版本的新提交。
+- 验收期间发现的 Git 作者邮箱校验和版本历史页面路由问题已分别由提交 `99bcf2e`、`2ed7b83` 修正，并完成类型检查、自动化测试和构建回归。
+- 正式发布提交 `00c0867` 证明 Git Push 成功后数据库发布记录、远端内容和 commit hash 一致；最初失败记录仍保留用于审计。
+- 需求文档中的阶段 5 总体进度已勾选。阶段 5 实现以 `e471889` 为基础，包含验收修正 `99bcf2e` 和 `2ed7b83`。
+- 阶段 6 尚未启动；不得提前实现图片上传、WebP 转换、S3 兼容对象存储或媒体记录。
