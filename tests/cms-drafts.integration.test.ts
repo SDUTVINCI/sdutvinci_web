@@ -22,8 +22,9 @@ import {
   assessMarkdownVisualSafety,
   normalizeMarkdownRoundTrip
 } from '../shared/utils/cms-markdown-safety'
+import { configureCmsTestDatabase } from './helpers/cms-test-database'
 
-const integration = process.env.DATABASE_URL ? describe : describe.skip
+const integration = configureCmsTestDatabase() ? describe : describe.skip
 let contentRoot = ''
 let userId = ''
 

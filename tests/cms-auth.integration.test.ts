@@ -15,9 +15,9 @@ import {
 import { verifyCmsPassword } from '../server/utils/cms-security'
 import { auditLogs, users } from '../server/db/schema'
 import { eq } from 'drizzle-orm'
+import { configureCmsTestDatabase } from './helpers/cms-test-database'
 
-const hasDatabase = Boolean(process.env.DATABASE_URL)
-const integration = hasDatabase ? describe : describe.skip
+const integration = configureCmsTestDatabase() ? describe : describe.skip
 
 integration('CMS 身份认证与数据库', () => {
   beforeAll(async () => {

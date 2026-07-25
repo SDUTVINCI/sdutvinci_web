@@ -76,7 +76,9 @@ npm run build
 CMS 集成测试必须指向专用测试数据库，测试会清空其中的 CMS 表，严禁连接生产数据库：
 
 ```bash
-DATABASE_URL=postgresql://vinci:vinci_test@127.0.0.1:55432/vinci_cms \
+TEST_DATABASE_URL=postgresql://vinci:vinci_test@127.0.0.1:55432/vinci_cms_test \
 CMS_AUTH_SECRET=test-only-secret-with-at-least-32-characters \
 npm run test:cms
 ```
+
+测试只读取 `TEST_DATABASE_URL`，并要求数据库名称包含独立的 `test` 单词；未提供时全部数据库集成测试会跳过。即使当前环境中存在普通 `DATABASE_URL`，测试也不会使用它。

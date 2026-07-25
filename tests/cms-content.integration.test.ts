@@ -19,8 +19,9 @@ import {
 } from '../server/services/cms-members'
 import { bootstrapCmsAdmin } from '../server/services/cms-auth'
 import { allocateMemberKey, memberKeyFromName } from '../server/utils/member-key'
+import { configureCmsTestDatabase } from './helpers/cms-test-database'
 
-const integration = process.env.DATABASE_URL ? describe : describe.skip
+const integration = configureCmsTestDatabase() ? describe : describe.skip
 let contentRoot = ''
 
 const markdown = (frontmatter: string, body = '') =>
