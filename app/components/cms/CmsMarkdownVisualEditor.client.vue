@@ -2,6 +2,10 @@
 import { Crepe } from '@milkdown/crepe'
 import '@milkdown/crepe/theme/common/style.css'
 import '@milkdown/crepe/theme/frame.css'
+import {
+  cmsProtectedMarkdownPlugins,
+  prepareMarkdownForVisualEditor
+} from '../../utils/cms-protected-markdown'
 
 const props = defineProps<{
   modelValue: string
@@ -23,11 +27,12 @@ onMounted(async () => {
   try {
     crepe = new Crepe({
       root: root.value,
-      defaultValue: props.modelValue,
+      defaultValue: prepareMarkdownForVisualEditor(props.modelValue),
       features: {
         [Crepe.Feature.AI]: false
       }
     })
+    crepe.editor.use(cmsProtectedMarkdownPlugins)
     crepe.on((listener) => {
       listener.markdownUpdated((_ctx, markdown) => {
         if (acceptsUpdates) emit('update:modelValue', markdown)

@@ -665,6 +665,38 @@
   padding: clamp(20px, 4vw, 52px);
 }
 
+.cms-protected-syntax {
+  border: 1px solid #d39b33;
+  background: #fff8e8;
+  color: #754b05;
+  cursor: not-allowed;
+  user-select: none;
+}
+
+.cms-protected-syntax-inline {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 0.2rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.82em;
+  font-weight: 700;
+  vertical-align: baseline;
+}
+
+.cms-protected-syntax-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0.8rem 0;
+  padding: 0.8rem 1rem;
+  border-radius: 0.65rem;
+}
+
+.cms-protected-syntax-block small {
+  color: #8a651f;
+}
+
 .cms-draft-scope-note {
   margin-top: 18px;
   color: var(--muted);

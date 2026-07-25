@@ -2,10 +2,6 @@
 import type { CmsDraft } from '../../../../shared/types/cms-drafts'
 import type { CmsMember } from '../../../../shared/types/cms-members'
 import CmsMarkdownVisualEditor from '../../../components/cms/CmsMarkdownVisualEditor.client.vue'
-import {
-  assessMarkdownVisualSafety,
-  normalizeMarkdownRoundTrip
-} from '~~/shared/utils/cms-markdown-safety'
 
 definePageMeta({ layout: 'cms', middleware: 'cms-auth' })
 const route = useRoute()
@@ -129,12 +125,6 @@ const switchMode = (next: 'source' | 'visual') => {
     return
   }
 
-  const safety = assessMarkdownVisualSafety(body.value)
-  if (!safety.allowed) {
-    message.value = `为避免破坏内容，当前正文只能使用源码模式：${safety.reasons.join('；')}`
-    return
-  }
-
   visualSource.value = body.value
   visualChecking.value = true
   visualKey.value += 1
@@ -146,13 +136,8 @@ const switchMode = (next: 'source' | 'visual') => {
 
 const handleVisualReady = (serialized: string) => {
   clearTimeout(visualCheckTimer)
-  if (
-    normalizeMarkdownRoundTrip(serialized)
-    !== normalizeMarkdownRoundTrip(visualSource.value)
-  ) {
-    body.value = visualSource.value
-    mode.value = 'source'
-    message.value = '可视化解析会改变当前 Markdown 格式，已安全返回源码模式，原文未被修改。'
+  if (serialized !== visualSource.value) {
+    message.value = '已进入混合可视化模式；HTML、Vue 等扩展语法已作为只读区域保护。'
   }
   visualChecking.value = false
 }
@@ -168,7 +153,7 @@ const handleVisualError = (error: string) => {
 onMounted(() => {
   mounted.value = true
   window.addEventListener('beforeunload', handleBeforeUnload)
-  if (initial.visualMode.allowed) switchMode('visual')
+  switchMode('visual')
 })
 
 onBeforeUnmount(() => {

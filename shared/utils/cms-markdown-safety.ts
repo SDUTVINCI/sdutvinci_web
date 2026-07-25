@@ -25,10 +25,10 @@ const checks: Array<{ pattern: RegExp, reason: string }> = [
 export const assessMarkdownVisualSafety = (markdown: string): MarkdownVisualSafety => {
   const reasons = checks
     .filter(check => check.pattern.test(markdown))
-    .map(check => check.reason)
+    .map(check => `${check.reason}，将在可视化模式中作为只读区域保护`)
 
   return {
-    allowed: reasons.length === 0,
+    allowed: true,
     reasons
   }
 }

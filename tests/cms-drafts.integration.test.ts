@@ -187,7 +187,11 @@ integration('CMS Markdown 编辑器与草稿系统', () => {
     expect(normalizeMarkdownRoundTrip(`${supported}\n`)).toBe(
       normalizeMarkdownRoundTrip(supported)
     )
-    expect(assessMarkdownVisualSafety('<NuxtLink to="/">首页</NuxtLink>').allowed).toBe(false)
-    expect(assessMarkdownVisualSafety('{% include section.html %}').allowed).toBe(false)
+    expect(assessMarkdownVisualSafety('<NuxtLink to="/">首页</NuxtLink>')).toMatchObject({
+      allowed: true
+    })
+    expect(assessMarkdownVisualSafety('{% include section.html %}')).toMatchObject({
+      allowed: true
+    })
   })
 })
