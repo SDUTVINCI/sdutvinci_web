@@ -14,7 +14,7 @@ const { session } = useCmsSession()
       <p class="cms-eyebrow">
         DASHBOARD
       </p>
-      <h1>你好，{{ session?.user.displayName }}</h1>
+      <h1>你好，{{ session?.user.account }}</h1>
       <p>后台基础能力已经就绪，内容编辑和发布能力会在后续阶段依次开放。</p>
     </header>
 

@@ -6,13 +6,11 @@ import { closeDatabase } from '../server/db/client'
 import { runMigrations } from '../server/db/migrate'
 import { bootstrapCmsAdmin, countAdmins } from '../server/services/cms-auth'
 
-const emailSchema = z.email('请输入有效邮箱').max(320)
 const accountSchema = z
   .string()
   .trim()
   .toLowerCase()
   .regex(cmsAccountPattern, '账号须为 3～32 位小写字母或数字，并以字母开头')
-const nameSchema = z.string().trim().min(1, '显示名称不能为空').max(100)
 const passwordSchema = z
   .string()
   .min(12, '密码至少需要 12 个字符')
@@ -86,8 +84,6 @@ const main = async () => {
 
   const readline = createInterface({ input: stdin, output: stdout })
   const account = accountSchema.parse(await readline.question('账号 ID（如 dongjiahui）：'))
-  const email = emailSchema.parse((await readline.question('管理员邮箱：')).trim().toLowerCase())
-  const displayName = nameSchema.parse(await readline.question('显示名称：'))
   readline.close()
 
   const password = passwordSchema.parse(await readSecret('密码（输入内容不会显示）：'))
@@ -97,7 +93,7 @@ const main = async () => {
     throw new Error('两次密码输入不一致')
   }
 
-  const admin = await bootstrapCmsAdmin({ account, email, displayName, password })
+  const admin = await bootstrapCmsAdmin({ account, password })
   stdout.write(`管理员已创建：${admin?.account}\n`)
 }
 

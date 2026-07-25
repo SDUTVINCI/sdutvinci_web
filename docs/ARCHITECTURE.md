@@ -125,7 +125,7 @@ scripts/
 - 所有写 API 进行同源校验并使用 CSRF token；页面中间件只负责跳转，API 必须再次执行会话和权限校验。
 - 登录失败保护、速率限制和完整安全回归在阶段 9 完善，但阶段 1 就不得明文存储密码或信任客户端角色。
 
-`users.account` 是唯一、稳定的登录 ID，使用小写字母和数字（例如 `dongjiahui`、`dongjiahui1`）；邮箱保留为联系资料，不作为登录标识。阶段 2 绑定成员资料时，账号默认与 `members.member_key` 一致。
+`users.account` 是唯一、稳定的登录 ID，使用小写字母和数字（例如 `dongjiahui`、`dongjiahui1`）。认证用户不重复保存姓名、头像或邮箱；阶段 2 通过相同 ID 与 `members.member_key` 一对一绑定，并从成员实体读取所有展示资料。
 
 `CMS_AUTH_SECRET` 用于 CSRF/一次性安全流程，不用于替代密码哈希。敏感配置只从服务端环境读取。
 
@@ -187,7 +187,7 @@ GitHub 是代码和正式 Markdown 的唯一权威来源。恢复旧版本通过
 | 表 | 关键字段 | 说明 |
 | --- | --- | --- |
 | `roles` | `id`, `code`, `name` | 初始化 `admin`、`member`，`code` 唯一 |
-| `users` | `id`, `account`, `email`, `display_name`, `password_hash`, `status`, timestamps | `account` 是稳定登录 ID；账号和邮箱分别唯一 |
+| `users` | `id`, `account`, `password_hash`, `status`, timestamps | 只保存认证信息；`account` 是唯一稳定登录 ID |
 | `user_roles` | `user_id`, `role_id` | 多对多，权限只从服务端读取 |
 | `sessions` | `id`, `user_id`, `token_hash`, `expires_at`, `last_seen_at`, `revoked_at`, `ip_hash`, `user_agent` | 可撤销会话；`token_hash` 唯一 |
 | `members` | `id`, `member_key`, `name`, `avatar_url`, `source_path`, timestamps | `member_key` 是文章引用的稳定 ID；可选关联用户 |
@@ -241,7 +241,6 @@ description:
 - `POST /api/cms/auth/logout`
 - `GET /api/cms/auth/session`
 - `GET /api/cms/profile`
-- `PATCH /api/cms/profile`
 - `GET /api/cms/admin/users`
 - `POST /api/cms/admin/users`
 - `PATCH /api/cms/admin/users/:id`

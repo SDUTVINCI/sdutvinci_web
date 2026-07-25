@@ -254,3 +254,25 @@
 - `npm run build`：通过，Wiki 226 个文件检查正常。
 - Nitro HTTP 回归：邮箱格式登录请求返回 400；账号登录返回 200 且会话用户携带稳定账号；普通成员访问管理员 API 返回 403。
 - 人工验收需改为使用账号 `dongjiahui` 和原密码登录，不再使用邮箱登录。
+
+## 2026-07-25：阶段 1 最终模型修正——认证用户与成员资料分离
+
+### 最终决定
+
+- `users` 只保存认证与授权字段：`id`、`account`、`password_hash`、`status`、时间戳；角色、会话和成员关联继续使用独立关系表。
+- 删除 `users.email` 和 `users.display_name`。姓名、头像及其他展示资料只属于 `members`，阶段 2 通过 `users.account = members.member_key` 建立一对一关系。
+- 创建首位管理员只输入账号 ID 和密码；管理员创建普通用户也只提交账号 ID、密码和角色。
+- 个人中心在阶段 1 只读显示账号、角色和状态。资料编辑由阶段 2 的成员管理承担，因此删除 `PATCH /api/cms/profile`。
+
+### 数据迁移
+
+- 新 migration 删除邮箱、显示名称及邮箱唯一索引，但保留现有用户 ID、账号、密码哈希、状态、角色、会话、成员关联和审计日志。
+- 本地现有管理员仍为 `dongjiahui`，原密码不变。
+- 已确认现有成员资料包含“董佳辉”，阶段 2 可生成 `member_key: dongjiahui` 后直接建立一对一关联。
+
+### 验证
+
+- 既有开发数据库 migration 连续执行两次：通过；`users` 最终只有 `id`、`account`、`password_hash`、`status` 和时间戳字段。
+- 空 PostgreSQL 17 数据库 migration 与 4 项认证集成测试：全部通过。
+- `npm run typecheck`、`npm run build`、226 个 Wiki 文件检查：全部通过。
+- Nitro HTTP 回归：登录响应不含邮箱或显示名称；只提交账号、密码和角色即可创建用户；普通成员访问管理员 API 返回 403；资料修改路由已移除。

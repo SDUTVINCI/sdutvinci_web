@@ -19,19 +19,15 @@ import {
 
 export interface CreateCmsUserInput {
   account: string
-  email: string
-  displayName: string
   password: string
   roles: CmsRoleCode[]
 }
 
 export interface UpdateCmsUserInput {
-  displayName?: string
   status?: 'active' | 'disabled'
   roles?: CmsRoleCode[]
 }
 
-const normalizeEmail = (email: string) => email.trim().toLowerCase()
 const normalizeAccount = (account: string) => account.trim().toLowerCase()
 
 const uniqueRoleCodes = (values: CmsRoleCode[]) =>
@@ -43,8 +39,6 @@ const loadUserRows = async (userId?: string) => {
     .select({
       id: users.id,
       account: users.account,
-      email: users.email,
-      displayName: users.displayName,
       status: users.status,
       createdAt: users.createdAt,
       updatedAt: users.updatedAt,
@@ -67,8 +61,6 @@ const rowsToManagedUsers = (rows: Awaited<ReturnType<typeof loadUserRows>>): Cms
     const current = result.get(row.id) ?? {
       id: row.id,
       account: row.account,
-      email: row.email,
-      displayName: row.displayName,
       status: row.status,
       roles: [],
       memberId: row.memberId,
@@ -137,8 +129,6 @@ export const createCmsUser = async (
       .insert(users)
       .values({
         account: normalizeAccount(input.account),
-        email: normalizeEmail(input.email),
-        displayName: input.displayName.trim(),
         passwordHash
       })
       .returning({ id: users.id })
@@ -155,7 +145,6 @@ export const createCmsUser = async (
       targetId: created.id,
       metadata: {
         account: normalizeAccount(input.account),
-        email: normalizeEmail(input.email),
         roles: uniqueRoleCodes(input.roles)
       }
     })
@@ -186,8 +175,6 @@ export const bootstrapCmsAdmin = async (input: Omit<CreateCmsUserInput, 'roles'>
       .insert(users)
       .values({
         account: normalizeAccount(input.account),
-        email: normalizeEmail(input.email),
-        displayName: input.displayName.trim(),
         passwordHash
       })
       .returning({ id: users.id })
@@ -204,7 +191,6 @@ export const bootstrapCmsAdmin = async (input: Omit<CreateCmsUserInput, 'roles'>
       targetId: created.id,
       metadata: {
         account: normalizeAccount(input.account),
-        email: normalizeEmail(input.email),
         roles: ['admin']
       }
     })
@@ -223,14 +209,11 @@ export const updateCmsUser = async (
   const db = getDatabase()
 
   await db.transaction(async (tx) => {
-    if (input.displayName !== undefined || input.status !== undefined) {
+    if (input.status !== undefined) {
       await tx
         .update(users)
         .set({
-          ...(input.displayName !== undefined
-            ? { displayName: input.displayName.trim() }
-            : {}),
-          ...(input.status !== undefined ? { status: input.status } : {}),
+          status: input.status,
           updatedAt: new Date()
         })
         .where(eq(users.id, userId))

@@ -12,7 +12,6 @@ import {
 } from '../../../../utils/cms-http'
 
 const updateUserSchema = z.object({
-  displayName: z.string().trim().min(1).max(100).optional(),
   status: z.enum(['active', 'disabled']).optional(),
   roles: z.array(z.enum(cmsRoleCodes)).min(1).optional()
 }).refine(value => Object.keys(value).length > 0, '至少提交一个修改项')

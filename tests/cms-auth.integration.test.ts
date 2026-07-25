@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { sql } from 'drizzle-orm'
 import { closeDatabase, getDatabase } from '../server/db/client'
@@ -46,13 +45,10 @@ integration('CMS 身份认证与数据库', () => {
   it('只允许首次引导创建一个管理员，并使用 Argon2id 保存密码', async () => {
     const admin = await bootstrapCmsAdmin({
       account: 'admin',
-      email: 'ADMIN@EXAMPLE.COM',
-      displayName: '首位管理员',
       password: 'AdminPassword123'
     })
 
     expect(admin).toMatchObject({
-      email: 'admin@example.com',
       account: 'admin',
       roles: ['admin'],
       status: 'active'
@@ -68,8 +64,6 @@ integration('CMS 身份认证与数据库', () => {
 
     await expect(bootstrapCmsAdmin({
       account: 'secondadmin',
-      email: 'second@example.com',
-      displayName: '第二位管理员',
       password: 'OtherPassword123'
     })).rejects.toThrow('CMS_ADMIN_ALREADY_EXISTS')
   })
@@ -77,14 +71,10 @@ integration('CMS 身份认证与数据库', () => {
   it('管理员和普通成员均可登录、创建会话并退出或被停用', async () => {
     const admin = await bootstrapCmsAdmin({
       account: 'admin',
-      email: 'admin@example.com',
-      displayName: '管理员',
       password: 'AdminPassword123'
     })
     const member = await createCmsUser({
       account: 'dongjiahui',
-      email: 'member@example.com',
-      displayName: '普通成员',
       password: 'MemberPassword123',
       roles: ['member']
     }, admin!.id)
@@ -118,22 +108,18 @@ integration('CMS 身份认证与数据库', () => {
     expect(await authenticateCmsUser('dongjiahui', 'MemberPassword123')).toBeNull()
   })
 
-  it('记录管理员引导、用户创建、登录和资料修改审计事件', async () => {
+  it('记录管理员引导、用户创建、登录和用户更新审计事件', async () => {
     const admin = await bootstrapCmsAdmin({
       account: 'auditadmin',
-      email: `${randomUUID()}@example.com`,
-      displayName: '审计管理员',
       password: 'AdminPassword123'
     })
     const member = await createCmsUser({
       account: 'auditmember',
-      email: `${randomUUID()}@example.com`,
-      displayName: '审计成员',
       password: 'MemberPassword123',
       roles: ['member']
     }, admin!.id)
     await createCmsSession(member!, 1, null, 'vitest')
-    await updateCmsUser(member!.id, { displayName: '已改名' }, member!.id)
+    await updateCmsUser(member!.id, { roles: ['member'] }, admin!.id)
 
     const events = await getDatabase()
       .select({ action: auditLogs.action })
@@ -145,6 +131,6 @@ integration('CMS 身份认证与数据库', () => {
       'auth.login',
       'user.update'
     ]))
-    expect((await getCmsUser(member!.id))?.displayName).toBe('已改名')
+    expect((await getCmsUser(member!.id))?.roles).toEqual(['member'])
   })
 })

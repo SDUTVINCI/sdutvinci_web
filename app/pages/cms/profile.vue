@@ -5,49 +5,7 @@ definePageMeta({
 })
 useHead({ title: '个人资料 · Vinci 内容管理后台' })
 
-const { session, csrfHeaders } = useCmsSession()
-const displayName = ref(session.value?.user.displayName ?? '')
-const saving = ref(false)
-const message = ref('')
-const isError = ref(false)
-
-watch(
-  () => session.value?.user.displayName,
-  value => {
-    if (value) {
-      displayName.value = value
-    }
-  },
-  { immediate: true }
-)
-
-const save = async () => {
-  saving.value = true
-  message.value = ''
-  isError.value = false
-
-  try {
-    const result = await $fetch<{ user: NonNullable<typeof session.value>['user'] }>(
-      '/api/cms/profile',
-      {
-        method: 'PATCH',
-        headers: csrfHeaders(),
-        body: { displayName: displayName.value }
-      }
-    )
-    if (session.value) {
-      session.value.user = result.user
-    }
-    message.value = '资料已保存'
-  } catch (error: any) {
-    isError.value = true
-    message.value = error?.data?.message
-      ?? error?.data?.statusMessage
-      ?? '保存失败，请稍后重试'
-  } finally {
-    saving.value = false
-  }
-}
+const { session } = useCmsSession()
 </script>
 
 <template>
@@ -57,13 +15,10 @@ const save = async () => {
         PROFILE
       </p>
       <h1>个人资料</h1>
-      <p>更新后台中显示的名称。账号 ID、邮箱和权限由管理员维护。</p>
+      <p>账号只负责身份认证；姓名、头像等资料将在阶段 2 从对应成员档案读取。</p>
     </header>
 
-    <form
-      class="cms-panel cms-form"
-      @submit.prevent="save"
-    >
+    <div class="cms-panel cms-form">
       <label>
         <span>账号 ID</span>
         <input
@@ -74,40 +29,26 @@ const save = async () => {
       </label>
 
       <label>
-        <span>联系邮箱</span>
+        <span>角色</span>
         <input
-          :value="session?.user.email"
-          type="email"
+          :value="session?.user.roles.join('、')"
+          type="text"
           disabled
         >
       </label>
 
       <label>
-        <span>显示名称</span>
+        <span>账号状态</span>
         <input
-          v-model.trim="displayName"
+          :value="session?.user.status === 'active' ? '正常' : '已停用'"
           type="text"
-          maxlength="100"
-          required
+          disabled
         >
       </label>
 
-      <p
-        v-if="message"
-        class="cms-alert"
-        :class="{ 'cms-alert-error': isError }"
-        role="status"
-      >
-        {{ message }}
+      <p class="cms-muted">
+        成员资料将通过相同的稳定 ID 与本账号一对一关联。
       </p>
-
-      <button
-        class="cms-button cms-button-primary"
-        type="submit"
-        :disabled="saving"
-      >
-        {{ saving ? '正在保存…' : '保存资料' }}
-      </button>
-    </form>
+    </div>
   </section>
 </template>

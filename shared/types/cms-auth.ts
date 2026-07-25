@@ -6,8 +6,6 @@ export type CmsRoleCode = typeof cmsRoleCodes[number]
 export interface CmsUser {
   id: string
   account: string
-  email: string
-  displayName: string
   status: 'active' | 'disabled'
   roles: CmsRoleCode[]
   memberId: string | null
