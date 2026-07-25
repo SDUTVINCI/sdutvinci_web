@@ -7,6 +7,7 @@
     "build": "nuxt build",
     "generate": "nuxt generate",
     "wiki:check": "node scripts/wiki-check.mjs",
+    "typecheck": "nuxt typecheck",
     "prebuild": "npm run wiki:check",
     "pregenerate": "npm run wiki:check",
     "preview": "nuxt preview"
@@ -19,5 +20,10 @@
     "nuxt-studio": "^1.7.0",
     "pinyin-pro": "^3.28.1",
     "vue": "^3.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "typescript": "5.9.3",
+    "vue-tsc": "3.3.8"
   }
 }

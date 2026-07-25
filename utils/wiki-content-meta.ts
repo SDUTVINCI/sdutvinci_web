@@ -27,6 +27,10 @@ export function getWikiContentMeta(stem?: string): WikiContentMeta | null {
   }
 
   const rawDocKey = parts[1]
+  if (!rawDocKey) {
+    return null
+  }
+
   const docKey = toPinyinSlug(rawDocKey)
   const rawFileName = parts.at(-1) || ''
   const isWikiIndex = rawFileName === 'index'

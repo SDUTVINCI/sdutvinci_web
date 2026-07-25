@@ -73,7 +73,9 @@ export default defineNuxtConfig({
   },
   hooks: {
     'content:file:afterParse'({ content }) {
-      const wikiMeta = getWikiContentMeta(content.stem)
+      const wikiMeta = getWikiContentMeta(
+        typeof content.stem === 'string' ? content.stem : undefined
+      )
 
       if (wikiMeta) {
         Object.assign(content, wikiMeta)

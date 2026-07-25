@@ -416,11 +416,12 @@ const scheduleAnchorSettle = (id: string) => {
     scrollRetryTimers.push(timer)
   })
 
+  const lastAnchorSettleDelay = anchorSettleDelays.at(-1) ?? 0
   const doneTimer = setTimeout(() => {
     if (pendingAnchorId.value === id) {
       pendingAnchorId.value = ''
     }
-  }, anchorSettleDelays[anchorSettleDelays.length - 1] + 500)
+  }, lastAnchorSettleDelay + 500)
   scrollRetryTimers.push(doneTimer)
 }
 
