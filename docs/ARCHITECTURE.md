@@ -2,24 +2,24 @@
 
 ## 1. 文档状态
 
-本文记录网站与 CMS 的长期架构约束。阶段 0 于 2026-07-25 完成首次技术方案确认。后续只有在发生重大架构调整时才修改本文，并应同步在 `docs/CODEX_HANDOVER.md` 追加说明。
+本文记录网站与 CMS 的长期架构约束。阶段 0 于 2026-07-25 完成首次技术方案确认，阶段 1 于同日落地数据库与身份认证基础。后续只有在发生重大架构调整时才修改本文，并应同步在 `docs/CODEX_HANDOVER.md` 追加说明。
 
-当前阶段只形成方案和环境变量模板，尚未接入数据库、登录、编辑器、对象存储或 Git 发布。
+当前已接入 PostgreSQL、登录和权限骨架；尚未接入编辑器、对象存储或 Git 发布。
 
 ## 2. 当前项目审查结论
 
 ### 2.1 技术栈与构建
 
-- Nuxt 4.4.x、Vue 3.5.x、TypeScript；根 `tsconfig.json` 使用 Nuxt 4 推荐的 project references，具体配置由 Nuxt 生成。
-- Nuxt Content 3.13.x，内容构建时使用 SQLite/`better-sqlite3` 索引；它不承担 CMS 业务数据库职责。
+- Nuxt 4.5.x、Vue 3.5.x、TypeScript；根 `tsconfig.json` 使用 Nuxt 4 推荐的 project references，具体配置由 Nuxt 生成。
+- Nuxt Content 3.15.x，内容构建时使用 SQLite/`better-sqlite3` 索引；它不承担 CMS 业务数据库职责。
 - npm 与 `package-lock.json` v3，当前开发机为 Node.js 24。
 - `npm run build` 生成 Nitro `node-server`，同时预渲染前台路由。因此项目可以在同一 Nuxt 应用中增加服务端 API 和动态 CMS 页面。
 - `prebuild` 和 `pregenerate` 均执行 `scripts/wiki-check.mjs`。
-- 当前没有 `server/`、鉴权中间件、数据库 migration、Docker 或 CI/CD 配置。
+- 当前已有 `server/` CMS API、页面路由保护和数据库 migration；Docker 与 CI/CD 配置留到后续阶段。
 
 ### 2.2 前台与内容
 
-- 前台页面位于 `app/pages/`，根组件 `app/app.vue` 直接包裹统一的前台页头和页脚。
+- 前台页面位于 `app/pages/`，统一页头和页脚已迁移到 `app/layouts/default.vue`；CMS 使用独立 layout。
 - 内容集合由 `content.config.ts` 定义：
   - `members`：32 个成员文件；
   - `news`：2 个新闻文件；
@@ -34,20 +34,7 @@
 
 ### 2.3 Nuxt Studio
 
-项目当前加载 `nuxt-studio`。它与本需求的审核、数据库草稿和独立 Git 工作区发布流程不同，并可能成为绕过 CMS 权限和审核的第二条写入通道。
-
-在阶段 1 引入自有 CMS 时，应禁用生产环境的 Nuxt Studio；确认不再依赖后再移除依赖。阶段 0 不改变现有 Studio 行为。
-
-本地直接执行生产构建时，Studio 无法自动发现仓库而报错。当前可复现的基线构建命令为：
-
-```bash
-GITHUB_ACTIONS=true \
-GITHUB_REPOSITORY=SDUTVINCI/sdutvinci_web \
-GITHUB_REF_NAME=main \
-npm run build
-```
-
-这只是让 Studio 使用公开仓库标识，不包含密钥。阶段 1 应在禁用生产 Studio 后恢复普通 `npm run build`。
+阶段 1 已移除 `nuxt-studio`，避免它成为绕过 CMS 权限和审核的第二条内容写入通道。普通 `npm run build` 不再依赖 GitHub 仓库环境变量。
 
 ## 3. 目标系统总览
 
@@ -73,12 +60,12 @@ npm run build
 
 ## 4. 目录规划
 
-目录将在对应阶段逐步创建，不得在阶段 0 提前实现：
+目录按阶段逐步创建；阶段 1 已建立如下基础：
 
 ```text
 app/
   components/cms/       CMS 专用组件
-  composables/cms/      CMS 客户端状态与 API 封装
+  composables/          CMS 客户端会话状态与 API 封装
   layouts/
     default.vue         现有前台壳
     cms.vue             登录后的后台壳
@@ -96,15 +83,13 @@ app/
 server/
   api/cms/              CMS HTTP API
   db/
-    schema/             Drizzle 表定义
+    schema.ts           Drizzle 表定义
     migrations/         已提交的 SQL migration
-  middleware/           请求级安全头、会话上下文等
   services/             auth、content、draft、review、git、storage
-  repositories/         数据库访问边界
   utils/                校验、路径、错误与权限工具
 scripts/
-  cms-admin.mjs         首个管理员初始化入口
-  cms-migrate.mjs       migration 入口
+  cms-admin.ts          首个管理员初始化入口
+  cms-migrate.ts        migration 入口
 ```
 
 前台查询和 Wiki 路径派生继续复用现有 `content.config.ts`、`transformers/` 与 `utils/`。CMS 代码不得让浏览器直接访问文件系统、数据库、Git 或对象存储密钥。

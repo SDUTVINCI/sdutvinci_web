@@ -153,3 +153,71 @@
 - 第十六章内没有遗漏普通列表格式的任务项。
 - 第十六章之外没有残留任务清单格式。
 - 数据库、API、依赖和环境变量均无变更。
+
+## 2026-07-25：阶段 1——PostgreSQL、基础数据模型与用户登录
+
+### 完成状态
+
+- 阶段 1 的实现与自动化验证已完成，等待维护者人工验收。
+- 需求文档中阶段 1 的任务、范围约束与验收标准已勾选；总体进度及“等待验收”保持未勾选，验收通过后再更新。
+- 未开始阶段 2。
+
+### 数据库与身份认证
+
+- 引入 PostgreSQL、Drizzle ORM、node-postgres 和已提交 SQL migration。
+- 建立 `users`、`roles`、`user_roles`、`members`、`user_members`、`sessions`、`audit_logs`。
+- migration 初始化 `admin`、`member` 两个系统角色，并可重复执行。
+- 密码使用 Argon2id；会话使用 256-bit 随机令牌，数据库只保存 SHA-256 摘要。
+- Cookie 使用 `HttpOnly`、`SameSite=Lax`，生产环境由 `CMS_SECURE_COOKIES=true` 开启 `Secure`。
+- 写接口执行同源和 CSRF 校验；权限在 API 服务端再次校验，不信任页面中间件或客户端角色。
+- 停用用户会撤销其活动会话；最后一名管理员不能被停用或移除管理员角色。
+- 首位管理员通过 `npm run cms:admin` 交互式创建。命令不接受参数或环境变量密码，已有管理员时拒绝执行。
+
+### API 与页面
+
+- 新增登录、退出、会话、个人资料和管理员用户 API，路由与 `docs/ARCHITECTURE.md` 的阶段 1 草案一致。
+- 新增 `/cms/login`、`/cms`、`/cms/profile`。
+- 前台 Header/Footer 从根组件迁入 default layout；CMS 使用独立的认证 layout 和后台 layout。
+- 未实现文章、草稿、Git 发布、图片或阶段 2 功能。
+
+### 新增和修改文件
+
+- 配置与依赖：`.env.example`、`package.json`、`package-lock.json`、`nuxt.config.ts`、`drizzle.config.ts`、`vitest.config.ts`。
+- 前端入口与样式：`app/app.vue`、`app/assets/css/main.css`、`app/assets/css/cms.css`。
+- CMS 前端：`app/composables/useCmsSession.ts`、`app/layouts/default.vue`、`app/layouts/cms.vue`、`app/layouts/cms-auth.vue`、`app/middleware/cms-auth.ts`、`app/middleware/cms-admin.ts`、`app/pages/cms/login.vue`、`app/pages/cms/index.vue`、`app/pages/cms/profile.vue`。
+- 数据库：`server/db/client.ts`、`server/db/schema.ts`、`server/db/migrate.ts`、`server/db/migrations/0000_tired_invisible_woman.sql` 及对应 Drizzle meta 文件。
+- 服务端认证：`server/services/cms-auth.ts`、`server/utils/cms-config.ts`、`server/utils/cms-security.ts`、`server/utils/cms-http.ts`、`shared/types/cms-auth.ts`。
+- API：`server/api/cms/auth/*`、`server/api/cms/profile.*`、`server/api/cms/admin/users/*`。
+- 命令与测试：`scripts/cms-admin.ts`、`scripts/cms-migrate.ts`、`tests/cms-auth.integration.test.ts`。
+- 文档：`docs/ARCHITECTURE.md`、`docs/CMS_SETUP.md`、`docs/CODEX_HANDOVER.md`、`docs/网站后台（CMS）需求文档_最终完整版.md`。
+
+### 依赖、构建与安全
+
+- Nuxt 更新到 4.5.x，Nuxt Content 更新到 3.15.x。
+- 移除 `nuxt-studio`，关闭绕过 CMS 审核流程的第二条写入入口；普通 `npm run build` 已恢复。
+- 新增运行依赖：`argon2`、`drizzle-orm`、`pg`、`zod`。
+- 新增开发依赖：`drizzle-kit`、`tsx`、`vitest`、`@types/pg`。
+- 非强制 `npm audit fix` 已更新可安全升级的间接依赖。剩余公告来自 Nuxt/Nitro 的归档依赖和 Drizzle Kit 的开发期 esbuild 链；自动修复建议会反向降级直接依赖，因此未执行 `--force`，阶段 9 继续复核。
+
+### 环境变量与运行说明
+
+- 阶段 1 使用 `DATABASE_URL`、`DATABASE_POOL_MAX`、`DATABASE_SSL`、`CMS_AUTH_SECRET`、`CMS_SESSION_COOKIE`、`CMS_SESSION_TTL_HOURS`、`CMS_SECURE_COOKIES`、`NUXT_PUBLIC_SITE_URL`。
+- `.env.example` 仅包含占位值。
+- 初始化、管理员创建、启动和测试步骤见 `docs/CMS_SETUP.md`。
+
+### 验证结果
+
+- `npm run typecheck`：通过。
+- `npm run build`：通过；Wiki 检查 226 个文件正常，预渲染 540 条前台路由。
+- PostgreSQL 17 临时容器中的 `npm run test:cms`：4 项集成测试全部通过。
+- 真实 Nitro API 冒烟测试：未登录会话 401；未登录 `/cms` 跳转 `/cms/login`；member 登录 200；member 访问管理员用户 API 403；资料更新 200；退出 200；已撤销会话 401；admin 登录和用户列表 200。
+- 临时测试容器只包含验收数据，阶段结束后删除。
+
+### 人工验收
+
+1. 按 `docs/CMS_SETUP.md` 配置专用 PostgreSQL 与本机 `.env`。
+2. 执行 `npm run db:migrate`，再执行 `npm run cms:admin` 创建首位管理员。
+3. 执行 `npm run dev`，访问 `/cms/login`。
+4. 验证管理员登录、个人资料修改和退出。
+5. 如需验证普通成员权限，可用管理员用户 API 创建 `member` 账号，再确认其访问 `/api/cms/admin/users` 返回 403。
+6. 验收通过后，勾选阶段 1 总体进度和通用模板中的“等待本阶段验收通过”，再启动阶段 2。

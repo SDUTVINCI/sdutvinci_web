@@ -19,7 +19,7 @@ const memberRoutes = existsSync('content/members')
   : []
 
 export default defineNuxtConfig({
-  modules: ['@nuxt/content', 'nuxt-studio'],
+  modules: ['@nuxt/content'],
   compatibilityDate: '2026-05-12',
   css: ['~/assets/css/main.css'],
   content: {
@@ -134,7 +134,9 @@ export default defineNuxtConfig({
     '/wiki/**': { prerender: true },
     '/docs': { redirect: '/wiki' },
     '/recruitment': { prerender: true },
-    '/contact': { prerender: true }
+    '/contact': { prerender: true },
+    '/cms/**': { prerender: false },
+    '/api/cms/**': { prerender: false }
   },
   nitro: {
     prerender: {
