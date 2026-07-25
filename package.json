@@ -5,9 +5,9 @@
   "scripts": {
     "dev": "nuxt dev",
     "build": "nuxt build",
-    "cms:admin": "tsx scripts/cms-admin.ts",
+    "cms:admin": "tsx --env-file=.env scripts/cms-admin.ts",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx scripts/cms-migrate.ts",
+    "db:migrate": "tsx --env-file=.env scripts/cms-migrate.ts",
     "generate": "nuxt generate",
     "test": "vitest run",
     "test:cms": "vitest run tests/cms-auth.integration.test.ts",

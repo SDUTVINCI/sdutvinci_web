@@ -27,7 +27,7 @@ NUXT_PUBLIC_SITE_URL=http://localhost:3000
 npm run db:migrate
 ```
 
-该命令可以重复执行；migration 会初始化 `admin` 和 `member` 两个系统角色。
+该命令会自动读取项目根目录的 `.env`，可以重复执行；migration 会初始化 `admin` 和 `member` 两个系统角色。
 
 只有修改了 `server/db/schema.ts` 后才运行 `npm run db:generate` 生成新的 SQL。生产环境不得临时生成 migration。
 
@@ -37,7 +37,7 @@ npm run db:migrate
 npm run cms:admin
 ```
 
-命令只允许在交互式终端运行，密码输入会隐藏，并且不会从命令参数或环境变量读取。数据库中已有管理员时，初始化命令会拒绝继续。后续用户应通过管理员 API 创建，不应再次运行首次初始化。
+命令会自动读取项目根目录的 `.env`，但管理员密码只允许在交互式终端中输入，输入会隐藏，并且不会从命令参数或环境变量读取。数据库中已有管理员时，初始化命令会拒绝继续。后续用户应通过管理员 API 创建，不应再次运行首次初始化。
 
 ## 4. 启动与访问
 
