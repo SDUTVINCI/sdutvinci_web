@@ -663,6 +663,196 @@
   gap: 10px;
 }
 
+.cms-account-layout {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.72fr) minmax(0, 1.55fr);
+  align-items: start;
+  gap: 22px;
+}
+
+.cms-account-own {
+  position: sticky;
+  top: 28px;
+}
+
+.cms-account-heading {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--line);
+}
+
+.cms-account-heading img,
+.cms-account-card header img {
+  width: 62px;
+  height: 62px;
+  flex: 0 0 auto;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  background: var(--surface-soft);
+  box-shadow: 0 0 0 1px var(--line);
+  object-fit: cover;
+}
+
+.cms-account-heading h2,
+.cms-account-heading p,
+.cms-account-create h2,
+.cms-account-list-heading h2,
+.cms-account-card h3,
+.cms-account-card p {
+  margin: 0;
+}
+
+.cms-account-heading h2 {
+  margin: 3px 0;
+  font-size: 1.35rem;
+}
+
+.cms-account-heading p,
+.cms-account-card header p {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.cms-account-own .cms-form {
+  margin-top: 24px;
+}
+
+.cms-account-own .cms-form h3 {
+  margin: 0;
+}
+
+.cms-form label small,
+.cms-account-edit label small {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.cms-account-admin {
+  display: grid;
+  gap: 30px;
+}
+
+.cms-account-create {
+  margin: 0;
+}
+
+.cms-role-fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px 18px;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 13px;
+}
+
+.cms-role-fieldset legend {
+  padding: 0 6px;
+  color: var(--ink-soft);
+  font-size: 0.84rem;
+  font-weight: 750;
+}
+
+.cms-role-fieldset label {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+}
+
+.cms-role-fieldset input {
+  width: 17px;
+  min-height: 17px;
+  margin: 0;
+  accent-color: var(--red);
+}
+
+.cms-account-list-section {
+  display: grid;
+  gap: 16px;
+}
+
+.cms-account-list-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.cms-account-list {
+  display: grid;
+  gap: 14px;
+}
+
+.cms-account-card {
+  padding: 20px;
+}
+
+.cms-account-card > header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+}
+
+.cms-account-card header img {
+  width: 52px;
+  height: 52px;
+}
+
+.cms-account-card h3 {
+  overflow: hidden;
+  font-size: 1.05rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cms-account-edit {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.65fr) minmax(190px, 0.9fr) minmax(220px, 1.25fr) auto;
+  align-items: end;
+  gap: 13px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.cms-account-edit > label {
+  display: grid;
+  gap: 7px;
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.cms-account-edit input,
+.cms-account-edit select {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 8px 11px;
+  background: var(--surface-soft);
+  color: var(--ink);
+  font: inherit;
+}
+
+.cms-account-edit > .cms-muted {
+  align-self: center;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.cms-account-edit .cms-role-fieldset {
+  min-height: 68px;
+  padding: 8px 11px 9px;
+}
+
 .cms-editor-page {
   width: min(100%, 1440px);
 }
@@ -1194,6 +1384,20 @@
   white-space: pre-wrap;
 }
 
+@media (max-width: 1120px) {
+  .cms-account-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .cms-account-own {
+    position: static;
+  }
+
+  .cms-account-edit {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 760px) {
   .cms-shell {
     display: block;
@@ -1222,6 +1426,24 @@
 
   .cms-user-actions {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cms-account-edit {
+    grid-template-columns: 1fr;
+  }
+
+  .cms-account-list-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .cms-account-card > header {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .cms-account-card > header .cms-badge {
+    grid-column: 2;
+    width: fit-content;
   }
 
   .cms-card-grid {

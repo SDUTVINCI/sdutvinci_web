@@ -340,7 +340,7 @@ description:
 | 新建/编辑 | `/cms/articles/new`、`/cms/articles/:id/edit` | member |
 | 待审核列表与详情 | `/cms/reviews`、`/cms/reviews/:id` | admin |
 | 成员管理 | `/cms/members` | admin 写；member 只读 |
-| 用户管理 | `/cms/users` | admin |
+| 账号安全与用户管理 | `/cms/users` | member 修改本人密码；admin 管理全部账号 |
 | 个人中心 | `/cms/profile` | member |
 
 阶段 1 需把现有 `app/app.vue` 的前台壳迁入 `default` layout，并给 CMS 使用独立 layout；迁移不得改变现有前台页面结构和样式。
@@ -355,6 +355,7 @@ description:
 | 直接正式发布 | 否 | 否 | 仅审核通过内容 |
 | 审核、驳回 | 否 | 否 | 是 |
 | 强制接管编辑锁 | 否 | 否 | 是，必须审计 |
+| 修改本人密码 | 否 | 是，仅本人且验证当前密码 | 是，仅本人且验证当前密码 |
 | 管理成员和用户 | 否 | 否 | 是 |
 | 删除/恢复正式文章 | 否 | 否 | 是，必须审计 |
 

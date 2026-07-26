@@ -60,6 +60,9 @@ const member = computed(() => session.value?.user.member)
         成员资料将通过相同的稳定 ID 与本账号一对一关联。
       </p>
       <div class="cms-profile-actions">
+        <NuxtLink class="cms-button cms-button-link cms-button-quiet" to="/cms/users">
+          修改我的密码
+        </NuxtLink>
         <NuxtLink class="cms-button cms-button-link cms-button-primary" to="/cms/drafts">
           查看我的草稿
         </NuxtLink>

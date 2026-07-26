@@ -1,10 +1,12 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { sql } from 'drizzle-orm'
+import { eq, inArray, sql } from 'drizzle-orm'
 import { closeDatabase, getDatabase } from '../server/db/client'
 import { runMigrations } from '../server/db/migrate'
 import {
   authenticateCmsUser,
   bootstrapCmsAdmin,
+  changeCmsOwnPassword,
+  CmsLastAdminError,
   countAdmins,
   createCmsSession,
   createCmsUser,
@@ -27,7 +29,6 @@ import {
   userMembers,
   users
 } from '../server/db/schema'
-import { eq } from 'drizzle-orm'
 import { configureCmsTestDatabase } from './helpers/cms-test-database'
 
 const integration = configureCmsTestDatabase() ? describe : describe.skip
@@ -56,6 +57,12 @@ integration('CMS 身份认证与数据库', () => {
   })
 
   it('只允许首次引导创建一个管理员，并使用 Argon2id 保存密码', async () => {
+    const [adminMember] = await getDatabase().insert(members).values({
+      memberKey: 'admin',
+      name: '管理员成员',
+      avatarUrl: '/images/logo.png',
+      sourcePath: 'active/admin.md'
+    }).returning({ id: members.id })
     const admin = await bootstrapCmsAdmin({
       account: 'admin',
       password: 'AdminPassword123'
@@ -64,7 +71,12 @@ integration('CMS 身份认证与数据库', () => {
     expect(admin).toMatchObject({
       account: 'admin',
       roles: ['admin'],
-      status: 'active'
+      status: 'active',
+      memberId: adminMember!.id,
+      member: {
+        id: adminMember!.id,
+        name: '管理员成员'
+      }
     })
     expect(await countAdmins()).toBe(1)
 
@@ -79,6 +91,17 @@ integration('CMS 身份认证与数据库', () => {
       account: 'secondadmin',
       password: 'OtherPassword123'
     })).rejects.toThrow('CMS_ADMIN_ALREADY_EXISTS')
+    await expect(updateCmsUser(
+      admin!.id,
+      { roles: ['member'] },
+      admin!.id
+    )).rejects.toBeInstanceOf(CmsLastAdminError)
+    await expect(updateCmsUser(
+      admin!.id,
+      { status: 'disabled' },
+      admin!.id
+    )).rejects.toBeInstanceOf(CmsLastAdminError)
+    expect(await countAdmins()).toBe(1)
   })
 
   it('管理员和普通成员均可登录、创建会话并退出或被停用', async () => {
@@ -143,6 +166,35 @@ integration('CMS 身份认证与数据库', () => {
     expect(await authenticateCmsUser('dongjiahui', 'MemberPassword123')).toBeNull()
   })
 
+  it('创建与成员稳定 ID 相同的账号时自动关联姓名和头像', async () => {
+    const admin = await bootstrapCmsAdmin({
+      account: 'linkadmin',
+      password: 'AdminPassword123'
+    })
+    const [memberProfile] = await getDatabase().insert(members).values({
+      memberKey: 'linkedmember',
+      name: '已关联成员',
+      avatarUrl: '/images/team/linkedmember.jpg',
+      sourcePath: 'active/linkedmember.md'
+    }).returning({ id: members.id })
+
+    const user = await createCmsUser({
+      account: 'linkedmember',
+      password: 'MemberPassword123',
+      roles: ['member']
+    }, admin!.id)
+
+    expect(user).toMatchObject({
+      memberId: memberProfile!.id,
+      member: {
+        id: memberProfile!.id,
+        memberKey: 'linkedmember',
+        name: '已关联成员',
+        avatarUrl: '/images/team/linkedmember.jpg'
+      }
+    })
+  })
+
   it('记录管理员引导、用户创建、登录和用户更新审计事件', async () => {
     const admin = await bootstrapCmsAdmin({
       account: 'auditadmin',
@@ -167,6 +219,86 @@ integration('CMS 身份认证与数据库', () => {
       'user.update'
     ]))
     expect((await getCmsUser(member!.id))?.roles).toEqual(['member'])
+  })
+
+  it('用户改密会验证当前密码并仅保留当前会话，管理员重置会撤销目标全部会话', async () => {
+    const admin = await bootstrapCmsAdmin({
+      account: 'passwordadmin',
+      password: 'AdminPassword123'
+    })
+    const member = await createCmsUser({
+      account: 'passwordmember',
+      password: 'MemberPassword123',
+      roles: ['member']
+    }, admin!.id)
+    const currentSession = await createCmsSession(member!, 1, null, 'current-device')
+    const otherSession = await createCmsSession(member!, 1, null, 'other-device')
+
+    await expect(changeCmsOwnPassword(
+      member!.id,
+      'WrongCurrentPassword',
+      'ChangedPassword123',
+      currentSession.token
+    )).resolves.toBe(false)
+    expect(await authenticateCmsUser(
+      'passwordmember',
+      'MemberPassword123'
+    )).not.toBeNull()
+
+    await expect(changeCmsOwnPassword(
+      member!.id,
+      'MemberPassword123',
+      'ChangedPassword123',
+      currentSession.token
+    )).resolves.toBe(true)
+    expect(await authenticateCmsUser(
+      'passwordmember',
+      'MemberPassword123'
+    )).toBeNull()
+    expect(await authenticateCmsUser(
+      'passwordmember',
+      'ChangedPassword123'
+    )).not.toBeNull()
+    expect(await getCmsSessionUser(currentSession.token)).not.toBeNull()
+    expect(await getCmsSessionUser(otherSession.token)).toBeNull()
+
+    const resetSession = await createCmsSession(member!, 1, null, 'reset-device')
+    await updateCmsUser(member!.id, {
+      password: 'ResetPassword123'
+    }, admin!.id)
+    expect(await getCmsSessionUser(currentSession.token)).toBeNull()
+    expect(await getCmsSessionUser(resetSession.token)).toBeNull()
+    expect(await authenticateCmsUser(
+      'passwordmember',
+      'ChangedPassword123'
+    )).toBeNull()
+    expect(await authenticateCmsUser(
+      'passwordmember',
+      'ResetPassword123'
+    )).not.toBeNull()
+
+    const passwordEvents = await getDatabase()
+      .select({
+        action: auditLogs.action,
+        metadata: auditLogs.metadata
+      })
+      .from(auditLogs)
+      .where(inArray(auditLogs.action, [
+        'user.password.change',
+        'user.update'
+      ]))
+    expect(passwordEvents).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        action: 'user.password.change',
+        metadata: { otherSessionsRevoked: true }
+      }),
+      expect.objectContaining({
+        action: 'user.update',
+        metadata: { passwordChanged: true }
+      })
+    ]))
+    expect(JSON.stringify(passwordEvents)).not.toContain('ChangedPassword123')
+    expect(JSON.stringify(passwordEvents)).not.toContain('ResetPassword123')
   })
 
   it('按账号持久记录失败并在阈值后锁定，且不保存原始账号', async () => {

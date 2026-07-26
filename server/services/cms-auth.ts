@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, inArray, isNull, sql } from 'drizzle-orm'
+import { and, asc, eq, gt, inArray, isNull, ne, sql } from 'drizzle-orm'
 import type { CmsManagedUser, CmsRoleCode, CmsUser } from '../../shared/types/cms-auth'
 import { cmsRoleCodes } from '../../shared/types/cms-auth'
 import { getDatabase } from '../db/client'
@@ -27,6 +27,14 @@ export interface CreateCmsUserInput {
 export interface UpdateCmsUserInput {
   status?: 'active' | 'disabled'
   roles?: CmsRoleCode[]
+  password?: string
+}
+
+export class CmsLastAdminError extends Error {
+  constructor() {
+    super('不能停用或移除最后一个管理员')
+    this.name = 'CmsLastAdminError'
+  }
 }
 
 const normalizeAccount = (account: string) => account.trim().toLowerCase()
@@ -118,6 +126,24 @@ const replaceRoles = async (
   })))
 }
 
+const linkMatchingMember = async (
+  tx: Parameters<Parameters<ReturnType<typeof getDatabase>['transaction']>[0]>[0],
+  userId: string,
+  account: string
+) => {
+  const [matchingMember] = await tx
+    .select({ id: members.id })
+    .from(members)
+    .where(eq(members.memberKey, normalizeAccount(account)))
+    .limit(1)
+  if (matchingMember) {
+    await tx.insert(userMembers).values({
+      userId,
+      memberId: matchingMember.id
+    }).onConflictDoNothing()
+  }
+}
+
 export const listCmsUsers = async () => rowsToManagedUsers(await loadUserRows())
 
 export const getCmsUser = async (userId: string) =>
@@ -156,6 +182,7 @@ export const createCmsUser = async (
     }
 
     await replaceRoles(tx, created.id, input.roles)
+    await linkMatchingMember(tx, created.id, input.account)
     await tx.insert(auditLogs).values({
       actorUserId,
       action: auditAction,
@@ -202,6 +229,7 @@ export const bootstrapCmsAdmin = async (input: Omit<CreateCmsUserInput, 'roles'>
     }
 
     await replaceRoles(tx, created.id, ['admin'])
+    await linkMatchingMember(tx, created.id, input.account)
     await tx.insert(auditLogs).values({
       actorUserId: created.id,
       action: 'admin.bootstrap',
@@ -225,23 +253,60 @@ export const updateCmsUser = async (
   actorUserId: string
 ) => {
   const db = getDatabase()
+  const passwordHash = input.password
+    ? await hashCmsPassword(input.password)
+    : undefined
 
   await db.transaction(async (tx) => {
-    if (input.status !== undefined) {
-      await tx
-        .update(users)
-        .set({
-          status: input.status,
-          updatedAt: new Date()
-        })
-        .where(eq(users.id, userId))
+    const mayRemoveAdmin = input.status === 'disabled'
+      || (input.roles !== undefined && !input.roles.includes('admin'))
+    if (mayRemoveAdmin) {
+      await tx.execute(sql`select pg_advisory_xact_lock(884021502)`)
+      const [activeAdmin] = await tx
+        .select({ userId: users.id })
+        .from(users)
+        .innerJoin(userRoles, eq(users.id, userRoles.userId))
+        .innerJoin(roles, and(
+          eq(userRoles.roleId, roles.id),
+          eq(roles.code, 'admin')
+        ))
+        .where(and(
+          eq(users.id, userId),
+          eq(users.status, 'active')
+        ))
+        .limit(1)
+
+      if (activeAdmin) {
+        const adminRows = await tx
+          .select({ userId: users.id })
+          .from(users)
+          .innerJoin(userRoles, eq(users.id, userRoles.userId))
+          .innerJoin(roles, and(
+            eq(userRoles.roleId, roles.id),
+            eq(roles.code, 'admin')
+          ))
+          .where(eq(users.status, 'active'))
+
+        if (new Set(adminRows.map(row => row.userId)).size <= 1) {
+          throw new CmsLastAdminError()
+        }
+      }
     }
+
+    await tx
+      .update(users)
+      .set({
+        ...(input.status !== undefined ? { status: input.status } : {}),
+        ...(passwordHash ? { passwordHash } : {}),
+        updatedAt: new Date()
+      })
+      .where(eq(users.id, userId))
 
     if (input.roles !== undefined) {
       await replaceRoles(tx, userId, input.roles)
     }
 
-    if (input.status === 'disabled') {
+    if (input.status === 'disabled' || passwordHash) {
       await tx
         .update(sessions)
         .set({ revokedAt: new Date() })
@@ -253,11 +318,72 @@ export const updateCmsUser = async (
       action: 'user.update',
       targetType: 'user',
       targetId: userId,
-      metadata: { ...input }
+      metadata: {
+        ...(input.status !== undefined ? { status: input.status } : {}),
+        ...(input.roles !== undefined ? { roles: uniqueRoleCodes(input.roles) } : {}),
+        ...(passwordHash ? { passwordChanged: true } : {})
+      }
     })
   })
 
   return getCmsUser(userId)
+}
+
+export const changeCmsOwnPassword = async (
+  userId: string,
+  currentPassword: string,
+  newPassword: string,
+  currentSessionToken: string
+) => {
+  const db = getDatabase()
+  const [current] = await db
+    .select({ passwordHash: users.passwordHash })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1)
+
+  if (!current || !await verifyCmsPassword(current.passwordHash, currentPassword)) {
+    return false
+  }
+
+  const passwordHash = await hashCmsPassword(newPassword)
+  return db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(users)
+      .set({
+        passwordHash,
+        updatedAt: new Date()
+      })
+      .where(and(
+        eq(users.id, userId),
+        eq(users.passwordHash, current.passwordHash)
+      ))
+      .returning({ id: users.id })
+
+    if (!updated) {
+      return false
+    }
+
+    await tx
+      .update(sessions)
+      .set({ revokedAt: new Date() })
+      .where(and(
+        eq(sessions.userId, userId),
+        isNull(sessions.revokedAt),
+        ne(sessions.tokenHash, hashSessionToken(currentSessionToken))
+      ))
+    await tx.insert(auditLogs).values({
+      actorUserId: userId,
+      action: 'user.password.change',
+      targetType: 'user',
+      targetId: userId,
+      metadata: {
+        otherSessionsRevoked: true
+      }
+    })
+
+    return true
+  })
 }
 
 export const authenticateCmsUser = async (account: string, password: string) => {

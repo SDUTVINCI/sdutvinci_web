@@ -2,6 +2,7 @@ import { createError, readValidatedBody } from 'h3'
 import { z } from 'zod'
 import {
   cmsAccountPattern,
+  cmsPasswordMinLength,
   cmsRoleCodes
 } from '../../../../../shared/types/cms-auth'
 import { createCmsUser } from '../../../../services/cms-auth'
@@ -12,7 +13,7 @@ import {
 
 const createUserSchema = z.object({
   account: z.string().trim().toLowerCase().regex(cmsAccountPattern),
-  password: z.string().min(12).max(1024),
+  password: z.string().min(cmsPasswordMinLength).max(1024),
   roles: z.array(z.enum(cmsRoleCodes)).min(1).default(['member'])
 }).strict()
 

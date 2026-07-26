@@ -53,6 +53,9 @@ const handleLogout = async () => {
         <NuxtLink to="/cms/members">
           成员
         </NuxtLink>
+        <NuxtLink to="/cms/users">
+          {{ isAdmin ? '账号管理' : '账号安全' }}
+        </NuxtLink>
         <NuxtLink to="/cms/profile">
           个人资料
         </NuxtLink>
