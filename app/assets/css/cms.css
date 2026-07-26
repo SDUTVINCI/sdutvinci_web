@@ -11,9 +11,9 @@
   position: relative;
   display: grid;
   min-height: 100svh;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: max-content minmax(0, 1fr) max-content;
   overflow: hidden;
-  padding: clamp(22px, 3vw, 42px) clamp(22px, 4.5vw, 72px) 24px;
+  padding: 20px clamp(22px, 4.5vw, 72px) 18px;
   background:
     linear-gradient(90deg, rgba(8, 15, 18, 0.96) 0%, rgba(8, 15, 18, 0.88) 42%, rgba(8, 15, 18, 0.66) 100%),
     linear-gradient(0deg, rgba(8, 15, 18, 0.82), rgba(8, 15, 18, 0.06) 58%),
@@ -49,12 +49,17 @@
   content: "";
 }
 
-.cms-auth-ambient span {
+.cms-auth-ambient {
   position: absolute;
   z-index: -1;
+  inset: 0;
+  pointer-events: none;
+}
+
+.cms-auth-ambient span {
+  position: absolute;
   border-radius: 50%;
   filter: blur(2px);
-  pointer-events: none;
 }
 
 .cms-auth-ambient span:first-child {
@@ -149,8 +154,9 @@
 
 .cms-auth-main {
   display: grid;
-  place-items: center;
-  padding: clamp(44px, 7vh, 86px) 0;
+  align-items: start;
+  justify-items: center;
+  padding: clamp(46px, 8vh, 92px) 0 28px;
 }
 
 .cms-login-stage {
@@ -1821,7 +1827,7 @@
   }
 
   .cms-auth-main {
-    padding: 56px 0;
+    padding: 42px 0 24px;
   }
 
   .cms-login-stage {
@@ -1854,7 +1860,8 @@
 
 @media (max-width: 760px) {
   .cms-auth-shell {
-    padding: 20px 18px;
+    grid-template-rows: max-content minmax(0, 1fr);
+    padding: 14px 16px 12px;
     background-position: 58% center;
   }
 
@@ -1867,30 +1874,22 @@
   }
 
   .cms-auth-brand img {
-    width: 44px;
-    height: 44px;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
   }
 
   .cms-auth-main {
-    padding: 42px 0;
+    padding: 18px 0 0;
   }
 
   .cms-login-stage {
-    gap: 28px;
+    gap: 0;
   }
 
-  .cms-login-kicker {
-    margin-bottom: 15px;
-    font-size: 0.66rem;
-  }
-
-  .cms-login-story h1 {
-    font-size: clamp(2.8rem, 14vw, 4rem);
-  }
-
-  .cms-login-intro {
-    margin-top: 18px;
-    font-size: 0.9rem;
+  .cms-login-story,
+  .cms-auth-footer {
+    display: none;
   }
 
   .cms-auth-card {
@@ -1900,10 +1899,6 @@
 
   .cms-auth-card h2 {
     font-size: 2.2rem;
-  }
-
-  .cms-auth-footer span:last-child {
-    display: none;
   }
 
   .cms-shell {
