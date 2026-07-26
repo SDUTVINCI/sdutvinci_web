@@ -509,6 +509,9 @@ chmod 600 .env
 | `S3_*` | 图片存储 | 使用目标环境对应的 Bucket；首次演练必须是测试 Bucket |
 | `DEPLOY_GIT_REMOTE_URL` | 防止部署错仓库 | 必须与 `git remote get-url origin` 完全一致 |
 | `AUTO_DEPLOY_ENABLED` | 是否允许 systemd service 主动部署 | 首次人工部署验收前保持 `false` |
+| `DEPLOY_CACHE_CLEANUP_ENABLED` | 每次部署前后自动清理可重建 Docker 缓存 | 默认 `true`；紧急排查时可临时设为 `false` |
+| `DEPLOY_CACHE_KEEP_IMAGES` | 每个应用镜像仓库至少保留的最新 SHA 数 | 默认 `3`，允许范围 1～100 |
+| `DEPLOY_CACHE_RETENTION_HOURS` | 悬空镜像和构建缓存的最短保留时间 | 默认 `168` 小时，允许范围 1～8760 |
 | `BACKUP_ROOT` | 备份根目录 | 项目外的绝对路径，不能是 `/` |
 
 可生成两个不同的随机值：
@@ -1156,6 +1159,47 @@ sudo /opt/vinci-cms/scripts/install-auto-deploy.sh --disable
 如果 service 正在发布，不要中途强制停止；等待它成功或按失败保护退出。暂停 timer 不影响当前网站、PostgreSQL、gateway 或手工 `deploy.sh`。
 
 要恢复自动检查，重新执行第 5.5 节同一条无参数安装命令。安装器会重新校验、试跑并启用。
+
+#### 5.9.1 自动清理部署缓存
+
+`deploy.sh` 默认会在拉取新镜像前执行一次缓存清理，在成功切换并写入
+`.deploy/current` 后再收尾一次。这样即使磁盘已接近满载，也会先尝试释放旧部署
+占用，再下载候选镜像。`content` 和 `application` 两条通道使用同一安全边界。
+
+清理范围严格限定为：
+
+- `APP_IMAGE` 和 `APP_OPS_IMAGE` 下以 40 位小写 commit SHA 为 tag 的旧镜像引用；
+- Docker 悬空镜像，即 `docker image prune` 不加 `-a` 的范围；
+- 超过保留时间的 Docker builder 构建缓存。
+
+以下对象始终受保护：
+
+- 每个部署镜像仓库最新的 `DEPLOY_CACHE_KEEP_IMAGES` 个 SHA 镜像；
+- `.deploy/current` 和 `.deploy/auto-deploy-failed` 指向的 commit；
+- 任意运行中或已停止容器仍在引用的镜像；
+- `local`、`latest`、非 SHA tag 和其他镜像仓库；
+- 所有容器、Compose project、network、volume、PostgreSQL 数据和备份。
+
+脚本不会使用 `docker system prune`、`docker image prune -a`、`--force` 删除部署
+镜像，也不会删除失败候选容器。单独检查时默认只预览：
+
+```bash
+sudo -iu vinci-deploy
+cd /opt/vinci-cms
+./scripts/cleanup-deploy-cache.sh --dry-run
+```
+
+确认输出只包含预期的旧 SHA 镜像后，可以手工执行同一套规则：
+
+```bash
+./scripts/cleanup-deploy-cache.sh --apply
+```
+
+手工清理与部署、备份、恢复共用 `.deploy/operation.lock`；其他操作正在执行时会
+拒绝并发清理。自动行为可通过 `.env` 的
+`DEPLOY_CACHE_CLEANUP_ENABLED=false` 暂停，但磁盘不足问题解决后应恢复为
+`true`。这项清理不负责 systemd journal、应用日志或宿主机其他目录；如果空间仍
+不足，先用只读命令定位实际占用，不要扩大脚本到 volume 或数据库目录。
 
 ### 5.10 高级排查：安装器内部的 systemd 步骤
 
@@ -2003,6 +2047,7 @@ grep -E '^NUXT_PUBLIC_SITE_URL=|^CMS_SECURE_COOKIES=' .env
 - Git Push/恢复/删除失败记录和应用错误日志；
 - PostgreSQL、S3 和 Git 凭据轮换日期；
 - systemd 自动部署与备份 timer 最近一次成功时间；
+- 自动部署前后缓存清理是否成功、Docker 根目录剩余空间是否充足；
 - `npm audit --omit=dev` 和 Nuxt/Nitro 官方安全更新。
 
 不要把登录请求直接暴露给 `app-blue`/`app-green`；公网入口必须经过常驻 gateway 和宿主机 HTTPS 代理。

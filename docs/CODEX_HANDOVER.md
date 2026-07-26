@@ -929,3 +929,24 @@
 - 自动部署及安装器两个集成脚本、Shell/Caddy/Compose 检查、类型检查和 production build 通过。
 - 独立源/目标 Compose projects、数据库、volumes、测试凭据、`.invalid` Git/S3 和仓库外备份路径完成 checksum、空库 restore、向前 migration、数据 marker、应用/gateway 健康与非空二次恢复拒绝；临时资源已清理。
 - 后续依赖安全修复没有采用审计建议的 Nuxt 降级：通过 npm `overrides` 在保持 Archiver 7 API 兼容的同时升级其 `readdir-glob` / `glob` 依赖，并把 Drizzle Kit 已弃用加载器内的 esbuild 固定到安全版本；`npm audit` 与 `npm audit --omit=dev` 均为 0 vulnerabilities。glob 11 是兼容过渡版本，Nitro 支持 Archiver 8 后应升级并移除覆盖；升级 Nuxt、Nitro 或 Drizzle Kit 后需重新验证所有 overrides。
+
+## 2026-07-26：部署磁盘缓存自动清理
+
+- 阶段 9 首次服务器自动部署在 migration 失败后记录失败标记时遇到宿主机磁盘
+  `No space left on device`；原活动槽位由既有失败保护保留，未要求或执行生产
+  数据库手工修改。
+- 新增 `scripts/cleanup-deploy-cache.sh`。默认 `--dry-run`，只有显式
+  `--apply` 才会处理可重建的 Docker 构建缓存、悬空镜像和旧 commit-SHA 部署
+  镜像引用。
+- `deploy.sh` 在拉取候选镜像前和成功切换后自动调用清理。每个 runtime/operations
+  仓库至少保留最新 3 个 SHA；当前部署 commit、自动部署失败 commit，以及任意
+  运行中或已停止容器引用的镜像额外永久保护。
+- 清理脚本不调用 `docker system prune`，不使用 `docker image prune -a`，不
+  删除容器、network、volume、PostgreSQL 数据、备份、非 SHA tag 或其他仓库。
+  手工执行时继续复用部署/备份/恢复操作锁。
+- `.env.example` 新增启用开关、SHA 保留数和 builder/悬空镜像保留小时数；旧
+  服务器未配置时默认启用，使用 3 个 SHA 和 168 小时的保守值。
+- 新增 fake Docker 集成测试，覆盖 dry-run 零写入、当前/失败/容器引用保护、
+  精确旧 tag 删除、有限 prune 和操作锁跳过；Actions 运维检查已纳入该测试。
+- 本次没有连接服务器或正常数据库，没有删除任何真实 Docker 对象，没有 push
+  GitHub、发布镜像或触发外部部署。

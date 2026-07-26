@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+: "${FAKE_DOCKER_LOG:?FAKE_DOCKER_LOG is required}"
+: "${FAKE_RUNTIME_REPOSITORY:?FAKE_RUNTIME_REPOSITORY is required}"
+: "${FAKE_OPERATIONS_REPOSITORY:?FAKE_OPERATIONS_REPOSITORY is required}"
+: "${FAKE_CURRENT_COMMIT:?FAKE_CURRENT_COMMIT is required}"
+: "${FAKE_CONTAINER_COMMIT:?FAKE_CONTAINER_COMMIT is required}"
+: "${FAKE_REMOVABLE_COMMIT:?FAKE_REMOVABLE_COMMIT is required}"
+: "${FAKE_RETAINED_COMMIT_1:?FAKE_RETAINED_COMMIT_1 is required}"
+: "${FAKE_RETAINED_COMMIT_2:?FAKE_RETAINED_COMMIT_2 is required}"
+: "${FAKE_FAILED_COMMIT:?FAKE_FAILED_COMMIT is required}"
+
+printf '%s\n' "$*" >> "$FAKE_DOCKER_LOG"
+
+if [ "${1:-}" = "compose" ] \
+  && [ "${2:-}" = "config" ] \
+  && [ "${3:-}" = "--environment" ]; then
+  printf 'APP_IMAGE=%s\n' "$FAKE_RUNTIME_REPOSITORY"
+  printf 'APP_OPS_IMAGE=%s\n' "$FAKE_OPERATIONS_REPOSITORY"
+  printf 'DEPLOY_CACHE_KEEP_IMAGES=2\n'
+  printf 'DEPLOY_CACHE_RETENTION_HOURS=48\n'
+  exit 0
+fi
+
+if [ "${1:-}" = "ps" ] && [ "${2:-}" = "-aq" ]; then
+  printf 'protected-container\n'
+  exit 0
+fi
+
+if [ "${1:-}" = "inspect" ] && [ "${2:-}" = "--format" ]; then
+  [ "${FAKE_FAIL_CONTAINER_INSPECT:-false}" != "true" ] || exit 70
+  printf 'sha256:container-runtime\n'
+  exit 0
+fi
+
+if [ "${1:-}" = "image" ] && [ "${2:-}" = "ls" ]; then
+  for repository in "$FAKE_RUNTIME_REPOSITORY" "$FAKE_OPERATIONS_REPOSITORY"; do
+    printf '%s\t%s\n' "$repository" "$FAKE_CURRENT_COMMIT"
+    printf '%s\t%s\n' "$repository" "$FAKE_REMOVABLE_COMMIT"
+    printf '%s\t%s\n' "$repository" "$FAKE_RETAINED_COMMIT_1"
+    printf '%s\t%s\n' "$repository" "$FAKE_RETAINED_COMMIT_2"
+  done
+  printf '%s\t%s\n' "$FAKE_RUNTIME_REPOSITORY" "$FAKE_CONTAINER_COMMIT"
+  printf '%s\t%s\n' "$FAKE_OPERATIONS_REPOSITORY" "$FAKE_FAILED_COMMIT"
+  printf '%s\tlocal\n' "$FAKE_RUNTIME_REPOSITORY"
+  printf 'unrelated.invalid/repository\t%s\n' "$FAKE_REMOVABLE_COMMIT"
+  exit 0
+fi
+
+if [ "${1:-}" = "image" ] && [ "${2:-}" = "inspect" ]; then
+  format="${4:-}"
+  reference="${5:-}"
+  repository="${reference%:*}"
+  tag="${reference##*:}"
+
+  case "$tag" in
+    "$FAKE_RETAINED_COMMIT_2") created="2026-07-05T00:00:00Z" ;;
+    "$FAKE_RETAINED_COMMIT_1") created="2026-07-04T00:00:00Z" ;;
+    "$FAKE_REMOVABLE_COMMIT") created="2026-07-03T00:00:00Z" ;;
+    "$FAKE_CONTAINER_COMMIT") created="2026-07-02T00:00:00Z" ;;
+    "$FAKE_FAILED_COMMIT") created="2026-07-02T00:00:00Z" ;;
+    "$FAKE_CURRENT_COMMIT") created="2026-07-01T00:00:00Z" ;;
+    *) exit 1 ;;
+  esac
+
+  if [ "$format" = "{{.Created}}" ]; then
+    printf '%s\n' "$created"
+    exit 0
+  fi
+  if [ "$format" = "{{.Id}}" ]; then
+    if [ "$repository" = "$FAKE_RUNTIME_REPOSITORY" ] \
+      && [ "$tag" = "$FAKE_CONTAINER_COMMIT" ]; then
+      printf 'sha256:container-runtime\n'
+    else
+      printf 'sha256:%s-%s\n' "${repository##*/}" "${tag:0:1}"
+    fi
+    exit 0
+  fi
+fi
+
+if [ "${1:-}" = "image" ] && [ "${2:-}" = "rm" ]; then
+  exit 0
+fi
+
+if [ "${1:-}" = "image" ] && [ "${2:-}" = "prune" ]; then
+  exit 0
+fi
+
+if [ "${1:-}" = "builder" ] && [ "${2:-}" = "prune" ]; then
+  exit 0
+fi
+
+printf 'unexpected fake docker invocation: %s\n' "$*" >&2
+exit 64

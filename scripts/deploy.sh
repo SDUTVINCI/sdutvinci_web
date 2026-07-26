@@ -20,6 +20,13 @@ case "$requested_mode" in
   *) ops_die "DEPLOY_MODE 只能是 application 或 content" ;;
 esac
 
+cache_cleanup_enabled="$(ops_compose_env DEPLOY_CACHE_CLEANUP_ENABLED)"
+cache_cleanup_enabled="${cache_cleanup_enabled:-true}"
+case "$cache_cleanup_enabled" in
+  true|false) ;;
+  *) ops_die "DEPLOY_CACHE_CLEANUP_ENABLED 只能是 true 或 false" ;;
+esac
+
 configured_remote="$(ops_required_compose_env DEPLOY_GIT_REMOTE_URL)"
 actual_remote="$(git remote get-url origin 2>/dev/null || true)"
 [ "$actual_remote" = "$configured_remote" ] \
@@ -27,6 +34,11 @@ actual_remote="$(git remote get-url origin 2>/dev/null || true)"
 
 if [ -n "$(git status --porcelain=v1 --untracked-files=no)" ]; then
   ops_die "部署仓库存在已跟踪文件改动，拒绝覆盖"
+fi
+
+if [ "$cache_cleanup_enabled" = "true" ]; then
+  ops_info "拉取代码和候选镜像前清理可重建缓存及未使用的旧部署镜像..."
+  "$OPS_REPOSITORY_ROOT/scripts/cleanup-deploy-cache.sh" --apply --lock-held
 fi
 
 branch="$(ops_compose_env CMS_GIT_BRANCH)"
@@ -252,4 +264,10 @@ if [ -n "$legacy_container" ]; then
 fi
 
 trap - ERR
+if [ "$cache_cleanup_enabled" = "true" ]; then
+  ops_info "部署成功后收尾清理旧部署缓存..."
+  if ! "$OPS_REPOSITORY_ROOT/scripts/cleanup-deploy-cache.sh" --apply --lock-held; then
+    ops_info "警告：部署已经成功，但部署后缓存清理未完成；可稍后执行预览并重试。"
+  fi
+fi
 ops_info "部署成功：${target_commit}（${requested_mode}，活动槽位 ${candidate_slot}）"

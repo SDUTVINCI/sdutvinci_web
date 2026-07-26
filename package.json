@@ -14,6 +14,7 @@
     "generate": "nuxt generate",
     "test": "vitest run",
     "test:backup-restore": "./tests/backup-restore.integration.sh",
+    "test:deploy-cache-cleanup": "./tests/deploy-cache-cleanup.integration.sh",
     "test:cms": "./scripts/test-cms.sh",
     "wiki:check": "node scripts/wiki-check.mjs",
     "typecheck": "nuxt typecheck",
