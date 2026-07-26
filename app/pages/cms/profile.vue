@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import type { CmsMember } from '../../../shared/types/cms-members'
-
 definePageMeta({
   layout: 'cms',
   middleware: 'cms-auth'
@@ -8,14 +6,7 @@ definePageMeta({
 useHead({ title: '个人资料 · Vinci 内容管理后台' })
 
 const { session } = useCmsSession()
-const requestFetch = import.meta.server ? useRequestFetch() : $fetch
-const { data: memberData } = await useAsyncData('cms:profile:member', async () => {
-  if (!session.value?.user.memberId) return null
-  return requestFetch<{ member: CmsMember }>(
-    `/api/cms/members/${session.value.user.memberId}`
-  )
-})
-const member = computed(() => memberData.value?.member)
+const member = computed(() => session.value?.user.member)
 </script>
 
 <template>

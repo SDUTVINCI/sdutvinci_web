@@ -4,6 +4,7 @@ import { cmsRoleCodes } from '../../shared/types/cms-auth'
 import { getDatabase } from '../db/client'
 import {
   auditLogs,
+  members,
   roles,
   sessions,
   userMembers,
@@ -48,12 +49,16 @@ const loadUserRows = async (userId?: string) => {
       createdAt: users.createdAt,
       updatedAt: users.updatedAt,
       role: roles.code,
-      memberId: userMembers.memberId
+      memberId: userMembers.memberId,
+      memberKey: members.memberKey,
+      memberName: members.name,
+      memberAvatarUrl: members.avatarUrl
     })
     .from(users)
     .leftJoin(userRoles, eq(users.id, userRoles.userId))
     .leftJoin(roles, eq(userRoles.roleId, roles.id))
     .leftJoin(userMembers, eq(users.id, userMembers.userId))
+    .leftJoin(members, eq(userMembers.memberId, members.id))
     .orderBy(asc(users.createdAt), asc(users.id))
 
   return userId ? query.where(eq(users.id, userId)) : query
@@ -69,6 +74,14 @@ const rowsToManagedUsers = (rows: Awaited<ReturnType<typeof loadUserRows>>): Cms
       status: row.status,
       roles: [],
       memberId: row.memberId,
+      member: row.memberId && row.memberKey && row.memberName
+        ? {
+            id: row.memberId,
+            memberKey: row.memberKey,
+            name: row.memberName,
+            avatarUrl: row.memberAvatarUrl
+          }
+        : null,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString()
     }

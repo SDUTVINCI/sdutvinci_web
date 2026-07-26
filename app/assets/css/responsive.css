@@ -96,7 +96,7 @@
   }
 }
 
-@media (max-width: 920px) {
+@media (max-width: 1180px) {
   :root {
     --site-header-height: 62px;
   }
@@ -352,6 +352,36 @@
     grid-template-columns: 1fr;
   }
 
+  .site-account-name,
+  .site-account-chevron {
+    display: none;
+  }
+
+  .site-account-summary {
+    width: 38px;
+    padding: 2px;
+  }
+
+  .site-account-avatar {
+    width: 32px;
+    height: 32px;
+  }
+
+  .site-login-link {
+    width: 38px;
+    padding: 0;
+    font-size: 0;
+  }
+
+  .site-login-link span {
+    font-size: 1rem;
+  }
+
+  .site-account-loading {
+    width: 38px;
+    height: 38px;
+  }
+
   .member-profile-hero {
     margin-top: 34px;
     gap: 28px;
@@ -403,7 +433,10 @@
   }
 
   .theme-toggle,
-  .nav-toggle {
+  .nav-toggle,
+  .site-account-summary,
+  .site-login-link,
+  .site-account-loading {
     width: 36px;
     height: 36px;
   }

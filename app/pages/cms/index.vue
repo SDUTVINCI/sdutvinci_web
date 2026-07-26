@@ -21,7 +21,7 @@ const stats = computed(() => data.value?.stats)
       <p class="cms-eyebrow">
         DASHBOARD
       </p>
-      <h1>你好，{{ session?.user.account }}</h1>
+      <h1>你好，{{ session?.user.member?.name || session?.user.account }}</h1>
       <p>从这里查看正式文章、草稿、审核与成员资料的最新状态。</p>
     </header>
 

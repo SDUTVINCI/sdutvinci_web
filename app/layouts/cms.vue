@@ -2,6 +2,12 @@
 const { session, logout } = useCmsSession()
 const isAdmin = computed(() => session.value?.user.roles.includes('admin') ?? false)
 const loggingOut = ref(false)
+const displayName = computed(() =>
+  session.value?.user.member?.name || session.value?.user.account || '当前用户'
+)
+const avatarUrl = computed(() =>
+  session.value?.user.member?.avatarUrl || '/images/logo.png'
+)
 
 const handleLogout = async () => {
   loggingOut.value = true
@@ -21,8 +27,11 @@ const handleLogout = async () => {
         class="cms-brand"
         to="/cms"
       >
-        <span>VINCI</span>
-        <small>内容管理后台</small>
+        <img src="/images/logo.png" alt="">
+        <span>
+          <strong>Vinci 机器人队</strong>
+          <small>内容管理后台</small>
+        </span>
       </NuxtLink>
 
       <nav
@@ -51,15 +60,26 @@ const handleLogout = async () => {
       </nav>
 
       <div class="cms-sidebar-user">
-        <strong>@{{ session?.user.account }}</strong>
-        <button
-          class="cms-button cms-button-quiet"
-          type="button"
-          :disabled="loggingOut"
-          @click="handleLogout"
-        >
-          {{ loggingOut ? '正在退出…' : '退出登录' }}
-        </button>
+        <NuxtLink class="cms-user-identity" to="/cms/profile">
+          <img :src="avatarUrl" :alt="`${displayName}的头像`">
+          <span>
+            <strong>{{ displayName }}</strong>
+            <small>@{{ session?.user.account }}</small>
+          </span>
+        </NuxtLink>
+        <div class="cms-user-actions">
+          <NuxtLink class="cms-button cms-button-link cms-button-quiet" to="/">
+            返回网站
+          </NuxtLink>
+          <button
+            class="cms-button cms-button-quiet"
+            type="button"
+            :disabled="loggingOut"
+            @click="handleLogout"
+          >
+            {{ loggingOut ? '正在退出…' : '退出' }}
+          </button>
+        </div>
       </div>
     </aside>
 

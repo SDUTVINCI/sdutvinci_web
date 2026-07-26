@@ -20,7 +20,13 @@ import {
   recordCmsLoginFailure
 } from '../server/services/cms-rate-limits'
 import { verifyCmsPassword } from '../server/utils/cms-security'
-import { auditLogs, rateLimitBuckets, users } from '../server/db/schema'
+import {
+  auditLogs,
+  members,
+  rateLimitBuckets,
+  userMembers,
+  users
+} from '../server/db/schema'
 import { eq } from 'drizzle-orm'
 import { configureCmsTestDatabase } from './helpers/cms-test-database'
 
@@ -85,6 +91,16 @@ integration('CMS 身份认证与数据库', () => {
       password: 'MemberPassword123',
       roles: ['member']
     }, admin!.id)
+    const [memberProfile] = await getDatabase().insert(members).values({
+      memberKey: 'dongjiahui',
+      name: '董家辉',
+      avatarUrl: '/images/team/dongjiahui.jpg',
+      sourcePath: 'active/dongjiahui.md'
+    }).returning({ id: members.id })
+    await getDatabase().insert(userMembers).values({
+      userId: member!.id,
+      memberId: memberProfile!.id
+    })
 
     const authenticatedAdmin = await authenticateCmsUser(
       'ADMIN',
@@ -97,6 +113,12 @@ integration('CMS 身份认证与数据库', () => {
     expect(authenticatedAdmin?.roles).toEqual(['admin'])
     expect(authenticatedMember?.roles).toEqual(['member'])
     expect(authenticatedMember?.account).toBe('dongjiahui')
+    expect(authenticatedMember?.member).toEqual({
+      id: memberProfile!.id,
+      memberKey: 'dongjiahui',
+      name: '董家辉',
+      avatarUrl: '/images/team/dongjiahui.jpg'
+    })
     expect(await authenticateCmsUser('dongjiahui', 'wrong')).toBeNull()
 
     const session = await createCmsSession(
@@ -107,7 +129,13 @@ integration('CMS 身份认证与数据库', () => {
     )
     expect(await getCmsSessionUser(session.token)).toMatchObject({
       id: member!.id,
-      roles: ['member']
+      roles: ['member'],
+      member: {
+        id: memberProfile!.id,
+        memberKey: 'dongjiahui',
+        name: '董家辉',
+        avatarUrl: '/images/team/dongjiahui.jpg'
+      }
     })
 
     await updateCmsUser(member!.id, { status: 'disabled' }, admin!.id)

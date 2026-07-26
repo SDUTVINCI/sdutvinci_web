@@ -4,7 +4,11 @@
       class="cms-auth-brand"
       to="/"
     >
-      Vinci 机器人队
+      <img src="/images/logo.png" alt="">
+      <span>
+        <strong>山理工 Vinci 机器人队</strong>
+        <small>返回官方网站</small>
+      </span>
     </NuxtLink>
     <main class="cms-auth-main">
       <slot />

@@ -4,7 +4,7 @@ import type { CmsMember } from '../../../../shared/types/cms-members'
 definePageMeta({ layout: 'cms', middleware: 'cms-auth' })
 const route = useRoute()
 const id = String(route.params.id)
-const { session, csrfHeaders } = useCmsSession()
+const { session, csrfHeaders, loadSession } = useCmsSession()
 const isAdmin = computed(() => session.value?.user.roles.includes('admin') ?? false)
 const requestFetch = import.meta.server ? useRequestFetch() : $fetch
 const { data, refresh } = await useAsyncData(`cms:member:${id}`, () =>
@@ -29,6 +29,9 @@ const save = async () => {
       body: { name: form.name, avatarUrl: form.avatarUrl || null }
     })
     await refresh()
+    if (session.value?.user.memberId === id) {
+      await loadSession(true)
+    }
     message.value = '成员资料已保存，稳定 ID 未改变。'
   } catch (error: any) {
     errorMessage.value = error?.data?.message || '保存失败'
