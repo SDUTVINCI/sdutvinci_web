@@ -125,7 +125,102 @@ curl --version
 
 ### 3.3 创建专用部署账号和目录
 
-推荐使用专用账号，例如 `vinci-deploy`。目标目录必须由该账号读写：
+推荐使用专用账号 `vinci-deploy`。不能直接执行带
+`-o vinci-deploy -g vinci-deploy` 的 `install`：系统必须先存在这个用户和用户组，否则会出现：
+
+```text
+install: invalid user 'vinci-deploy'
+```
+
+#### 3.3.1 确认账号是否已经存在
+
+```bash
+getent passwd vinci-deploy
+```
+
+目的：查询系统账号数据库，不创建或修改任何用户。
+
+预期：
+
+- 如果打印以 `vinci-deploy:` 开头的一行，说明账号已经存在，跳到第 3.3.3 节；
+- 如果没有输出且返回非零状态，说明需要先创建账号。
+
+#### 3.3.2 创建账号
+
+Debian 或 Ubuntu 执行：
+
+```bash
+sudo adduser --disabled-password --gecos '' vinci-deploy
+```
+
+目的：
+
+- 创建 `vinci-deploy` 用户；
+- 同时创建同名主用户组；
+- 创建 `/home/vinci-deploy`；
+- 不启用密码登录，后续自动部署使用 SSH 公钥。
+
+其他使用 `useradd` 的 Linux 发行版可以执行：
+
+```bash
+sudo useradd \
+  --create-home \
+  --shell /bin/bash \
+  vinci-deploy
+```
+
+两组命令只选符合当前发行版的一组，不要重复执行。创建后检查：
+
+```bash
+getent passwd vinci-deploy
+id vinci-deploy
+```
+
+预期：能看到用户、主用户组和 `/home/vinci-deploy`。
+
+#### 3.3.3 允许部署账号运行 Docker
+
+先确认 Docker 用户组存在：
+
+```bash
+getent group docker
+```
+
+正常的 Docker Engine 安装通常会打印以 `docker:` 开头的一行。如果没有输出，应先检查 Docker Engine 是否按官方方式完整安装，不要继续配置 Actions。
+
+把部署账号加入 Docker 组：
+
+```bash
+sudo usermod -aG docker vinci-deploy
+```
+
+目的：让 GitHub Actions 通过该账号运行 `docker compose`，不需要把 sudo 密码放进 GitHub Secrets。
+
+Docker 组成员通常可以获得接近 root 的宿主机控制能力，因此只能加入受信任的专用部署账号，不能把它当作低权限组。
+
+启动一个新的登录会话验证组权限：
+
+```bash
+sudo -iu vinci-deploy id
+sudo -iu vinci-deploy docker ps
+```
+
+预期：
+
+- `id` 输出的组列表中包含 `docker`；
+- `docker ps` 能列出容器或空列表，不出现 `permission denied`。
+
+如果第一条没有 `docker`，确认 `usermod` 成功后退出旧会话，再创建新的登录会话。如果第二条仍失败，检查 Docker 服务：
+
+```bash
+sudo systemctl status docker --no-pager
+```
+
+不要通过把 root 密码保存到 GitHub Secrets、给 Docker socket 设置全员可写权限，或让部署脚本执行交互式 sudo 来绕过错误。
+
+#### 3.3.4 创建部署和备份目录
+
+账号和 Docker 权限验证完成后，再创建目录：
 
 ```bash
 sudo install -d -o vinci-deploy -g vinci-deploy -m 0750 /opt/vinci-cms
@@ -144,11 +239,22 @@ sudo install -d -o vinci-deploy -g vinci-deploy -m 0700 /var/backups/vinci-cms
 ls -ld /opt/vinci-cms /var/backups/vinci-cms
 ```
 
-显示 owner 为部署账号，备份目录不允许其他用户读取。
+显示：
+
+- 两个目录的 owner 和 group 都是 `vinci-deploy`；
+- `/opt/vinci-cms` 权限为 `drwxr-x---`；
+- `/var/backups/vinci-cms` 权限为 `drwx------`。
 
 ### 3.4 克隆部署仓库
 
-切换到部署账号后执行：
+先切换到刚创建的部署账号：
+
+```bash
+sudo -iu vinci-deploy
+whoami
+```
+
+预期 `whoami` 输出 `vinci-deploy`。然后执行：
 
 ```bash
 git clone https://github.com/SDUTVINCI/sdutvinci_web.git /opt/vinci-cms
@@ -158,6 +264,8 @@ git status --short --branch
 ```
 
 目的：建立服务器部署 clone。这个目录只供 Actions 和部署脚本使用，不能与 CMS 后台发布 Markdown 的工作区混用。
+
+即使当前登录账号已经在 `~/my/sdutvinci_web` 有一个开发 clone，也不要把它直接复制或改名成部署目录；继续使用独立的 `/opt/vinci-cms` clone。
 
 预期：
 
