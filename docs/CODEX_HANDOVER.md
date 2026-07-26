@@ -928,4 +928,4 @@
 - production `.output` HTTP 验证通过 Origin 403、严格输入 400、账号锁定 429、`Retry-After`、成员越权 403、CSRF 退出、管理员 200 和健康 200。
 - 自动部署及安装器两个集成脚本、Shell/Caddy/Compose 检查、类型检查和 production build 通过。
 - 独立源/目标 Compose projects、数据库、volumes、测试凭据、`.invalid` Git/S3 和仓库外备份路径完成 checksum、空库 restore、向前 migration、数据 marker、应用/gateway 健康与非空二次恢复拒绝；临时资源已清理。
-- `npm audit --omit=dev` 当前报告 Nuxt/Nitro 构建归档链 11 high、0 critical；最终 runtime 输出不含被点名的归档/glob 包，未采用审计建议的 Nuxt 降级，已记录为持续监控限制。
+- 后续依赖安全修复没有采用审计建议的 Nuxt 降级：通过 npm `overrides` 在保持 Archiver 7 API 兼容的同时升级其 `readdir-glob` / `glob` 依赖，并把 Drizzle Kit 已弃用加载器内的 esbuild 固定到安全版本；`npm audit` 与 `npm audit --omit=dev` 均为 0 vulnerabilities。glob 11 是兼容过渡版本，Nitro 支持 Archiver 8 后应升级并移除覆盖；升级 Nuxt、Nitro 或 Drizzle Kit 后需重新验证所有 overrides。

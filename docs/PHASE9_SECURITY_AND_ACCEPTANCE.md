@@ -97,13 +97,14 @@ Git Push、历史恢复和正式删除失败写入数据库或返回客户端前
 - Shell 语法、Caddy 配置、Compose 配置和 `git diff --check` 通过。
 - `npm run typecheck` 通过。
 - `npm run build` 通过；Wiki 226 个文件及站内链接检查通过。
+- 依赖安全补丁复验：从 lockfile 执行 `npm ci` 成功，`npm audit` 与 `npm audit --omit=dev` 均为 0 vulnerabilities；Archiver glob 和 Drizzle/esbuild 转换冒烟测试、runtime/operations 两个 Docker 构建目标均通过。
 - 隔离恢复演练：两个独立 Compose project、两个独立 PostgreSQL volumes、两个带 `test` 的数据库、测试凭据、`.invalid` Git/S3、仓库外项目目录和仓库外备份路径。checksum、空库恢复、向前 migration、审计标记、应用/gateway 健康、非空二次恢复拒绝全部通过，临时资源已清理。
 - 没有 push GitHub、发布镜像或操作生产服务器。
 
 ## 5. 已知限制
 
 1. 原始 Markdown HTML 的存储型 XSS 风险由维护者明确接受，详见第 3 节。
-2. `npm audit --omit=dev` 报告 Nuxt/Nitro 构建归档依赖链的 11 个 high、0 个 critical；审计建议降级 Nuxt，当前未采用。最终 runtime `.output` 不包含被点名的 `archiver`、`brace-expansion`、`minimatch` 或 `readdir-glob`；operations 镜像只应按需执行受信任的 migration/admin 命令，不得对公网提供服务。每次依赖升级继续复查 [GHSA-mh99-v99m-4gvg](https://github.com/advisories/GHSA-mh99-v99m-4gvg) 及 Nuxt 官方更新。
+2. Nuxt `4.5.0` / Nitro `2.13.4` 当前仍声明 `archiver ^7.0.1`，默认会引入受 [GHSA-mh99-v99m-4gvg](https://github.com/advisories/GHSA-mh99-v99m-4gvg) 影响的旧 glob 依赖链；项目通过 npm `overrides` 在保持 Archiver 7 API 兼容的同时升级 `readdir-glob` 和 `glob`，并把 Drizzle Kit 已弃用加载器内的 esbuild 固定到安全版本。`npm audit` 与 `npm audit --omit=dev` 均为 0 vulnerabilities，Nuxt 没有降级。兼容覆盖中的 glob 11 已被上游标为旧主版本，应在 Nitro 支持 Archiver 8 后升级并移除覆盖；升级 Nuxt、Nitro 或 Drizzle Kit 后必须重新验证这些 overrides。
 3. 账号级锁定可被用于暂时锁定已知账号；来源限流降低单一来源滥用，但不能替代网关/WAF、监控和账号告警。
 4. 图片二进制仍以 S3 兼容存储为权威，PostgreSQL 备份不包含图片；必须单独启用对象存储版本控制、复制或供应商备份。
 5. 第一期没有媒体库、自动删除孤立对象、审计后台查询或自动备份保留清理；这些不应在阶段 9 临时扩展。

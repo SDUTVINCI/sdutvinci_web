@@ -48,5 +48,16 @@
     "typescript": "5.9.3",
     "vitest": "^4.1.10",
     "vue-tsc": "3.3.8"
+  },
+  "overrides": {
+    "@esbuild-kit/core-utils": {
+      "esbuild": "0.25.12"
+    },
+    "archiver": {
+      "readdir-glob": "^3.0.0"
+    },
+    "archiver-utils": {
+      "glob": "11.1.0"
+    }
   }
 }
