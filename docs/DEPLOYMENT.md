@@ -847,7 +847,14 @@ test -r /etc/vinci-cms/github_known_hosts
 
 ```bash
 cd /opt/vinci-cms
-target_commit='替换为40位小写commit SHA'
+
+git fetch origin main
+
+target_commit="$(
+  git rev-parse origin/main
+)"
+
+printf '准备部署：%s\n' "$target_commit"
 ```
 
 检查该 commit 属于远端 `main`：
