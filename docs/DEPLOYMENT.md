@@ -590,20 +590,214 @@ Compose 会把宿主机文件只读挂载到应用容器。文件必须真实存
 
 ### 3.8 登录私有 GHCR
 
-如果 GitHub Container Registry package 是私有的，在服务器创建只具备读取 package 权限的 token，然后通过标准输入登录：
+#### 3.8.1 这个教程是做什么的
+
+GitHub Actions 会把两个镜像发布到 GitHub Container Registry：
+
+```text
+ghcr.io/sdutvinci/sdutvinci_web
+ghcr.io/sdutvinci/sdutvinci_web-ops
+```
+
+- runtime package 用于 `app-blue` 和 `app-green`；
+- operations package 用于数据库 migration 和首个管理员命令。
+
+服务器只需要拉取镜像，不需要上传、删除或管理 package。因此如果必须登录，只授予 `read:packages`。
+
+GitHub 仓库公开不等于 GHCR package 一定公开。Container Registry 的 package 可见性可以单独设置，必须分别检查两个 package。
+
+#### 3.8.2 先决定使用公开还是私有 package
+
+有两种方案，只选一种。
+
+方案 A：两个 package 都设为 Public。
+
+- 服务器可以匿名拉取；
+- 不创建或保存 Personal Access Token；
+- 可以完全跳过本节后面的登录步骤；
+- package 设为 Public 后通常不能再改回 Private。
+
+第一次 `main` push 创建 package 后，在 GitHub 组织中分别打开 `sdutvinci_web` 和 `sdutvinci_web-ops`：
+
+1. 进入 package 页面；
+2. 打开 `Package settings`；
+3. 找到 `Change visibility`；
+4. 确认镜像可以公开后选择 `Public`；
+5. 两个 package 都要单独检查。
+
+源码仓库公开并不自动替你完成这一步。修改 package 可见性属于外部且可能不可逆的操作，必须由仓库维护者人工确认。
+
+首次 `main` push 时，Actions 可能已经成功发布镜像，但部署 job 因 package 初始为 Private 而在服务器 `docker pull` 失败。这不会修改数据库。把两个 package 都确认设为 Public 后，可以重新运行该次失败的 workflow；不要为此删除容器或 volume。
+
+方案 B：package 保持 Private。
+
+- 服务器需要登录 GHCR；
+- 使用个人 GitHub 账号创建只读 Personal Access Token；
+- token 长期保存在 `vinci-deploy` 的 Docker credential 文件中；
+- token 到期、被撤销或失去 package 权限后，新部署将无法拉取镜像。
+
+GitHub 关于 package 可见性和权限的官方说明：
+
+- [配置 package 访问权限和可见性](https://docs.github.com/en/packages/learn-github-packages/configuring-a-packages-access-control-and-visibility)
+- [GitHub Packages 权限说明](https://docs.github.com/en/packages/learn-github-packages/about-permissions-for-github-packages)
+
+#### 3.8.3 创建只读 Personal Access Token
+
+token 在有权读取组织 package 的**个人 GitHub 账号**中创建，不是在组织账号中创建。组织名只出现在镜像地址中，不能作为 `docker login` 的登录身份。
+
+例如：
+
+```text
+组织名：SDUTVINCI
+个人 GitHub 用户名：tungchiahui
+镜像地址：ghcr.io/sdutvinci/sdutvinci_web
+docker login 用户名：tungchiahui
+```
+
+不需要借用组织拥有者的 token。如果当前个人账号已有 package 读取权限，使用自己的账号即可。长期要求更严格时，可以创建专用 GitHub 机器账号，并只授予 package 读取权限。
+
+在浏览器中：
+
+1. 登录签发 token 的个人 GitHub 账号；
+2. 点击右上角头像；
+3. 打开 `Settings`；
+4. 打开 `Developer settings`；
+5. 打开 `Personal access tokens`；
+6. 选择 `Tokens (classic)`；
+7. 点击 `Generate new token`；
+8. 选择 `Generate new token (classic)`；
+9. `Note` 填写容易识别的名称，例如 `vinci-server-ghcr-read`；
+10. 选择有效期；
+11. 权限只勾选 `read:packages`；
+12. 点击 `Generate token`；
+13. 立即复制到密码管理器。
+
+GitHub Packages 当前要求 Personal Access Token (classic)。不要改用 Fine-grained token，除非 GitHub 官方以后明确支持当前 GHCR 登录场景。
+
+权限只需要：
+
+```text
+read:packages
+```
+
+不要额外勾选：
+
+```text
+repo
+write:packages
+delete:packages
+admin:org
+```
+
+有效期选择：
+
+| 有效期 | 优点 | 风险和维护 |
+| --- | --- | --- |
+| 90 天 | 泄漏后的最长有效时间较短 | 需要定期轮换，过期会导致部署拉取失败 |
+| 1 年 | 维护频率较低 | 泄漏后风险窗口更长 |
+| No expiration | 不会因自然过期中断部署 | 泄漏后会一直有效，直到人工撤销；组织策略也可能禁止 |
+
+`No expiration` 不是技术上不能选择，而是不作为默认推荐。若选择无期限，必须保持只有 `read:packages`，妥善保护服务器，并定期审核个人账号和 package 权限。
+
+如果 `SDUTVINCI` 启用了 SAML SSO，token 创建后还需要在 token 页面点击 `Configure SSO`，授权访问该组织。若组织策略禁止 classic token 或限制最长有效期，应遵守组织策略，不能绕过。
+
+完整 token 只在创建时显示一次。刷新或关闭页面后无法再次查看，丢失时应撤销旧 token 并重新创建。不要把 token 发送到聊天、Issue、Git、`.env` 或普通备份。
+
+GitHub 官方创建步骤：
+
+- [管理 Personal Access Token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens)
+- [使用 GitHub Container Registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)
+
+#### 3.8.4 以 `vinci-deploy` 登录 GHCR
+
+先看当前身份：
+
+```bash
+whoami
+```
+
+如果输出 `tungchiahui`，执行：
+
+```bash
+sudo -iu vinci-deploy
+```
+
+如果已经输出 `vinci-deploy`，不要再次运行 sudo。`vinci-deploy` 使用禁用密码方式创建，也不应加入 sudoers。
+
+使用 token 签发者的个人 GitHub 用户名登录。以下示例表示 token 由 `tungchiahui` 账号创建：
 
 ```bash
 read -rsp 'GHCR read token: ' ghcr_read_token
+printf '\n'
+
 printf '%s' "$ghcr_read_token" \
-  | docker login ghcr.io -u '你的GitHub账号' --password-stdin
+  | docker login ghcr.io \
+      -u 'tungchiahui' \
+      --password-stdin
+
 unset ghcr_read_token
 ```
 
-目的：让服务器能拉取 Actions 构建的镜像。
+`read -s` 输入时不会显示字符或星号，这是正常的。不要把 token 直接写在命令行中，否则可能进入 shell history。
 
 预期：显示 `Login Succeeded`。token 不写入 `.env`、仓库或 shell 脚本；实际操作时优先从密码管理器安全粘贴，避免保留在 shell history。
 
-若 package 公开，这一步可以省略。
+登录信息保存在：
+
+```text
+/home/vinci-deploy/.docker/config.json
+```
+
+不要打印或复制这个文件的内容。检查 owner 和权限即可：
+
+```bash
+ls -l /home/vinci-deploy/.docker/config.json
+```
+
+#### 3.8.5 验证两个镜像都能读取
+
+必须先有一次 `main` push 成功发布对应 SHA 镜像。把 Actions 显示的完整 40 位 commit SHA 填入：
+
+```bash
+target_commit='替换为已发布的40位commit SHA'
+
+docker manifest inspect \
+  "ghcr.io/sdutvinci/sdutvinci_web:${target_commit}" \
+  >/dev/null
+
+docker manifest inspect \
+  "ghcr.io/sdutvinci/sdutvinci_web-ops:${target_commit}" \
+  >/dev/null
+```
+
+目的：分别确认 runtime 和 operations 镜像存在且当前账号可以读取，不启动容器。
+
+预期：两条命令都没有输出并成功退出。
+
+- `denied`：package 仍为 Private 且 token、SSO 或 package 权限不正确；
+- `manifest unknown`：镜像尚未发布或 SHA 填错；
+- runtime 成功但 operations 失败：可能目标 commit 被分类为 `content`，该模式本来不会构建 operations 镜像；首次部署必须选择一个已构建 operations 的 `application` commit。
+
+若选择 Public package，可以在没有执行 `docker login` 的账号或临时空 Docker 配置下完成同样检查，以证明匿名读取有效。
+
+#### 3.8.6 轮换、撤销和退出登录
+
+token 到期前：
+
+1. 创建新的只读 token；
+2. 重新执行 `docker login`，覆盖服务器保存的登录信息；
+3. 验证两个镜像可读取；
+4. 在 GitHub 删除旧 token。
+
+如果以后把两个 package 都设为 Public，不再需要服务器凭据，可以执行：
+
+```bash
+docker logout ghcr.io
+```
+
+然后到个人 GitHub 的 `Settings → Developer settings → Personal access tokens → Tokens (classic)` 删除旧 token。
+
+不要只删除服务器上的 Docker 配置而保留无人使用的长期 token；撤销动作必须在 GitHub 完成。
 
 ### 3.9 配置宿主机 HTTPS
 
