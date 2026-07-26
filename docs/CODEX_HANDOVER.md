@@ -893,3 +893,12 @@
 `docs/DEPLOYMENT.md` 教程四现以“一条命令安装并启用”为主流程，逐条 systemd 命令只保留在高级排查。已首次部署但尚无安装器的服务器仍需对包含安装器的 commit 完成一次人工引导部署，这是 timer 无法自动安装自身的唯一过渡步骤。
 
 本轮再次通过 ShellCheck 0.11.0、Shell 语法、Compose config、Actions YAML、systemd unit、两个自动部署隔离测试和 `git diff --check`。临时 PostgreSQL 17 只通过 `TEST_DATABASE_URL` 提供给测试，显式移除 `DATABASE_URL`，CMS 7 个测试文件、33 项通过；临时容器随后删除。类型检查、production build、runtime 与 operations Docker targets 均通过。没有推送 commit 或镜像，没有连接或修改真实服务器、正常数据库、生产 S3 和生产 Git 凭据。
+
+## 2026-07-26：阶段 8 人工验收完成
+
+- 维护者已在 Debian 服务器完成人工首次 `application` 部署，PostgreSQL migration、活动应用槽位、gateway、健康接口和首个管理员均正常。
+- 内网服务器主动拉取 timer 已安装并启用；测试 Markdown commit `48580dd2febedddac3e495027e010bf6bfa60535` 被正确识别为 `content`，跳过 operations 与数据库迁移，拉取不可变 runtime 镜像、等待候选健康并完成网关切换。
+- 人工备份首次误用 `sudo ./scripts/backup.sh`，root 在 `pg_dump` 后被 Git dubious ownership 拒绝；未生成最终备份目录，异常退出清理保护生效。收尾补充 root 前置拒绝和教程身份说明，正确方式为先 `sudo -iu vinci-deploy` 再运行脚本；不得给 root 添加全局 `safe.directory` 绕过。
+- 自动化阶段已经用隔离 Compose project、测试数据库和测试凭据验证 custom-format backup、checksum、非空恢复拒绝、空库 restore、migration、恢复后健康及全新 Linux 控制环境迁移；阶段 9 仍须按其自身要求再次执行最终备份恢复演练。
+- 维护者明确要求阶段 8 收尾并进入下一阶段。需求文档中的阶段 8 总体进度已勾选；阶段 9 尚未启动。
+- 本次只追加阶段 8 安全收尾和验收记录，未提前实现阶段 9，未推送 GitHub、未操作服务器或外部发布。

@@ -4,6 +4,9 @@ set -Eeuo pipefail
 # shellcheck source=scripts/ops-common.sh
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/ops-common.sh"
 
+[ "$EUID" -ne 0 ] \
+  || ops_die "不要使用 sudo 直接运行备份；请先执行 sudo -iu vinci-deploy，再运行 /opt/vinci-cms/scripts/backup.sh"
+
 ops_require_command docker
 ops_require_command git
 ops_require_command realpath

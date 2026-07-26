@@ -1449,6 +1449,16 @@ realpath /var/backups/vinci-cms
 
 ### 9.3 执行备份
 
+备份脚本必须以部署账号 `vinci-deploy` 运行。不要执行 `sudo ./scripts/backup.sh`：那会切换成 root，触发 Git 仓库所有权保护，并可能生成 root-owned 文件。
+
+如果当前是个人管理账号 `tungchiahui`，先切换到部署账号：
+
+```bash
+sudo -iu vinci-deploy
+```
+
+这里输入的是 `tungchiahui` 的 sudo 密码，不需要也不应给 `vinci-deploy` 设置登录密码。然后执行：
+
 ```bash
 cd /opt/vinci-cms
 ./scripts/backup.sh
@@ -1461,6 +1471,8 @@ cd /opt/vinci-cms
 ```
 
 脚本先写临时目录，校验成功后才原子移动为最终目录。它使用操作锁，部署、备份和恢复不能同时执行。
+
+如果误用 root，脚本现在会在 `pg_dump` 之前直接拒绝。不要按 Git 错误提示给 root 全局添加 `safe.directory`；改用正确的 `vinci-deploy` 身份。
 
 ### 9.4 人工检查备份
 
