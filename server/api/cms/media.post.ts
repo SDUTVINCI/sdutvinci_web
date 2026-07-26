@@ -13,8 +13,13 @@ import {
 } from '../../services/cms-media'
 import { CmsEditLockLostError } from '../../services/cms-edit-locks'
 import {
+  CmsRateLimitError,
+  consumeCmsMediaUploadLimit
+} from '../../services/cms-rate-limits'
+import {
   requireCmsCsrf,
-  requireCmsRequestAuth
+  requireCmsRequestAuth,
+  throwCmsRateLimitError
 } from '../../utils/cms-http'
 import { getCmsMediaConfig } from '../../utils/cms-media-config'
 
@@ -38,6 +43,14 @@ const fieldValue = (
 export default defineEventHandler(async (event): Promise<CmsMediaUploadResponse> => {
   const auth = await requireCmsRequestAuth(event)
   requireCmsCsrf(event, auth)
+  try {
+    await consumeCmsMediaUploadLimit(auth.user.id)
+  } catch (error) {
+    if (error instanceof CmsRateLimitError) {
+      throwCmsRateLimitError(event, error, '图片上传过于频繁，请稍后重试')
+    }
+    throw error
+  }
 
   let config
   try {
@@ -68,6 +81,21 @@ export default defineEventHandler(async (event): Promise<CmsMediaUploadResponse>
     throw createError({
       statusCode: 400,
       message: '请求必须使用 multipart/form-data'
+    })
+  }
+  const allowedFields = new Set([
+    'image',
+    'draftId',
+    'lockLeaseId',
+    'altText'
+  ])
+  if (
+    parts.length > allowedFields.size
+    || parts.some(part => !part.name || !allowedFields.has(part.name))
+  ) {
+    throw createError({
+      statusCode: 400,
+      message: '图片上传包含未知或重复字段'
     })
   }
   const files = parts.filter(part => part.name === 'image' && part.filename)

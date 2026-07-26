@@ -1,6 +1,8 @@
 const testDatabaseUrl = process.env.TEST_DATABASE_URL
 
 export const configureCmsTestDatabase = () => {
+  delete process.env.DATABASE_URL
+
   if (!testDatabaseUrl) {
     return false
   }

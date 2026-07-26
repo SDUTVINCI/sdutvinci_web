@@ -19,7 +19,8 @@ import { getCmsGitConfig } from '../utils/cms-git-config'
 
 const runFile = promisify(execFile)
 const gitCommitPattern = /^[0-9a-f]{7,64}$/
-const publishLockKey = 0x56494e4349434d53n
+const publishLockKey = BigInt('0x56494e4349434d53')
+const shellQuote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`
 
 const gitEnvironment = () => {
   const config = getCmsGitConfig()
@@ -31,7 +32,7 @@ const gitEnvironment = () => {
     GIT_COMMITTER_EMAIL: config.CMS_GIT_AUTHOR_EMAIL,
     ...(config.CMS_GIT_SSH_KEY_PATH
       ? {
-          GIT_SSH_COMMAND: `ssh -i ${config.CMS_GIT_SSH_KEY_PATH} -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes`
+          GIT_SSH_COMMAND: `ssh -i ${shellQuote(config.CMS_GIT_SSH_KEY_PATH)} -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes`
         }
       : {})
   }

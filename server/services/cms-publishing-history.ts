@@ -15,6 +15,7 @@ import {
 } from '../db/schema'
 import { parseCmsMarkdown } from '../utils/cms-frontmatter'
 import { getCmsGitConfig } from '../utils/cms-git-config'
+import { describeCmsFailure } from '../utils/cms-sensitive-data'
 import {
   assertCmsGitCommit,
   atomicWriteCmsGitArticle,
@@ -128,16 +129,6 @@ export const diffCmsArticleVersions = async (
   })
 }
 
-const describeFailure = (error: unknown) => {
-  if (error instanceof Error) {
-    const stderr = 'stderr' in error && typeof error.stderr === 'string'
-      ? error.stderr.trim()
-      : ''
-    return `${error.message}${stderr ? `：${stderr}` : ''}`.slice(0, 4000)
-  }
-  return String(error).slice(0, 4000)
-}
-
 export const restoreCmsArticleVersion = async (
   articleId: string,
   commit: string,
@@ -226,10 +217,10 @@ export const restoreCmsArticleVersion = async (
     }
     await db.update(publishRecords).set({
       status: 'failed',
-      failureReason: describeFailure(error),
+      failureReason: describeCmsFailure(error),
       completedAt: new Date()
     }).where(eq(publishRecords.id, attempt!.id))
     if (error instanceof CmsPublishPathError) throw error
-    throw new CmsPublishGitError(describeFailure(error))
+    throw new CmsPublishGitError(describeCmsFailure(error))
   }
 }

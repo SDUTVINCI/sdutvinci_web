@@ -138,7 +138,8 @@ scripts/
 - Cookie 设置 `HttpOnly`、`SameSite=Lax`、限定 Path；生产环境必须启用 `Secure`。
 - 退出、禁用用户、改密和管理员撤销操作都能立即删除会话。
 - 所有写 API 进行同源校验并使用 CSRF token；页面中间件只负责跳转，API 必须再次执行会话和权限校验。
-- 登录失败保护、速率限制和完整安全回归在阶段 9 完善，但阶段 1 就不得明文存储密码或信任客户端角色。
+- 阶段 9 已落地共享 PostgreSQL 限流：单账号失败、单来源登录尝试和单用户图片上传分别限流，429 带 `Retry-After`；限流键只保存 HMAC，不保存原始账号或 IP。
+- 不存在、停用和密码错误账号都执行 Argon2id 校验并返回相同错误，降低账号枚举信号。
 
 `users.account` 是唯一、稳定的登录 ID，使用小写字母和数字（例如 `dongjiahui`、`dongjiahui1`）。认证用户不重复保存姓名、头像或邮箱；阶段 2 通过相同 ID 与 `members.member_key` 一对一绑定，并从成员实体读取所有展示资料。
 
@@ -161,6 +162,12 @@ scripts/
 3. 所有文章均可进入混合可视化模式；`<NuxtLink>`、MDC、自定义 HTML、Jekyll 标签等扩展语法转换为不可编辑、不可删除的 ProseMirror 原子节点，显示语法类型并在序列化时还原原始源码。
 4. 切换模式不能触发保存；保存始终使用当前明确确认的 Markdown 字符串。
 5. 测试必须覆盖普通区域编辑、保护节点删除拦截、扩展语法无损往返，以及代码/自动链接不被误判。
+
+HTML 安全策略：
+
+- 维护者明确要求兼容高级原始 HTML、Vue/MDC 和既有扩展语法，因此渲染层有意不启用 HTML sanitizer。
+- 这是已接受的存储型 XSS 风险，依赖可信 CMS 账号、管理员审核/发布和 Git 可审计历史控制；这些控制不能消除恶意 HTML 的浏览器执行能力。
+- 若作者信任模型改变，必须单独设计 allowlist 或 sandbox，并先评估既有 260 个内容文件的兼容迁移，不能在普通安全补丁中静默改变渲染结果。
 
 ### 5.4 S3 兼容对象存储
 
@@ -208,6 +215,7 @@ GitHub 是代码和正式 Markdown 的唯一权威来源。恢复旧版本通过
 | `users` | `id`, `account`, `password_hash`, `status`, timestamps | 只保存认证信息；`account` 是唯一稳定登录 ID |
 | `user_roles` | `user_id`, `role_id` | 多对多，权限只从服务端读取 |
 | `sessions` | `id`, `user_id`, `token_hash`, `expires_at`, `last_seen_at`, `revoked_at`, `ip_hash`, `user_agent` | 可撤销会话；`token_hash` 唯一 |
+| `rate_limit_buckets` | `scope`, `key_hash`, `window_started_at`, `attempt_count`, `blocked_until`, `updated_at` | 阶段 9 共享限流；`scope + key_hash` 主键，键为 HMAC |
 | `members` | `id`, `member_key`, `name`, `avatar_url`, `source_path`, `metadata`, timestamps | `member_key` 是文章引用的稳定 ID；可选关联同 ID 用户 |
 | `user_members` | `user_id`, `member_id` | 一个用户至多绑定一个成员，成员也至多绑定一个用户 |
 | `audit_logs` | `id`, `actor_user_id`, `action`, `target_type`, `target_id`, `metadata`, `created_at` | 只追加，不允许业务层更新或删除 |

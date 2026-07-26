@@ -12,8 +12,15 @@ import {
   getCmsUser,
   updateCmsUser
 } from '../server/services/cms-auth'
+import {
+  assertCmsLoginAllowed,
+  clearCmsLoginFailures,
+  CmsRateLimitError,
+  consumeCmsMediaUploadLimit,
+  recordCmsLoginFailure
+} from '../server/services/cms-rate-limits'
 import { verifyCmsPassword } from '../server/utils/cms-security'
-import { auditLogs, users } from '../server/db/schema'
+import { auditLogs, rateLimitBuckets, users } from '../server/db/schema'
 import { eq } from 'drizzle-orm'
 import { configureCmsTestDatabase } from './helpers/cms-test-database'
 
@@ -28,7 +35,7 @@ integration('CMS 身份认证与数据库', () => {
 
   beforeEach(async () => {
     await getDatabase().execute(sql`
-      truncate table article_deletion_events, publish_records, edit_locks, review_events, audit_logs, sessions, draft_authors, drafts, user_members, user_roles, articles, members, users
+      truncate table rate_limit_buckets, article_deletion_events, publish_records, edit_locks, review_events, audit_logs, sessions, draft_authors, drafts, user_members, user_roles, articles, members, users
       restart identity cascade
     `)
   })
@@ -132,5 +139,59 @@ integration('CMS 身份认证与数据库', () => {
       'user.update'
     ]))
     expect((await getCmsUser(member!.id))?.roles).toEqual(['member'])
+  })
+
+  it('按账号持久记录失败并在阈值后锁定，且不保存原始账号', async () => {
+    const now = new Date('2026-07-26T12:00:00.000Z')
+    for (let attempt = 1; attempt < 5; attempt += 1) {
+      await recordCmsLoginFailure('TargetAccount', now)
+    }
+
+    await expect(recordCmsLoginFailure('TargetAccount', now))
+      .rejects.toBeInstanceOf(CmsRateLimitError)
+    await expect(assertCmsLoginAllowed('targetaccount', 'hashed-test-ip', now))
+      .rejects.toBeInstanceOf(CmsRateLimitError)
+
+    const buckets = await getDatabase().select().from(rateLimitBuckets)
+    const accountBucket = buckets.find(
+      bucket => bucket.scope === 'login-account-failure'
+    )
+    expect(accountBucket).toMatchObject({ attemptCount: 5 })
+    expect(accountBucket?.keyHash).toMatch(/^[0-9a-f]{64}$/)
+    expect(JSON.stringify(buckets)).not.toContain('targetaccount')
+
+    await clearCmsLoginFailures('TARGETACCOUNT')
+    await expect(assertCmsLoginAllowed(
+      'targetaccount',
+      'hashed-test-ip',
+      new Date(now.getTime() + 1000)
+    )).resolves.toBeUndefined()
+  })
+
+  it('限制单个来源的登录尝试频率', async () => {
+    const now = new Date('2026-07-26T12:00:00.000Z')
+    for (let attempt = 1; attempt <= 30; attempt += 1) {
+      await assertCmsLoginAllowed(
+        `account-${attempt}`,
+        'hashed-shared-test-ip',
+        now
+      )
+    }
+
+    await expect(assertCmsLoginAllowed(
+      'account-31',
+      'hashed-shared-test-ip',
+      now
+    )).rejects.toBeInstanceOf(CmsRateLimitError)
+  })
+
+  it('限制单个用户的图片上传频率', async () => {
+    const now = new Date('2026-07-26T12:00:00.000Z')
+    for (let upload = 1; upload <= 20; upload += 1) {
+      await consumeCmsMediaUploadLimit('test-user-id', now)
+    }
+
+    await expect(consumeCmsMediaUploadLimit('test-user-id', now))
+      .rejects.toBeInstanceOf(CmsRateLimitError)
   })
 })

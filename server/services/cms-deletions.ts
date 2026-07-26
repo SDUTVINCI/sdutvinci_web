@@ -22,6 +22,7 @@ import {
   withCmsPublishLock
 } from './cms-git-worktree'
 import { getCmsGitConfig } from '../utils/cms-git-config'
+import { describeCmsFailure } from '../utils/cms-sensitive-data'
 import { upsertPublishedArticle } from './cms-publishing'
 
 const sha256 = (source: string) => createHash('sha256').update(source).digest('hex')
@@ -36,16 +37,6 @@ export class CmsArticleDeletionStateError extends Error {
 
 export class CmsArticleDeletionGitError extends Error {
   constructor(message: string) { super(message) }
-}
-
-const describeFailure = (error: unknown) => {
-  if (error instanceof Error) {
-    const stderr = 'stderr' in error && typeof error.stderr === 'string'
-      ? error.stderr.trim()
-      : ''
-    return `${error.message}${stderr ? `：${stderr}` : ''}`.slice(0, 4000)
-  }
-  return String(error).slice(0, 4000)
 }
 
 const loadArticle = async (articleId: string, deleted: boolean) => {
@@ -127,7 +118,7 @@ export const deleteCmsArticle = async (
   } catch (error) {
     await resetAfterFailure()
     if (error instanceof CmsArticleDeletionStateError) throw error
-    throw new CmsArticleDeletionGitError(describeFailure(error))
+    throw new CmsArticleDeletionGitError(describeCmsFailure(error))
   }
 }
 
@@ -216,6 +207,6 @@ export const restoreCmsArticle = async (
   } catch (error) {
     await resetAfterFailure()
     if (error instanceof CmsArticleDeletionStateError) throw error
-    throw new CmsArticleDeletionGitError(describeFailure(error))
+    throw new CmsArticleDeletionGitError(describeCmsFailure(error))
   }
 }

@@ -1,6 +1,6 @@
-# CMS 阶段 1～8 运行说明
+# CMS 阶段 1～9 运行说明
 
-本文覆盖 PostgreSQL、身份认证、成员管理、文章索引、Markdown 编辑器、数据库草稿、审核流程、编辑锁、正式版本冲突检查、隔离 Git 工作区中的正式发布和历史恢复、WebP 图片处理、S3 兼容对象存储，以及阶段 8 Docker 运维入口。完整生产部署、备份、恢复和迁移流程见 `docs/DEPLOYMENT.md`。
+本文覆盖 PostgreSQL、身份认证、成员管理、文章索引、Markdown 编辑器、数据库草稿、审核流程、编辑锁、正式版本冲突检查、隔离 Git 工作区中的正式发布和历史恢复、WebP 图片处理、S3 兼容对象存储、阶段 8 Docker 运维入口和阶段 9 安全基线。完整生产部署、备份、恢复和迁移流程见 `docs/DEPLOYMENT.md`；最终安全策略、已知限制和人工验收见 `docs/PHASE9_SECURITY_AND_ACCEPTANCE.md`。
 
 ## 1. 环境变量
 
@@ -15,6 +15,13 @@ CMS_AUTH_SECRET=至少32字符的随机密钥
 CMS_SESSION_COOKIE=vinci_cms_session
 CMS_SESSION_TTL_HOURS=168
 CMS_SECURE_COOKIES=false
+CMS_LOGIN_FAILURE_LIMIT=5
+CMS_LOGIN_FAILURE_WINDOW_MINUTES=15
+CMS_LOGIN_LOCKOUT_MINUTES=15
+CMS_LOGIN_IP_ATTEMPT_LIMIT=30
+CMS_LOGIN_IP_WINDOW_MINUTES=5
+CMS_MEDIA_UPLOAD_LIMIT=20
+CMS_MEDIA_UPLOAD_WINDOW_MINUTES=1
 NUXT_PUBLIC_SITE_URL=http://localhost:3000
 CMS_CONTENT_ROOT=content
 CMS_GIT_WORKTREE=/var/lib/vinci-cms/worktree
@@ -38,7 +45,7 @@ CMS_IMAGE_MAX_HEIGHT=2560
 CMS_IMAGE_WEBP_QUALITY=82
 ```
 
-可使用 `openssl rand -base64 48` 生成 `CMS_AUTH_SECRET`。生产环境必须把 `CMS_SECURE_COOKIES` 设为 `true`，并把 `NUXT_PUBLIC_SITE_URL` 设为实际 HTTPS Origin。`S3_PUBLIC_BASE_URL` 应指向能公开读取对象的 Bucket 域名、CDN 域名或包含 Bucket 的路径前缀；API Endpoint 与公开访问域名必须分开配置。真实密钥不得提交到 Git。
+可使用 `openssl rand -base64 48` 生成 `CMS_AUTH_SECRET`。生产环境必须把 `CMS_SECURE_COOKIES` 设为 `true`，并把 `NUXT_PUBLIC_SITE_URL` 设为实际 HTTPS Origin。Origin 必须与浏览器地址的协议、主机和端口一致且不带路径；`localhost` 与 `127.0.0.1` 不相同，修改后需要重启应用。`S3_PUBLIC_BASE_URL` 应指向能公开读取对象的 Bucket 域名、CDN 域名或包含 Bucket 的路径前缀；API Endpoint 与公开访问域名必须分开配置。真实密钥不得提交到 Git。
 
 ## 2. 初始化数据库
 
@@ -48,7 +55,7 @@ CMS_IMAGE_WEBP_QUALITY=82
 npm run db:migrate
 ```
 
-该命令在 `.env` 存在时自动读取项目根目录的 `.env`，在运维容器中读取 Compose 注入的环境变量；可以重复执行。migration 会初始化 `admin` 和 `member` 两个系统角色。
+该命令在 `.env` 存在时自动读取项目根目录的 `.env`，在运维容器中读取 Compose 注入的环境变量；可以重复执行。migration 会初始化 `admin` 和 `member` 两个系统角色。阶段 9 migration `0010_handy_meteorite.sql` 创建共享的 `rate_limit_buckets`，用于登录失败、来源登录和图片上传限流。
 
 只有修改了 `server/db/schema.ts` 后才运行 `npm run db:generate` 生成新的 SQL。生产环境不得临时生成 migration。
 
@@ -145,3 +152,11 @@ npm run test:cms
 测试只读取 `TEST_DATABASE_URL`，并要求数据库名称包含独立的 `test` 单词；未提供时全部数据库集成测试会跳过。即使当前环境中存在普通 `DATABASE_URL`，测试也不会使用它。阶段 5 测试会自行创建临时本地裸 Git 远端、独立工作区和拒绝推送 hook，不会连接或推送真实 GitHub 仓库。阶段 6 测试使用内存中的模拟 S3 客户端验证转换、上传参数、失败补偿和密钥隔离，不会访问真实对象存储。
 
 阶段 8 的 Docker、健康检查、备份、恢复、自动部署和全新服务器迁移说明统一维护在 `docs/DEPLOYMENT.md`。测试演练必须使用独立 Compose project、独立 volume、测试凭据和非生产端口。
+
+阶段 9 的完整隔离恢复测试入口为：
+
+```bash
+npm run test:backup-restore
+```
+
+该命令会构建本地测试镜像并创建两个随机后缀的 Compose project，只能在允许运行 Docker 且没有生产凭据注入的开发/测试主机执行。脚本使用仓库外 `/tmp` 目录、独立数据库和 volumes，完成后只清理自己创建的明确测试资源。

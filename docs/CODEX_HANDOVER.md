@@ -902,3 +902,30 @@
 - 自动化阶段已经用隔离 Compose project、测试数据库和测试凭据验证 custom-format backup、checksum、非空恢复拒绝、空库 restore、migration、恢复后健康及全新 Linux 控制环境迁移；阶段 9 仍须按其自身要求再次执行最终备份恢复演练。
 - 维护者明确要求阶段 8 收尾并进入下一阶段。需求文档中的阶段 8 总体进度已勾选；阶段 9 尚未启动。
 - 本次只追加阶段 8 安全收尾和验收记录，未提前实现阶段 9，未推送 GitHub、未操作服务器或外部发布。
+
+## 2026-07-26：阶段 9 安全检查、测试与最终验收实现完成
+
+### 状态与边界
+
+- 启动时确认 `main`、`origin/main` 和 `HEAD` 均包含阶段 8 验收提交 `ac2bc0cd940fee53192751289130f42cf44f5d86`，工作区初始干净。
+- 阶段 9 任务及验收子项已完成并在需求文档勾选；总体进度等待维护者按 `docs/PHASE9_SECURITY_AND_ACCEPTANCE.md` 人工验收后再勾选。
+- 未 push GitHub、未发布镜像、未触发服务器部署；未连接或清理正常数据库，未使用生产 S3、生产 Git 凭据或生产服务器。
+- 维护者明确接受原始 Markdown HTML 的高风险存储型 XSS，以保留高级 HTML/Vue/MDC 能力；本阶段记录明确策略但没有加入 sanitizer。
+
+### 安全实现
+
+- 新增 migration `0010_handy_meteorite.sql` 和 `rate_limit_buckets`：单账号 5 次失败锁定、单来源 30 次登录尝试、单用户 20 次图片上传，默认窗口可配置；429 包含 `Retry-After`。
+- 限流键使用 `CMS_AUTH_SECRET` HMAC，不保存原始账号/IP；蓝绿槽位共享 PostgreSQL 状态，并发更新使用 advisory transaction lock，七天旧桶按小时清理。
+- 不存在、停用和错误密码账号统一执行 Argon2id 校验；登录、用户和成员写入采用严格输入校验。
+- 图片入口增加固定 multipart 字段、55 MB gateway 总请求上限和用户频率限制；原有 Sharp 实际解码、尺寸、草稿权限、编辑租约和 S3 失败补偿保持不变。
+- Git/S3/数据库/Auth Token、URL 凭据和私钥在 Git Push、恢复及删除失败落库/响应前统一遮盖；SSH key path 拒绝控制字符并安全 shell quote。
+- 修正已有 Git advisory lock BigInt 字面量的 ES2019 构建警告，数值和锁语义不变。
+
+### 验证结果
+
+- 专用 PostgreSQL 17 且仅通过 `TEST_DATABASE_URL`：8 个文件、39 项 CMS 测试全部通过。
+- 只提供不可达普通 `DATABASE_URL` 且不提供 `TEST_DATABASE_URL`：数据库测试全部跳过，证明不会误连正常数据库。
+- production `.output` HTTP 验证通过 Origin 403、严格输入 400、账号锁定 429、`Retry-After`、成员越权 403、CSRF 退出、管理员 200 和健康 200。
+- 自动部署及安装器两个集成脚本、Shell/Caddy/Compose 检查、类型检查和 production build 通过。
+- 独立源/目标 Compose projects、数据库、volumes、测试凭据、`.invalid` Git/S3 和仓库外备份路径完成 checksum、空库 restore、向前 migration、数据 marker、应用/gateway 健康与非空二次恢复拒绝；临时资源已清理。
+- `npm audit --omit=dev` 当前报告 Nuxt/Nitro 构建归档链 11 high、0 critical；最终 runtime 输出不含被点名的归档/glob 包，未采用审计建议的 Nuxt 降级，已记录为持续监控限制。

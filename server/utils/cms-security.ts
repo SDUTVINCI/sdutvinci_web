@@ -30,6 +30,11 @@ export const hashClientIp = (ip: string | undefined) => {
     .digest('hex')
 }
 
+export const hashCmsSecurityKey = (scope: string, value: string) =>
+  createHmac('sha256', getCmsServerConfig().CMS_AUTH_SECRET)
+    .update(`${scope}:${value}`)
+    .digest('hex')
+
 export const createCsrfToken = (sessionToken: string) =>
   createHmac('sha256', getCmsServerConfig().CMS_AUTH_SECRET)
     .update(`csrf:${sessionToken}`)

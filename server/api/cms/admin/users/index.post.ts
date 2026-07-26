@@ -14,7 +14,7 @@ const createUserSchema = z.object({
   account: z.string().trim().toLowerCase().regex(cmsAccountPattern),
   password: z.string().min(12).max(1024),
   roles: z.array(z.enum(cmsRoleCodes)).min(1).default(['member'])
-})
+}).strict()
 
 export default defineEventHandler(async (event) => {
   const auth = await requireCmsRequestAuth(event, 'admin')

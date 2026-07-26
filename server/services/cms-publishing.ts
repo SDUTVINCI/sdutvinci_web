@@ -16,6 +16,7 @@ import {
 } from '../db/schema'
 import { parseCmsMarkdown, writeCmsMarkdown } from '../utils/cms-frontmatter'
 import { getCmsGitConfig } from '../utils/cms-git-config'
+import { describeCmsFailure } from '../utils/cms-sensitive-data'
 import {
   atomicWriteCmsGitArticle,
   cmsGitArticlePath,
@@ -158,16 +159,6 @@ const buildPublishedSource = (input: {
     throw new Error('生成的 Markdown 未通过完整性校验')
   }
   return { source, frontmatter }
-}
-
-const describeFailure = (error: unknown) => {
-  if (error instanceof Error) {
-    const detail = 'stderr' in error && typeof error.stderr === 'string'
-      ? error.stderr.trim()
-      : ''
-    return `${error.message}${detail ? `：${detail}` : ''}`.slice(0, 4000)
-  }
-  return String(error).slice(0, 4000)
 }
 
 export const upsertPublishedArticle = async (
@@ -387,7 +378,7 @@ export const publishCmsDraft = async (
     }
     await db.update(publishRecords).set({
       status: 'failed',
-      failureReason: describeFailure(error),
+      failureReason: describeCmsFailure(error),
       completedAt: new Date()
     }).where(eq(publishRecords.id, attempt!.id))
     if (
@@ -397,6 +388,6 @@ export const publishCmsDraft = async (
     ) {
       throw error
     }
-    throw new CmsPublishGitError(describeFailure(error))
+    throw new CmsPublishGitError(describeCmsFailure(error))
   }
 }

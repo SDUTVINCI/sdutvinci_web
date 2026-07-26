@@ -29,6 +29,11 @@ export interface UpdateCmsUserInput {
 }
 
 const normalizeAccount = (account: string) => account.trim().toLowerCase()
+const dummyPasswordHash = [
+  '$argon2id$v=19$m=19456,p=1,t=2',
+  'gm+RMKrH/megdzjjhUXTIQ',
+  'uwt+ea0wTEkE40Yrbi2cMCfyissUZGE+EHecObWu42k'
+].join('$')
 
 const uniqueRoleCodes = (values: CmsRoleCode[]) =>
   [...new Set(values)].filter(value => cmsRoleCodes.includes(value))
@@ -250,12 +255,11 @@ export const authenticateCmsUser = async (account: string, password: string) => 
     .where(eq(users.account, normalizeAccount(account)))
     .limit(1)
 
-  if (!user || user.status !== 'active') {
-    return null
-  }
-
-  const valid = await verifyCmsPassword(user.passwordHash, password)
-  return valid ? getCmsUser(user.id) : null
+  const passwordHash = user?.passwordHash || dummyPasswordHash
+  const valid = await verifyCmsPassword(passwordHash, password)
+  return user && user.status === 'active' && valid
+    ? getCmsUser(user.id)
+    : null
 }
 
 export const createCmsSession = async (

@@ -14,16 +14,12 @@ import {
 const updateUserSchema = z.object({
   status: z.enum(['active', 'disabled']).optional(),
   roles: z.array(z.enum(cmsRoleCodes)).min(1).optional()
-}).refine(value => Object.keys(value).length > 0, '至少提交一个修改项')
+}).strict().refine(value => Object.keys(value).length > 0, '至少提交一个修改项')
 
 export default defineEventHandler(async (event) => {
   const auth = await requireCmsRequestAuth(event, 'admin')
   requireCmsCsrf(event, auth)
-  const userId = getRouterParam(event, 'id')
-
-  if (!userId) {
-    throw createError({ statusCode: 400, message: '缺少用户 ID' })
-  }
+  const userId = z.string().uuid().parse(getRouterParam(event, 'id'))
 
   const current = await getCmsUser(userId)
   if (!current) {

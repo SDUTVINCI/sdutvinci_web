@@ -16,7 +16,10 @@ const gitConfigSchema = z.object({
       'CMS_GIT_AUTHOR_EMAIL 必须是有效的 Git 作者邮箱格式'
     )
     .default('cms@localhost'),
-  CMS_GIT_SSH_KEY_PATH: z.string().min(1).optional(),
+  CMS_GIT_SSH_KEY_PATH: z.string().min(1).refine(
+    value => !/[\0\r\n]/.test(value),
+    'CMS_GIT_SSH_KEY_PATH 包含非法控制字符'
+  ).optional(),
   CMS_CONTENT_ROOT: z.string().min(1).default('content')
 })
 

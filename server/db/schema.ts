@@ -299,6 +299,23 @@ export const sessions = pgTable('sessions', {
   index('sessions_expires_at_index').on(table.expiresAt)
 ])
 
+export const rateLimitBuckets = pgTable('rate_limit_buckets', {
+  scope: varchar('scope', { length: 64 }).notNull(),
+  keyHash: varchar('key_hash', { length: 64 }).notNull(),
+  windowStartedAt: timestamp('window_started_at', { withTimezone: true }).notNull(),
+  attemptCount: integer('attempt_count').default(0).notNull(),
+  blockedUntil: timestamp('blocked_until', { withTimezone: true }),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull()
+}, table => [
+  primaryKey({
+    columns: [table.scope, table.keyHash],
+    name: 'rate_limit_buckets_primary_key'
+  }),
+  check('rate_limit_buckets_attempt_count_check', sql`${table.attemptCount} >= 0`),
+  index('rate_limit_buckets_updated_at_index').on(table.updatedAt),
+  index('rate_limit_buckets_blocked_until_index').on(table.blockedUntil)
+])
+
 export const auditLogs = pgTable('audit_logs', {
   id: uuid('id').defaultRandom().primaryKey(),
   actorUserId: uuid('actor_user_id')
@@ -319,6 +336,7 @@ export type User = typeof users.$inferSelect
 export type NewUser = typeof users.$inferInsert
 export type Role = typeof roles.$inferSelect
 export type Session = typeof sessions.$inferSelect
+export type RateLimitBucket = typeof rateLimitBuckets.$inferSelect
 export type Member = typeof members.$inferSelect
 export type Article = typeof articles.$inferSelect
 export type Draft = typeof drafts.$inferSelect

@@ -1,6 +1,6 @@
 # Docker、自动部署、备份、恢复与迁移教程
 
-本文是阶段 8 的操作手册。它既说明“该做什么”，也说明“为什么做、在哪里做、做完应看到什么”。
+本文是阶段 8～9 的最终操作手册。它既说明“该做什么”，也说明“为什么做、在哪里做、做完应看到什么”。阶段 9 的安全策略、已知限制和最终人工验收步骤另见 `docs/PHASE9_SECURITY_AND_ACCEPTANCE.md`。
 
 所有首次演练必须使用测试服务器、测试数据库、测试 S3 Bucket 和测试 GitHub 仓库或 fork。不要把真实生产数据库、生产对象存储或现有正常数据当作练习目标。
 
@@ -1970,3 +1970,66 @@ ls -ld /opt/vinci-cms/.deploy/operation.lock
 - [ ] 故障时能通过新 Git revert commit 前向回滚。
 
 人工验收通过后，才能勾选需求文档中的阶段 8 总体进度。阶段 9 不属于本教程，也不得因完成上述验收而自动启动。
+
+## 14. 阶段 9 上线后安全运维
+
+### 14.1 上线前一次性操作
+
+阶段 9 是 `application` 变化，必须发布 runtime 和 operations 完整 SHA 镜像并执行 migration，不能伪装成 `content` 部署。
+
+上线前确认：
+
+```bash
+cd /opt/vinci-cms
+git status --short --branch
+docker compose config --quiet
+grep -E '^NUXT_PUBLIC_SITE_URL=|^CMS_SECURE_COOKIES=' .env
+```
+
+- `NUXT_PUBLIC_SITE_URL` 必须是浏览器使用的真实 HTTPS Origin，协议、主机和端口完全一致且不带路径；
+- `CMS_SECURE_COOKIES=true`；
+- 新增七个登录/上传限流变量可以省略并使用安全默认值，也可以在 `.env` 明确写出；
+- migration 完成后应存在 `rate_limit_buckets`；不要手工创建、清空或回退该表。
+
+按现有 timer 自动部署时，只需 push 阶段 9 commit 后等待 Actions 验证、发布完整 SHA 镜像并由服务器主动拉取。Codex 阶段没有代替维护者执行 push 或服务器部署。
+
+### 14.2 日常监控
+
+至少监控：
+
+- `/api/health`、活动槽位和 gateway 健康；
+- 登录 401/403/429 的突增、`Retry-After` 是否正常；
+- `rate_limit_buckets` 总量及七天以上旧行是否被登录流量清理；
+- Git Push/恢复/删除失败记录和应用错误日志；
+- PostgreSQL、S3 和 Git 凭据轮换日期；
+- systemd 自动部署与备份 timer 最近一次成功时间；
+- `npm audit --omit=dev` 和 Nuxt/Nitro 官方安全更新。
+
+不要把登录请求直接暴露给 `app-blue`/`app-green`；公网入口必须经过常驻 gateway 和宿主机 HTTPS 代理。
+
+### 14.3 429 与登录故障排查
+
+如果登录提示“请求来源不受信任”：
+
+1. 对照浏览器地址栏检查 `.env` 的 `NUXT_PUBLIC_SITE_URL`；
+2. 特别检查 `localhost`/`127.0.0.1`、HTTP/HTTPS 和端口；
+3. 修改后按正常蓝绿发布或重启当前测试应用，不能通过删除 Origin/CSRF 校验解决。
+
+如果可信用户收到 429：
+
+1. 查看响应 `Retry-After`；
+2. 检查是否有密码管理器使用旧密码、自动脚本重试或异常来源；
+3. 优先等待锁定窗口并修复客户端，不要直接删除生产限流记录；
+4. 持续攻击应在宿主机反向代理、防火墙或 WAF 增加来源控制，并轮换受影响账号密码。
+
+### 14.4 备份恢复和已知限制
+
+阶段 8 的备份、空库恢复确认令牌、非空拒绝、独立 Compose project 和 migration 向前兼容要求全部保持不变。阶段 9 的自动化隔离演练可在开发/测试主机运行：
+
+```bash
+npm run test:backup-restore
+```
+
+此命令不得在注入生产凭据的环境运行。正式恢复仍严格按教程九执行，不使用自动化测试替代人工目标核对。
+
+Markdown 原始 HTML 是维护者明确保留的兼容能力，存在已接受的存储型 XSS 风险；详细信任模型与审核要求见 `docs/PHASE9_SECURITY_AND_ACCEPTANCE.md`。不得在未评估内容迁移的情况下临时加入 sanitizer，也不得把这一策略解释为允许不可信作者自动发布。

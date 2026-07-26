@@ -6,10 +6,12 @@ import {
   getHeader,
   getRequestIP,
   getRequestURL,
-  setCookie
+  setCookie,
+  setResponseHeader
 } from 'h3'
 import type { CmsRoleCode, CmsUser } from '../../shared/types/cms-auth'
 import { getCmsSessionUser } from '../services/cms-auth'
+import { CmsRateLimitError } from '../services/cms-rate-limits'
 import { getCmsServerConfig } from './cms-config'
 import { createCsrfToken, verifyCsrfToken } from './cms-security'
 
@@ -98,10 +100,18 @@ export const requireSameOrigin = (event: H3Event) => {
     ? new URL(getCmsServerConfig().NUXT_PUBLIC_SITE_URL!).origin
     : requestOrigin
 
-  if (origin !== configuredOrigin && origin !== requestOrigin) {
+  if (!isCmsOriginTrusted(origin, requestOrigin, configuredOrigin)) {
     throw createError({ statusCode: 403, message: '请求来源不受信任' })
   }
 }
+
+export const isCmsOriginTrusted = (
+  origin: string,
+  requestOrigin: string,
+  configuredOrigin?: string
+) => origin === requestOrigin || (
+  Boolean(configuredOrigin) && origin === configuredOrigin
+)
 
 export const requireCmsCsrf = (event: H3Event, auth: CmsRequestAuth) => {
   requireSameOrigin(event)
@@ -113,3 +123,19 @@ export const requireCmsCsrf = (event: H3Event, auth: CmsRequestAuth) => {
 
 export const getCmsRequestIp = (event: H3Event) =>
   getRequestIP(event, { xForwardedFor: true })
+
+export const throwCmsRateLimitError = (
+  event: H3Event,
+  error: CmsRateLimitError,
+  message = '请求过于频繁，请稍后重试'
+): never => {
+  setResponseHeader(event, 'retry-after', error.retryAfterSeconds)
+  throw createError({
+    statusCode: 429,
+    message,
+    data: {
+      code: 'RATE_LIMITED',
+      retryAfterSeconds: error.retryAfterSeconds
+    }
+  })
+}
