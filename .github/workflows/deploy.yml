@@ -76,6 +76,9 @@ jobs:
           sh -n docker/entrypoint.sh docker/gateway-entrypoint.sh
           docker compose config --quiet
 
+      - name: Prepare Nuxt generated types
+        run: npx nuxt prepare
+
       - name: Run CMS tests against the isolated test database
         run: npm run test:cms
 
