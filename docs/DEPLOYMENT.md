@@ -11,7 +11,7 @@
 | 教程一：理解运行架构 | 认识容器、数据和两条发布通道 | 第一次部署前 | 不执行操作 |
 | 教程二：准备一台 Linux 服务器 | 安装依赖、克隆代码、准备密钥和 `.env` | 新服务器首次接入 | 尚未上线时无影响 |
 | 教程三：完成首次上线 | 建库、迁移、启动蓝绿槽位和创建管理员 | 新服务器准备完成后 | 新站无影响；旧单容器升级可能短暂中断 |
-| 教程四：接通主动拉取自动部署 | Actions 构建镜像，内网服务器定时检查并部署 | 首次上线验收后配置一次 | 配置本身无影响 |
+| 教程四：一键接通主动拉取自动部署 | Actions 构建镜像，内网服务器定时检查并部署 | 首次上线验收后配置一次 | 配置本身无影响 |
 | 教程五：发布 Markdown | 只改 `content/**`，走内容发布通道 | 日常编辑内容 | 设计目标是无可见停机 |
 | 教程六：发布 Vue/代码 | 代码、配置、依赖或 migration 走完整通道 | 开发功能或修复代码 | 普通兼容改动也蓝绿切换；不兼容数据库改动需维护窗口 |
 | 教程七：日常检查与排障 | 查看当前 commit、活动槽位、健康和日志 | 发布后或站点异常时 | 只读检查无影响 |
@@ -31,7 +31,7 @@
 3. push 第一个经过审核的 `main` commit，让 Actions 发布两种不可变镜像；
 4. 按教程三第 4.3 节人工完成首次 `application` 部署；
 5. 按教程三第 4.4～4.5 节创建管理员并验收；
-6. 按教程四显式启用服务器主动拉取 timer；
+6. 按教程四用一条安装命令显式启用服务器主动拉取 timer；
 7. 再分别按教程五、六测试内容通道和完整应用通道。
 
 首次部署必须人工确认目标 SHA 和两个镜像；不要在镜像尚未发布时运行教程三第 4.3 节。
@@ -993,128 +993,91 @@ docker compose logs --tail=100 gateway app-blue app-green postgres
 
 这会为纯内容 commit 多构建一个备用 operations 镜像，但能防止服务器错过中间发布后错误跳过 migration。
 
-### 5.3 启用前检查目标
+### 5.3 启用前只需要确认三件事
 
-必须先完成教程三的首次人工部署，并确认 `.deploy/current` 存在。服务器执行：
+一键安装器会代替你逐条执行 Git、Docker、权限和 systemd 检查。运行它以前，只需要确认：
 
-```bash
-cd /opt/vinci-cms
+1. 教程三的首次人工部署已经成功，网站目前健康；
+2. `/opt/vinci-cms/.deploy/current` 是部署脚本生成的真实状态，不是手工伪造；
+3. 当前服务器部署目录已经包含 `scripts/install-auto-deploy.sh`。
 
-git status --short --branch
-docker compose config --quiet
-test -f .deploy/current
-test ! -L .deploy/current
+第三项很重要：安装器不能安装“它自己所在 commit”之前的代码。如果当前服务器还是旧 commit，先按第 5.11 节完成一次过渡部署，再回来继续。
 
-git fetch --prune origin main
+### 5.4 明确打开自动部署开关
 
-current_commit="$(
-  awk -F= '$1 == "commit" { print $2; exit }' .deploy/current
-)"
-remote_commit="$(
-  git rev-parse origin/main
-)"
+用 VS Code Remote SSH 或 1Panel 文件编辑器打开：
 
-printf '当前线上：%s\n远端目标：%s\n' \
-  "$current_commit" \
-  "$remote_commit"
-
-git merge-base --is-ancestor \
-  "$current_commit" \
-  "$remote_commit"
-
-git log \
-  --oneline \
-  "${current_commit}..${remote_commit}"
+```text
+/opt/vinci-cms/.env
 ```
 
-目的：启用 timer 前人工查看它第一次可能部署哪些 commit。若祖先检查失败、仓库有已跟踪改动或日志中出现不认识的提交，停止配置并先排查，不要绕过检查。
-
-### 5.4 打开自动部署开关
-
-编辑服务器的 `/opt/vinci-cms/.env`：
+把这一项设为：
 
 ```dotenv
 AUTO_DEPLOY_ENABLED=true
 ```
 
-然后执行：
+保存即可，不要把 `.env` 内容粘贴到聊天、GitHub Issue 或 Actions 日志中。这个开关的目的，是要求管理员明确同意服务器开始跟随 `main`；仅仅把安装器和 unit 放进仓库不会自动打开发布。
+
+安装器还会检查 `.env` 权限必须是 `600`。如果它只报告权限问题，再用有 sudo 权限的个人账号执行：
 
 ```bash
-chmod 600 /opt/vinci-cms/.env
-docker compose config --quiet
+sudo chmod 600 /opt/vinci-cms/.env
 ```
 
-目的：timer 文件即使被误安装，在首次人工部署完成且显式打开开关之前也只能安全退出。
+这条命令只收紧配置文件权限，不修改其中任何密码或连接地址。
 
-### 5.5 安装 systemd service 与 timer
+### 5.5 用一条命令安装并启用
 
-仓库内的两个 unit 文件分别负责：
-
-- `vinci-cms-auto-deploy.service`：执行一次安全检查和可能的部署；
-- `vinci-cms-auto-deploy.timer`：开机两分钟后开始，每分钟触发一次 service。
-
-以有 sudo 权限的 `tungchiahui` 用户执行：
+继续使用有 sudo 权限的个人账号 `tungchiahui` 登录服务器，不要给 `vinci-deploy` 设置密码。执行：
 
 ```bash
-sudo install \
-  -o root \
-  -g root \
-  -m 0644 \
-  /opt/vinci-cms/systemd/vinci-cms-auto-deploy.service \
-  /etc/systemd/system/vinci-cms-auto-deploy.service
-
-sudo install \
-  -o root \
-  -g root \
-  -m 0644 \
-  /opt/vinci-cms/systemd/vinci-cms-auto-deploy.timer \
-  /etc/systemd/system/vinci-cms-auto-deploy.timer
-
-sudo systemd-analyze verify \
-  /etc/systemd/system/vinci-cms-auto-deploy.service \
-  /etc/systemd/system/vinci-cms-auto-deploy.timer
-
-sudo systemctl daemon-reload
+sudo /opt/vinci-cms/scripts/install-auto-deploy.sh
 ```
 
-目的：仓库保存可审查的模板，`/etc/systemd/system` 保存 systemd 实际读取的 root-owned 副本。以后仓库 unit 变化时必须重新执行 `install` 和 `daemon-reload`，不能假设 Git 更新会自动改写 `/etc`。
+这一条命令会按顺序完成：
 
-### 5.6 人工运行一次检查
+1. 确认执行者获得了 root 权限；
+2. 确认 `vinci-deploy`、`/opt/vinci-cms`、Git working tree 和 unit 模板存在；
+3. 确认 `.env` 是权限为 `600` 的普通文件，且 `vinci-deploy` 可以读取；
+4. 确认首次部署生成的 `.deploy/current` 指向仓库中真实的完整 commit；
+5. 确认部署目录没有被人工修改的已跟踪文件；
+6. 确认 `origin` 与 `.env` 的 `DEPLOY_GIT_REMOTE_URL` 完全一致；
+7. 确认 `vinci-deploy` 可以连接 Docker；
+8. 把仓库里的 service 和 timer 安装为 `/etc/systemd/system` 下的 root-owned 副本；
+9. 使用 `systemd-analyze verify` 检查 unit，再人工试跑一次 service；
+10. 只有试跑成功，才设置 timer 开机自启并立即启动。
 
-先不要启用 timer，手工启动一次 service：
+因此，安装器不是跳过检查，而是把容易漏掉或抄错的命令固化到一个可测试、可重复执行的脚本里。
+
+成功时最后会看到类似：
+
+```text
+自动部署已启用：服务器会定期检查 GitHub main，并只部署验证完成的不可变镜像。
+```
+
+如果首次试跑失败，安装器会保持 timer 关闭、打印最近日志并返回失败。修复提示的问题后，重新运行同一条命令即可；不要手工伪造 `.deploy/current`，也不要为了通过检查而删除正常数据。
+
+### 5.6 以后日常发布需要做什么
+
+安装成功以后，不再需要每次 SSH 到服务器运行部署命令。本机正常完成：
 
 ```bash
-sudo systemctl start vinci-cms-auto-deploy.service
-
-sudo systemctl status \
-  --no-pager \
-  vinci-cms-auto-deploy.service
-
-sudo journalctl \
-  -u vinci-cms-auto-deploy.service \
-  -n 100 \
-  --no-pager
+git add <本次改动>
+git commit -m "说明本次改动"
+git push origin main
 ```
 
-可能结果：
+随后：
 
-- 当前已是最新 SHA：打印“当前已经运行”并成功退出；
-- Actions 仍在构建：打印“镜像尚未发布”，不修改网站；
-- 存在已验证的新 SHA：执行 `content` 或 `application` 蓝绿部署；
-- 仓库、快进关系、状态文件或镜像不安全：拒绝部署并标红 service。
+1. GitHub Actions 在隔离测试数据库中验证；
+2. 验证成功后为该完整 SHA 发布镜像；
+3. 内网服务器 timer 主动发现新 SHA；
+4. 纯 `content/**` 累计变化走内容通道；
+5. Vue、TypeScript、配置、依赖或 migration 变化走完整应用通道；
+6. 候选槽位健康后 gateway 切换。
 
-确认符合预期后启用定时器：
-
-```bash
-sudo systemctl enable \
-  --now \
-  vinci-cms-auto-deploy.timer
-
-systemctl list-timers \
-  vinci-cms-auto-deploy.timer
-```
-
-`enable --now` 只启动 timer，不会开放任何网络端口。
+只有本地 `commit`、没有 `push` 时，服务器不会变化。Actions 失败时不会发布可部署镜像，服务器也会保持当前版本。
 
 ### 5.7 第一次自动触发
 
@@ -1135,14 +1098,15 @@ Actions 中应依次看到：
 
 工作流不再包含 `deploy` job，也不读取服务器 SSH、数据库、S3、CMS Auth 或 CMS Git Secrets。
 
-服务器观察：
+服务器观察不再需要记三组 systemd 命令，执行：
 
 ```bash
-sudo journalctl \
-  -u vinci-cms-auto-deploy.service \
-  --since '10 minutes ago' \
-  --no-pager
+sudo /opt/vinci-cms/scripts/install-auto-deploy.sh --status
+```
 
+这个只读状态入口会显示 timer、最近一次 service 结果和最近 80 行日志。部署完成后，如需进一步核对版本和健康接口，再执行：
+
+```bash
 cd /opt/vinci-cms
 git rev-parse HEAD
 sed -n '1,20p' .deploy/current
@@ -1181,23 +1145,56 @@ sudo systemctl start vinci-cms-auto-deploy.service
 
 不要在部署仍运行时删除 `.deploy/operation.lock`，也不要修改 `.deploy/current`。
 
-### 5.9 暂停自动部署
+### 5.9 一条命令暂停自动部署
 
 只停止未来的定时检查：
 
 ```bash
-sudo systemctl disable \
-  --now \
-  vinci-cms-auto-deploy.timer
+sudo /opt/vinci-cms/scripts/install-auto-deploy.sh --disable
 ```
 
 如果 service 正在发布，不要中途强制停止；等待它成功或按失败保护退出。暂停 timer 不影响当前网站、PostgreSQL、gateway 或手工 `deploy.sh`。
 
-### 5.10 从旧的 Actions SSH 方案切换
+要恢复自动检查，重新执行第 5.5 节同一条无参数安装命令。安装器会重新校验、试跑并启用。
+
+### 5.10 高级排查：安装器内部的 systemd 步骤
+
+日常不要手敲本节命令。只有安装器明确报告 unit 安装或 systemd 校验问题，且需要逐步定位时才使用。
+
+仓库中的两个文件分别负责：
+
+- `vinci-cms-auto-deploy.service`：以 `vinci-deploy` 身份执行一次检查；
+- `vinci-cms-auto-deploy.timer`：开机后和每分钟触发 service。
+
+安装器内部等价的核心步骤是：
+
+```bash
+sudo install -o root -g root -m 0644 \
+  /opt/vinci-cms/systemd/vinci-cms-auto-deploy.service \
+  /etc/systemd/system/vinci-cms-auto-deploy.service
+
+sudo install -o root -g root -m 0644 \
+  /opt/vinci-cms/systemd/vinci-cms-auto-deploy.timer \
+  /etc/systemd/system/vinci-cms-auto-deploy.timer
+
+sudo systemd-analyze verify \
+  /etc/systemd/system/vinci-cms-auto-deploy.service \
+  /etc/systemd/system/vinci-cms-auto-deploy.timer
+
+sudo systemctl daemon-reload
+sudo systemctl start vinci-cms-auto-deploy.service
+sudo systemctl enable --now vinci-cms-auto-deploy.timer
+```
+
+这里必须由宿主机管理员执行，是因为 `/etc/systemd/system` 属于宿主机 root，Docker 容器没有权力修改它。不要为了省略 `sudo` 把 `/var/run/docker.sock` 和整份部署配置挂进一个常驻“更新器容器”；Docker Socket 基本等价于宿主机 root，并且会让该容器具备影响同一台机器上 1Panel、LibreChat 等其他容器的能力。
+
+仓库模板更新后，`/etc` 中的 root-owned 副本不会随 Git 自动变化。如果后续发布说明明确写着“systemd unit 有更新”，重新运行第 5.5 节的一键安装器即可安全覆盖、验证并重新试跑。
+
+### 5.11 从旧方案或未安装 timer 的服务器切换
 
 只适用于已经按阶段 8 早期教程完成首次部署、但服务器还没有 `auto-deploy.sh` 和 systemd unit 的站点。
 
-这次改动本身包含 workflow、脚本和 systemd 文件，属于 `application`。必须先用旧站已有的 `deploy.sh` 人工部署这个过渡 commit，不能指望尚未安装的 timer 自动安装自己。
+这次改动本身包含 workflow、安装器、脚本和 systemd 文件，属于 `application`。必须先用旧站已有的 `deploy.sh` 人工部署这个过渡 commit，不能指望尚未存在的安装器或 timer 自动安装自己。这是唯一一次“先有鸡还是先有蛋”的引导部署。
 
 操作顺序：
 
@@ -1205,8 +1202,8 @@ sudo systemctl disable \
 2. 等 Actions 的 verify、runtime 和 operations 全部成功；
 3. 在服务器人工检查并部署新 SHA；
 4. 确认网站健康；
-5. 再按第 5.4～5.6 节打开开关、安装 unit 并人工运行一次；
-6. 最后启用 timer。
+5. 按第 5.4 节打开开关；
+6. 按第 5.5 节运行一键安装器。
 
 服务器人工过渡：
 
@@ -1237,7 +1234,13 @@ APP_IMAGE_TAG="$transition_commit" \
 ./scripts/deploy.sh
 ```
 
-部署成功后，仓库 HEAD 已包含新的脚本和 unit 模板。此时再安装 timer，不需要公网 SSH，也不需要保留旧的 GitHub `production` Environment SSH Secrets；确认新 timer 验收通过后可由仓库管理员删除那些不再使用的 Secrets。
+部署成功后，仓库 HEAD 已包含新的安装器、自动部署脚本和 unit 模板。执行：
+
+```bash
+sudo /opt/vinci-cms/scripts/install-auto-deploy.sh
+```
+
+此后不需要公网 SSH，也不需要保留旧的 GitHub `production` Environment SSH Secrets；确认新 timer 验收通过后可由仓库管理员删除那些不再使用的 Secrets。
 
 ## 6. 教程五：发布 Markdown
 

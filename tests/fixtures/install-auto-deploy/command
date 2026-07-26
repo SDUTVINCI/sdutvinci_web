@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+
+set -eu
+
+command_name="$(basename -- "$0")"
+arguments=("$@")
+
+log_command() {
+  {
+    printf '%s' "$command_name"
+    printf ' %s' "$@"
+    printf '\n'
+  } >> "$FAKE_INSTALLER_LOG"
+}
+
+case "$command_name" in
+  id)
+    [ "${1:-}" = "-u" ] || exit 64
+    printf '0\n'
+    ;;
+  getent)
+    [ "${1:-}" = "passwd" ] || exit 64
+    printf '%s:x:1001:1001::/home/%s:/bin/bash\n' "$2" "$2"
+    ;;
+  runuser)
+    [ "${1:-}" = "-u" ] || exit 64
+    shift 2
+    [ "${1:-}" = "--" ] || exit 64
+    shift
+    exec "$@"
+    ;;
+  docker)
+    if [ "${1:-}" = "compose" ] \
+      && [ "${2:-}" = "config" ] \
+      && [ "${3:-}" = "--environment" ]; then
+      printf 'AUTO_DEPLOY_ENABLED=%s\n' \
+        "${FAKE_AUTO_DEPLOY_ENABLED:-true}"
+      printf 'DEPLOY_GIT_REMOTE_URL=https://github.com/example/vinci.git\n'
+      exit 0
+    fi
+    if [ "${1:-}" = "info" ]; then
+      exit 0
+    fi
+    exit 64
+    ;;
+  install)
+    log_command "$@"
+    if [ "${1:-}" = "-d" ]; then
+      destination="${arguments[$# - 1]}"
+      mkdir -p -- "$destination"
+      exit 0
+    fi
+    source_file="${arguments[$# - 2]}"
+    destination="${arguments[$# - 1]}"
+    cp -- "$source_file" "$destination"
+    chmod 0644 "$destination"
+    ;;
+  systemd-analyze)
+    log_command "$@"
+    [ "${1:-}" = "verify" ]
+    ;;
+  systemctl)
+    log_command "$@"
+    case "${1:-}" in
+      daemon-reload|reset-failed)
+        ;;
+      start)
+        [ "${FAKE_INSTALLER_START_FAIL:-false}" != "true" ]
+        ;;
+      enable)
+        touch "$FAKE_INSTALLER_STATE/timer-enabled"
+        ;;
+      disable)
+        rm -f -- "$FAKE_INSTALLER_STATE/timer-enabled"
+        ;;
+      is-enabled|is-active)
+        if [ "${2:-}" = "--quiet" ]; then
+          test -f "$FAKE_INSTALLER_STATE/timer-enabled"
+        else
+          printf 'active\n'
+        fi
+        ;;
+      status|list-timers)
+        printf 'fake systemd status\n'
+        ;;
+      *)
+        exit 64
+        ;;
+    esac
+    ;;
+  journalctl)
+    log_command "$@"
+    printf 'fake service journal\n'
+    ;;
+  *)
+    exit 64
+    ;;
+esac

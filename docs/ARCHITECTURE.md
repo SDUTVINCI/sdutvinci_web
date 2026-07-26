@@ -411,7 +411,7 @@ approved 草稿
 - PostgreSQL 数据、CMS Git 工作区和必要日志使用持久卷；镜像本身不保存状态。
 - 正式 Markdown 以 GitHub 为准，图片以 S3 为准。
 - 数据库使用 `pg_dump`/`pg_restore`；恢复演练属于阶段 8 和阶段 9。
-- 服务器自动部署 service 是部署目录的唯一自动修改者。部署失败要保留旧容器或可回切镜像，并停止重复尝试同一失败 SHA。
+- 服务器自动部署 service 是部署目录的唯一自动修改者。宿主机管理员通过 `install-auto-deploy.sh` 安装、试跑和启用 systemd timer；只有试跑成功才启用周期检查。部署失败要保留旧容器或可回切镜像，并停止重复尝试同一失败 SHA。
 - `.env` 和 SSH/S3/数据库密钥不进入 Git；仓库只保存 `.env.example`。
 
 ## 13. 不允许轻易修改的核心设计

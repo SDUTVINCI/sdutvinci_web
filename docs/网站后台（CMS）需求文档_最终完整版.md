@@ -866,6 +866,7 @@ Codex 必须严格按阶段顺序执行。
 - [x] 提供：
   - [x] `deploy.sh`
   - [x] `auto-deploy.sh`
+  - [x] `install-auto-deploy.sh`
   - [x] `backup.sh`
   - [x] `restore.sh`
 - [x] 数据库备份使用 PostgreSQL 标准备份工具。
@@ -881,6 +882,7 @@ Codex 必须严格按阶段顺序执行。
   - [x] 为 `main` 构建并发布完整 commit SHA 的 runtime 与 operations 镜像
 - [x] 实现内网服务器主动拉取自动部署：
   - [x] systemd timer 定期读取 `origin/main`
+  - [x] 一键安装器校验环境、试跑 service，且仅在试跑成功后启用 timer
   - [x] 镜像未齐时保持当前网站并等待下一轮
   - [x] 仅累计 `content/**` 变化时走内容发布通道并跳过数据库迁移
   - [x] 累计包含代码、配置或迁移变化时走完整应用部署通道

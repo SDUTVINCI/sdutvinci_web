@@ -72,10 +72,11 @@ jobs:
       - name: Validate operations files
         run: |
           cp .env.example .env
-          bash -n scripts/ops-common.sh scripts/classify-deployment.sh scripts/auto-deploy.sh scripts/deploy.sh scripts/backup.sh scripts/restore.sh
+          bash -n scripts/ops-common.sh scripts/classify-deployment.sh scripts/auto-deploy.sh scripts/install-auto-deploy.sh scripts/deploy.sh scripts/backup.sh scripts/restore.sh
           sh -n docker/entrypoint.sh docker/gateway-entrypoint.sh
           docker compose config --quiet
           ./tests/auto-deploy.integration.sh
+          ./tests/install-auto-deploy.integration.sh
 
       - name: Prepare Nuxt generated types
         run: npx nuxt prepare

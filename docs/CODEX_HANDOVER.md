@@ -877,3 +877,19 @@
 - 维护者已在服务器完成人工首次 `application` 部署：commit `e8b506eb5cff67fcac13fcb3a92f49746cf5fd39`，活动槽位 `blue`。
 - PostgreSQL migration、`app-blue`、gateway 和 `/api/health` 均成功，`.deploy/current` 已写入；首个管理员已创建。
 - 尚未验收新的 timer 自动部署、内容/应用两条自动通道、备份恢复和新服务器迁移；阶段 8 总体进度继续保持未勾选，阶段 9 未启动。
+
+## 2026-07-26：阶段 8 自动部署安装简化
+
+维护者确认继续使用宿主机 systemd 主动拉取，但不接受把常规安装拆成大量手工命令。新增 `scripts/install-auto-deploy.sh` 作为唯一推荐入口：
+
+- 无参数执行时，先校验 root、`vinci-deploy`、固定部署目录、`.env` 权限与显式开关、`.deploy/current`、干净 Git working tree、远端身份和 Docker 权限；
+- 安装 root-owned service/timer，运行 `systemd-analyze verify`，先试跑一次 service，只有试跑成功才 `enable --now` timer；
+- `--status` 统一显示 timer、service 和最近日志；
+- `--disable` 只停用未来检查，不停止网站、数据库或已经开始的部署；
+- 不自动重写 `.env`，不把 Docker Socket、生产凭据或部署目录挂入新的常驻更新器容器。
+
+`tests/install-auto-deploy.integration.sh` 使用临时 Git working tree、临时 unit 目录和 fake systemd/Docker 命令验证：成功路径会启用 timer，失败试跑不会启用，状态和停用入口可重复使用。Actions 的运维文件检查已包含该测试。
+
+`docs/DEPLOYMENT.md` 教程四现以“一条命令安装并启用”为主流程，逐条 systemd 命令只保留在高级排查。已首次部署但尚无安装器的服务器仍需对包含安装器的 commit 完成一次人工引导部署，这是 timer 无法自动安装自身的唯一过渡步骤。
+
+本轮再次通过 ShellCheck 0.11.0、Shell 语法、Compose config、Actions YAML、systemd unit、两个自动部署隔离测试和 `git diff --check`。临时 PostgreSQL 17 只通过 `TEST_DATABASE_URL` 提供给测试，显式移除 `DATABASE_URL`，CMS 7 个测试文件、33 项通过；临时容器随后删除。类型检查、production build、runtime 与 operations Docker targets 均通过。没有推送 commit 或镜像，没有连接或修改真实服务器、正常数据库、生产 S3 和生产 Git 凭据。
