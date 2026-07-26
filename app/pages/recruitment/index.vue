@@ -7,7 +7,7 @@ const quickLinks = [
   {
     label: '填写报名表',
     text: '提交基础信息后，我们会根据招新安排联系你参加面试或技术交流。',
-    href: 'https://docs.qq.com/form/page/DTk9Ha0hsTHpwa0FL',
+    href: 'https://docs.qq.com/form/page/DWkhPenpmeHBEZ3d4',
     external: true
   },
   {
@@ -18,8 +18,8 @@ const quickLinks = [
   },
   {
     label: '加入咨询群',
-    text: 'QQ群 1033839949，适合先咨询方向、时间投入和报名安排。',
-    href: 'https://qm.qq.com/q/Obiyw4DIkO',
+    text: 'QQ群 1082100919，适合先咨询方向、时间投入和报名安排。',
+    href: 'https://qm.qq.com/q/nzStNZrgaW',
     external: true
   }
 ]
@@ -95,7 +95,7 @@ const process = [
         <div class="join-actions">
           <a
             class="action-button primary"
-            href="https://docs.qq.com/form/page/DTk9Ha0hsTHpwa0FL"
+            href="https://docs.qq.com/form/page/DWkhPenpmeHBEZ3d4"
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -103,7 +103,7 @@ const process = [
           </a>
           <a
             class="action-button"
-            href="https://qm.qq.com/q/Obiyw4DIkO"
+            href="https://qm.qq.com/q/nzStNZrgaW"
             target="_blank"
             rel="noopener noreferrer"
           >
