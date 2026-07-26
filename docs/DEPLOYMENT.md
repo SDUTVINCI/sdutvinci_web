@@ -20,6 +20,8 @@
 | 教程十：迁移到新服务器 | 把数据库和服务器配置迁到全新 Linux | 更换主机或灾难恢复 | 最终一致性切换会有维护窗口 |
 | 教程十一：失败与回滚 | 候选版本失败、功能回归、迁移失败时处理 | 故障时 | 视故障类型而定 |
 
+教程二的第 3.5 节另有一份可选教程：允许个人账号通过 VS Code 读写整个部署目录。默认不需要执行；只有明确接受误改部署工作区的风险时才启用。
+
 如果你的问题是“本机提交后服务器会不会自动更新”，直接看教程四。答案是：**只在 commit 被 push 到 GitHub 的 `main`、工作流全部通过、生产环境审批已完成时，服务器才会自动部署；仅本地 commit 不会触发任何服务器操作。**
 
 第一次上线的推荐阅读和操作顺序是：
@@ -277,7 +279,209 @@ git status --short --branch
 
 不要在此目录手工编辑代码或 Markdown。部署脚本发现已跟踪文件改动时会拒绝覆盖。
 
-### 3.5 创建 `.env`
+### 3.5 可选教程：允许个人账号通过 VS Code 读写整个部署目录
+
+#### 3.5.1 这个可选教程是做什么的
+
+默认情况下：
+
+- `/opt/vinci-cms` 由 `vinci-deploy` 拥有；
+- GitHub Actions 直接以 `vinci-deploy` 部署；
+- 个人账号 `tungchiahui` 负责 SSH、sudo 和服务器管理；
+- 项目源码应在 `~/my/sdutvinci_web` 等开发 clone 中修改。
+
+如果你希望 VS Code Remote SSH 仍以 `tungchiahui` 登录，但能读写 `/opt/vinci-cms` 中的全部文件，可以使用 ACL 单独授权。ACL 不改变文件 owner，`vinci-deploy` 和自动部署仍可正常使用该目录。
+
+这是可选方案。它适合需要用 VS Code 查看和维护服务器文件的管理员，但会增加以下风险：
+
+- VS Code 自动格式化可能修改 Git 跟踪文件；
+- 扩展可能创建配置或缓存文件；
+- 任何已跟踪文件改动都会让部署脚本拒绝继续；
+- `tungchiahui` 将能读取 `.env` 中的数据库、CMS 和 S3 凭据。
+
+如果只需要修改 `.env`，更安全的做法是只给 `.env` 单独添加 ACL，不开放整个仓库。
+
+#### 3.5.2 回到个人管理账号
+
+如果当前提示符是 `vinci-deploy@...`，先退出：
+
+```bash
+exit
+whoami
+```
+
+预期 `whoami` 输出：
+
+```text
+tungchiahui
+```
+
+目的：安装软件和修改 ACL 属于服务器管理操作，应使用有 sudo 权限的个人账号完成。`vinci-deploy` 使用 `--disabled-password` 创建，没有可用于交互式 sudo 的密码，这是预期设计。
+
+#### 3.5.3 安装 ACL 工具
+
+Debian 或 Ubuntu 执行：
+
+```bash
+sudo apt update
+sudo apt install -y acl
+command -v setfacl
+command -v getfacl
+```
+
+目的：安装按单个用户授权的 `setfacl` 和检查权限的 `getfacl`。
+
+预期：最后两条命令分别打印可执行文件路径。
+
+#### 3.5.4 给现有文件和未来文件授权
+
+确认目标是部署目录后执行：
+
+```bash
+realpath /opt/vinci-cms
+sudo setfacl -R \
+  -m u:tungchiahui:rwX \
+  /opt/vinci-cms
+sudo find /opt/vinci-cms -type d \
+  -exec setfacl -m d:u:tungchiahui:rwX {} +
+```
+
+两条 ACL 命令作用不同：
+
+1. 第一条给目录内已经存在的文件和目录添加 `tungchiahui` 权限；
+2. 第二条给所有目录添加默认 ACL，使以后由 `vinci-deploy`、Git 或部署脚本创建的文件继续继承权限。
+
+这里的 `X` 只给目录和原本可执行的文件增加执行权限，不会把普通文本文件变成可执行文件。
+
+不要把目标换成 `/`、`/opt` 或其他宽泛目录，也不要使用 `chmod -R 777`。
+
+#### 3.5.5 验证 ACL
+
+```bash
+getfacl -p /opt/vinci-cms | sed -n '1,30p'
+touch /opt/vinci-cms/.vinci-permission-check
+rm -- /opt/vinci-cms/.vinci-permission-check
+```
+
+预期：
+
+- ACL 中有 `user:tungchiahui:rwx`；
+- 有 `default:user:tungchiahui:rwx`；
+- `touch` 和 `rm` 都成功。
+
+这个临时文件只用于验证写权限，命令随后会立即删除它。
+
+#### 3.5.6 允许 VS Code 的 Git 功能信任确切目录
+
+因为仓库 owner 是 `vinci-deploy`，Git 可能提示 `detected dubious ownership`。先确认目录确实是预期部署 clone：
+
+```bash
+git -C /opt/vinci-cms remote get-url origin
+ls -ld /opt/vinci-cms /opt/vinci-cms/.git
+```
+
+确认无误后，以 `tungchiahui` 执行：
+
+```bash
+git config --global --add safe.directory /opt/vinci-cms
+git -C /opt/vinci-cms status --short --branch
+```
+
+目的：只信任这个确切路径，不使用通配符信任所有其他用户拥有的仓库。
+
+#### 3.5.7 在 VS Code 中打开
+
+1. VS Code 安装 `Remote - SSH` 扩展；
+2. SSH 配置继续使用 `User tungchiahui`；
+3. 连接服务器；
+4. 选择 `File → Open Folder`；
+5. 输入 `/opt/vinci-cms`；
+6. 打开终端，运行 `whoami`，确认仍是 `tungchiahui`；
+7. 运行 `git status --short --branch`，确认仓库初始状态干净。
+
+不要为了 VS Code 直接登录而给 `vinci-deploy` 设置密码。GitHub Actions 使用的专用 SSH 公钥与 VS Code 人工登录无关。
+
+#### 3.5.8 `.env` 的特殊处理
+
+后面的第 3.6 节会执行：
+
+```bash
+chmod 600 .env
+```
+
+`chmod 600` 可能收紧 ACL mask，因此创建并保护 `.env` 后，再以 `tungchiahui` 执行一次：
+
+```bash
+sudo setfacl \
+  -m u:tungchiahui:rw \
+  /opt/vinci-cms/.env
+getfacl -p /opt/vinci-cms/.env
+```
+
+预期能看到 `user:tungchiahui:rw-`，且 ACL 的 `mask` 没有移除这项有效权限。除 `root`、`vinci-deploy` 和明确授权的 `tungchiahui` 外，其他用户仍不能读取 `.env`。
+
+如果使用 1Panel 文件管理器保存 `.env`，保存后还要检查：
+
+```bash
+sudo chown vinci-deploy:vinci-deploy /opt/vinci-cms/.env
+sudo chmod 600 /opt/vinci-cms/.env
+sudo setfacl -m u:tungchiahui:rw /opt/vinci-cms/.env
+```
+
+因为某些网页文件管理器采用“创建新文件后替换旧文件”的保存方式，可能改变 owner 或清除原 ACL。
+
+#### 3.5.9 每次自动部署前检查
+
+在 `/opt/vinci-cms` 中执行：
+
+```bash
+git status --short --untracked-files=no
+git diff --check
+```
+
+预期两条命令均没有输出。第一条只检查已跟踪文件，因为 `.env` 和服务器状态文件不属于 Git。
+
+如果有输出：
+
+1. 停止本次部署；
+2. 用 `git diff` 审查具体改动；
+3. 需要保留的源码改动移回开发 clone，正常 commit 并 push；
+4. 只有确认部署 clone 中的改动不需要保留后，才恢复对应的确切文件；
+5. 不要直接对整个仓库运行 `git reset --hard`。
+
+部署 clone 即使具备写权限，也不应成为日常代码开发目录。
+
+#### 3.5.10 撤销整个目录的个人写权限
+
+如果以后不再需要 VS Code 写入，可以移除这一个用户的 ACL：
+
+```bash
+sudo setfacl -R \
+  -x u:tungchiahui \
+  /opt/vinci-cms
+sudo find /opt/vinci-cms -type d \
+  -exec setfacl -x d:u:tungchiahui {} +
+git config --global --unset-all safe.directory /opt/vinci-cms
+```
+
+目的：只删除 `tungchiahui` 的访问 ACL 和 Git 信任项，不改变 owner，也不删除其他用户可能存在的 ACL。
+
+撤销后重新检查：
+
+```bash
+getfacl -p /opt/vinci-cms | sed -n '1,30p'
+git -C /opt/vinci-cms status --short --branch
+```
+
+如果只想保留 `.env` 编辑权限，可在撤销整个目录 ACL 后，单独重新添加：
+
+```bash
+sudo setfacl \
+  -m u:tungchiahui:rw \
+  /opt/vinci-cms/.env
+```
+
+### 3.6 创建 `.env`
 
 ```bash
 cd /opt/vinci-cms
@@ -322,7 +526,7 @@ docker compose config --quiet
 
 预期：没有输出并返回成功。不要执行 `docker compose config` 后把完整输出粘贴到公开位置，因为展开后的配置可能包含凭据。
 
-### 3.6 准备 CMS 登录 GitHub 的密钥
+### 3.7 准备 CMS 登录 GitHub 的密钥
 
 这把密钥的方向是：
 
@@ -384,7 +588,7 @@ CMS_GIT_REMOTE_URL=git@github.com:SDUTVINCI/sdutvinci_web.git
 
 Compose 会把宿主机文件只读挂载到应用容器。文件必须真实存在，不能用 `/dev/null` 代替。
 
-### 3.7 登录私有 GHCR
+### 3.8 登录私有 GHCR
 
 如果 GitHub Container Registry package 是私有的，在服务器创建只具备读取 package 权限的 token，然后通过标准输入登录：
 
@@ -401,7 +605,7 @@ unset ghcr_read_token
 
 若 package 公开，这一步可以省略。
 
-### 3.8 配置宿主机 HTTPS
+### 3.9 配置宿主机 HTTPS
 
 项目内 `gateway` 只监听 `127.0.0.1:3000`，还需宿主机反向代理把公网 HTTPS 转发到它。例如宿主机 Caddy 的站点逻辑是：
 
