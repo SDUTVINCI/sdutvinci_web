@@ -4,7 +4,7 @@
 
 本文记录网站与 CMS 的长期架构约束。阶段 0 于 2026-07-25 完成首次技术方案确认，阶段 1 于同日落地数据库与身份认证基础，阶段 2 落地成员管理和文章只读索引。后续只有在发生重大架构调整时才修改本文，并应同步在 `docs/CODEX_HANDOVER.md` 追加说明。
 
-当前已接入 PostgreSQL、登录、权限骨架、成员管理、文章浏览、Milkdown 编辑器、数据库草稿、审核流程、编辑锁、正式版本冲突检查、隔离 Git 发布、历史恢复、服务端 WebP 图片处理和 S3 兼容对象存储，以及 Docker Compose、备份恢复和 GitHub Actions 自动部署。
+当前已接入 PostgreSQL、登录、权限骨架、成员管理、文章浏览、Milkdown 编辑器、数据库草稿、审核流程、编辑锁、正式版本冲突检查、隔离 Git 发布、历史恢复、服务端 WebP 图片处理和 S3 兼容对象存储，以及 Docker Compose、备份恢复、GitHub Actions 镜像发布和内网服务器主动拉取自动部署。
 
 ## 2. 当前项目审查结论
 
@@ -47,7 +47,8 @@
             ├─ S3 兼容存储（WebP 图片）
             └─ CMS 独立 Git 工作区（唯一 Markdown 写入口）
                     └─ GitHub
-                         └─ GitHub Actions 构建并部署运行目录
+                         └─ GitHub Actions 验证并发布 SHA 镜像
+                              └─ 服务器 systemd timer 主动拉取并部署
 ```
 
 系统边界：
@@ -64,7 +65,8 @@
 - Compose 使用 `postgres_data`、`cms_git_worktree` 和 `gateway_config` 三个持久 volume。镜像内 Markdown 不再与宿主机 Markdown 同时作为前台数据源。
 - PostgreSQL 仅连接 internal network；`app-blue`/`app-green` 不映射宿主机端口，常驻 Caddy gateway 绑定回环地址，再由宿主机 HTTPS reverse proxy 对外服务。
 - Nuxt Content 的索引和预渲染输出在构建期产生，因此 `content/**` 变化也构建带完整 commit SHA 的 runtime 镜像，而不是运行时覆盖 Markdown。
-- Actions 以目录分类部署：纯 `content/**` 只构建 runtime、跳过 migration；其他变化构建 runtime/operations 并执行完整部署。服务器再次验证变更范围和快进关系，不能只信任 CI 参数。
+- Actions 对 PR 做验证，对每个 `main` push 发布同 SHA 的 runtime/operations 镜像。服务器 timer 从当前线上 commit 到 `origin/main` 重新分类累计变化：纯 `content/**` 跳过 operations 和 migration，其他变化执行完整应用部署。
+- 服务器只使用出站 HTTPS 读取 GitHub/GHCR，不要求 Actions 通过公网 SSH 登录。镜像未齐时保持当前版本；候选失败记录 SHA 并停止周期性重试。
 - 新 runtime 总是在非活动槽位通过健康检查后由 gateway graceful reload 切换；旧槽位保留到下一次发布，切换或网关健康失败时可以立即恢复。
 - migration 不自动 down，生产 schema 变更必须对旧、新应用保持向后兼容。
 - PostgreSQL 用 custom-format `pg_dump` 备份；CMS Git 工作区备份 refs bundle、tracked patch 和 untracked archive，仅用于异常审查。
@@ -178,7 +180,7 @@ scripts/
 
 生产环境使用两个完全分离的目录：
 
-- 部署目录：GitHub Actions 管理，只用于构建/运行，不允许 CMS 写入。
+- 部署目录：服务器自动部署 service 管理，只用于运行和运维，不允许 CMS 写入。
 - `CMS_GIT_WORKTREE`：持久卷或宿主机目录中的独立 clone，只允许发布服务操作。
 
 发布事务边界：
@@ -385,7 +387,8 @@ approved 草稿
   → 原子写入、commit、push
   → 写 publish_records
   → 标记 published
-  → GitHub Actions 部署
+  → GitHub Actions 发布镜像
+  → 服务器 timer 主动部署
   → 前台读取新的正式 Markdown
 ```
 
@@ -408,7 +411,7 @@ approved 草稿
 - PostgreSQL 数据、CMS Git 工作区和必要日志使用持久卷；镜像本身不保存状态。
 - 正式 Markdown 以 GitHub 为准，图片以 S3 为准。
 - 数据库使用 `pg_dump`/`pg_restore`；恢复演练属于阶段 8 和阶段 9。
-- GitHub Actions 是部署目录的唯一修改者。部署失败要保留旧容器或可回切镜像。
+- 服务器自动部署 service 是部署目录的唯一自动修改者。部署失败要保留旧容器或可回切镜像，并停止重复尝试同一失败 SHA。
 - `.env` 和 SSH/S3/数据库密钥不进入 Git；仓库只保存 `.env.example`。
 
 ## 13. 不允许轻易修改的核心设计
@@ -421,7 +424,7 @@ approved 草稿
 6. 所有权限在服务端校验，普通成员不能绕过审核。
 7. 稳定成员 ID 和文章 UUID 不由可变姓名、标题或展示 URL决定。
 8. 未识别 Markdown/Frontmatter 必须无损保留，不能静默规范化或删除。
-9. 密钥只存在于环境变量、Docker secrets 或 GitHub Secrets。
+9. 密钥只存在于服务器环境变量、受控密钥文件、Docker secrets 或确有需要的 GitHub Secrets。
 10. 各阶段只实现需求文档指定范围，并在验收后才进入下一阶段。
 
 ## 14. 选型核验来源

@@ -11,7 +11,7 @@
 | 教程一：理解运行架构 | 认识容器、数据和两条发布通道 | 第一次部署前 | 不执行操作 |
 | 教程二：准备一台 Linux 服务器 | 安装依赖、克隆代码、准备密钥和 `.env` | 新服务器首次接入 | 尚未上线时无影响 |
 | 教程三：完成首次上线 | 建库、迁移、启动蓝绿槽位和创建管理员 | 新服务器准备完成后 | 新站无影响；旧单容器升级可能短暂中断 |
-| 教程四：接通 GitHub Actions | 本机 push `main` 后自动构建并 SSH 部署 | 首次上线前后各配置一次 | 配置本身无影响 |
+| 教程四：接通主动拉取自动部署 | Actions 构建镜像，内网服务器定时检查并部署 | 首次上线验收后配置一次 | 配置本身无影响 |
 | 教程五：发布 Markdown | 只改 `content/**`，走内容发布通道 | 日常编辑内容 | 设计目标是无可见停机 |
 | 教程六：发布 Vue/代码 | 代码、配置、依赖或 migration 走完整通道 | 开发功能或修复代码 | 普通兼容改动也蓝绿切换；不兼容数据库改动需维护窗口 |
 | 教程七：日常检查与排障 | 查看当前 commit、活动槽位、健康和日志 | 发布后或站点异常时 | 只读检查无影响 |
@@ -22,18 +22,19 @@
 
 教程二的第 3.5 节另有一份可选教程：允许个人账号通过 VS Code 读写整个部署目录。默认不需要执行；只有明确接受误改部署工作区的风险时才启用。
 
-如果你的问题是“本机提交后服务器会不会自动更新”，直接看教程四。答案是：**只在 commit 被 push 到 GitHub 的 `main`、工作流全部通过、生产环境审批已完成时，服务器才会自动部署；仅本地 commit 不会触发任何服务器操作。**
+如果你的问题是“本机提交后服务器会不会自动更新”，直接看教程四。答案是：**只有 commit 被 push 到 GitHub 的 `main`、Actions 验证并发布镜像、服务器 timer 已显式启用时，服务器才会主动检查并部署；仅本地 commit 不会触发任何服务器操作。**
 
 第一次上线的推荐阅读和操作顺序是：
 
 1. 读教程一，理解哪些数据不能删除；
 2. 按教程二把服务器准备到“尚未启动应用”的状态；
-3. 按教程四第 5.2～5.4 节先接通 Actions SSH 和 Secrets；
-4. push 第一个阶段 8 `main` commit，让 Actions 发布两种镜像并自动执行首次 `application` 部署；
-5. 回到教程三第 4.4～4.5 节创建管理员并验收；
-6. 再分别按教程五、六测试内容通道和完整应用通道。
+3. push 第一个经过审核的 `main` commit，让 Actions 发布两种不可变镜像；
+4. 按教程三第 4.3 节人工完成首次 `application` 部署；
+5. 按教程三第 4.4～4.5 节创建管理员并验收；
+6. 按教程四显式启用服务器主动拉取 timer；
+7. 再分别按教程五、六测试内容通道和完整应用通道。
 
-教程三第 4.3 节提供的是“镜像已经发布，但需要人工完成首次部署”时的等价命令。不要在镜像尚未发布时运行它。
+首次部署必须人工确认目标 SHA 和两个镜像；不要在镜像尚未发布时运行教程三第 4.3 节。
 
 ## 2. 教程一：理解运行架构
 
@@ -104,7 +105,7 @@ Nuxt Content 在构建期生成索引和预渲染页面，所以 Markdown 不能
 
 ### 3.1 这个教程是做什么的
 
-它把一台干净 Linux 主机准备成可被 GitHub Actions 部署的目标。下面命令均在**服务器**执行，除非步骤明确写“管理电脑”或“GitHub”。
+它把一台干净 Linux 主机准备成可主动读取 GitHub、拉取 GHCR 镜像并运行 Docker 的目标。下面命令均在**服务器**执行，除非步骤明确写“管理电脑”或“GitHub”。
 
 示例目录是 `/opt/vinci-cms`，域名、账号、仓库地址和凭据全部使用你自己的测试值。不要把示例占位符直接用于生产。
 
@@ -160,7 +161,7 @@ sudo adduser --disabled-password --gecos '' vinci-deploy
 - 创建 `vinci-deploy` 用户；
 - 同时创建同名主用户组；
 - 创建 `/home/vinci-deploy`；
-- 不启用密码登录，后续自动部署使用 SSH 公钥。
+- 不启用密码登录；自动部署由该账号在本机 systemd service 中执行。
 
 其他使用 `useradd` 的 Linux 发行版可以执行：
 
@@ -188,7 +189,7 @@ id vinci-deploy
 getent group docker
 ```
 
-正常的 Docker Engine 安装通常会打印以 `docker:` 开头的一行。如果没有输出，应先检查 Docker Engine 是否按官方方式完整安装，不要继续配置 Actions。
+正常的 Docker Engine 安装通常会打印以 `docker:` 开头的一行。如果没有输出，应先检查 Docker Engine 是否按官方方式完整安装，不要继续配置自动部署。
 
 把部署账号加入 Docker 组：
 
@@ -196,7 +197,7 @@ getent group docker
 sudo usermod -aG docker vinci-deploy
 ```
 
-目的：让 GitHub Actions 通过该账号运行 `docker compose`，不需要把 sudo 密码放进 GitHub Secrets。
+目的：让本机自动部署 service 通过该账号运行 `docker compose`，不需要保存 sudo 密码。
 
 Docker 组成员通常可以获得接近 root 的宿主机控制能力，因此只能加入受信任的专用部署账号，不能把它当作低权限组。
 
@@ -233,7 +234,7 @@ sudo install -d -o vinci-deploy -g vinci-deploy -m 0700 /var/backups/vinci-cms
 
 - `/opt/vinci-cms` 保存只读式部署 clone；
 - `/var/backups/vinci-cms` 保存数据库备份，必须位于项目目录之外；
-- 专用账号限制自动部署的权限范围。
+- 专用账号限制 systemd 自动部署的权限范围。
 
 预期：
 
@@ -265,7 +266,7 @@ git remote get-url origin
 git status --short --branch
 ```
 
-目的：建立服务器部署 clone。这个目录只供 Actions 和部署脚本使用，不能与 CMS 后台发布 Markdown 的工作区混用。
+目的：建立服务器部署 clone。这个目录只供自动部署 service 和运维脚本使用，不能与 CMS 后台发布 Markdown 的工作区混用。
 
 即使当前登录账号已经在 `~/my/sdutvinci_web` 有一个开发 clone，也不要把它直接复制或改名成部署目录；继续使用独立的 `/opt/vinci-cms` clone。
 
@@ -275,7 +276,7 @@ git status --short --branch
 - 工作区没有本地改动；
 - 当前分支是 `main`，或后续由部署脚本切换到目标 commit。
 
-如果仓库是私有的，还必须为部署账号配置只读拉取权限，并保证无人值守的 `git fetch origin main` 能成功。该凭据只负责服务器部署 clone 的读取；不要因此扩大 Actions SSH key 或 CMS 发布 key 的权限范围。
+如果仓库是私有的，还必须为部署账号配置只读拉取权限，并保证无人值守的 `git fetch origin main` 能成功。该凭据只负责服务器部署 clone 的读取；不要因此扩大 CMS 发布 key 的权限范围。
 
 不要在此目录手工编辑代码或 Markdown。部署脚本发现已跟踪文件改动时会拒绝覆盖。
 
@@ -286,7 +287,7 @@ git status --short --branch
 默认情况下：
 
 - `/opt/vinci-cms` 由 `vinci-deploy` 拥有；
-- GitHub Actions 直接以 `vinci-deploy` 部署；
+- systemd service 直接以 `vinci-deploy` 部署；
 - 个人账号 `tungchiahui` 负责 SSH、sudo 和服务器管理；
 - 项目源码应在 `~/my/sdutvinci_web` 等开发 clone 中修改。
 
@@ -399,7 +400,7 @@ git -C /opt/vinci-cms status --short --branch
 6. 打开终端，运行 `whoami`，确认仍是 `tungchiahui`；
 7. 运行 `git status --short --branch`，确认仓库初始状态干净。
 
-不要为了 VS Code 直接登录而给 `vinci-deploy` 设置密码。GitHub Actions 使用的专用 SSH 公钥与 VS Code 人工登录无关。
+不要为了 VS Code 直接登录而给 `vinci-deploy` 设置密码。自动部署不需要 GitHub Runner 登录该账号；VS Code 人工登录继续使用个人管理账号。
 
 #### 3.5.8 `.env` 的特殊处理
 
@@ -507,6 +508,7 @@ chmod 600 .env
 | `CMS_GIT_*` | CMS 向 GitHub 提交 Markdown | remote、branch、作者和密钥路径 |
 | `S3_*` | 图片存储 | 使用目标环境对应的 Bucket；首次演练必须是测试 Bucket |
 | `DEPLOY_GIT_REMOTE_URL` | 防止部署错仓库 | 必须与 `git remote get-url origin` 完全一致 |
+| `AUTO_DEPLOY_ENABLED` | 是否允许 systemd service 主动部署 | 首次人工部署验收前保持 `false` |
 | `BACKUP_ROOT` | 备份根目录 | 项目外的绝对路径，不能是 `/` |
 
 可生成两个不同的随机值：
@@ -627,7 +629,7 @@ GitHub 仓库公开不等于 GHCR package 一定公开。Container Registry 的 
 
 源码仓库公开并不自动替你完成这一步。修改 package 可见性属于外部且可能不可逆的操作，必须由仓库维护者人工确认。
 
-首次 `main` push 时，Actions 可能已经成功发布镜像，但部署 job 因 package 初始为 Private 而在服务器 `docker pull` 失败。这不会修改数据库。把两个 package 都确认设为 Public 后，可以重新运行该次失败的 workflow；不要为此删除容器或 volume。
+首次 `main` push 时，Actions 可能已经成功发布镜像，但服务器因 package 初始为 Private 而无法拉取。这不会修改数据库。把两个 package 都确认设为 Public 后，重新运行一次自动部署 service；不要为此删除容器或 volume。
 
 方案 B：package 保持 Private。
 
@@ -865,7 +867,19 @@ git cat-file -e "${target_commit}^{commit}"
 git merge-base --is-ancestor "$target_commit" origin/main
 ```
 
-然后执行：
+检查镜像：
+
+```bash
+docker manifest inspect \
+  "ghcr.io/sdutvinci/sdutvinci_web:${target_commit}" \
+  >/dev/null && echo '运行镜像存在'
+
+docker manifest inspect \
+  "ghcr.io/sdutvinci/sdutvinci_web-ops:${target_commit}" \
+  >/dev/null && echo '运维镜像存在'
+```
+
+两个都存在后执行首次部署：
 
 ```bash
 DEPLOY_COMMIT="$target_commit" \
@@ -938,7 +952,7 @@ docker compose logs --tail=100 gateway app-blue app-green postgres
 
 这一次端口交接可能短暂中断。完成后，后续发布均使用双槽位，不再重复这段迁移。
 
-## 5. 教程四：接通 GitHub Actions 自动部署
+## 5. 教程四：接通内网服务器主动拉取自动部署
 
 ### 5.1 这个教程是做什么的
 
@@ -947,97 +961,164 @@ docker compose logs --tail=100 gateway app-blue app-green postgres
 ```text
 本机 commit
   -> push 到 GitHub main
-  -> Actions 测试和构建 commit 镜像
-  -> GitHub runner 通过 SSH 登录服务器
-  -> scripts/deploy.sh 蓝绿发布
+  -> Actions 在隔离环境测试并发布 commit SHA 镜像
+  -> 内网服务器的 systemd timer 每分钟主动读取 origin/main
+  -> 镜像齐全后调用 scripts/deploy.sh 蓝绿发布
 ```
 
-注意三个边界：
+服务器只需要主动访问 GitHub 和 GHCR 的 HTTPS；不需要公网 IPv4，不需要在路由器映射 SSH 端口，也不需要让 GitHub Runner 登录服务器。
 
-- 本机只执行 `git commit`：不会触发；
-- push 到非 `main` 分支或提交 PR：只验证和构建，不部署生产；
-- push 到 `main`：满足工作流条件后自动部署。
-- 手工运行 `workflow_dispatch`：只做保守的 `application` 验证和镜像构建检查，不发布镜像，也不 SSH 部署。
+注意四个边界：
 
-如果 GitHub `production` environment 配置了 required reviewers，工作流会停在部署 job 等待批准。批准前不算“完全自动部署”，但镜像构建可以已经完成。
+- 本机只执行 `git commit`：GitHub 和服务器都不会发生变化；
+- push 到非 `main` 分支或提交 PR：只验证，不发布可部署镜像；
+- push 到 `main`：Actions 验证并发布不可变 SHA 镜像，服务器下一轮检查后部署；
+- 手工运行 `workflow_dispatch`：只验证和构建检查，不发布镜像，服务器不会部署。
 
-### 5.2 创建 Actions 登录服务器的 SSH 密钥
+默认最多等待约一分钟，再加上 Actions 构建镜像所需时间。它不是 webhook 的即时推送，但避免了公网 SSH、Tailscale 和自托管 Runner。
 
-这把密钥的方向是：
+### 5.2 为什么 `main` 的两个镜像都要发布
 
-```text
-GitHub Actions runner -> Linux 服务器
-```
+纯 `content/**` 的最终部署仍只使用 runtime 镜像并跳过数据库 migration。但服务器可能关机、断网，或在多次 push 后才恢复检查；此时“当前线上 commit 到最新 commit”的累计差异可能包含代码变化。
 
-在可信的管理电脑、且不在项目目录内生成：
+因此每次 `main` push 在验证成功后都发布同一 SHA 的：
+
+- runtime 镜像；
+- operations 安全备用镜像。
+
+服务器按自己当前的 `.deploy/current` 到最新 `origin/main` 重新分类：
+
+- 累计变化全部位于 `content/**`：使用 `content`，不运行 operations 和 migration；
+- 只要包含一个代码、配置、依赖或 migration 变化：使用 `application`，要求两个镜像均存在并执行 migration。
+
+这会为纯内容 commit 多构建一个备用 operations 镜像，但能防止服务器错过中间发布后错误跳过 migration。
+
+### 5.3 启用前检查目标
+
+必须先完成教程三的首次人工部署，并确认 `.deploy/current` 存在。服务器执行：
 
 ```bash
-ssh-keygen \
-  -t ed25519 \
-  -f ./vinci_actions_server_deploy \
-  -N '' \
-  -C 'github-actions-vinci-deploy'
+cd /opt/vinci-cms
+
+git status --short --branch
+docker compose config --quiet
+test -f .deploy/current
+test ! -L .deploy/current
+
+git fetch --prune origin main
+
+current_commit="$(
+  awk -F= '$1 == "commit" { print $2; exit }' .deploy/current
+)"
+remote_commit="$(
+  git rev-parse origin/main
+)"
+
+printf '当前线上：%s\n远端目标：%s\n' \
+  "$current_commit" \
+  "$remote_commit"
+
+git merge-base --is-ancestor \
+  "$current_commit" \
+  "$remote_commit"
+
+git log \
+  --oneline \
+  "${current_commit}..${remote_commit}"
 ```
 
-把 `.pub` 公钥追加到服务器部署账号的 `~/.ssh/authorized_keys`，并确认权限：
+目的：启用 timer 前人工查看它第一次可能部署哪些 commit。若祖先检查失败、仓库有已跟踪改动或日志中出现不认识的提交，停止配置并先排查，不要绕过检查。
+
+### 5.4 打开自动部署开关
+
+编辑服务器的 `/opt/vinci-cms/.env`：
+
+```dotenv
+AUTO_DEPLOY_ENABLED=true
+```
+
+然后执行：
 
 ```bash
-chmod 700 ~/.ssh
-chmod 600 ~/.ssh/authorized_keys
+chmod 600 /opt/vinci-cms/.env
+docker compose config --quiet
 ```
 
-从管理电脑先人工测试：
+目的：timer 文件即使被误安装，在首次人工部署完成且显式打开开关之前也只能安全退出。
+
+### 5.5 安装 systemd service 与 timer
+
+仓库内的两个 unit 文件分别负责：
+
+- `vinci-cms-auto-deploy.service`：执行一次安全检查和可能的部署；
+- `vinci-cms-auto-deploy.timer`：开机两分钟后开始，每分钟触发一次 service。
+
+以有 sudo 权限的 `tungchiahui` 用户执行：
 
 ```bash
-ssh -i ./vinci_actions_server_deploy \
-  vinci-deploy@测试服务器地址 \
-  'cd /opt/vinci-cms && git status --short --branch'
+sudo install \
+  -o root \
+  -g root \
+  -m 0644 \
+  /opt/vinci-cms/systemd/vinci-cms-auto-deploy.service \
+  /etc/systemd/system/vinci-cms-auto-deploy.service
+
+sudo install \
+  -o root \
+  -g root \
+  -m 0644 \
+  /opt/vinci-cms/systemd/vinci-cms-auto-deploy.timer \
+  /etc/systemd/system/vinci-cms-auto-deploy.timer
+
+sudo systemd-analyze verify \
+  /etc/systemd/system/vinci-cms-auto-deploy.service \
+  /etc/systemd/system/vinci-cms-auto-deploy.timer
+
+sudo systemctl daemon-reload
 ```
 
-目的：确认 Actions 将使用的账号能 SSH、读取部署目录并运行后续命令。
+目的：仓库保存可审查的模板，`/etc/systemd/system` 保存 systemd 实际读取的 root-owned 副本。以后仓库 unit 变化时必须重新执行 `install` 和 `daemon-reload`，不能假设 Git 更新会自动改写 `/etc`。
 
-预期：打印服务器仓库状态，不要求密码。
+### 5.6 人工运行一次检查
 
-### 5.3 固定服务器 host key
-
-在可信管理电脑获取候选 key：
+先不要启用 timer，手工启动一次 service：
 
 ```bash
-ssh-keyscan -p 22 -t ed25519 测试服务器地址 \
-  > ./vinci_server_known_hosts.candidate
-ssh-keygen -lf ./vinci_server_known_hosts.candidate
+sudo systemctl start vinci-cms-auto-deploy.service
+
+sudo systemctl status \
+  --no-pager \
+  vinci-cms-auto-deploy.service
+
+sudo journalctl \
+  -u vinci-cms-auto-deploy.service \
+  -n 100 \
+  --no-pager
 ```
 
-通过云控制台、服务器本地终端或其他独立可信通道核对 fingerprint。确认后，这个文件的完整内容才可作为 Secret。
+可能结果：
 
-目的：让 Actions 严格确认“连接的是这台服务器”，而不是自动接受未知主机。
+- 当前已是最新 SHA：打印“当前已经运行”并成功退出；
+- Actions 仍在构建：打印“镜像尚未发布”，不修改网站；
+- 存在已验证的新 SHA：执行 `content` 或 `application` 蓝绿部署；
+- 仓库、快进关系、状态文件或镜像不安全：拒绝部署并标红 service。
 
-服务器重装或 SSH host key 正常轮换后，工作流会安全失败。应重新独立核对并更新 Secret，不能关闭 `StrictHostKeyChecking`。
+确认符合预期后启用定时器：
 
-### 5.4 配置 GitHub `production` environment
+```bash
+sudo systemctl enable \
+  --now \
+  vinci-cms-auto-deploy.timer
 
-在目标仓库创建名为 `production` 的 environment，并配置以下 Secrets：
+systemctl list-timers \
+  vinci-cms-auto-deploy.timer
+```
 
-| Secret | 示例含义 | 获取方式 |
-| --- | --- | --- |
-| `DEPLOY_HOST` | 服务器域名或 IP | 你的测试服务器地址 |
-| `DEPLOY_PORT` | SSH 端口 | 通常 `22` |
-| `DEPLOY_USER` | SSH 部署账号 | 例如 `vinci-deploy` |
-| `DEPLOY_PATH` | 服务器仓库绝对路径 | `/opt/vinci-cms` |
-| `DEPLOY_SSH_PRIVATE_KEY` | Actions 登录服务器的私钥全文 | 上一步生成的无 `.pub` 文件 |
-| `DEPLOY_SSH_KNOWN_HOSTS` | 已核对的服务器 host key 全文 | 上一步 candidate 文件 |
+`enable --now` 只启动 timer，不会开放任何网络端口。
 
-这些 Secrets 只负责 GitHub 到服务器。数据库、CMS session、S3 和 CMS Git 凭据仍只留在服务器 `.env` 或密钥文件中。
+### 5.7 第一次自动触发
 
-建议同时配置：
-
-- environment 只允许 `main` 部署；
-- 首次演练启用人工审批；
-- 验收稳定后，再决定是否取消审批实现 push 后全自动发布。
-
-### 5.5 第一次触发
-
-先确保教程二的服务器准备已完成，再从本机 push 一个经过审核的 `main` commit：
+从本机 push 一个经过审核的 `main` commit：
 
 ```bash
 git status
@@ -1045,42 +1126,118 @@ git log -1 --oneline
 git push origin main
 ```
 
-目的：触发 `.github/workflows/deploy.yml`。
-
 Actions 中应依次看到：
 
-1. `classify`：显示 `content` 或 `application`；
-2. `verify`：独立测试 PostgreSQL、CMS tests、类型检查、production build；
-3. `build-runtime`：构建并发布 SHA tag runtime；
-4. `build-operations`：仅 application 运行；
-5. `deploy`：SSH 到服务器并调用部署脚本。
+1. `classify`：记录本次 push 是 `content` 还是 `application`；
+2. `verify`：只使用隔离 `TEST_DATABASE_URL` 执行 CMS tests、类型检查和 production build；
+3. `build-runtime`：发布完整 SHA tag runtime；
+4. `build-operations`：为 `main` 发布同 SHA 的安全备用 operations。
 
-工作流测试只设置 `TEST_DATABASE_URL`，不会使用服务器的正常 `DATABASE_URL`。
+工作流不再包含 `deploy` job，也不读取服务器 SSH、数据库、S3、CMS Auth 或 CMS Git Secrets。
 
-部署成功后在服务器核对：
+服务器观察：
 
 ```bash
+sudo journalctl \
+  -u vinci-cms-auto-deploy.service \
+  --since '10 minutes ago' \
+  --no-pager
+
 cd /opt/vinci-cms
 git rev-parse HEAD
 sed -n '1,20p' .deploy/current
 curl --fail http://127.0.0.1:3000/api/health
 ```
 
-`git rev-parse HEAD`、`.deploy/current` 的 commit 和 GitHub Actions 的 `${GITHUB_SHA}` 应一致。
+`git rev-parse HEAD`、`.deploy/current` 和目标 GitHub SHA 应一致。
 
-### 5.6 为什么 Actions 不会随便覆盖服务器
+### 5.8 失败后为什么不会每分钟破坏网站
 
-服务器会再次检查：
+`auto-deploy.sh` 和 `deploy.sh` 共同检查：
 
+- 必须先存在人工首次部署生成的 `.deploy/current`；
+- `AUTO_DEPLOY_ENABLED` 必须严格为 `true`；
 - 工作区没有已跟踪文件改动；
 - `origin` 与 `.env` 的 `DEPLOY_GIT_REMOTE_URL` 完全相同；
-- 目标是完整 40 位小写 SHA；
-- 目标属于 `origin/main`；
-- 目标是当前线上 commit 的后继，不允许倒序或分叉；
-- `APP_IMAGE_TAG` 与目标 SHA 完全相同；
-- 请求 `content` 时，服务器重新确认所有路径都在 `content/**`。
+- 目标属于远端目标分支，并且是当前线上 commit 的后继；
+- runtime 镜像必须存在；累计为应用变化时 operations 镜像也必须存在；
+- 请求 `content` 时，服务器再次确认累计路径全部在 `content/**`；
+- 部署、备份和恢复共用操作锁，不能并发写状态或数据库。
 
-因此不要 force-push 已上线的 `main`，也不要靠手工修改 `.deploy/current` 绕过检查。
+候选部署真正失败时会写入：
+
+```text
+.deploy/auto-deploy-failed
+```
+
+后续轮询不会反复重试同一个失败 SHA。先检查日志、旧槽位和健康接口。修复原因后可以推送新的向前 commit；如果确认要重试同一 SHA，由运维人员执行：
+
+```bash
+cd /opt/vinci-cms
+sed -n '1,20p' .deploy/auto-deploy-failed
+rm -- .deploy/auto-deploy-failed
+sudo systemctl start vinci-cms-auto-deploy.service
+```
+
+不要在部署仍运行时删除 `.deploy/operation.lock`，也不要修改 `.deploy/current`。
+
+### 5.9 暂停自动部署
+
+只停止未来的定时检查：
+
+```bash
+sudo systemctl disable \
+  --now \
+  vinci-cms-auto-deploy.timer
+```
+
+如果 service 正在发布，不要中途强制停止；等待它成功或按失败保护退出。暂停 timer 不影响当前网站、PostgreSQL、gateway 或手工 `deploy.sh`。
+
+### 5.10 从旧的 Actions SSH 方案切换
+
+只适用于已经按阶段 8 早期教程完成首次部署、但服务器还没有 `auto-deploy.sh` 和 systemd unit 的站点。
+
+这次改动本身包含 workflow、脚本和 systemd 文件，属于 `application`。必须先用旧站已有的 `deploy.sh` 人工部署这个过渡 commit，不能指望尚未安装的 timer 自动安装自己。
+
+操作顺序：
+
+1. 在开发电脑 commit 并 push 新方案；
+2. 等 Actions 的 verify、runtime 和 operations 全部成功；
+3. 在服务器人工检查并部署新 SHA；
+4. 确认网站健康；
+5. 再按第 5.4～5.6 节打开开关、安装 unit 并人工运行一次；
+6. 最后启用 timer。
+
+服务器人工过渡：
+
+```bash
+cd /opt/vinci-cms
+git fetch --prune origin main
+
+transition_commit="$(
+  git rev-parse origin/main
+)"
+
+printf '准备切换自动部署方案：%s\n' \
+  "$transition_commit"
+
+docker manifest inspect \
+  "ghcr.io/sdutvinci/sdutvinci_web:${transition_commit}" \
+  >/dev/null
+
+docker manifest inspect \
+  "ghcr.io/sdutvinci/sdutvinci_web-ops:${transition_commit}" \
+  >/dev/null
+
+DEPLOY_COMMIT="$transition_commit" \
+DEPLOY_MODE=application \
+APP_IMAGE=ghcr.io/sdutvinci/sdutvinci_web \
+APP_OPS_IMAGE=ghcr.io/sdutvinci/sdutvinci_web-ops \
+APP_IMAGE_TAG="$transition_commit" \
+./scripts/deploy.sh
+```
+
+部署成功后，仓库 HEAD 已包含新的脚本和 unit 模板。此时再安装 timer，不需要公网 SSH，也不需要保留旧的 GitHub `production` Environment SSH Secrets；确认新 timer 验收通过后可由仓库管理员删除那些不再使用的 Secrets。
 
 ## 6. 教程五：发布 Markdown
 
@@ -1115,9 +1272,9 @@ git push origin main
 预期：
 
 - `classify` 输出 `content`；
-- `build-runtime` 运行；
-- `build-operations` 显示 skipped；
-- `deploy` 日志显示跳过运维镜像和数据库迁移；
+- Actions 为该 SHA 发布 runtime 和安全备用 operations 镜像；
+- 服务器 timer 日志显示重新分类为 `content`；
+- `deploy.sh` 跳过运维镜像和数据库迁移；
 - 候选槽位健康后，网关切换；
 - `.deploy/current` 显示 `mode=content`。
 
@@ -1172,6 +1329,7 @@ git push origin main
 - `classify` 输出 `application`；
 - verify 全部通过；
 - runtime 和 operations 两个镜像都以同一完整 SHA 发布；
+- 服务器 timer 把累计变化重新分类为 `application`；
 - 服务器先执行已审核 migration；
 - 非活动槽位健康后再切换网关；
 - `.deploy/current` 显示 `mode=application`。
@@ -1237,6 +1395,19 @@ docker compose logs --follow --tail=100 gateway app-blue app-green
 
 用 `Ctrl+C` 退出只会停止日志跟随，不会停止容器。
 
+查看自动部署 timer 和最近一次检查：
+
+```bash
+systemctl status \
+  --no-pager \
+  vinci-cms-auto-deploy.timer
+
+sudo journalctl \
+  -u vinci-cms-auto-deploy.service \
+  -n 100 \
+  --no-pager
+```
+
 ### 8.4 常见现象
 
 | 现象 | 先检查 | 常见原因 |
@@ -1246,9 +1417,9 @@ docker compose logs --follow --tail=100 gateway app-blue app-green
 | app unhealthy | app 和 postgres 日志 | 数据库连接或应用启动失败 |
 | 镜像 pull denied | `docker login ghcr.io` | 私有 package 未授权或 token 过期 |
 | CMS 可编辑但发布失败 | app 日志、CMS Git key/known_hosts | Deploy Key 无写权限或 host key 不匹配 |
-| Actions SSH 失败 | Actions key、服务器 authorized_keys、known_hosts | 把两类 SSH 密钥混用了 |
+| Actions 成功但服务器未更新 | timer 状态、service journal、镜像 SHA | timer 未启用、镜像未齐或失败 SHA 被保护 |
 | 部署拒绝工作区不干净 | `git status --short` | 有人在部署 clone 手改了跟踪文件 |
-| content 请求被拒绝 | Git diff 和 Actions 日志 | push 中含 `content/` 外变化 |
+| content 请求被拒绝 | 当前线上到远端的累计 Git diff | 服务器离线期间累计了 `content/` 外变化 |
 
 发现部署 clone 有人工改动时，先识别改动来源并保存证据。不要直接执行 `git reset --hard` 或删除文件。
 
@@ -1329,7 +1500,6 @@ sed -n '1,40p' "$backup_dir/config-checklist.txt"
 - 真实 `.env`；
 - CMS Git 私钥和 `known_hosts`；
 - 宿主机 HTTPS/DNS 配置；
-- Actions 登录服务器的私钥；
 - S3 图片二进制。
 
 应把配置和密钥放进加密密码库，把备份复制到异机或加密远端，并为 S3 配置版本控制、复制或供应商备份策略。至少保留一份不与应用服务器共故障域的备份。
@@ -1508,7 +1678,7 @@ APP_IMAGE_TAG="$target_commit" \
 - 先把恢复的数据升级到当前代码要求的 schema；
 - 再启动隔离应用和 gateway。
 
-这两条是恢复演练的直接启动方式。正式自动部署仍应使用 `scripts/deploy.sh` 建立 `.deploy/current`。
+这两条是恢复演练的直接启动方式。正式自动部署仍应由 `auto-deploy.sh` 调用 `scripts/deploy.sh` 并维护 `.deploy/current`。
 
 ### 10.6 验证恢复结果
 
@@ -1658,12 +1828,13 @@ APP_IMAGE_TAG="$target_commit" \
 确认新站正确后：
 
 1. 把正式 DNS 或负载均衡入口切到新服务器；
-2. 更新 GitHub `production` environment 中的 `DEPLOY_HOST`、host key 等 Secrets；
-3. 通过一个新的受审核 `main` push 验证 Actions 能部署新服务器；
-4. 观察 DNS TTL、访问日志、健康和业务功能；
-5. 旧服务器保持停止写入的只读/关闭入口状态一段观察期。
+2. 在旧服务器停止自动部署 timer，避免两个服务器同时跟随 `main`；
+3. 在新服务器按教程四安装并启用自动部署 timer；
+4. 通过一个新的受审核 `main` push 验证 Actions 发布镜像且新服务器主动部署；
+5. 观察 DNS TTL、访问日志、健康和业务功能；
+6. 旧服务器保持停止写入的只读/关闭入口状态一段观察期。
 
-不要在确认 Actions 已指向新服务器前下线旧服务器，也不要让两个服务器同时接收 CMS 写入。最终观察期结束后再按单独审核的下线流程处理旧资源。
+不要在确认新服务器 timer 工作前下线旧服务器，也不要让两个服务器同时接收 CMS 写入或同时自动跟随 `main`。最终观察期结束后再按单独审核的下线流程处理旧资源。
 
 ### 11.8 旧服务器完全损坏时
 
@@ -1674,7 +1845,7 @@ APP_IMAGE_TAG="$target_commit" \
 3. 从加密密码库恢复配置和密钥；
 4. 继续使用原 S3 或按独立方案恢复图片；
 5. 按教程九恢复到空数据库；
-6. 验证后切换 DNS 和 Actions Secrets。
+6. 验证后切换 DNS，并在新服务器启用自动部署 timer。
 
 可恢复点取决于最近一次成功备份。CMS Git 异常 bundle/patch 只能补救备份时已捕获但尚未 push 的内容。
 
@@ -1749,7 +1920,7 @@ ls -ld /opt/vinci-cms/.deploy/operation.lock
 ### 13.1 Docker 与首次部署
 
 - [ ] `.env` 不含占位符，权限为 600，未进入 Git。
-- [ ] CMS Git key 与 Actions SSH key 是两把不同的密钥。
+- [ ] CMS Git 写入 key 只供应用发布使用；服务器拉取仓库使用公开 HTTPS 或独立只读凭据。
 - [ ] `docker compose config --quiet` 通过。
 - [ ] 首次 `application` 部署成功并生成 `.deploy/current`。
 - [ ] PostgreSQL、活动槽位和 gateway 健康。
@@ -1758,13 +1929,16 @@ ls -ld /opt/vinci-cms/.deploy/operation.lock
 
 ### 13.2 自动部署与无中断切换
 
-- [ ] 仅本地 commit 不触发；push `main` 后 Actions 触发。
+- [ ] 未完成首次部署或 `AUTO_DEPLOY_ENABLED=false` 时，service 安全退出。
+- [ ] timer 只需要服务器出站 HTTPS，不开放公网 SSH。
+- [ ] 仅本地 commit 不触发；push `main` 后 Actions 构建镜像。
+- [ ] 镜像尚未齐全时 service 等待下一轮，当前网站不变。
 - [ ] 纯 `content/**` commit 分类为 `content`。
-- [ ] 内容发布跳过 operations 和 migration，但构建 runtime。
+- [ ] 内容发布即使有备用 operations 镜像也跳过 operations 和 migration。
 - [ ] 连续健康请求没有失败，新 Markdown 页面可见。
 - [ ] Vue 或 TypeScript commit 分类为 `application`。
 - [ ] 完整发布构建两个镜像并执行 migration。
-- [ ] 不存在的测试镜像 tag 使候选失败，旧槽位仍健康。
+- [ ] 候选失败会写失败 SHA、停止循环重试且旧槽位仍健康。
 - [ ] `content` 模式搭配代码变化时，服务器在 migration 前拒绝。
 - [ ] 倒序或分叉 commit 被服务器拒绝。
 
@@ -1777,7 +1951,7 @@ ls -ld /opt/vinci-cms/.deploy/operation.lock
 - [ ] 对非空目标再次恢复被拒绝。
 - [ ] 新测试服务器无需修改源码即可启动。
 - [ ] GitHub Markdown、测试 S3 图片和 PostgreSQL 业务数据均正常。
-- [ ] 更新测试 Actions Secrets 后，新 `main` push 能部署到新服务器。
+- [ ] 旧服务器 timer 已停用，新服务器 timer 启用后能跟随新的 `main` push。
 - [ ] 故障时能通过新 Git revert commit 前向回滚。
 
 人工验收通过后，才能勾选需求文档中的阶段 8 总体进度。阶段 9 不属于本教程，也不得因完成上述验收而自动启动。

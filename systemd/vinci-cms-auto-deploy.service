@@ -1,0 +1,18 @@
+[Unit]
+Description=Check and deploy the latest verified Vinci CMS commit
+Wants=network-online.target
+After=network-online.target docker.service
+Requires=docker.service
+ConditionPathIsDirectory=/opt/vinci-cms/.git
+
+[Service]
+Type=oneshot
+User=vinci-deploy
+Group=vinci-deploy
+WorkingDirectory=/opt/vinci-cms
+ExecStart=/opt/vinci-cms/scripts/auto-deploy.sh
+TimeoutStartSec=20min
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full

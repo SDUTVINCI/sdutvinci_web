@@ -1,0 +1,12 @@
+[Unit]
+Description=Check GitHub for a deployable Vinci CMS commit every minute
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+AccuracySec=10s
+RandomizedDelaySec=10s
+Unit=vinci-cms-auto-deploy.service
+
+[Install]
+WantedBy=timers.target

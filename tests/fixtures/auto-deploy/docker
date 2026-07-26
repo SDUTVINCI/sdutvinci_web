@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+
+set -eu
+
+if [ "${1:-}" = "compose" ] \
+  && [ "${2:-}" = "config" ] \
+  && [ "${3:-}" = "--environment" ]; then
+  printf 'AUTO_DEPLOY_ENABLED=%s\n' "${FAKE_AUTO_DEPLOY_ENABLED:-true}"
+  printf 'DEPLOY_GIT_REMOTE_URL=%s\n' "$(git remote get-url origin)"
+  printf 'CMS_GIT_BRANCH=main\n'
+  printf 'APP_IMAGE=registry.invalid/vinci/runtime\n'
+  printf 'APP_OPS_IMAGE=registry.invalid/vinci/operations\n'
+  exit 0
+fi
+
+if [ "${1:-}" = "manifest" ] && [ "${2:-}" = "inspect" ]; then
+  [ "${3:-}" != "${FAKE_MISSING_REFERENCE:-}" ]
+  exit
+fi
+
+printf 'unexpected fake docker command:' >&2
+printf ' %q' "$@" >&2
+printf '\n' >&2
+exit 64

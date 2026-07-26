@@ -837,3 +837,43 @@
 ### 人工验收
 
 按 `docs/DEPLOYMENT.md` 的教程五、教程六、教程十一和第 13 节清单，在测试仓库/测试服务器验证 `content` 与 `application` 两条流水线、连续请求、模式二次校验和候选失败保护。验收通过前阶段 8 总体进度继续保持未勾选，阶段 9 不得启动。
+
+## 2026-07-26：阶段 8 自动部署调整——内网服务器主动拉取
+
+维护者确认目标服务器位于内网，不希望映射公网 SSH、接入 Tailscale 或在公开仓库的正式服务器上运行 self-hosted Runner。以下设计覆盖本文件此前所有“Actions 通过 SSH 部署”“纯内容不发布 operations 镜像”和“Actions Secrets 保存服务器连接信息”的描述。
+
+### 最新部署链路
+
+- GitHub Actions 继续在隔离 PostgreSQL 中执行脚本检查、CMS tests、类型检查和 production build。
+- PR 和非 `main` 只验证；`main` push 验证通过后发布完整 commit SHA 的 runtime 与 operations 镜像，不创建 `latest` 部署依据。
+- `scripts/auto-deploy.sh` 由服务器 systemd timer 每分钟触发，主动 fetch `origin/main` 并检查镜像；服务器只需要访问 GitHub/GHCR 的出站 HTTPS。
+- 自动部署必须已经存在人工首次部署生成的 `.deploy/current`，且 `.env` 显式设置 `AUTO_DEPLOY_ENABLED=true`；默认示例保持关闭。
+- 服务器从当前线上 commit 到最新远端 commit 重新分类累计差异。纯 `content/**` 使用 `content` 并跳过 operations/migration；任何其他累计变化使用 `application`。
+- 所有 `main` SHA 都发布 operations 安全备用镜像，是为了服务器离线或错过中间 push 后仍能把最新累计变化安全地按 `application` 部署；纯内容实际部署仍不运行该镜像。
+
+### 网络与凭据边界
+
+- `.github/workflows/deploy.yml` 不再包含 SSH `deploy` job，也不读取 `DEPLOY_HOST`、`DEPLOY_USER`、`DEPLOY_PATH`、SSH 私钥或服务器 host key。
+- 数据库、CMS Auth、CMS Git 和 S3 凭据继续只保存在服务器；GHCR 私有 package 的只读登录继续由 `vinci-deploy` 本机 Docker credential 管理。
+- 自动部署不开放新的公网端口，不要求公网 IPv4。CMS Git 写入 key 与服务器部署 clone 的公开 HTTPS/独立只读凭据继续分离。
+
+### 防循环与 systemd
+
+- 新增 `systemd/vinci-cms-auto-deploy.service` 和 `.timer` 模板。service 以 `vinci-deploy` 运行，timer 开机两分钟后开始、约每分钟检查一次；仓库模板需要由管理员安装为 `/etc/systemd/system` 的 root-owned 副本。
+- 镜像未发布时只记录等待并成功退出，不触碰当前容器。`deploy.sh` 继续负责快进、镜像 tag、累计内容范围、操作锁、migration、候选健康和网关切换。
+- 候选真正失败时写 `.deploy/auto-deploy-failed`；同一失败 SHA 不会每分钟重复部署。运维人员排查后可以推送新的向前修复 commit，或明确删除失败标记后重试同一 SHA。
+- 备份、恢复、迁移、双槽位和阶段 1～7 的功能边界没有放宽。
+
+### 本轮自动化验证
+
+- 隔离本地 Git 远端与 fake Docker/部署脚本验证：默认关闭、已是最新、镜像未齐等待、纯内容、应用变化、失败 SHA 停止循环、新向前 commit 恢复均通过。
+- ShellCheck 0.11.0、`bash -n`/`sh -n`、Compose config、GitHub Actions YAML、systemd unit verify 和 `git diff --check` 均通过。
+- 临时 PostgreSQL 17 只向测试进程提供 `TEST_DATABASE_URL`，普通 `DATABASE_URL` 已移除：CMS 7 个测试文件、33 项全部通过。
+- `npm run typecheck` 与 `npm run build` 通过；Wiki 226 文件正常，Nuxt Content 处理 260 个文件，保留既有构建 warning。
+- runtime 与 operations Docker targets 均构建通过；未推送镜像、未连接真实服务器、正常数据库、真实 S3 或生产 Git 凭据。
+
+### 当前人工验收进度
+
+- 维护者已在服务器完成人工首次 `application` 部署：commit `e8b506eb5cff67fcac13fcb3a92f49746cf5fd39`，活动槽位 `blue`。
+- PostgreSQL migration、`app-blue`、gateway 和 `/api/health` 均成功，`.deploy/current` 已写入；首个管理员已创建。
+- 尚未验收新的 timer 自动部署、内容/应用两条自动通道、备份恢复和新服务器迁移；阶段 8 总体进度继续保持未勾选，阶段 9 未启动。

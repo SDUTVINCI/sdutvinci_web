@@ -1,4 +1,4 @@
-name: Verify, build, and deploy
+name: Verify and build deployable images
 
 on:
   pull_request:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: production-${{ github.ref }}
+  group: build-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
@@ -72,9 +72,10 @@ jobs:
       - name: Validate operations files
         run: |
           cp .env.example .env
-          bash -n scripts/ops-common.sh scripts/classify-deployment.sh scripts/deploy.sh scripts/backup.sh scripts/restore.sh
+          bash -n scripts/ops-common.sh scripts/classify-deployment.sh scripts/auto-deploy.sh scripts/deploy.sh scripts/backup.sh scripts/restore.sh
           sh -n docker/entrypoint.sh docker/gateway-entrypoint.sh
           docker compose config --quiet
+          ./tests/auto-deploy.integration.sh
 
       - name: Prepare Nuxt generated types
         run: npx nuxt prepare
@@ -127,7 +128,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=runtime
 
   build-operations:
-    if: needs.classify.outputs.mode == 'application'
+    if: github.event_name == 'push' || needs.classify.outputs.mode == 'application'
     needs: [classify, verify]
     runs-on: ubuntu-latest
     permissions:
@@ -163,56 +164,3 @@ jobs:
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
           cache-from: type=gha,scope=operations
           cache-to: type=gha,mode=max,scope=operations
-
-  deploy:
-    if: >-
-      always()
-      && github.event_name == 'push'
-      && github.ref == 'refs/heads/main'
-      && needs.classify.result == 'success'
-      && needs.build-runtime.result == 'success'
-      && (needs.classify.outputs.mode == 'content' || needs.build-operations.result == 'success')
-    needs: [classify, build-runtime, build-operations]
-    runs-on: ubuntu-latest
-    environment: production
-    permissions:
-      contents: read
-    env:
-      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-      DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
-      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
-      DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
-      DEPLOY_SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
-    steps:
-      - name: Configure pinned SSH host identity
-        run: |
-          test -n "$DEPLOY_HOST"
-          test -n "$DEPLOY_USER"
-          test -n "$DEPLOY_PATH"
-          test -n "$DEPLOY_SSH_PRIVATE_KEY"
-          test -n "$DEPLOY_SSH_KNOWN_HOSTS"
-          [[ "${DEPLOY_PORT:-22}" =~ ^[0-9]{1,5}$ ]]
-          [[ "$DEPLOY_PATH" = /* ]]
-          install -d -m 0700 "$HOME/.ssh"
-          printf '%s\n' "$DEPLOY_SSH_PRIVATE_KEY" > "$HOME/.ssh/id_deploy"
-          printf '%s\n' "$DEPLOY_SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
-          chmod 0600 "$HOME/.ssh/id_deploy"
-          chmod 0644 "$HOME/.ssh/known_hosts"
-
-      - name: Deploy immutable commit image over SSH
-        env:
-          DEPLOY_MODE: ${{ needs.classify.outputs.mode }}
-        run: |
-          image_name="ghcr.io/${GITHUB_REPOSITORY,,}"
-          printf -v remote_command \
-            'cd -- %q && DEPLOY_COMMIT=%q DEPLOY_MODE=%q APP_IMAGE=%q APP_OPS_IMAGE=%q APP_IMAGE_TAG=%q ./scripts/deploy.sh' \
-            "$DEPLOY_PATH" "$GITHUB_SHA" "$DEPLOY_MODE" "$image_name" "${image_name}-ops" "$GITHUB_SHA"
-          ssh \
-            -i "$HOME/.ssh/id_deploy" \
-            -p "${DEPLOY_PORT:-22}" \
-            -o BatchMode=yes \
-            -o IdentitiesOnly=yes \
-            -o StrictHostKeyChecking=yes \
-            "$DEPLOY_USER@$DEPLOY_HOST" \
-            "$remote_command"

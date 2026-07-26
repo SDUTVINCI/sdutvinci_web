@@ -296,14 +296,14 @@ contributors:
 # 十五，部署架构要求
 
 ### 总体要求
-采用 Docker Compose + GitHub + GitHub Actions 自动部署方案。
+采用 Docker Compose + GitHub + GitHub Actions 构建镜像 + 内网服务器主动拉取的自动部署方案。
 
 目标：
 
 - 支持一键迁移至任意 Linux 服务器。
 - GitHub 为唯一代码源（Source of Truth）。
 - 服务器不得被人工直接修改项目文件；后台服务可以通过受控程序修改 Markdown，并自动提交到 GitHub。
-- 所有部署均通过 GitHub Actions 自动完成，不允许手动修改服务器代码。
+- 所有正式部署均使用 GitHub Actions 验证并发布的不可变镜像，由服务器受控自动部署脚本完成；不允许手动修改服务器代码。
 
 ---
 
@@ -316,7 +316,8 @@ contributors:
 - Markdown（Nuxt Content）
 - 数据库（用户、权限等）
 - 对象存储（S3协议图床，例如腾讯云COS，用于图片）
-- GitHub Actions 自动部署
+- GitHub Actions 验证与镜像发布
+- 服务器 systemd 主动拉取自动部署
 
 ---
 
@@ -333,13 +334,13 @@ Git Push
     ↓
 GitHub Actions
     ↓
-SSH 到服务器
+测试、构建并发布 commit SHA 镜像
     ↓
-git pull
+内网服务器定时读取 origin/main
     ↓
-docker compose build
+校验快进关系、累计变更范围与镜像
     ↓
-docker compose up -d
+deploy.sh 蓝绿发布
 ```
 
 ---
@@ -363,7 +364,9 @@ GitHub Actions
     ↓
 构建新镜像
     ↓
-docker compose up -d
+内网服务器主动检查
+    ↓
+content 模式蓝绿发布并跳过数据库迁移
 ```
 
 后台操作 Markdown 的 Git 工作区与 Docker 部署目录必须分离，避免正在运行的应用直接修改或重建自身。
@@ -404,19 +407,11 @@ docker compose up -d
 
 ---
 
-### GitHub Secrets
+### GitHub 与服务器 Secrets
 
-GitHub Actions 所需敏感信息统一保存在 GitHub Secrets：
+GitHub Actions 只使用 GitHub 自动提供的最小权限 `GITHUB_TOKEN` 发布 GHCR 镜像，不保存服务器 SSH、数据库、CMS Auth、CMS Git 或 S3 凭据。
 
-- SSH 私钥
-- SSH 用户
-- SSH 地址
-- COS SecretId
-- COS SecretKey
-- JWT Secret
-- 数据库密码
-
-不得写入仓库。
+数据库密码、CMS Auth Secret、CMS Git Deploy Key 和 S3 凭据只保存在服务器 `.env`、受控密钥文件或加密密码库中，不得写入仓库。服务器只需主动访问 GitHub 与 GHCR，不开放用于 Actions 部署的公网 SSH 入口。
 
 ---
 
@@ -458,7 +453,7 @@ Markdown 不得同时以“镜像内副本”和“宿主机挂载副本”作�
 
 - GitHub 为唯一代码源。
 - Docker Compose 一键部署。
-- GitHub Actions 自动部署。
+- GitHub Actions 发布镜像，内网服务器主动拉取自动部署。
 - 易于升级。
 - 易于备份。
 - 易于迁移。
@@ -870,6 +865,7 @@ Codex 必须严格按阶段顺序执行。
 - [x] 提供首个管理员初始化命令。
 - [x] 提供：
   - [x] `deploy.sh`
+  - [x] `auto-deploy.sh`
   - [x] `backup.sh`
   - [x] `restore.sh`
 - [x] 数据库备份使用 PostgreSQL 标准备份工具。
@@ -882,13 +878,16 @@ Codex 必须严格按阶段顺序执行。
 - [x] 实现 GitHub Actions：
   - [x] 构建检查
   - [x] 测试
-  - [x] 构建镜像
-  - [x] 通过 SSH 部署
-  - [x] 仅 `content/**` 变化时走内容发布通道并跳过数据库迁移
-  - [x] 代码、配置或迁移变化时走完整应用部署通道
+  - [x] 为 `main` 构建并发布完整 commit SHA 的 runtime 与 operations 镜像
+- [x] 实现内网服务器主动拉取自动部署：
+  - [x] systemd timer 定期读取 `origin/main`
+  - [x] 镜像未齐时保持当前网站并等待下一轮
+  - [x] 仅累计 `content/**` 变化时走内容发布通道并跳过数据库迁移
+  - [x] 累计包含代码、配置或迁移变化时走完整应用部署通道
+  - [x] 候选失败记录 SHA 并停止循环重试
 - [x] 内容发布使用双应用槽位和常驻网关，候选版本健康后无中断切换。
 - [x] 服务器再次校验内容发布的路径范围和 commit 快进关系，防止错误跳过完整部署。
-- [x] SSH 私钥、服务器地址和其他敏感信息只能放入 GitHub Secrets。
+- [x] 自动部署不要求公网 SSH；数据库、S3、CMS Auth 和 CMS Git 敏感信息不进入 Actions。
 - [x] 实现部署失败回滚或保留旧容器的方案。
 - [x] 编写完整部署与迁移说明。
 - [x] 在一台全新的 Linux 环境中验证迁移流程。
@@ -911,7 +910,7 @@ Codex 必须严格按阶段顺序执行。
 - [x] 数据库数据完整。
 - [x] 正式 Markdown 与 GitHub 一致。
 - [x] 图片链接继续有效。
-- [x] GitHub Actions 可以继续自动部署。
+- [x] GitHub Actions 可以继续发布镜像，新服务器 timer 可以继续自动部署。
 - [x] 旧服务器故障后可以通过备份恢复。
 
 ---
@@ -994,7 +993,7 @@ Codex 必须严格按阶段顺序执行。
 
 推荐流程：
 
-开发电脑 → Codex 修改代码 → 本地 Docker(PostgreSQL 等)测试 → 类型检查/测试/Production Build → Git Commit → Git Push → GitHub → GitHub Actions → SSH 自动部署服务器。
+开发电脑 → Codex 修改代码 → 本地 Docker(PostgreSQL 等)测试 → 类型检查/测试/Production Build → Git Commit → Git Push → GitHub → GitHub Actions 验证并发布镜像 → 内网服务器主动拉取自动部署。
 
 原则：
 
@@ -1017,7 +1016,7 @@ Codex 必须严格按阶段顺序执行。
 
 - Docker Compose 运行网站
 - PostgreSQL
-- GitHub Actions 自动部署
+- systemd 主动拉取自动部署
 - 后台正式发布 Markdown
 - 日志与备份
 
@@ -1086,7 +1085,7 @@ docs/
 - Markdown 与 PostgreSQL 的职责划分
 - Git 与 GitHub 的职责
 - Docker 部署架构
-- GitHub Actions 自动部署流程
+- GitHub Actions 构建与服务器主动拉取自动部署流程
 - S3 图片存储方案
 - 权限模型
 - 数据流
