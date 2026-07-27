@@ -448,3 +448,17 @@ approved 草稿
 - AWS SDK v3 S3 client：<https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/client/s3/>
 - 腾讯云 COS 的 S3 兼容说明：<https://intl.cloud.tencent.com/zh/document/product/436/34688>
 - OWASP 密码存储建议：<https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html>
+
+## 15. V2.0 已确认目标约束（尚未实现）
+
+> 本节在 V2 阶段 0 只冻结目标约束，不改变以上 V1 现状。详细设计和只读基线见
+> `docs/v2/PHASE_V2_0_DESIGN.md`；实现必须按 V2 各阶段验收后逐步落地。
+
+1. V2 最终由 PostgreSQL 正式 Revision 作为线上内容唯一权威来源；阶段 5 切换前继续保持 V1 Git-first。
+2. `news`、`wiki`、`members` 必须能分别采用 `legacy_git`、`database_shadow`、`database`，不能一次性无回滚地切换。
+3. DB-first 发布时，正式 Revision、当前版本指针、审计和导出 Outbox 在一个数据库事务中提交；GitHub 故障不得阻塞已切换集合的线上发布。
+4. 已存在的 `SDUTVINCI/sdutvinci_content` 是数据库的异步可审计输出及 PR 提案入口，不是应用启动时覆盖数据库的输入。不得重新创建、清空、覆盖、批量删除或 Force Push。
+5. V2 最终取消宿主机 `vinci-deploy` 专用用户，默认使用执行安装的当前系统用户；用户名、UID/GID、Home、目录和凭据位置均由本机安全解析或显式配置，不写死进仓库。
+6. 数据库备份、配置备份、内容快照、报告、日志、迁移包、临时目录、镜像和缓存都必须有自动清理和有限保留策略。
+7. 任何清理都必须保护最新成功备份、最近验证可恢复备份、锁定备份、当前活动镜像和至少一个已验证回滚镜像；保护集合耗尽空间时停止并告警，不强制删除。
+8. Nuxt Content、代码仓库 `content/`、内容预渲染和内容镜像分类只允许在阶段 10、且数据库与独立内容仓库均已验证完整后移除。

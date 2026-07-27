@@ -16,6 +16,7 @@
     "test:backup-restore": "./tests/backup-restore.integration.sh",
     "test:deploy-cache-cleanup": "./tests/deploy-cache-cleanup.integration.sh",
     "test:cms": "./scripts/test-cms.sh",
+    "v2:phase0:audit": "node scripts/v2-phase0-audit.mjs --check",
     "wiki:check": "node scripts/wiki-check.mjs",
     "typecheck": "nuxt typecheck",
     "prebuild": "npm run wiki:check",
