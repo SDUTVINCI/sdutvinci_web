@@ -108,7 +108,12 @@ const createMember = async () => {
         class="cms-member-card"
         :to="`/cms/members/${member.id}`"
       >
-        <img :src="member.avatarUrl || '/images/logo.png'" :alt="`${member.name} 头像`">
+        <img
+          :src="member.avatarUrl || '/images/logo.png'"
+          :alt="`${member.name} 头像`"
+          loading="lazy"
+          decoding="async"
+        >
         <div>
           <h2>{{ member.name }}</h2>
           <code>{{ member.memberKey }}</code>

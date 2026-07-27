@@ -370,6 +370,8 @@ const changeOwnPassword = async () => {
                 <img
                   :src="user.member?.avatarUrl || '/images/logo.png'"
                   :alt="`${user.member?.name || user.account}的头像`"
+                  loading="lazy"
+                  decoding="async"
                 >
                 <div>
                   <h3>{{ user.member?.name || user.account }}</h3>

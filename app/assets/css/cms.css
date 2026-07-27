@@ -713,7 +713,6 @@
     linear-gradient(165deg, #172226, #0c1417 76%);
   color: #edf5f3;
   box-shadow: 16px 0 44px rgba(7, 14, 17, 0.16);
-  backdrop-filter: blur(18px);
 }
 
 .cms-brand {
@@ -947,9 +946,8 @@
   justify-content: space-between;
   padding: 0 clamp(28px, 4vw, 58px);
   border-bottom: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
-  background: color-mix(in srgb, var(--paper) 84%, transparent);
+  background: color-mix(in srgb, var(--paper) 96%, var(--surface));
   box-shadow: 0 8px 24px color-mix(in srgb, var(--ink) 4%, transparent);
-  backdrop-filter: blur(18px);
 }
 
 .cms-workspace-bar p {
@@ -1173,9 +1171,8 @@
   padding: 18px 20px;
   border: 1px solid var(--line);
   border-radius: 16px;
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  background: var(--surface);
   box-shadow: var(--shadow-card);
-  backdrop-filter: blur(12px);
 }
 
 .cms-toolbar-compact {
@@ -1210,6 +1207,8 @@
   border-radius: 18px;
   background: var(--surface);
   box-shadow: var(--shadow-card);
+  content-visibility: auto;
+  contain-intrinsic-size: auto 420px;
 }
 
 .cms-table {
@@ -1363,6 +1362,8 @@
     border-color 160ms ease,
     box-shadow 160ms ease,
     transform 160ms ease;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 110px;
 }
 
 .cms-member-card:hover {
@@ -1554,6 +1555,8 @@
 
 .cms-account-card {
   padding: 20px;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 300px;
 }
 
 .cms-account-card > header {
@@ -2352,6 +2355,7 @@
   .cms-main-content {
     min-height: calc(100svh - 52px);
     padding: 28px 18px 44px;
+    background-image: none;
   }
 
   .cms-page-header {
@@ -2496,7 +2500,20 @@
 @media (prefers-reduced-motion: reduce) {
   .cms-auth-brand small span,
   .cms-login-input,
-  .cms-login-submit {
+  .cms-login-submit,
+  .cms-nav a,
+  .cms-card-link,
+  .cms-member-card,
+  .cms-button {
     transition: none;
+  }
+}
+
+@media (hover: none) {
+  .cms-nav a:hover,
+  .cms-card-link:hover,
+  .cms-member-card:hover,
+  .cms-button-primary:hover {
+    transform: none;
   }
 }
