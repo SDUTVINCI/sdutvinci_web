@@ -462,3 +462,28 @@ approved 草稿
 6. 数据库备份、配置备份、内容快照、报告、日志、迁移包、临时目录、镜像和缓存都必须有自动清理和有限保留策略。
 7. 任何清理都必须保护最新成功备份、最近验证可恢复备份、锁定备份、当前活动镜像和至少一个已验证回滚镜像；保护集合耗尽空间时停止并告警，不强制删除。
 8. Nuxt Content、代码仓库 `content/`、内容预渲染和内容镜像分类只允许在阶段 10、且数据库与独立内容仓库均已验证完整后移除。
+
+## 16. V2 阶段 1 已落地：正式 Revision 模型与安全回填
+
+阶段 1 只完成 expand，不改变本文件前述 V1 正式行为。Git 中 Markdown、Git 历史、
+恢复 API、Nuxt Content 和前台读取仍是当前生产路径；Revision 在阶段 2 影子写入和
+阶段 5 权威切换前不是发布权威。
+
+新增 `article_revisions` 保存不可变的完整 Markdown 原文、解析正文、完整
+Frontmatter、SHA-256、文章内版本号和来源关联。`articles.current_revision_id` 与
+`drafts.base_revision_id` 均为可空外键；旧 `articles.content_hash`、
+`articles.frontmatter` 和 `drafts.base_content_hash` 继续保留，旧应用可忽略新表和
+新列。业务服务没有 Revision 正文 UPDATE/DELETE 路径，后续发布、恢复和成员发布只能
+追加新版本。
+
+首次回填以 V1 索引的 `(collection, relative_path)` 定位文章并直接复用
+`articles.id` 作为稳定 UUID 和未来 `vinciId`。工具默认 Dry Run；实际写入要求显式
+`--apply --confirm=BACKFILL_ARTICLE_REVISIONS`，并在一个 PostgreSQL 事务内取得 advisory
+lock、锁定文章行、二次读取文件、校验完整原文 SHA-256、插入首版 Revision 和设置当前
+指针。任一活跃文章缺文件、哈希漂移、未索引文件、损坏指针或既有 Revision 冲突都会
+阻止全部写入。已删除或 V1 标记为不存在的文章明确跳过，不从 Git 历史猜测正文。
+
+阶段 1 仅覆盖 `news` 和 `wiki`；`members` 的 Revision 化属于阶段 9。回填不改
+Markdown、不连接或写入独立内容仓库、不修改 V1 发布时间，也不自动运行 Migration。
+详细命令、验证、失败处理和回滚见
+`docs/v2/PHASE_V2_1_ACCEPTANCE.md`。

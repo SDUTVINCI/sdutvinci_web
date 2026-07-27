@@ -1,4 +1,5 @@
 import {
+  type AnyPgColumn,
   check,
   index,
   integer,
@@ -78,6 +79,8 @@ export const articles = pgTable('articles', {
   frontmatter: jsonb('frontmatter').$type<Record<string, unknown>>().default({}).notNull(),
   searchText: text('search_text').notNull(),
   contentHash: varchar('content_hash', { length: 64 }).notNull(),
+  currentRevisionId: uuid('current_revision_id')
+    .references((): AnyPgColumn => articleRevisions.id, { onDelete: 'restrict' }),
   isPresent: varchar('is_present', { length: 5 }).default('true').notNull(),
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
   deletedByUserId: uuid('deleted_by_user_id')
@@ -110,6 +113,8 @@ export const drafts = pgTable('drafts', {
     .default({})
     .notNull(),
   baseContentHash: varchar('base_content_hash', { length: 64 }),
+  baseRevisionId: uuid('base_revision_id')
+    .references((): AnyPgColumn => articleRevisions.id, { onDelete: 'restrict' }),
   status: varchar('status', { length: 32 }).default('draft').notNull(),
   version: integer('version').default(1).notNull(),
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
@@ -132,6 +137,44 @@ export const drafts = pgTable('drafts', {
   index('drafts_status_index').on(table.status),
   index('drafts_deleted_at_index').on(table.deletedAt),
   index('drafts_updated_at_index').on(table.updatedAt)
+])
+
+export const articleRevisions = pgTable('article_revisions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  articleId: uuid('article_id')
+    .notNull()
+    .references(() => articles.id, { onDelete: 'restrict' }),
+  revisionNumber: integer('revision_number').notNull(),
+  markdownSource: text('markdown_source').notNull(),
+  body: text('body').notNull(),
+  frontmatter: jsonb('frontmatter').$type<Record<string, unknown>>().default({}).notNull(),
+  contentHash: varchar('content_hash', { length: 64 }).notNull(),
+  sourceKind: varchar('source_kind', { length: 32 }).default('backfill').notNull(),
+  sourceDraftId: uuid('source_draft_id')
+    .references(() => drafts.id, { onDelete: 'set null' }),
+  publishedByUserId: uuid('published_by_user_id')
+    .references(() => users.id, { onDelete: 'set null' }),
+  reviewedByUserId: uuid('reviewed_by_user_id')
+    .references(() => users.id, { onDelete: 'set null' }),
+  restoredFromRevisionId: uuid('restored_from_revision_id')
+    .references((): AnyPgColumn => articleRevisions.id, { onDelete: 'restrict' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
+}, table => [
+  check('article_revisions_number_check', sql`${table.revisionNumber} >= 1`),
+  check(
+    'article_revisions_content_hash_check',
+    sql`${table.contentHash} ~ '^[0-9a-f]{64}$'`
+  ),
+  check(
+    'article_revisions_source_kind_check',
+    sql`${table.sourceKind} in ('backfill', 'publish', 'restore', 'member_publish')`
+  ),
+  uniqueIndex('article_revisions_article_number_unique')
+    .on(table.articleId, table.revisionNumber),
+  index('article_revisions_article_created_at_index')
+    .on(table.articleId, table.createdAt),
+  index('article_revisions_content_hash_index').on(table.contentHash),
+  index('article_revisions_source_draft_id_index').on(table.sourceDraftId)
 ])
 
 export const draftAuthors = pgTable('draft_authors', {
@@ -339,6 +382,7 @@ export type Session = typeof sessions.$inferSelect
 export type RateLimitBucket = typeof rateLimitBuckets.$inferSelect
 export type Member = typeof members.$inferSelect
 export type Article = typeof articles.$inferSelect
+export type ArticleRevision = typeof articleRevisions.$inferSelect
 export type Draft = typeof drafts.$inferSelect
 export type ReviewEvent = typeof reviewEvents.$inferSelect
 export type PublishRecord = typeof publishRecords.$inferSelect

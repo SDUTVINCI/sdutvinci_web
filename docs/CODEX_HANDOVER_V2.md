@@ -164,3 +164,127 @@ CMS 首次调用因隔离数据库名不含 `test` 被安全护栏拒绝，改�
 ### 安全和生产资源边界
 
 本次收尾只修改文档复选框、验收记录和路径引用，不修改数据库、API、内容、部署或生产资源。
+
+## 2026-07-27：V2 阶段 1——正式 Revision 数据模型与安全回填
+
+### 完成状态
+
+- 实现：阶段 1 实现完成。
+- 自动化验证：全部通过。
+- 人工验收：等待维护者验收，阶段总体完成和人工验收项未勾选。
+- 下一阶段是否开始：否；未进入阶段 2。
+
+### 基线
+
+- 阶段 1 开始时 HEAD 为维护者 Commit
+  `940dc7e7371fb8ca9320477785528addaee9b3c9`，其唯一变化是把 V2 权威需求移动到
+  `docs/v2/`。
+- 阶段 0 人工验收收尾 Commit 为
+  `d20c0b9`；阶段 1 在该独立文档 Commit 后实施。
+- 没有发现适用的仓库 `AGENT.md` 或 `AGENTS.md`。
+- 没有覆盖、丢弃、暂存或回退来源不明的改动；阶段 1 开始实施前工作区干净。
+
+### 实现内容
+
+- 新增 expand-only `article_revisions`，保存完整 Markdown 原文、正文、
+  Frontmatter、SHA-256、文章内版本号、来源类型和发布/审核/恢复关联预留字段。
+- 新增可空 `articles.current_revision_id` 和 `drafts.base_revision_id`，继续保留
+  全部 V1 兼容字段。
+- 增加文章内版本唯一约束、版本号/哈希/来源检查约束及查询索引；外键采用
+  `restrict` 或关联主体删除后的 `set null`。
+- 新增默认只读回填 CLI。实际写入要求
+  `--apply --confirm=BACKFILL_ARTICLE_REVISIONS`，不会隐式运行 Migration。
+- 以 `(collection, relative_path)` 映射现有 `articles.id`，该 UUID 同时作为未来
+  `vinciId`；不批量改写 Markdown。
+- apply 使用 advisory transaction lock、稳定文章行锁、事务内文件二次读取和
+  单一事务；任一 blocker 或写入失败时不留下半回填。
+- 已删除和 `is_present != true` 的文章明确跳过；活跃文章缺文件、哈希漂移、
+  未索引文件、指针损坏和既有 Revision 冲突均 fail closed。
+- 重复运行识别首版或当前 Revision，不生成重复版本，也不改变 V1
+  `articles.updated_at`。
+- CMS 测试清理显式包含新表，备份恢复演练覆盖 Revision 原文/哈希及两个指针。
+
+### 数据库、API、依赖和环境变量
+
+- 新增 Migration `0011_thankful_proteus.sql`、Drizzle snapshot 和 journal 记录。
+- Migration 只建表、加可空列/约束/索引；不回填、不删除、不重命名旧列。
+- API 变化：无。
+- 依赖和锁文件变化：无。
+- 新增环境变量：无；CLI 复用 `DATABASE_URL` 和 `CMS_CONTENT_ROOT`。
+
+### 架构边界
+
+- 当前生产内容、发布、历史、恢复和前台仍是 V1 Git-first / Nuxt Content；
+  Revision 尚未成为发布或读取权威。
+- 阶段 1 只处理 news/wiki；members 属于阶段 9。
+- 没有修改正式发布事务、Git 历史/恢复入口、前台内容来源、API、Docker、
+  Compose、systemd、自动部署行为或 `content/**/*.md`。
+- 没有访问独立内容仓库写端点，也没有新增真实写权限或凭据。
+
+### 自动化验证
+
+- 阶段 1 专用集成测试：1 个文件、9 项通过，覆盖空库、模拟 V1、只读 Dry Run、
+  业务层不可变、完整原文、228 篇哈希、幂等、冲突/缺失和事务回滚。
+- 完整 CMS：9 个文件、50 项通过。
+- CLI：228 个 Dry Run 待创建；首次 apply 创建/链接各 228；再次 Dry Run/apply
+  创建 0；缺确认参数以退出码 2 拒绝。
+- 备份恢复：校验和、空目标恢复、前向 Migration、Revision 原文/哈希、
+  当前/基线指针、应用健康、非空拒绝和卷隔离通过。
+- 自动部署、安装自动部署、部署缓存清理三套集成测试通过。
+- Wiki 检查 226 个文件通过；typecheck、build、Drizzle check、Shell 语法和
+  `git diff --check` 通过。
+- build 仅有基线已有的 6 个 `/images/*` 运行时解析 warning，退出码为 0。
+
+### 验证修复记录
+
+- 首次专用测试误传 `DATABASE_URL` 而被安全护栏 skip；未计作通过，改用
+  `TEST_DATABASE_URL` 后 9 项实际执行并通过。
+- 备份夹具的 `psql --command` 多行变量和同语句 CTE 可见性导致两次预期失败；
+  改为标准输入和顺序 `DO` 块后完整演练通过。这些失败均只发生在本轮临时测试环境。
+
+### 安全和生产资源边界
+
+- 没有取得或使用生产密钥。
+- 只使用本轮创建、名称含 `test` 的隔离 PostgreSQL 17 容器和临时数据库。
+- 备份恢复使用 `/tmp`、隔离 Compose project、临时卷和无效外部地址，退出时清理。
+- 没有连接生产 PostgreSQL、S3/COS、服务器或独立内容仓库。
+- 没有 Push、部署、发布镜像、修改生产部署行为或进入阶段 2。
+
+### 已知限制
+
+- 已删除或当前缺失文章不会从 Git 历史猜测回填，当前 Revision 指针保持可空。
+- 文件系统不参与 PostgreSQL 锁；实际运维回填仍应暂停内容发布，并在同一只读
+  工作树完成 Dry Run 和 apply。
+- 阶段 2 前的新发布和恢复不会追加 Revision，`drafts.base_revision_id` 也尚未由
+  V1 草稿流程主动写入。
+- CLI 报告只写 stdout；持久报告、保留和自动清理属于后续运维阶段。
+
+### 回滚
+
+优先普通 `git revert <阶段1-commit-sha>` 回滚应用。`0011` 是 expand-only；
+数据库已执行时可保留新表和可空列，旧应用可安全忽略。不要自动删除 Revision。
+单次回填失败由事务自动回滚；保存报告、修复 blocker 后重新 Dry Run，不要删除历史
+或改写 Markdown 规避冲突。隔离环境需要物理删除 Schema 时，必须先备份并确认没有
+阶段 2 数据，具体 SQL 见 `docs/v2/PHASE_V2_1_ACCEPTANCE.md`。
+
+### 人工验收
+
+维护者应在隔离 PostgreSQL 17：
+
+1. 核对阶段 1 Commit 只含 Schema、Migration、回填、测试和文档。
+2. 分别在空库和 V1 数据副本运行 Migration，确认旧行数量与内容不变。
+3. 同步 228 篇 V1 索引，运行默认 Dry Run，确认 228 待创建、0 blocker。
+4. 带双确认执行 apply，确认创建/链接各 228，再运行两次确认幂等。
+5. 抽查新闻、普通 Wiki 和含扩展语法 Wiki 的完整原文、正文、Frontmatter 与 SHA。
+6. 人为制造文件漂移和事务失败，确认 fail closed 且没有半回填。
+7. 重跑完整 CMS 和备份恢复，手工确认 V1 前台、编辑、审核、发布、历史和恢复不变。
+8. 确认没有独立内容仓库写入、生产连接、Push 或部署。
+9. 全部接受后明确回复“V2 阶段 1 验收通过”。
+
+详细命令、预期结果、失败处理、回滚和安全注意事项见
+`docs/v2/PHASE_V2_1_ACCEPTANCE.md`。
+
+### Commit
+
+本记录将与阶段 1 独立 Commit 一同提交。最终不可循环自引用的 Commit SHA 由阶段 1
+最终回复报告；在提交完成前不预填或猜测 SHA。

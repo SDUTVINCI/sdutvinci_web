@@ -110,6 +110,10 @@ initialize_snapshot "$target_directory"
 write_environment "$source_directory" "$source_project" "$source_database" 43991
 write_environment "$target_directory" "$target_project" "$target_database" \
   "$target_port"
+phase1_revision_source=$'---\ntitle: Phase 1 backup\n---\nphase1 backup body\n'
+phase1_revision_hash="$(
+  printf '%s' "$phase1_revision_source" | sha256sum | cut -d ' ' -f1
+)"
 
 printf '隔离演练根目录：%s\n' "$test_root"
 printf '测试备份路径：%s\n' "$backup_root"
@@ -127,6 +131,59 @@ printf '源/目标 Compose project：%s / %s\n' \
     --dbname "$source_database" \
     --set ON_ERROR_STOP=1 \
     --command "insert into audit_logs (action, target_type, target_id, metadata) values ('phase9.restore.marker', 'phase9-test', 'source', '{\"restored\":true}')"
+  printf '%s\n' "
+      do \$\$
+      declare
+        phase1_article_id uuid;
+        phase1_revision_id uuid;
+        phase1_user_id uuid;
+      begin
+        insert into articles (
+          collection, relative_path, public_path, directory, title,
+          frontmatter, search_text, content_hash
+        )
+        values (
+          'wiki', 'phase1-backup.md', '/wiki/phase1-backup', 'wiki',
+          'Phase 1 backup', '{\"title\":\"Phase 1 backup\"}',
+          'phase 1 backup', '$phase1_revision_hash'
+        )
+        returning id into phase1_article_id;
+
+        insert into article_revisions (
+          article_id, revision_number, markdown_source, body,
+          frontmatter, content_hash, source_kind
+        )
+        values (
+          phase1_article_id, 1,
+          E'---\ntitle: Phase 1 backup\n---\nphase1 backup body\n',
+          E'phase1 backup body\n',
+          '{\"title\":\"Phase 1 backup\"}', '$phase1_revision_hash', 'backfill'
+        )
+        returning id into phase1_revision_id;
+
+        update articles
+        set current_revision_id = phase1_revision_id
+        where id = phase1_article_id;
+
+        insert into users (account, password_hash)
+        values ('phase1backup', 'test-only')
+        returning id into phase1_user_id;
+
+        insert into drafts (
+          article_id, owner_user_id, collection, title, body,
+          base_content_hash, base_revision_id
+        )
+        values (
+          phase1_article_id, phase1_user_id, 'wiki',
+          'Phase 1 backup draft', 'draft body',
+          '$phase1_revision_hash', phase1_revision_id
+        );
+      end
+      \$\$;
+    " | docker compose exec -T postgres psql \
+    --username "$test_user" \
+    --dbname "$source_database" \
+    --set ON_ERROR_STOP=1
   ./scripts/backup.sh
 )
 
@@ -169,6 +226,24 @@ backup_directory="$(
   marker_count="${marker_count//$'\r'/}"
   marker_count="${marker_count//$'\n'/}"
   test "$marker_count" = 1
+  revision_count="$(
+    printf '%s\n' "
+        select count(*)
+        from article_revisions r
+        join articles a on a.current_revision_id = r.id
+        join drafts d on d.base_revision_id = r.id
+        where r.revision_number = 1
+          and r.content_hash = '$phase1_revision_hash'
+          and r.markdown_source =
+            E'---\ntitle: Phase 1 backup\n---\nphase1 backup body\n';
+      " | docker compose exec -T postgres psql \
+      --username "$test_user" \
+      --dbname "$target_database" \
+      --tuples-only --no-align
+  )"
+  revision_count="${revision_count//$'\r'/}"
+  revision_count="${revision_count//$'\n'/}"
+  test "$revision_count" = 1
   curl --fail --silent --show-error \
     "http://127.0.0.1:${target_port}/api/health" >/dev/null
 

@@ -46,7 +46,7 @@ integration('CMS 图片处理与 S3 兼容对象存储', () => {
   beforeEach(async () => {
     await getDatabase().execute(sql`
       truncate table rate_limit_buckets, media_assets, article_deletion_events, publish_records, edit_locks, review_events,
-        audit_logs, sessions, draft_authors, drafts, user_members, user_roles,
+        audit_logs, sessions, draft_authors, article_revisions, drafts, user_members, user_roles,
         articles, members, users
       restart identity cascade
     `)

@@ -1067,48 +1067,48 @@ Markdown 快照不包含：
 
 ## 17.2 实现任务
 
-- [ ] 增加 `article_revisions`。
-- [ ] 为 `articles` 增加可空的 `current_revision_id`。
-- [ ] 为草稿增加 `base_revision_id`，暂时保留旧哈希兼容字段。
-- [ ] 增加 Revision 唯一约束和必要索引。
-- [ ] 保证 Revision 正文在业务层不可更新。
-- [ ] 编写向前兼容 Migration。
-- [ ] 编写回填 Dry Run 命令。
-- [ ] Dry Run 只扫描和报告，不写数据库。
-- [ ] 编写实际回填命令。
-- [ ] 每篇现有正式文章生成首个 Revision。
-- [ ] 保存完整 Markdown 原文、正文、Frontmatter 和 SHA-256。
-- [ ] 将 `articles.current_revision_id` 指向对应 Revision。
-- [ ] 回填可重复执行且不产生重复 Revision。
-- [ ] 处理已删除文章和缺失文件的明确策略。
-- [ ] 建立现有路径到稳定文章 UUID 的映射。
-- [ ] 为后续导出准备 `vinciId`，但本阶段不批量改写代码仓库 Markdown。
-- [ ] 更新测试数据库初始化和清理逻辑。
-- [ ] 更新备份恢复测试以包含新表。
+- [x] 增加 `article_revisions`。
+- [x] 为 `articles` 增加可空的 `current_revision_id`。
+- [x] 为草稿增加 `base_revision_id`，暂时保留旧哈希兼容字段。
+- [x] 增加 Revision 唯一约束和必要索引。
+- [x] 保证 Revision 正文在业务层不可更新。
+- [x] 编写向前兼容 Migration。
+- [x] 编写回填 Dry Run 命令。
+- [x] Dry Run 只扫描和报告，不写数据库。
+- [x] 编写实际回填命令。
+- [x] 每篇现有正式文章生成首个 Revision。
+- [x] 保存完整 Markdown 原文、正文、Frontmatter 和 SHA-256。
+- [x] 将 `articles.current_revision_id` 指向对应 Revision。
+- [x] 回填可重复执行且不产生重复 Revision。
+- [x] 处理已删除文章和缺失文件的明确策略。
+- [x] 建立现有路径到稳定文章 UUID 的映射。
+- [x] 为后续导出准备 `vinciId`，但本阶段不批量改写代码仓库 Markdown。
+- [x] 更新测试数据库初始化和清理逻辑。
+- [x] 更新备份恢复测试以包含新表。
 
 ## 17.3 本阶段不做
 
-- [ ] 不改变现有 Git-first 发布。
-- [ ] 不改变现有 Git 历史和恢复入口。
-- [ ] 不切换前台读取。
-- [ ] 不向已存在的真实内容仓库写入或修改内容。
-- [ ] 不删除旧字段。
-- [ ] 不批量改写线上 Markdown。
-- [ ] 不连接生产数据库执行自动回填。
-- [ ] 不 Push、不部署。
+- [x] 不改变现有 Git-first 发布。
+- [x] 不改变现有 Git 历史和恢复入口。
+- [x] 不切换前台读取。
+- [x] 不向已存在的真实内容仓库写入或修改内容。
+- [x] 不删除旧字段。
+- [x] 不批量改写线上 Markdown。
+- [x] 不连接生产数据库执行自动回填。
+- [x] 不 Push、不部署。
 
 ## 17.4 自动化验证
 
-- [ ] Migration 可在空测试数据库执行。
-- [ ] Migration 可在模拟 V1 数据库上执行。
-- [ ] 回填 Dry Run 不写数据库。
-- [ ] 实际回填数量与现有正式文章数量一致。
-- [ ] 每篇回填 Revision 的 SHA-256 与源 Markdown 一致。
-- [ ] 重复回填不会生成重复 Revision。
-- [ ] 事务失败不会留下半回填状态。
-- [ ] V1 现有前台和 CMS 测试通过。
-- [ ] 备份恢复集成测试通过。
-- [ ] `npm run typecheck`、`npm run build` 和 `git diff --check` 通过。
+- [x] Migration 可在空测试数据库执行。
+- [x] Migration 可在模拟 V1 数据库上执行。
+- [x] 回填 Dry Run 不写数据库。
+- [x] 实际回填数量与现有正式文章数量一致。
+- [x] 每篇回填 Revision 的 SHA-256 与源 Markdown 一致。
+- [x] 重复回填不会生成重复 Revision。
+- [x] 事务失败不会留下半回填状态。
+- [x] V1 现有前台和 CMS 测试通过。
+- [x] 备份恢复集成测试通过。
+- [x] `npm run typecheck`、`npm run build` 和 `git diff --check` 通过。
 
 ## 17.5 人工验收
 
@@ -1120,11 +1120,11 @@ Markdown 快照不包含：
 
 ## 17.6 阶段记录
 
-- [ ] 已追加交接记录。
-- [ ] 已创建阶段 1 验收文档。
-- [ ] 已记录 Migration、回填和回滚方法。
-- [ ] 已创建独立 Commit 并报告 SHA。
-- [ ] 已停止开发并等待人工验收。
+- [x] 已追加交接记录。
+- [x] 已创建阶段 1 验收文档。
+- [x] 已记录 Migration、回填和回滚方法。
+- [x] 已创建独立 Commit 并报告 SHA。
+- [x] 已停止开发并等待人工验收。
 
 ---
 

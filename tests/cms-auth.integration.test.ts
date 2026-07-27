@@ -42,7 +42,7 @@ integration('CMS 身份认证与数据库', () => {
 
   beforeEach(async () => {
     await getDatabase().execute(sql`
-      truncate table rate_limit_buckets, article_deletion_events, publish_records, edit_locks, review_events, audit_logs, sessions, draft_authors, drafts, user_members, user_roles, articles, members, users
+      truncate table rate_limit_buckets, article_deletion_events, publish_records, edit_locks, review_events, audit_logs, sessions, draft_authors, article_revisions, drafts, user_members, user_roles, articles, members, users
       restart identity cascade
     `)
   })

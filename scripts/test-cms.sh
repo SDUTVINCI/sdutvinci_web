@@ -13,5 +13,6 @@ exec ./node_modules/.bin/vitest run \
   tests/cms-workflow.integration.test.ts \
   tests/cms-publishing.integration.test.ts \
   tests/cms-media.integration.test.ts \
+  tests/v2-revision-backfill.integration.test.ts \
   tests/cms-protected-markdown.test.ts \
   tests/cms-security.test.ts
