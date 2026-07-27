@@ -1,7 +1,7 @@
 # V2 阶段 0：现状复审、基线冻结与详细设计
 
 > 状态：设计冻结，尚未实施 V2 运行时变更。
-> 最高优先级依据：`docs/VINCI_CONTENT_ARCHITECTURE_V2_REQUIREMENTS.md`。
+> 最高优先级依据：`docs/v2/VINCI_CONTENT_ARCHITECTURE_V2_REQUIREMENTS.md`。
 > 本文只描述已核实的 V1 现状和后续阶段目标，不把目标写成现状。
 
 ## 1. 范围、原则和非目标
@@ -44,7 +44,7 @@
 
 ### 2.2 已完整阅读的输入
 
-- `docs/VINCI_CONTENT_ARCHITECTURE_V2_REQUIREMENTS.md`
+- `docs/v2/VINCI_CONTENT_ARCHITECTURE_V2_REQUIREMENTS.md`
 - `docs/CODEX_HANDOVER.md`
 - `docs/ARCHITECTURE.md`
 - `docs/DEPLOYMENT.md`
