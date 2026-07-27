@@ -9,6 +9,35 @@ const displayName = computed(() =>
 const avatarUrl = computed(() =>
   session.value?.user.member?.avatarUrl || '/images/logo.png'
 )
+const navItems = computed(() => [
+  { to: '/cms', code: '01', label: '工作台', caption: 'OVERVIEW', icon: 'dashboard' as const },
+  { to: '/cms/articles', code: '02', label: '文章', caption: 'ARTICLES', icon: 'articles' as const },
+  { to: '/cms/drafts', code: '03', label: '草稿', caption: 'DRAFTS', icon: 'drafts' as const },
+  ...(isAdmin.value
+    ? [{ to: '/cms/reviews', code: '04', label: '审核', caption: 'REVIEWS', icon: 'reviews' as const }]
+    : []),
+  {
+    to: '/cms/members',
+    code: isAdmin.value ? '05' : '04',
+    label: '成员',
+    caption: 'MEMBERS',
+    icon: 'members' as const
+  },
+  {
+    to: '/cms/users',
+    code: isAdmin.value ? '06' : '05',
+    label: isAdmin.value ? '账号管理' : '账号安全',
+    caption: 'ACCOUNTS',
+    icon: 'accounts' as const
+  },
+  {
+    to: '/cms/profile',
+    code: isAdmin.value ? '07' : '06',
+    label: '个人资料',
+    caption: 'PROFILE',
+    icon: 'profile' as const
+  }
+])
 const sectionTitle = computed(() => {
   const section = route.path.split('/')[2] || ''
   return {
@@ -39,71 +68,43 @@ const handleLogout = async () => {
         class="cms-brand"
         to="/cms"
       >
-        <img src="/images/logo.png" alt="">
-        <span>
-          <strong>Vinci 机器人队</strong>
-          <small>内容管理后台</small>
+        <span class="cms-brand-mark">
+          <img src="/images/logo.png" alt="">
         </span>
+        <span class="cms-brand-copy">
+          <strong>Vinci 机器人队</strong>
+          <small>CONTENT OPERATIONS</small>
+        </span>
+        <span class="cms-brand-signal" aria-hidden="true" />
       </NuxtLink>
 
-      <p class="cms-sidebar-label">
-        WORKSPACE
-      </p>
+      <div class="cms-sidebar-heading">
+        <p class="cms-sidebar-label">WORKSPACE</p>
+        <span><i /> ONLINE</span>
+      </div>
       <nav
         class="cms-nav"
         aria-label="后台导航"
       >
-        <NuxtLink to="/cms">
-          <span class="cms-nav-code">01</span>
-          <span class="cms-nav-copy">
-            <strong>工作台</strong>
-            <small>OVERVIEW</small>
+        <NuxtLink
+          v-for="item in navItems"
+          :key="item.to"
+          :to="item.to"
+        >
+          <span class="cms-nav-icon">
+            <CmsIcon :name="item.icon" />
           </span>
-        </NuxtLink>
-        <NuxtLink to="/cms/articles">
-          <span class="cms-nav-code">02</span>
           <span class="cms-nav-copy">
-            <strong>文章</strong>
-            <small>ARTICLES</small>
+            <strong>{{ item.label }}</strong>
+            <small>{{ item.caption }}</small>
           </span>
-        </NuxtLink>
-        <NuxtLink to="/cms/drafts">
-          <span class="cms-nav-code">03</span>
-          <span class="cms-nav-copy">
-            <strong>草稿</strong>
-            <small>DRAFTS</small>
-          </span>
-        </NuxtLink>
-        <NuxtLink v-if="isAdmin" to="/cms/reviews">
-          <span class="cms-nav-code">04</span>
-          <span class="cms-nav-copy">
-            <strong>审核</strong>
-            <small>REVIEWS</small>
-          </span>
-        </NuxtLink>
-        <NuxtLink to="/cms/members">
-          <span class="cms-nav-code">{{ isAdmin ? '05' : '04' }}</span>
-          <span class="cms-nav-copy">
-            <strong>成员</strong>
-            <small>MEMBERS</small>
-          </span>
-        </NuxtLink>
-        <NuxtLink to="/cms/users">
-          <span class="cms-nav-code">{{ isAdmin ? '06' : '05' }}</span>
-          <span class="cms-nav-copy">
-            <strong>{{ isAdmin ? '账号管理' : '账号安全' }}</strong>
-            <small>ACCOUNTS</small>
-          </span>
-        </NuxtLink>
-        <NuxtLink to="/cms/profile">
-          <span class="cms-nav-code">{{ isAdmin ? '07' : '06' }}</span>
-          <span class="cms-nav-copy">
-            <strong>个人资料</strong>
-            <small>PROFILE</small>
-          </span>
+          <span class="cms-nav-code">{{ item.code }}</span>
         </NuxtLink>
         <span class="cms-nav-hint">
-          <strong>ACCESS SCOPE</strong>
+          <span class="cms-nav-hint-icon">
+            <CmsIcon name="activity" />
+          </span>
+          <strong>{{ isAdmin ? 'ADMIN CONTROL' : 'MEMBER ACCESS' }}</strong>
           <span>{{ isAdmin ? '管理员可审核内容、接管编辑锁并维护成员资料' : '成员可以保存草稿、提交审核并在审核前撤回' }}</span>
         </span>
       </nav>
@@ -111,6 +112,7 @@ const handleLogout = async () => {
       <div class="cms-sidebar-user">
         <NuxtLink class="cms-user-identity" to="/cms/profile">
           <img :src="avatarUrl" :alt="`${displayName}的头像`">
+          <span class="cms-user-presence" aria-hidden="true" />
           <span class="cms-user-copy">
             <strong>{{ displayName }}</strong>
             <small>@{{ session?.user.account }}</small>
@@ -119,7 +121,8 @@ const handleLogout = async () => {
         </NuxtLink>
         <div class="cms-user-actions">
           <NuxtLink class="cms-button cms-button-link cms-button-quiet" to="/">
-            返回网站
+            <CmsIcon name="external" />
+            <span>官网</span>
           </NuxtLink>
           <button
             class="cms-button cms-button-quiet"
@@ -127,7 +130,8 @@ const handleLogout = async () => {
             :disabled="loggingOut"
             @click="handleLogout"
           >
-            {{ loggingOut ? '正在退出…' : '退出' }}
+            <CmsIcon name="logout" />
+            <span>{{ loggingOut ? '退出中…' : '退出' }}</span>
           </button>
         </div>
       </div>
@@ -135,16 +139,25 @@ const handleLogout = async () => {
 
     <main class="cms-main">
       <header class="cms-workspace-bar">
-        <p>
-          <span class="cms-workspace-dot" aria-hidden="true" />
-          VINCI CMS
-          <span aria-hidden="true">/</span>
-          <strong>{{ sectionTitle }}</strong>
-        </p>
-        <NuxtLink to="/">
-          查看官网
-          <span aria-hidden="true">↗</span>
-        </NuxtLink>
+        <div class="cms-workspace-context">
+          <span class="cms-workspace-icon">
+            <CmsIcon name="spark" />
+          </span>
+          <p>
+            <small>VINCI CMS</small>
+            <strong>{{ sectionTitle }}</strong>
+          </p>
+        </div>
+        <div class="cms-workspace-tools">
+          <span class="cms-workspace-health">
+            <i class="cms-workspace-dot" aria-hidden="true" />
+            系统在线
+          </span>
+          <NuxtLink to="/">
+            查看官网
+            <CmsIcon name="external" />
+          </NuxtLink>
+        </div>
       </header>
       <div class="cms-main-content">
         <slot />
