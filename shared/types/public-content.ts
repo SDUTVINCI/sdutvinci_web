@@ -1,7 +1,11 @@
 export type PublicContentCollection = 'news' | 'wiki' | 'members'
 export type PublicArticleCollection = Exclude<PublicContentCollection, 'members'>
 export type PublicContentSourceMode = 'legacy_git' | 'database_shadow' | 'database'
-export type PublicContentCandidateEnvironment = 'disabled' | 'test' | 'staging'
+export type PublicContentCandidateEnvironment =
+  | 'disabled'
+  | 'test'
+  | 'staging'
+  | 'production'
 
 export interface PublicContentSourceConfig {
   environment: PublicContentCandidateEnvironment

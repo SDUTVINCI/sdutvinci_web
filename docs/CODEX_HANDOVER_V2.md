@@ -912,3 +912,107 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
   Content 和代码仓库 `content/` 均未切换或删除。
 - 阶段 4 人工验收项和总体进度已勾选。阶段 5 具备开始条件，但本次没有开始阶段 5。
 - 没有 Push、部署、生产资源访问、内容仓库读写或测试资源遗留。
+
+---
+
+## 2026-07-29：V2 阶段 5——数据库权威与 DB-first 发布事务
+
+### 完成状态
+
+- 实现：完成。
+- 自动化验证：完成。
+- 人工验收：等待维护者确认，阶段 5 总体完成项保持未勾选。
+- 下一阶段是否开始：否；不得开始阶段 6。
+
+### 基线与资源边界
+
+- 开始时分支 `main`，HEAD/main/origin/main 均为
+  `ddcb6a38b91e3104c25aacf524491d7cfda4397d`，工作区干净；没有 fetch、pull、
+  rebase、reset 或覆盖维护者改动。
+- 旧 `/tmp/vinci-v2-phase2-acceptance.*`、`vinci-v2-phase2-acceptance-db` 和普通
+  `vinci-cms-postgres` 只读盘点后保持原状。
+- 自动验证仅创建 `vinci-v2-phase5-test-db` /
+  `vinci_v2_phase5_test`，绑定 `127.0.0.1:55445`；蓝绿测试只在其中短暂创建并删除
+  `vinci_v2_phase5_test_expand_contract`。
+- 未连接生产数据库、生产容器、服务器、S3/COS、GitHub 写权限或
+  `SDUTVINCI/sdutvinci_content`；没有 Push、部署、Worker 或内容仓库导出。
+- `content/` tree 保持
+  `c621880ed3e8d5f39335555c83ecedef834ffbe5`，没有 Markdown 变化。阶段 3/4 已接受的
+  33 篇/35 项及额外 25 条差异原样保留。
+
+### 权威、事务和 Outbox
+
+- 生产运行时及 Compose 默认：
+  `CONTENT_PUBLISH_MODE=database`、news/wiki=`database`、
+  members=`legacy_git`、候选环境=`production`。开发/测试的无变量回退仍为旧安全模式。
+- DB-first 服务在一个 PostgreSQL 事务内锁定草稿和文章、验证 approved/version 与
+  `base_revision_id`、构建确定性 Markdown、写成功 publish record、追加不可变
+  Revision/更新 current pointer、写唯一 pending Outbox、更新草稿基线/状态/版本并写
+  审计。事务内没有 Git/GitHub、文件写入或导出等待。
+- `content_export_jobs` 保存 target、Revision、操作、状态、幂等键、attempt、
+  next-attempt、错误、导出 Commit 和时间戳；全局幂等键和非空
+  `(revision_id, operation)` 唯一。阶段 5 只写 pending，不建立或启动 Worker。
+- 发布提交后才按 collection/article UUID 精确清缓存并返回 Revision 与
+  `waiting_export`；Git 配置是无效地址、worktree/content 目录不存在时仍成功。
+- 并发请求通过文章行锁序列化 Revision Number，唯一索引兜底；旧 base Revision
+  直接 409，不能覆盖当前正式版本。
+
+### 历史、恢复、删除和后台
+
+- 正式历史、版本详情和正文 Diff 改读数据库 Revision UUID。恢复旧版复制所选内容，
+  追加新 Revision、Outbox 和审计，不改写历史。
+- 删除以数据库 current Revision 立即下线并写 Outbox/审计；恢复删除复制 current
+  Revision、追加新 Revision 并立即上线。普通发布拒绝隐式恢复已删除文章。
+- CMS 文章详情在 DB 模式直接读取 current Revision，不再旁路读取 Nuxt Content；
+  显示 Revision Number/UUID 以及等待导出、失败、同步、落后或未跟踪的安全占位。
+- 草稿和审核比较在 DB 模式使用 base/current Revision；重新同步同时更新 hash 与
+  Revision，之后必须重新审核。
+
+### Migration、蓝绿与回滚
+
+- Migration `0013_charming_iceman.sql` 只新增 Outbox、删除事件的可空
+  Revision/Outbox 关联，并放宽旧 Commit 字段 NOT NULL；无表/列删除或破坏性 down。
+- 隔离兼容测试先应用 0000～0012 并执行旧删除写法，再应用 0013 并再次执行同一旧
+  写法，均成功。旧 Git-first 源码、字段、Nuxt Content、`content/` 全部保留。
+- 完整回滚必须同时设 publish/news/wiki/members 为 `legacy_git`、候选环境为
+  `disabled`。基础 Compose 在 DB-first 模式不要求或挂载 Git 写凭据；显式
+  `compose.git-first.yaml` overlay 才挂载 key/known_hosts，缺失时 fail closed。
+- `v2:phase5:consistency` 是只读 DB 检查，覆盖 pointer、投影、Revision 序号、
+  草稿基线、发布/审计/Outbox 和删除事件关联；不访问 Git、不自动修复。
+
+### 自动验证
+
+- 阶段 5 专项：1 文件，14/14。
+- 完整 CMS 回归：12 文件，80/80；包含阶段 1～5、旧 Git-first、权限和安全回归。
+- 普通测试：4 文件、16 项通过；9 个数据库文件、71 项在无测试 URL 时安全跳过，数据库
+  路径已由完整 CMS 回归覆盖。
+- `npm run v2:phase0:audit`：260 个 Markdown 基线通过。
+- `npm run wiki:check`：226 个 Wiki 文件通过。
+- `npm run typecheck`、`npm run build`、基础/回滚 Compose config、脚本语法和
+  `git diff --check` 通过。
+- 构建处理 4 个集合/260 个内容文件；既有静态图片解析 warning 和 Nuxt timing
+  warning 不阻断，退出码为 0。
+
+专项失败注入证明 Revision、current pointer、草稿、发布记录、审计和 Outbox 同成
+同败；并发仅一个请求成功且序号连续；无效 Git 远端下成功；提交后数据库前台立即返回
+新 Revision；缓存只失效目标文章；历史/Diff/恢复/删除/恢复删除与一致性报告均通过。
+
+### 已知限制
+
+- 阶段 6 Worker 未实现，pending Outbox 不会自动导出，最近导出状态只是安全占位。
+- 缓存仍是单进程有界缓存；多实例广播尚未实现。Revision UUID 键保证新 current
+  Revision 不复用旧缓存，删除/恢复依靠本实例精确失效。
+- 成员仍为 legacy 权威；Nuxt Content、旧 Git-first 和仓库 Markdown 继续保留。
+- Git-first 回滚期间产生的 Git-only 内容不会自动反向覆盖数据库；再次切回 DB-first
+  前必须冻结发布并人工回填/对账。
+- 尚未执行浏览器人工验收、真实预发布或生产部署，也没有声称 Outbox 已导出。
+
+### 人工验收、清理与 Commit
+
+- 浏览器优先启动、发布、无效 Git、等待导出、多人旧基线、历史/Diff/恢复、删除/恢复、
+  Git-first 回滚、失败证据和精确清理见
+  `docs/v2/PHASE_V2_5_ACCEPTANCE.md`。
+- 人工脚本只创建明确带 phase5/manual-test 的本机容器、数据库、临时目录、隔离 bare
+  Git 和 HTTP；不会使用 GitHub Token 或真实内容仓库。
+- 自动测试容器在最终提交前按名称和归属标签精确删除，无测试 HTTP/Git 进程遗留。
+- 本阶段独立 Commit SHA 由最终回复报告；未 Push、未部署、未进入阶段 6。

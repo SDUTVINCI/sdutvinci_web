@@ -16,6 +16,7 @@ const { data, status, error, refresh } = await useAsyncData(`cms:article:${id}:h
   requestFetch<{ history: CmsArticleHistoryEntry[] }>(`/api/cms/articles/${id}/history`)
 )
 const history = computed(() => data.value?.history || [])
+const authority = computed(() => history.value[0]?.authority || 'legacy_git')
 const selected = ref<CmsArticleVersion | null>(null)
 const comparison = ref<CmsArticleVersionDiff | null>(null)
 const fromCommit = ref('')
@@ -64,7 +65,10 @@ const compareVersions = async () => {
 }
 
 const restoreVersion = async (commit: string) => {
-  if (!isAdmin.value || !confirm('恢复会创建并推送一个新提交，历史提交不会删除。是否继续？')) return
+  const confirmation = authority.value === 'database'
+    ? '恢复会复制所选内容并创建一个新的数据库 Revision，已有 Revision 不会覆盖。是否继续？'
+    : '恢复会创建并推送一个新提交，历史提交不会删除。是否继续？'
+  if (!isAdmin.value || !confirm(confirmation)) return
   busy.value = true
   message.value = ''
   errorMessage.value = ''
@@ -73,7 +77,9 @@ const restoreVersion = async (commit: string) => {
       `/api/cms/articles/${id}/versions/${commit}/restore`,
       { method: 'POST', headers: csrfHeaders() }
     )
-    message.value = `恢复成功，新提交为 ${response.result.commitHash.slice(0, 12)}。`
+    message.value = response.result.revisionId
+      ? `恢复成功，已生成 Revision #${response.result.revisionNumber}，等待导出。`
+      : `恢复成功，新提交为 ${response.result.commitHash?.slice(0, 12)}。`
     selected.value = null
     comparison.value = null
     await refresh()
@@ -89,15 +95,18 @@ const restoreVersion = async (commit: string) => {
   <section class="cms-page">
     <header class="cms-page-header">
       <NuxtLink class="cms-back-link" :to="`/cms/articles/${id}`">← 返回文章</NuxtLink>
-      <p class="cms-eyebrow">GIT HISTORY</p>
+      <p class="cms-eyebrow">{{ authority === 'database' ? 'DATABASE REVISIONS' : 'GIT HISTORY' }}</p>
       <h1>版本历史</h1>
-      <p>查看、比较历史内容；管理员可把历史版本恢复为一个新的 Git 提交。</p>
+      <p>
+        查看、比较历史内容；管理员恢复旧版时会生成新的
+        {{ authority === 'database' ? 'Revision' : 'Git 提交' }}。
+      </p>
     </header>
 
     <p v-if="message" class="cms-alert">{{ message }}</p>
     <p v-if="errorMessage" class="cms-alert cms-alert-error">{{ errorMessage }}</p>
-    <p v-if="status === 'pending'" class="cms-muted">正在读取 Git 历史…</p>
-    <p v-else-if="error" class="cms-alert cms-alert-error">{{ error.message || 'Git 历史读取失败' }}</p>
+    <p v-if="status === 'pending'" class="cms-muted">正在读取正式历史…</p>
+    <p v-else-if="error" class="cms-alert cms-alert-error">{{ error.message || '正式历史读取失败' }}</p>
 
     <section class="cms-panel">
       <h2>版本比较</h2>
@@ -127,7 +136,7 @@ const restoreVersion = async (commit: string) => {
 
     <div class="cms-detail-grid">
       <section class="cms-panel">
-        <h2>提交记录</h2>
+        <h2>{{ authority === 'database' ? 'Revision 记录' : '提交记录' }}</h2>
         <ol class="cms-history-list">
           <li v-for="entry in history" :key="entry.commitHash">
             <div>
@@ -150,7 +159,7 @@ const restoreVersion = async (commit: string) => {
             </div>
           </li>
         </ol>
-        <p v-if="!history.length" class="cms-muted">此文件尚无 Git 历史记录。</p>
+        <p v-if="!history.length" class="cms-muted">此文章尚无正式历史记录。</p>
       </section>
       <aside class="cms-panel">
         <h2>历史 Markdown</h2>

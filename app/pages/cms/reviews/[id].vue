@@ -81,7 +81,9 @@ const publish = async () => {
       }
     )
     publishResult.value = response.result
-    message.value = `发布成功，Git 提交 ${response.result.commitHash.slice(0, 12)} 已推送。`
+    message.value = response.result.exportStatus === 'waiting_export'
+      ? `数据库发布成功，Revision #${response.result.revisionNumber} 已立即生效；等待导出。`
+      : `Git-first 发布成功，提交 ${response.result.commitHash?.slice(0, 12)} 已推送。`
   } catch (error: any) {
     errorMessage.value = error?.data?.message || '发布失败；草稿仍保持已通过，可重试。'
   } finally {
@@ -192,7 +194,7 @@ const reject = async () => {
         >
           <h2>正式发布</h2>
           <p class="cms-muted">
-            发布会同步独立 Git 工作区、生成并校验 Markdown，然后提交和推送。只有推送成功才会更新发布状态。
+            DB-first 会在单个事务写入 Revision、草稿、审计和 Outbox；显式 legacy_git 回滚模式沿用原 Git-first 发布。
           </p>
           <label v-if="!review.draft.articleId">
             <span>新文章相对路径（可留空自动生成）</span>
@@ -210,14 +212,20 @@ const reject = async () => {
             :disabled="busy"
             @click="publish"
           >
-            {{ busy ? '正在发布…' : '确认发布到 Git' }}
+            {{ busy ? '正在发布…' : '确认正式发布' }}
           </button>
         </section>
 
         <section v-if="publishResult" class="cms-panel">
           <h2>发布完成</h2>
           <p><code>{{ publishResult.collection }}/{{ publishResult.relativePath }}</code></p>
-          <p><code>{{ publishResult.commitHash }}</code></p>
+          <p v-if="publishResult.revisionId">
+            当前 Revision #{{ publishResult.revisionNumber }} · <code>{{ publishResult.revisionId }}</code>
+          </p>
+          <p v-if="publishResult.commitHash"><code>{{ publishResult.commitHash }}</code></p>
+          <p v-if="publishResult.exportStatus === 'waiting_export'" class="cms-alert">
+            等待导出：数据库发布已成功，阶段 6 Worker 尚未实现。
+          </p>
           <NuxtLink
             class="cms-button cms-button-link cms-button-quiet"
             :to="`/cms/articles/${publishResult.articleId}/history`"
@@ -241,7 +249,7 @@ const reject = async () => {
     </div>
 
     <footer class="cms-draft-scope-note">
-      发布只写入隔离的 CMS Git 工作区；网站部署目录由后续部署流程更新。
+      DB-first 不访问 GitHub 或代码仓库 Markdown；显式 legacy_git 回滚模式才使用原 Git-first 路径。
     </footer>
   </section>
 </template>

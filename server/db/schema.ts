@@ -286,8 +286,14 @@ export const articleDeletionEvents = pgTable('article_deletion_events', {
     .references(() => users.id, { onDelete: 'set null' }),
   operation: varchar('operation', { length: 16 }).notNull(),
   articlePath: text('article_path').notNull(),
-  sourceCommitHash: varchar('source_commit_hash', { length: 64 }).notNull(),
-  commitHash: varchar('commit_hash', { length: 64 }).notNull(),
+  sourceCommitHash: varchar('source_commit_hash', { length: 64 }),
+  commitHash: varchar('commit_hash', { length: 64 }),
+  sourceRevisionId: uuid('source_revision_id')
+    .references(() => articleRevisions.id, { onDelete: 'restrict' }),
+  resultRevisionId: uuid('result_revision_id')
+    .references(() => articleRevisions.id, { onDelete: 'restrict' }),
+  exportJobId: uuid('export_job_id')
+    .references((): AnyPgColumn => contentExportJobs.id, { onDelete: 'restrict' }),
   metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
 }, table => [
@@ -297,7 +303,52 @@ export const articleDeletionEvents = pgTable('article_deletion_events', {
   ),
   index('article_deletion_events_article_id_index').on(table.articleId),
   index('article_deletion_events_actor_user_id_index').on(table.actorUserId),
+  index('article_deletion_events_source_revision_id_index').on(table.sourceRevisionId),
+  index('article_deletion_events_result_revision_id_index').on(table.resultRevisionId),
+  uniqueIndex('article_deletion_events_export_job_unique').on(table.exportJobId),
   index('article_deletion_events_created_at_index').on(table.createdAt)
+])
+
+export const contentExportJobs = pgTable('content_export_jobs', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  targetType: varchar('target_type', { length: 32 }).notNull(),
+  targetId: uuid('target_id').notNull(),
+  revisionId: uuid('revision_id')
+    .references(() => articleRevisions.id, { onDelete: 'restrict' }),
+  operation: varchar('operation', { length: 32 }).notNull(),
+  status: varchar('status', { length: 32 }).default('pending').notNull(),
+  idempotencyKey: varchar('idempotency_key', { length: 200 }).notNull(),
+  attemptCount: integer('attempt_count').default(0).notNull(),
+  nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  lastError: text('last_error'),
+  exportedCommitHash: varchar('exported_commit_hash', { length: 64 }),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  ...timestamps
+}, table => [
+  check(
+    'content_export_jobs_target_type_check',
+    sql`${table.targetType} in ('article', 'member')`
+  ),
+  check(
+    'content_export_jobs_operation_check',
+    sql`${table.operation} in ('create', 'update', 'move', 'delete', 'member_update')`
+  ),
+  check(
+    'content_export_jobs_status_check',
+    sql`${table.status} in ('pending', 'processing', 'succeeded', 'failed')`
+  ),
+  check('content_export_jobs_attempt_count_check', sql`${table.attemptCount} >= 0`),
+  uniqueIndex('content_export_jobs_idempotency_key_unique').on(table.idempotencyKey),
+  uniqueIndex('content_export_jobs_revision_operation_unique')
+    .on(table.revisionId, table.operation)
+    .where(sql`${table.revisionId} is not null`),
+  index('content_export_jobs_pending_index')
+    .on(table.status, table.nextAttemptAt, table.createdAt),
+  index('content_export_jobs_target_index')
+    .on(table.targetType, table.targetId, table.createdAt),
+  index('content_export_jobs_revision_id_index').on(table.revisionId)
 ])
 
 export const editLocks = pgTable('edit_locks', {
@@ -395,5 +446,6 @@ export type ReviewEvent = typeof reviewEvents.$inferSelect
 export type PublishRecord = typeof publishRecords.$inferSelect
 export type MediaAsset = typeof mediaAssets.$inferSelect
 export type ArticleDeletionEvent = typeof articleDeletionEvents.$inferSelect
+export type ContentExportJob = typeof contentExportJobs.$inferSelect
 export type EditLock = typeof editLocks.$inferSelect
 export type AuditLog = typeof auditLogs.$inferSelect

@@ -11,7 +11,10 @@ export default defineEventHandler(async (event) => {
   const auth = await requireCmsRequestAuth(event, 'admin')
   requireCmsCsrf(event, auth)
   const id = z.string().uuid().parse(getRouterParam(event, 'id'))
-  const commit = z.string().regex(/^[0-9a-f]{7,64}$/).parse(getRouterParam(event, 'commit'))
+  const commit = z.union([
+    z.string().uuid(),
+    z.string().regex(/^[0-9a-f]{7,64}$/)
+  ]).parse(getRouterParam(event, 'commit'))
   try {
     return {
       result: await restoreCmsArticleVersion(id, commit, auth.user.id)

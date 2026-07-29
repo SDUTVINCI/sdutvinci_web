@@ -96,6 +96,7 @@ const rowsToDrafts = async (rows: Array<typeof drafts.$inferSelect>): Promise<Cm
     preservedFrontmatter: row.preservedFrontmatter,
     systemFrontmatter: systemFrontmatterFrom(row.preservedFrontmatter),
     baseContentHash: row.baseContentHash,
+    baseRevisionId: row.baseRevisionId,
     status: row.status as CmsDraftStatus,
     isDeleted: Boolean(row.deletedAt),
     deletedAt: row.deletedAt?.toISOString() || null,
@@ -357,7 +358,8 @@ export const createCmsDraftForArticle = async (
         targetId: existing.id,
         metadata: {
           articleId,
-          baseContentHash: existing.baseContentHash
+          baseContentHash: existing.baseContentHash,
+          baseRevisionId: existing.baseRevisionId
         }
       })
       return result
@@ -384,7 +386,8 @@ export const createCmsDraftForArticle = async (
           : '',
         body: article.body,
         preservedFrontmatter: preserveFrontmatter(frontmatter),
-        baseContentHash: article.contentHash
+        baseContentHash: article.contentHash,
+        baseRevisionId: article.currentRevision?.id || null
       }).returning()
       await replaceDraftAuthors(tx, result[0]!.id, authorKeys)
       await tx.insert(auditLogs).values({
@@ -392,7 +395,11 @@ export const createCmsDraftForArticle = async (
         action: 'draft.create',
         targetType: 'draft',
         targetId: result[0]!.id,
-        metadata: { articleId, baseContentHash: article.contentHash }
+        metadata: {
+          articleId,
+          baseContentHash: article.contentHash,
+          baseRevisionId: article.currentRevision?.id || null
+        }
       })
       return result
     })

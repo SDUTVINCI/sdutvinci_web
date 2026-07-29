@@ -2081,19 +2081,123 @@ Markdown 原始 HTML 是维护者明确保留的兼容能力，存在已接受�
 
 ## 15. V2 阶段 2 隔离验收附录
 
-阶段 2 没有改变本文前述生产部署流程。`.env.example` 和 Compose 新增
-`CONTENT_PUBLISH_MODE`，默认必须保持：
+以下是阶段 2 当时的历史约束：该阶段没有改变生产部署流程，默认必须保持：
 
 ```dotenv
 CONTENT_PUBLISH_MODE=legacy_git
 ```
 
-`revision_shadow` 只允许 `NODE_ENV=test` 的隔离环境；Compose 正式应用固定
+`revision_shadow` 仍只允许 `NODE_ENV=test` 的隔离环境；Compose 正式应用固定
 `NODE_ENV=production`，因此错误配置会 fail closed，不能以影子模式启动发布或数据库
-历史能力。`database` 属于后续阶段，本阶段同样拒绝。
+历史能力。阶段 5 已启用 `database` 并替换生产默认，不能继续照抄本节的历史默认；
+当前配置见下一节。
 
 维护者执行阶段 2 人工验收时必须使用隔离 PostgreSQL、测试 Git 远端和单独 Git
 worktree，不得复用生产 `.env`、deploy key、Compose project 或 volume。完整前置
 条件、命令、预期结果、失败处理、回滚和安全注意事项见
 `docs/v2/PHASE_V2_2_ACCEPTANCE.md`。验收结束后恢复 `legacy_git`；已经创建的测试
 Revision 作为审计数据保留或随整个隔离数据库销毁，不单独删除历史行。
+
+## 16. V2 阶段 5 数据库权威部署与回滚
+
+阶段 5 是 application + migration 变化。本文记录安全顺序，但本阶段实现工作没有执行
+部署。蓝绿发布必须先运行 expand-only Migration `0013_charming_iceman.sql`，确认旧
+槽位仍健康，再切换带新代码的新槽位。Migration 只新建 `content_export_jobs`、增加
+可空关联并放宽旧删除 Commit 字段；不删除旧表、列、约束所依赖的数据或 Git-first
+代码。
+
+### 16.1 权威配置
+
+新槽位的完整默认组合必须是：
+
+```dotenv
+NODE_ENV=production
+CONTENT_PUBLISH_MODE=database
+CONTENT_SOURCE_NEWS=database
+CONTENT_SOURCE_WIKI=database
+CONTENT_SOURCE_MEMBERS=legacy_git
+CONTENT_CANDIDATE_ENV=production
+```
+
+不要只切换发布或只切换前台。新闻/Wiki 由
+`articles.current_revision_id → article_revisions` 提供正式响应；成员在阶段 9 前
+继续使用旧来源。`database_shadow` 不允许作为阶段 5 的 production 权威配置。
+
+上线前只读核对：
+
+```bash
+docker compose config --quiet
+docker compose --profile tools run --rm migrate
+docker compose exec -T postgres psql \
+  --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
+  --set ON_ERROR_STOP=1 \
+  --command "select to_regclass('public.content_export_jobs');"
+```
+
+必须先按既有流程完成数据库备份并验证可恢复。Migration 后旧槽位应继续响应健康检查；
+新槽位切换后再从浏览器验证配置 API、新闻/Wiki、CMS 发布、当前 Revision 和等待导出。
+不得把“Migration 已执行”解释为部署已完成。
+
+### 16.2 发布与 Outbox 运维
+
+DB-first 发布成功只依赖 PostgreSQL 事务。响应中的 `waiting_export` 和
+`content_export_jobs.status=pending` 是阶段 5 正常状态，不是 GitHub 故障或发布失败。
+阶段 6 前没有 Worker，因此不要手工把 job 改为 succeeded、不要运行临时 Git 脚本、
+不要将 pending job 直接删除。
+
+只读检查：
+
+```bash
+docker compose exec -T app-blue \
+  npm run v2:phase5:consistency
+```
+
+实际命令应在当前活动槽位执行。非零退出表示 pointer、Revision、发布、审计、Outbox
+或删除事件关联有问题：停止新发布，保存 JSON 和日志，先备份，再由维护者决定修复。
+此工具不会访问 GitHub或修改数据。
+
+监控至少增加：
+
+- `content_export_jobs` 各状态总量和最老 pending 时间；
+- DB-first 发布成功数、409 基线冲突数和事务错误数；
+- 当前 Revision 缺失、一致性报告 issue；
+- “等待导出”仅作积压指标，不反向把正式 Revision 标为失败；
+- 多实例部署时各进程缓存失效的已知边界。
+
+### 16.3 短期 Git-first 回滚
+
+运行时回滚必须作为一个配置变更同时设置：
+
+```dotenv
+CONTENT_PUBLISH_MODE=legacy_git
+CONTENT_SOURCE_NEWS=legacy_git
+CONTENT_SOURCE_WIKI=legacy_git
+CONTENT_SOURCE_MEMBERS=legacy_git
+CONTENT_CANDIDATE_ENV=disabled
+```
+
+然后按正常蓝绿流程重启/切换槽位。不要 down migration，不删除 Revision 或 Outbox。
+旧路径重新要求 `CMS_GIT_WORKTREE`、远端权限和 push 成功；应先只读验证其配置，不得用
+生产凭据做破坏性故障测试。
+
+DB-first 的基础 `compose.yaml` 不挂载 Git 写凭据，未配置远端时使用明确无效地址。
+Git-first 回滚必须显式叠加凭据 overlay：
+
+```bash
+docker compose -f compose.yaml -f compose.git-first.yaml config --quiet
+docker compose -f compose.yaml -f compose.git-first.yaml up -d
+```
+
+overlay 缺任一 SSH key/known_hosts 路径会 fail closed。恢复 DB-first 后回到基础
+Compose 文件，并确认活动容器不再挂载这两个 Git secret。
+
+回滚期间新 Git 发布不会自动生成数据库正式 Revision。重新切回 DB-first 前必须：
+
+1. 冻结发布；
+2. 备份数据库和旧 Git 内容；
+3. 运行只读差异分析；
+4. 为 Git-only 变化制定人工回填/Revision 方案；
+5. 复验一致性后再同时切回五个阶段 5 默认变量。
+
+阶段 5 不实现从 Git 自动覆盖数据库、内容仓库 Worker、对账修复或 Force Push。隔离
+浏览器验收和精确资源清理见 `docs/v2/PHASE_V2_5_ACCEPTANCE.md`。

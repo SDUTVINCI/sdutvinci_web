@@ -10,7 +10,8 @@ import { throwCmsWorkflowError } from '../../../../utils/cms-workflow-http'
 const schema = z.object({
   version: z.number().int().positive(),
   lockLeaseId: z.string().uuid(),
-  expectedCurrentContentHash: z.string().length(64)
+  expectedCurrentContentHash: z.string().length(64).optional(),
+  expectedCurrentRevisionId: z.string().uuid().optional()
 }).strict()
 
 export default defineEventHandler(async (event) => {

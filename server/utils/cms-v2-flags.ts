@@ -21,13 +21,9 @@ export const getCmsRuntimeNodeEnvironment = () =>
 export const getContentPublishMode = (): ContentPublishMode => {
   if (!cachedMode) {
     const mode = contentPublishModeSchema.parse(
-      process.env.CONTENT_PUBLISH_MODE || 'legacy_git'
+      process.env.CONTENT_PUBLISH_MODE
+      || (getCmsRuntimeNodeEnvironment() === 'production' ? 'database' : 'legacy_git')
     )
-    if (mode === 'database') {
-      throw new CmsV2ConfigurationError(
-        'CONTENT_PUBLISH_MODE=database 在 V2 阶段 2 尚不可用'
-      )
-    }
     if (mode === 'revision_shadow' && getCmsRuntimeNodeEnvironment() !== 'test') {
       throw new CmsV2ConfigurationError(
         'revision_shadow 只允许在 NODE_ENV=test 的隔离环境启用'
@@ -41,9 +37,21 @@ export const getContentPublishMode = (): ContentPublishMode => {
 export const isCmsRevisionShadowEnabled = () =>
   getContentPublishMode() === 'revision_shadow'
 
+export const isCmsDatabaseAuthorityEnabled = () =>
+  getContentPublishMode() === 'database'
+
+export const isCmsRevisionHistoryEnabled = () =>
+  ['revision_shadow', 'database'].includes(getContentPublishMode())
+
 export const assertCmsRevisionShadowEnabled = () => {
   if (!isCmsRevisionShadowEnabled()) {
     throw new Error('CMS_REVISION_SHADOW_DISABLED')
+  }
+}
+
+export const assertCmsRevisionHistoryEnabled = () => {
+  if (!isCmsRevisionHistoryEnabled()) {
+    throw new Error('CMS_REVISION_HISTORY_DISABLED')
   }
 }
 

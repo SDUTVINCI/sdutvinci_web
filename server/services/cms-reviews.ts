@@ -21,6 +21,7 @@ import {
 } from '../db/schema'
 import { getCmsArticle } from './cms-articles'
 import { getCmsDraftForReview } from './cms-drafts'
+import { isCmsDatabaseAuthorityEnabled } from '../utils/cms-v2-flags'
 import {
   assertCmsDraftEditLease,
   releaseCmsDraftEditLeaseInTransaction
@@ -44,10 +45,12 @@ export class CmsReviewStateError extends Error {
 
 export class CmsPublishedVersionConflictError extends Error {
   currentContentHash: string | null
+  currentRevisionId: string | null
 
-  constructor(currentContentHash: string | null) {
+  constructor(currentContentHash: string | null, currentRevisionId: string | null = null) {
     super('PUBLISHED_VERSION_CONFLICT')
     this.currentContentHash = currentContentHash
+    this.currentRevisionId = currentRevisionId
   }
 }
 
@@ -58,7 +61,7 @@ const comparisonForDraft = async (draftId: string): Promise<CmsReviewComparison>
     ? await getCmsArticle(draft.articleId)
     : null
   if (draft.articleId && !formalArticle) {
-    throw new CmsPublishedVersionConflictError(null)
+    throw new CmsPublishedVersionConflictError(null, null)
   }
   const formalAuthorKeys = Array.isArray(formalArticle?.frontmatter.authors)
     ? formalArticle.frontmatter.authors.filter(value => typeof value === 'string') as string[]
@@ -79,10 +82,15 @@ const comparisonForDraft = async (draftId: string): Promise<CmsReviewComparison>
     authorKeys: draft.authors.map(author => author.memberKey),
     body: draft.body
   }
-  const hasVersionConflict = Boolean(
-    draft.articleId
-    && draft.baseContentHash !== formalArticle?.contentHash
-  )
+  const databaseAuthority = isCmsDatabaseAuthorityEnabled()
+  const hasVersionConflict = Boolean(draft.articleId && (
+    databaseAuthority
+      ? (
+          !draft.baseRevisionId
+          || draft.baseRevisionId !== formalArticle?.currentRevision?.id
+        )
+      : draft.baseContentHash !== formalArticle?.contentHash
+  ))
   const bodyDiff: CmsDiffPart[] = diffLines(formal?.body || '', draft.body).map(part => ({
     type: part.added ? 'added' : part.removed ? 'removed' : 'same',
     value: part.value
@@ -90,6 +98,8 @@ const comparisonForDraft = async (draftId: string): Promise<CmsReviewComparison>
   return {
     baseContentHash: draft.baseContentHash,
     currentContentHash: formalArticle?.contentHash || null,
+    baseRevisionId: draft.baseRevisionId,
+    currentRevisionId: formalArticle?.currentRevision?.id || null,
     hasVersionConflict,
     formal,
     draft: draftValue,
@@ -225,7 +235,10 @@ export const listCmsDraftReviewEvents = async (
 const ensureCurrentBase = async (draftId: string) => {
   const comparison = await comparisonForDraft(draftId)
   if (comparison.hasVersionConflict) {
-    throw new CmsPublishedVersionConflictError(comparison.currentContentHash)
+    throw new CmsPublishedVersionConflictError(
+      comparison.currentContentHash,
+      comparison.currentRevisionId
+    )
   }
   return comparison
 }
@@ -278,7 +291,9 @@ export const submitCmsDraftForReview = async (
       toStatus: 'pending_review',
       metadata: {
         baseContentHash: row.baseContentHash,
-        currentContentHash: comparison.currentContentHash
+        currentContentHash: comparison.currentContentHash,
+        baseRevisionId: row.baseRevisionId,
+        currentRevisionId: comparison.currentRevisionId
       }
     })
     await releaseCmsDraftEditLeaseInTransaction(
@@ -379,17 +394,28 @@ export const resyncCmsDraftBase = async (
   input: {
     version: number
     lockLeaseId: string
-    expectedCurrentContentHash: string
+    expectedCurrentContentHash?: string
+    expectedCurrentRevisionId?: string
   },
   allowAdmin = false
 ) => {
   await ensureDraftAccess(draftId, requesterUserId, allowAdmin)
   const comparison = await comparisonForDraft(draftId)
-  if (
-    !comparison.currentContentHash
-    || comparison.currentContentHash !== input.expectedCurrentContentHash
+  const databaseAuthority = isCmsDatabaseAuthorityEnabled()
+  if (databaseAuthority
+    ? (
+        !comparison.currentRevisionId
+        || comparison.currentRevisionId !== input.expectedCurrentRevisionId
+      )
+    : (
+        !comparison.currentContentHash
+        || comparison.currentContentHash !== input.expectedCurrentContentHash
+      )
   ) {
-    throw new CmsPublishedVersionConflictError(comparison.currentContentHash)
+    throw new CmsPublishedVersionConflictError(
+      comparison.currentContentHash,
+      comparison.currentRevisionId
+    )
   }
   const [updated] = await getDatabase().transaction(async (tx) => {
     await assertCmsDraftEditLease(tx, draftId, requesterUserId, input.lockLeaseId)
@@ -402,7 +428,8 @@ export const resyncCmsDraftBase = async (
     const result = await tx
       .update(drafts)
       .set({
-        baseContentHash: input.expectedCurrentContentHash,
+        baseContentHash: comparison.currentContentHash,
+        baseRevisionId: comparison.currentRevisionId,
         version: sql`${drafts.version} + 1`,
         updatedAt: new Date()
       })
@@ -418,7 +445,9 @@ export const resyncCmsDraftBase = async (
       toStatus: 'draft',
       metadata: {
         previousBaseContentHash: comparison.baseContentHash,
-        currentContentHash: input.expectedCurrentContentHash
+        currentContentHash: comparison.currentContentHash,
+        previousBaseRevisionId: comparison.baseRevisionId,
+        currentRevisionId: comparison.currentRevisionId
       }
     })
     return result
@@ -488,7 +517,9 @@ export const approveCmsDraftReview = async (
       toStatus: 'approved',
       metadata: {
         baseContentHash: result[0].baseContentHash,
-        currentContentHash: comparison.currentContentHash
+        currentContentHash: comparison.currentContentHash,
+        baseRevisionId: result[0].baseRevisionId,
+        currentRevisionId: comparison.currentRevisionId
       }
     })
     return result

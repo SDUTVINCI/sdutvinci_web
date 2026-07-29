@@ -11,7 +11,7 @@ import {
   articleRevisions,
   articles
 } from '../db/schema'
-import { assertCmsRevisionShadowEnabled } from '../utils/cms-v2-flags'
+import { assertCmsRevisionHistoryEnabled } from '../utils/cms-v2-flags'
 
 export class CmsRevisionNotFoundError extends Error {
   constructor() {
@@ -35,7 +35,7 @@ interface AppendCmsArticleRevisionInput {
   reviewedByUserId?: string | null
   restoredFromRevisionId?: string | null
   sourceOperationId: string
-  gitCommitHash: string
+  gitCommitHash: string | null
   createdAt: Date
 }
 
@@ -99,17 +99,19 @@ export const appendCmsArticleRevision = async (
     return existingOperation
   }
 
-  const [existingCommit] = await tx
-    .select()
-    .from(articleRevisions)
-    .where(and(
-      eq(articleRevisions.articleId, input.articleId),
-      eq(articleRevisions.gitCommitHash, input.gitCommitHash)
-    ))
-    .limit(1)
-  if (existingCommit) {
-    assertSameOperation(existingCommit, input)
-    return existingCommit
+  if (input.gitCommitHash) {
+    const [existingCommit] = await tx
+      .select()
+      .from(articleRevisions)
+      .where(and(
+        eq(articleRevisions.articleId, input.articleId),
+        eq(articleRevisions.gitCommitHash, input.gitCommitHash)
+      ))
+      .limit(1)
+    if (existingCommit) {
+      assertSameOperation(existingCommit, input)
+      return existingCommit
+    }
   }
 
   const [latest] = await tx
@@ -161,7 +163,7 @@ const loadRevision = async (articleId: string, revisionId: string) => {
 export const listCmsArticleRevisions = async (
   articleId: string
 ): Promise<CmsArticleRevisionHistoryEntry[]> => {
-  assertCmsRevisionShadowEnabled()
+  assertCmsRevisionHistoryEnabled()
   const [article] = await getDatabase()
     .select({ id: articles.id })
     .from(articles)
@@ -183,7 +185,7 @@ export const getCmsArticleRevision = async (
   articleId: string,
   revisionId: string
 ): Promise<CmsArticleRevision> => {
-  assertCmsRevisionShadowEnabled()
+  assertCmsRevisionHistoryEnabled()
   const revision = await loadRevision(articleId, revisionId)
   return {
     ...toHistoryEntry(revision),
@@ -198,7 +200,7 @@ export const diffCmsArticleRevisions = async (
   fromRevisionId: string,
   toRevisionId: string
 ): Promise<CmsArticleRevisionDiff> => {
-  assertCmsRevisionShadowEnabled()
+  assertCmsRevisionHistoryEnabled()
   const [from, to] = await Promise.all([
     loadRevision(articleId, fromRevisionId),
     loadRevision(articleId, toRevisionId)

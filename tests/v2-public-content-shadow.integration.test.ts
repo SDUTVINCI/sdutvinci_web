@@ -150,7 +150,7 @@ databaseSuite('V2 阶段 4 正式内容查询、缓存与候选 Feed', () => {
   beforeAll(async () => {
     await runMigrations()
     await getDatabase().execute(`
-      truncate table rate_limit_buckets, article_deletion_events, publish_records, edit_locks,
+      truncate table rate_limit_buckets, content_export_jobs, article_deletion_events, publish_records, edit_locks,
       review_events, audit_logs, sessions, draft_authors, article_revisions, drafts,
       user_members, user_roles, articles, members, users restart identity cascade
     `)

@@ -9,11 +9,15 @@ import type {
 } from '../../shared/types/cms-articles'
 import { getWikiContentMeta } from '../../utils/wiki-content-meta'
 import { getDatabase } from '../db/client'
-import { articles } from '../db/schema'
+import { articleRevisions, articles } from '../db/schema'
 import { listMarkdownFiles, readContentFile } from '../utils/cms-content-path'
 import { parseCmsMarkdown } from '../utils/cms-frontmatter'
-import { isCmsRevisionShadowEnabled } from '../utils/cms-v2-flags'
+import {
+  isCmsDatabaseAuthorityEnabled,
+  isCmsRevisionShadowEnabled
+} from '../utils/cms-v2-flags'
 import { readCmsGitArticle } from './cms-git-worktree'
+import { getCmsArticleExportStatus } from './cms-export-status'
 
 const collections: CmsArticleCollection[] = ['news', 'wiki']
 
@@ -115,7 +119,7 @@ export const synchronizeCmsArticles = async () => {
 }
 
 export const refreshCmsArticlesForRequest = async () => {
-  if (!isCmsRevisionShadowEnabled()) {
+  if (!isCmsRevisionShadowEnabled() && !isCmsDatabaseAuthorityEnabled()) {
     await synchronizeCmsArticles()
   }
 }
@@ -210,11 +214,27 @@ export const getCmsArticle = async (
   if (!row) return null
 
   const collection = row.collection as CmsArticleCollection
+  const databaseAuthority = isCmsDatabaseAuthorityEnabled()
+  const [currentRevision] = row.currentRevisionId
+    ? await db
+        .select()
+        .from(articleRevisions)
+        .where(and(
+          eq(articleRevisions.id, row.currentRevisionId),
+          eq(articleRevisions.articleId, row.id)
+        ))
+        .limit(1)
+    : []
+  if (databaseAuthority && !currentRevision) {
+    throw new Error('ARTICLE_CURRENT_REVISION_MISSING')
+  }
   let source: string
   try {
-    source = isCmsRevisionShadowEnabled()
-      ? await readShadowArticleSource(collection, row.relativePath)
-      : (await readContentFile(collection, row.relativePath)).source
+    source = databaseAuthority
+      ? currentRevision!.markdownSource
+      : isCmsRevisionShadowEnabled()
+        ? await readShadowArticleSource(collection, row.relativePath)
+        : (await readContentFile(collection, row.relativePath)).source
   } catch (error) {
     if (!includeDeleted) throw error
     source = ''
@@ -225,7 +245,20 @@ export const getCmsArticle = async (
       title: row.title,
       frontmatter: row.frontmatter,
       body: '',
-      contentHash: row.contentHash
+      contentHash: row.contentHash,
+      currentRevision: currentRevision
+        ? {
+            id: currentRevision.id,
+            revisionNumber: currentRevision.revisionNumber,
+            contentHash: currentRevision.contentHash,
+            createdAt: currentRevision.createdAt.toISOString()
+          }
+        : null,
+      exportStatus: await getCmsArticleExportStatus(
+        row.id,
+        row.currentRevisionId,
+        databaseAuthority
+      )
     }
   }
   const parsed = parseCmsMarkdown(source)
@@ -237,7 +270,20 @@ export const getCmsArticle = async (
     title,
     frontmatter: parsed.frontmatter,
     body: parsed.body,
-    contentHash: createHash('sha256').update(source).digest('hex')
+    contentHash: createHash('sha256').update(source).digest('hex'),
+    currentRevision: currentRevision
+      ? {
+          id: currentRevision.id,
+          revisionNumber: currentRevision.revisionNumber,
+          contentHash: currentRevision.contentHash,
+          createdAt: currentRevision.createdAt.toISOString()
+        }
+      : null,
+    exportStatus: await getCmsArticleExportStatus(
+      row.id,
+      row.currentRevisionId,
+      databaseAuthority
+    )
   }
 }
 

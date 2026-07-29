@@ -30,16 +30,18 @@ x-app: &app
     CMS_MEDIA_UPLOAD_WINDOW_MINUTES: ${CMS_MEDIA_UPLOAD_WINDOW_MINUTES:-1}
     CMS_CONTENT_ROOT: /app/content
     CMS_GIT_WORKTREE: /var/lib/vinci-cms/worktree
-    CMS_GIT_REMOTE_URL: ${CMS_GIT_REMOTE_URL:?CMS_GIT_REMOTE_URL is required}
+    # DB-first does not require Git credentials. The invalid default makes any
+    # accidental legacy call fail closed; use compose.git-first.yaml for rollback.
+    CMS_GIT_REMOTE_URL: ${CMS_GIT_REMOTE_URL:-ssh://git-disabled.invalid/no-access}
     CMS_GIT_REMOTE: ${CMS_GIT_REMOTE:-origin}
     CMS_GIT_BRANCH: ${CMS_GIT_BRANCH:-main}
     CMS_GIT_AUTHOR_NAME: ${CMS_GIT_AUTHOR_NAME:-Vinci CMS}
     CMS_GIT_AUTHOR_EMAIL: ${CMS_GIT_AUTHOR_EMAIL:-cms@localhost}
-    CONTENT_PUBLISH_MODE: ${CONTENT_PUBLISH_MODE:-legacy_git}
-    CONTENT_SOURCE_NEWS: ${CONTENT_SOURCE_NEWS:-legacy_git}
-    CONTENT_SOURCE_WIKI: ${CONTENT_SOURCE_WIKI:-legacy_git}
+    CONTENT_PUBLISH_MODE: ${CONTENT_PUBLISH_MODE:-database}
+    CONTENT_SOURCE_NEWS: ${CONTENT_SOURCE_NEWS:-database}
+    CONTENT_SOURCE_WIKI: ${CONTENT_SOURCE_WIKI:-database}
     CONTENT_SOURCE_MEMBERS: ${CONTENT_SOURCE_MEMBERS:-legacy_git}
-    CONTENT_CANDIDATE_ENV: ${CONTENT_CANDIDATE_ENV:-disabled}
+    CONTENT_CANDIDATE_ENV: ${CONTENT_CANDIDATE_ENV:-production}
     S3_ENDPOINT: ${S3_ENDPOINT:?S3_ENDPOINT is required}
     S3_REGION: ${S3_REGION:?S3_REGION is required}
     S3_BUCKET: ${S3_BUCKET:?S3_BUCKET is required}
@@ -66,14 +68,6 @@ x-app: &app
     start_period: 30s
   volumes:
     - cms_git_worktree:/var/lib/vinci-cms/worktree
-    - type: bind
-      source: ${CMS_GIT_SSH_KEY_FILE:?CMS_GIT_SSH_KEY_FILE is required}
-      target: /run/secrets/cms_git_ssh_key
-      read_only: true
-    - type: bind
-      source: ${CMS_GIT_KNOWN_HOSTS_FILE:?CMS_GIT_KNOWN_HOSTS_FILE is required}
-      target: /run/secrets/cms_git_known_hosts
-      read_only: true
   networks:
     - frontend
     - backend

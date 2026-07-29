@@ -28,6 +28,7 @@ if (!article.value) {
 }
 
 const { data: rendered } = await useAsyncData(`cms:article:rendered:${id}`, async () => {
+  if (article.value!.exportStatus.state !== 'not_applicable') return null
   const path = article.value!.publicPath
   return article.value!.collection === 'news'
     ? queryCollection('news').path(path).first()
@@ -59,7 +60,12 @@ const openDraft = async () => {
 
 const changeDeletionState = async (restore: boolean) => {
   if (!isAdmin.value || actionBusy.value) return
-  if (!restore && !window.confirm('删除后前台文章将下线，并生成 Git Commit。确定继续吗？')) return
+  if (
+    !restore
+    && !window.confirm(
+      '确定删除正式文章吗？DB-first 会立即下线并写 Outbox；legacy_git 回滚模式沿用原 Git 删除。'
+    )
+  ) return
   actionBusy.value = true
   actionMessage.value = ''
   actionError.value = ''
@@ -67,11 +73,18 @@ const changeDeletionState = async (restore: boolean) => {
     const endpoint = restore
       ? `/api/cms/articles/${id}/restore-deleted`
       : `/api/cms/articles/${id}/delete`
-    const result = await $fetch<{ result: { commitHash: string } }>(endpoint, {
+    const result = await $fetch<{ result: {
+      commitHash: string | null
+      revisionId: string | null
+      revisionNumber: number | null
+      exportStatus: string
+    } }>(endpoint, {
       method: 'POST',
       headers: csrfHeaders()
     })
-    actionMessage.value = `${restore ? '文章已恢复' : '文章已删除'}，Git Commit：${result.result.commitHash}`
+    actionMessage.value = result.result.revisionId
+      ? `${restore ? '文章已恢复' : '文章已删除'}，当前 Revision #${result.result.revisionNumber}；等待导出。`
+      : `${restore ? '文章已恢复' : '文章已删除'}，Git Commit：${result.result.commitHash}`
     await refresh()
   } catch (error: any) {
     actionError.value = error?.data?.message || `${restore ? '恢复' : '删除'}失败`
@@ -128,13 +141,21 @@ onMounted(async () => {
     <p v-if="actionMessage" class="cms-alert">{{ actionMessage }}</p>
     <p v-if="actionError" class="cms-alert cms-alert-error">{{ actionError }}</p>
     <p v-if="article.isDeleted" class="cms-alert cms-alert-error">
-      此正式文章已从 Git 当前版本删除；历史记录仍保留，管理员可以恢复。
+      {{
+        article.exportStatus.state === 'not_applicable'
+          ? '此正式文章已按 legacy_git 回滚模式删除；历史仍保留，管理员可以恢复。'
+          : '此正式文章已从数据库当前状态删除；Revision 历史仍保留，管理员可以恢复。'
+      }}
     </p>
 
     <div class="cms-detail-grid">
       <article class="cms-panel cms-preview">
         <h2>渲染预览</h2>
-        <ContentRenderer v-if="rendered && !article.isDeleted" :value="rendered" />
+        <VinciMarkdownRenderer
+          v-if="article.exportStatus.state !== 'not_applicable' && !article.isDeleted"
+          :markdown="article.body"
+        />
+        <ContentRenderer v-else-if="rendered && !article.isDeleted" :value="rendered" />
         <pre v-else class="cms-source">{{ article.body }}</pre>
       </article>
       <aside class="cms-panel cms-frontmatter">
@@ -148,6 +169,32 @@ onMounted(async () => {
         <h2>内容校验</h2>
         <p class="cms-muted">SHA-256</p>
         <code class="cms-hash">{{ article.contentHash }}</code>
+        <template v-if="article.currentRevision">
+          <h2>当前 Revision</h2>
+          <p>
+            #{{ article.currentRevision.revisionNumber }}<br>
+            <code>{{ article.currentRevision.id }}</code>
+          </p>
+        </template>
+        <h2>内容仓库导出状态</h2>
+        <p class="cms-muted">
+          {{
+            article.exportStatus.state === 'waiting_export'
+              ? '等待导出'
+              : article.exportStatus.state === 'synchronized'
+                ? '数据库与最近导出版本一致'
+                : article.exportStatus.state === 'export_behind'
+                  ? '数据库版本领先最近导出版本'
+                  : article.exportStatus.state === 'export_failed'
+                    ? '最近导出失败，数据库正式状态不受影响'
+                    : article.exportStatus.state === 'untracked'
+                      ? '尚无可核对的导出版本'
+                      : 'legacy_git 回滚模式'
+          }}
+        </p>
+        <p v-if="article.exportStatus.latestExportedRevisionId" class="cms-muted">
+          最近导出 Revision：<code>{{ article.exportStatus.latestExportedRevisionId }}</code>
+        </p>
       </aside>
     </div>
   </section>

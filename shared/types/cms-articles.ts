@@ -16,6 +16,26 @@ export interface CmsArticleSummary {
 
 export interface CmsArticleDetail extends CmsArticleSummary {
   body: string
+  currentRevision: {
+    id: string
+    revisionNumber: number
+    contentHash: string
+    createdAt: string
+  } | null
+  exportStatus: {
+    state:
+      | 'not_applicable'
+      | 'untracked'
+      | 'waiting_export'
+      | 'export_failed'
+      | 'synchronized'
+      | 'export_behind'
+    currentRevisionId: string | null
+    currentJobId: string | null
+    currentJobStatus: 'pending' | 'processing' | 'succeeded' | 'failed' | null
+    latestExportedRevisionId: string | null
+    latestExportedCommitHash: string | null
+  }
 }
 
 export interface CmsArticleListResponse {

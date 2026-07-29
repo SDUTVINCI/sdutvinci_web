@@ -1,6 +1,6 @@
 # CMS 阶段 1～9 运行说明
 
-本文覆盖 PostgreSQL、身份认证、成员管理、文章索引、Markdown 编辑器、数据库草稿、审核流程、编辑锁、正式版本冲突检查、隔离 Git 工作区中的正式发布和历史恢复、WebP 图片处理、S3 兼容对象存储、阶段 8 Docker 运维入口和阶段 9 安全基线。完整生产部署、备份、恢复和迁移流程见 `docs/DEPLOYMENT.md`；最终安全策略、已知限制和人工验收见 `docs/PHASE9_SECURITY_AND_ACCEPTANCE.md`。
+本文覆盖 PostgreSQL、身份认证、成员管理、文章索引、Markdown 编辑器、数据库草稿、审核流程、编辑锁、正式版本冲突检查、V2 阶段 5 的 DB-first 正式发布与 Revision 历史、短期 Git-first 回滚、WebP 图片处理、S3 兼容对象存储、阶段 8 Docker 运维入口和阶段 9 安全基线。完整生产部署、备份、恢复和迁移流程见 `docs/DEPLOYMENT.md`；最终安全策略、已知限制和人工验收见 `docs/PHASE9_SECURITY_AND_ACCEPTANCE.md`。
 
 ## 1. 环境变量
 
@@ -102,11 +102,12 @@ npm run dev
 - 所有文章都可以进入基于 Milkdown Crepe 的混合可视化模式；原始 HTML、Vue 组件、Jekyll/MDC 等扩展语法显示为标明类型的只读保护区域，周围的普通 Markdown 仍可编辑。保护区域本身需要切换到源码模式修改。
 - 草稿可提交审核；待审核内容不可编辑，提交者可在审核结束前撤回。被驳回或撤回的草稿需要显式点击“继续编辑”才能恢复。
 - 管理员在 `/cms/reviews` 查看 Frontmatter 和正文差异，填写原因驳回或审核通过。审核通过后可确认新文章路径并正式发布。
-- 提交和审核通过前都会读取当前正式 Markdown 计算实时哈希。发现冲突时必须撤回并手动整理差异，再明确确认最新正式版本为新基线；系统不会自动合并。
-- 正式发布会再次同步远端并校验基线，在独立工作区原子写入 Markdown，再 commit 和 push。只有 push 成功才将草稿标为 `published`。
-- Push 失败会记录原因，草稿保持 `approved`，管理员修复 Git 或网络问题后可在原审核页重试。
-- 文章详情的“版本历史”可查看和比较历史 Markdown；管理员恢复历史版本时会产生一个新提交，不删除已有历史。
-- `CMS_GIT_WORKTREE` 必须是部署目录之外的独立 clone。服务账号需要该目录的读写权限和目标分支的非强制推送权限；SSH 私钥建议只读挂载并由 `CMS_GIT_SSH_KEY_PATH` 指向。
+- DB-first 模式下，提交、审核和发布以 `base_revision_id` 对比数据库当前 Revision；发现冲突时必须同步新基线并重新审核，系统不会自动合并。
+- DB-first 正式发布在一个数据库事务内追加 Revision、更新当前指针和草稿、写发布记录/审计/Outbox；提交后立即失效目标文章缓存并返回“等待导出”。它不访问 GitHub、不 push、不写 `content/`。
+- 文章详情显示当前 Revision 和最近导出状态占位；历史、详情和 Diff 读取数据库。管理员恢复旧版时复制内容并追加一个新 Revision，不更新或删除旧 Revision。
+- 删除以数据库状态立即下线；恢复删除会追加新 Revision 并重新上线。两者均写审计和待处理 Outbox。
+- 阶段 5 没有 Outbox Worker；`pending` 不表示发布失败，只表示尚未执行阶段 6 的异步内容仓库导出。
+- 旧 Git-first 路径仍可通过完整回滚开关启用。该模式下 `CMS_GIT_WORKTREE` 必须是部署目录之外的独立 clone，且只有 push 成功才发布；不要把旧 Git 凭据接入 DB-first 验收。
 - 阶段 8 已实现内网主动拉取自动更新：后台发布 push 到 `main` 后，Actions 发布完整 SHA 的 runtime/operations 镜像；服务器 timer 从当前线上 commit 重新判断累计范围，纯 `content/**` 跳过 migration 并蓝绿切换，包含代码或配置时走完整应用部署。
 - 草稿为可编辑状态且当前页面持有有效编辑锁时，可选择图片、把图片拖入编辑区，或直接粘贴截图。服务端接受 JPEG/JPG、PNG、WebP、GIF，并统一转换为 WebP；动态 GIF 会保留动画。若这些格式的文件扩展名标错，以服务端安全解码出的真实格式为准。
 - 图片成功上传后会直接插入 Markdown；正文变化继续沿用自动保存。图片关联草稿，但二进制只保存在 S3 兼容对象存储中。

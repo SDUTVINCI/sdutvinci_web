@@ -45,6 +45,7 @@ import {
 import { createCmsDraftForArticle } from '../server/services/cms-drafts'
 import { parseCmsMarkdown, writeCmsMarkdown } from '../server/utils/cms-frontmatter'
 import { resetCmsGitConfigForTests } from '../server/utils/cms-git-config'
+import { resetCmsV2FlagsForTests } from '../server/utils/cms-v2-flags'
 import { configureCmsTestDatabase } from './helpers/cms-test-database'
 
 const exec = promisify(execFile)
@@ -71,6 +72,8 @@ suite('CMS 阶段 5 Git 发布与历史集成', () => {
     (await exec('git', args, { cwd })).stdout.trim()
 
   beforeAll(async () => {
+    process.env.CONTENT_PUBLISH_MODE = 'legacy_git'
+    resetCmsV2FlagsForTests()
     await runMigrations()
     temporaryRoot = await mkdtemp(join(tmpdir(), 'vinci-cms-publish-test-'))
     seedRepository = join(temporaryRoot, 'seed')
@@ -121,7 +124,7 @@ suite('CMS 阶段 5 Git 发布与历史集成', () => {
 
     const db = getDatabase()
     await db.execute(`
-      truncate table rate_limit_buckets, article_deletion_events, publish_records, edit_locks, review_events, audit_logs, sessions,
+      truncate table rate_limit_buckets, content_export_jobs, article_deletion_events, publish_records, edit_locks, review_events, audit_logs, sessions,
       draft_authors, article_revisions, drafts, user_members, user_roles, articles, members, users
       restart identity cascade
     `)
@@ -184,6 +187,8 @@ suite('CMS 阶段 5 Git 发布与历史集成', () => {
   })
 
   afterAll(async () => {
+    delete process.env.CONTENT_PUBLISH_MODE
+    resetCmsV2FlagsForTests()
     await closeDatabase()
     if (temporaryRoot) await rm(temporaryRoot, { recursive: true, force: true })
   })

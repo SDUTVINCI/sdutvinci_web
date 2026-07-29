@@ -50,6 +50,8 @@ export interface CmsDiffPart {
 export interface CmsReviewComparison {
   baseContentHash: string | null
   currentContentHash: string | null
+  baseRevisionId: string | null
+  currentRevisionId: string | null
   hasVersionConflict: boolean
   formal: {
     title: string

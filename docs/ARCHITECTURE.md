@@ -573,3 +573,56 @@ Comark、安全过滤、标题 ID 和代码高亮管线。
 关键标题或 SEO 缺失级别的不匹配。阶段 3 的 33 篇/35 项差异全部原样映射；另有 25 条
 非阻断 DOM/SEO 内容差异明确保留，未通过批量改写 Markdown 消除。实现边界、报告、
 安全的隔离验收脚本和回滚方式见 `docs/v2/PHASE_V2_4_ACCEPTANCE.md`。
+
+## 20. V2 阶段 5 已落地：数据库权威与 DB-first 发布
+
+阶段 5 把新闻和 Wiki 的生产默认来源切换为 PostgreSQL 当前 Revision；成员继续使用
+`legacy_git`。默认发布链路不访问 Git/GitHub，也不写代码仓库 Markdown：
+
+```text
+CMS approved draft
+  └─ PostgreSQL transaction
+       ├─ validate base_revision_id under row lock
+       ├─ append immutable article_revision
+       ├─ update articles.current_revision_id and compatibility projection
+       ├─ update draft base/status/version
+       ├─ write publish_record and audit_log
+       └─ write one pending content_export_job
+            └─ COMMIT → precise article cache invalidation → waiting_export
+```
+
+`content_export_jobs` 是阶段 6 导出器的事务 Outbox，不是本阶段的后台任务。阶段 5
+只写 `pending` job，并以全局幂等键及非空 `(revision_id, operation)` 唯一约束防止
+重复。Git Commit 允许为空，不再是线上版本主键。GitHub、独立内容仓库或未来 Worker
+失败不能回滚已经提交的数据库正式发布。
+
+发布和恢复锁定文章行；Revision Number 在锁内按文章递增，数据库唯一约束作为最后
+防线。现有文章必须满足草稿 `base_revision_id === articles.current_revision_id`。
+恢复历史复制所选 Revision 内容并追加新 Revision；删除保留当前 Revision 并标记文章
+下线，恢复删除复制该 Revision 并追加新 Revision。历史、详情和 Diff 均以 Revision
+UUID 查询。
+
+提交后按 `collection + articleId` 精确清除进程内 Revision 缓存。缓存失效不放进事务，
+避免回滚事务误清；当前缓存键包含 Revision UUID，新的前台查询立即连接新
+`current_revision_id`。多实例广播仍是后续运维能力，本阶段没有伪装实现。
+
+Migration 只新增 Outbox 和删除事件的可空关联，保留旧 commit 字段、Git-first 服务、
+Nuxt Content 和 `content/`。生产默认四开关为：
+
+```dotenv
+CONTENT_PUBLISH_MODE=database
+CONTENT_SOURCE_NEWS=database
+CONTENT_SOURCE_WIKI=database
+CONTENT_SOURCE_MEMBERS=legacy_git
+CONTENT_CANDIDATE_ENV=production
+```
+
+短期回滚必须把发布、news/wiki/members 来源同时设为 `legacy_git`，并把候选环境设为
+`disabled` 后重启。旧 Git-first 路径仍需要 push 成功才返回成功。回滚窗口产生的
+Git-only 正式内容不会自动反向覆盖数据库；重新切回 DB-first 前必须冻结发布并人工
+回填/对账。只读 `v2:phase5:consistency` 工具检查 pointer、投影、Revision 序号、
+草稿基线、发布/审计/Outbox 和删除事件关联，不访问 Git 或自动修复。
+
+完整事务边界、自动验证、浏览器验收和精确清理见
+`docs/v2/PHASE_V2_5_ACCEPTANCE.md`。Outbox 领取、重试、内容仓库导出和导出运行记录
+明确属于阶段 6，尚未实现。

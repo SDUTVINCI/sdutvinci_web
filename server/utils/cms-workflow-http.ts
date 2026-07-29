@@ -27,7 +27,7 @@ export const throwCmsWorkflowError = (error: unknown): never => {
   if (error instanceof CmsV2ConfigurationError) {
     throw createError({
       statusCode: 503,
-      message: `V2 影子发布配置无效：${error.message}`
+      message: `V2 内容权威配置无效：${error.message}`
     })
   }
   if (error instanceof CmsRevisionNotFoundError) {
@@ -68,7 +68,7 @@ export const throwCmsWorkflowError = (error: unknown): never => {
   if (error instanceof CmsPublishConflictError) {
     throw createError({
       statusCode: 409,
-      message: 'Git 远端正式内容已变化，请重新同步草稿并审核后再发布'
+      message: '数据库当前正式 Revision 已变化，请重新同步草稿并审核后再发布'
     })
   }
   if (error instanceof CmsPublishPathError) {
@@ -86,7 +86,8 @@ export const throwCmsWorkflowError = (error: unknown): never => {
       message: '当前文章已有更新，请重新同步后再发布。',
       data: {
         code: 'PUBLISHED_VERSION_CONFLICT',
-        currentContentHash: error.currentContentHash
+        currentContentHash: error.currentContentHash,
+        currentRevisionId: error.currentRevisionId
       }
     })
   }

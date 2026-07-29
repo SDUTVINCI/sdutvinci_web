@@ -5,8 +5,8 @@ import { requireCmsRequestAuth } from '../../../../utils/cms-http'
 import { throwCmsWorkflowError } from '../../../../utils/cms-workflow-http'
 
 const schema = z.object({
-  from: z.string().regex(/^[0-9a-f]{7,64}$/),
-  to: z.string().regex(/^[0-9a-f]{7,64}$/)
+  from: z.union([z.string().uuid(), z.string().regex(/^[0-9a-f]{7,64}$/)]),
+  to: z.union([z.string().uuid(), z.string().regex(/^[0-9a-f]{7,64}$/)])
 })
 
 export default defineEventHandler(async (event) => {

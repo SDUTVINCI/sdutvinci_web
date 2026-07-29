@@ -7,7 +7,10 @@ export interface CmsPublishResult {
   articleId: string
   collection: CmsArticleCollection
   relativePath: string
-  commitHash: string
+  commitHash: string | null
+  revisionId: string | null
+  revisionNumber: number | null
+  exportStatus: 'not_applicable' | 'waiting_export'
   publishedAt: string
 }
 
@@ -17,18 +20,24 @@ export interface CmsArticleHistoryEntry {
   authorName: string
   authoredAt: string
   subject: string
+  authority?: 'legacy_git' | 'database'
+  revisionId?: string
+  revisionNumber?: number
 }
 
 export interface CmsArticleVersion {
   articleId: string
   commitHash: string
   source: string
+  authority?: 'legacy_git' | 'database'
+  revisionNumber?: number
 }
 
 export interface CmsArticleVersionDiff {
   articleId: string
   fromCommit: string
   toCommit: string
+  authority?: 'legacy_git' | 'database'
   parts: Array<{
     type: 'added' | 'removed' | 'same'
     value: string

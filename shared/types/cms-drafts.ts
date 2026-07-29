@@ -34,6 +34,7 @@ export interface CmsDraft {
     publishedAt: unknown
   }
   baseContentHash: string | null
+  baseRevisionId: string | null
   status: CmsDraftStatus
   isDeleted: boolean
   deletedAt: string | null

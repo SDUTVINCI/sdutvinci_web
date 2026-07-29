@@ -16,7 +16,11 @@ import {
 import { parseCmsMarkdown } from '../utils/cms-frontmatter'
 import { getCmsGitConfig } from '../utils/cms-git-config'
 import { describeCmsFailure } from '../utils/cms-sensitive-data'
-import { isCmsRevisionShadowEnabled } from '../utils/cms-v2-flags'
+import {
+  getContentPublishMode,
+  isCmsDatabaseAuthorityEnabled,
+  isCmsRevisionShadowEnabled
+} from '../utils/cms-v2-flags'
 import {
   assertCmsGitCommit,
   atomicWriteCmsGitArticle,
@@ -35,9 +39,12 @@ import {
 } from './cms-publishing'
 import {
   appendCmsArticleRevision,
+  diffCmsArticleRevisions,
   findCmsRevisionForSource,
-  getCmsArticleRevision
+  getCmsArticleRevision,
+  listCmsArticleRevisions
 } from './cms-revisions'
+import { restoreCmsArticleRevisionDatabase } from './cms-publishing-database'
 
 const sha256 = (source: string) => createHash('sha256').update(source).digest('hex')
 
@@ -63,6 +70,20 @@ const readVersionSource = async (
 export const listCmsArticleHistory = async (
   articleId: string
 ): Promise<CmsArticleHistoryEntry[]> => {
+  if (isCmsDatabaseAuthorityEnabled()) {
+    return (await listCmsArticleRevisions(articleId)).map(revision => ({
+      commitHash: revision.id,
+      shortHash: `r${revision.revisionNumber}`,
+      authorName: revision.publishedByUserId || 'system',
+      authoredAt: revision.createdAt,
+      subject: revision.sourceKind === 'restore'
+        ? `恢复为 Revision #${revision.revisionNumber}`
+        : `数据库 Revision #${revision.revisionNumber}`,
+      authority: 'database',
+      revisionId: revision.id,
+      revisionNumber: revision.revisionNumber
+    }))
+  }
   const article = await loadArticle(articleId)
   return withCmsPublishLock(async () => {
     await prepareCmsGitWorktree()
@@ -86,7 +107,8 @@ export const listCmsArticleHistory = async (
           shortHash: shortHash!,
           authorName: authorName!,
           authoredAt: authoredAt!,
-          subject: subject!
+          subject: subject!,
+          authority: 'legacy_git' as const
         }
       })
   })
@@ -96,6 +118,16 @@ export const getCmsArticleVersion = async (
   articleId: string,
   commit: string
 ): Promise<CmsArticleVersion> => {
+  if (isCmsDatabaseAuthorityEnabled()) {
+    const revision = await getCmsArticleRevision(articleId, commit)
+    return {
+      articleId,
+      commitHash: revision.id,
+      source: revision.markdownSource,
+      authority: 'database',
+      revisionNumber: revision.revisionNumber
+    }
+  }
   const article = await loadArticle(articleId)
   return withCmsPublishLock(async () => {
     await prepareCmsGitWorktree()
@@ -105,7 +137,8 @@ export const getCmsArticleVersion = async (
       source: await readVersionSource(
         `content/${article.collection}/${article.relativePath}`,
         commit
-      )
+      ),
+      authority: 'legacy_git'
     }
   })
 }
@@ -116,6 +149,16 @@ export const diffCmsArticleVersions = async (
   toCommit: string,
   scope: 'source' | 'body' = 'source'
 ): Promise<CmsArticleVersionDiff> => {
+  if (isCmsDatabaseAuthorityEnabled()) {
+    const diff = await diffCmsArticleRevisions(articleId, fromCommit, toCommit)
+    return {
+      articleId,
+      fromCommit: diff.fromRevisionId,
+      toCommit: diff.toRevisionId,
+      authority: 'database',
+      parts: diff.parts
+    }
+  }
   const article = await loadArticle(articleId)
   return withCmsPublishLock(async () => {
     await prepareCmsGitWorktree()
@@ -130,6 +173,7 @@ export const diffCmsArticleVersions = async (
       articleId,
       fromCommit: assertCmsGitCommit(fromCommit),
       toCommit: assertCmsGitCommit(toCommit),
+      authority: 'legacy_git',
       parts: diffLines(fromValue, toValue).map(part => ({
         type: part.added ? 'added' : part.removed ? 'removed' : 'same',
         value: part.value
@@ -193,7 +237,7 @@ const restoreCmsArticleSource = async (
           ? { id: input.restoredFromRevisionId }
           : await findCmsRevisionForSource(articleId, source, contentHash)
         : null
-      await db.transaction(async (tx) => {
+      const restored = await db.transaction(async (tx) => {
         await upsertPublishedArticle(tx, {
           articleId,
           collection: article.collection as 'news' | 'wiki',
@@ -235,12 +279,19 @@ const restoreCmsArticleSource = async (
             revisionId: revision?.id || null
           }
         })
+        return {
+          revisionId: revision?.id || null,
+          revisionNumber: revision?.revisionNumber || null
+        }
       })
       return {
         articleId,
         collection: article.collection as 'news' | 'wiki',
         relativePath: article.relativePath,
         commitHash,
+        revisionId: restored.revisionId,
+        revisionNumber: restored.revisionNumber,
+        exportStatus: 'not_applicable',
         publishedAt: now.toISOString()
       }
     })
@@ -265,6 +316,9 @@ export const restoreCmsArticleVersion = async (
   commit: string,
   operatorUserId: string
 ): Promise<CmsPublishResult> => {
+  if (getContentPublishMode() === 'database') {
+    return restoreCmsArticleRevisionDatabase(articleId, commit, operatorUserId)
+  }
   const article = await loadArticle(articleId)
   const safeCommit = assertCmsGitCommit(commit)
   return restoreCmsArticleSource(article, operatorUserId, {
@@ -279,6 +333,13 @@ export const restoreCmsArticleRevision = async (
   revisionId: string,
   operatorUserId: string
 ): Promise<CmsPublishResult> => {
+  if (getContentPublishMode() === 'database') {
+    return restoreCmsArticleRevisionDatabase(
+      articleId,
+      revisionId,
+      operatorUserId
+    )
+  }
   const [article, revision] = await Promise.all([
     loadArticle(articleId),
     getCmsArticleRevision(articleId, revisionId)

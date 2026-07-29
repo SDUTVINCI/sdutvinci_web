@@ -57,6 +57,7 @@ const authorKeys = ref(initial.authors.map(author => author.memberKey))
 const status = ref<CmsDraftStatus>(initial.status)
 const version = ref(initial.version)
 const baseContentHash = ref(initial.baseContentHash)
+const baseRevisionId = ref(initial.baseRevisionId)
 const lastSavedAt = ref(initial.lastSavedAt)
 const comparison = ref(comparisonData.value?.comparison || null)
 const reviewEvents = ref(eventData.value?.events || [])
@@ -580,7 +581,10 @@ const confirmResync = async () => {
   if (
     !canEdit.value
     || !leaseId.value
-    || !comparison.value?.currentContentHash
+    || (
+      !comparison.value?.currentContentHash
+      && !comparison.value?.currentRevisionId
+    )
   ) return
   workflowBusy.value = true
   message.value = ''
@@ -594,12 +598,14 @@ const confirmResync = async () => {
         body: {
           version: version.value,
           lockLeaseId: leaseId.value,
-          expectedCurrentContentHash: comparison.value.currentContentHash
+          expectedCurrentContentHash: comparison.value.currentContentHash || undefined,
+          expectedCurrentRevisionId: comparison.value.currentRevisionId || undefined
         }
       }
     )
     version.value = result.draft.version
     baseContentHash.value = result.draft.baseContentHash
+    baseRevisionId.value = result.draft.baseRevisionId
     await Promise.all([refreshComparison(), refreshEvents()])
     message.value = '已把当前正式版本设为新基线；请确认内容后重新提交审核。'
   } catch (error: any) {
@@ -654,7 +660,7 @@ onBeforeUnmount(() => {
         <p>
           <span :class="`cms-save-state cms-save-state-${saveState}`">{{ saveLabel }}</span>
           · 版本 {{ version }}
-          · {{ baseContentHash ? '基于正式版本' : '尚未发布的新文章' }}
+          · {{ baseRevisionId || baseContentHash ? '基于正式版本' : '尚未发布的新文章' }}
         </p>
       </div>
       <div class="cms-editor-actions">
@@ -785,6 +791,9 @@ onBeforeUnmount(() => {
         </details>
         <p v-if="baseContentHash" class="cms-muted cms-base-version">
           基线 SHA-256<br><code>{{ baseContentHash }}</code>
+        </p>
+        <p v-if="baseRevisionId" class="cms-muted cms-base-version">
+          数据库基线 Revision<br><code>{{ baseRevisionId }}</code>
         </p>
       </aside>
 
