@@ -324,3 +324,157 @@ CMS 首次调用因隔离数据库名不含 `test` 被安全护栏拒绝，改�
 - 没有修改数据库 Schema、API、依赖、环境变量或运行时。
 - 没有连接生产 PostgreSQL、S3/COS、服务器或独立内容仓库。
 - 没有 Push、部署、发布镜像或进入阶段 2。
+
+## 2026-07-29：V2 阶段 2——Revision 影子写入、历史和恢复数据库化
+
+### 完成状态
+
+- 实现：阶段 2 实现完成。
+- 自动化验证：全部通过。
+- 人工验收：等待维护者验收；人工验收项和阶段总体完成均未勾选。
+- 下一阶段是否开始：否；未进入阶段 3。
+
+### 基线
+
+- 开始分支为 `main`，HEAD 为阶段 1 验收收尾 Commit
+  `383db3152dac6301001c5b8738ee2f17c41e566c`。
+- 阶段 1 实现 Commit 为 `42ca85976552fe483b80afd9050e99fd28422b2c`。
+- `origin/main` 为 `1752363a306d9c6bc0b44d1eb8a6ce359444637d`；本地领先 5。
+- 阶段 2 开始时工作区干净，没有发现适用的 `AGENT.md` 或 `AGENTS.md`。
+- 没有覆盖、丢弃、暂存或回退任何来源不明改动。
+
+### 实现内容
+
+- 新增测试环境专用 `CONTENT_PUBLISH_MODE=revision_shadow`。默认
+  `legacy_git` 保持 V1；非 `NODE_ENV=test` 的影子模式、未知值和阶段 2 的
+  `database` 均 fail closed。
+- Git Push 成功后，在同一后续数据库事务内追加 Revision，并同时更新
+  `articles.current_revision_id`、草稿 `base_revision_id`/旧哈希、V1 publish
+  record 和审计。
+- Revision 记录完整 Markdown、正文、Frontmatter、SHA-256、发布者、审核者、
+  来源草稿、V1 operation UUID 和 Git Commit SHA。
+- `source_operation_id` 和 `(article_id, git_commit_hash)` 唯一；追加时锁定文章行。
+  同 operation 重放返回既有 Revision，字段漂移 fail closed。
+- Push 失败发生在 Revision 事务之前，不创建正式 Revision；并发发布最多一个成功，
+  成功后重试也不重复。
+- 原 Git 历史、详情、Diff 和恢复入口完整保留。Git 恢复在影子模式下追加新的
+  `restore` Revision。
+- 增加 DB 历史列表、详情、正文 Diff 和从不可变 Revision 恢复的影子服务/API。
+  读取要求登录；恢复要求管理员、同源和 CSRF；未开启影子模式时 API 隐藏为 404。
+- 增加只读 Git/Revision 对账 CLI，核对发布时间、文章作者、发布者、审核者、来源
+  草稿、正文、完整原文和 SHA，并报告未匹配 Git Commit。没有自动修复模式。
+- 对账使用一对一匹配：显式 Commit 关联优先；阶段 1 backfill 只允许以完整原文和
+  SHA 推断到尚未占用的 Git Commit。
+- 完整 CMS 测试入口纳入阶段 2 套件；阶段 1 Migration 测试改为显式定位 `0011`，
+  不再错误假设它永远是迁移目录最后一个文件。
+
+### 数据库、API、依赖和环境变量
+
+- 新增 expand Migration `0012_fuzzy_roxanne_simpson.sql`、Drizzle snapshot 和
+  journal 记录。
+- 新增可空 `article_revisions.source_operation_id`、`git_commit_hash`、外键和两个
+  唯一索引；旧 backfill 行保持可空，旧字段和旧数据不改。
+- 新增 API：
+  - `GET /api/cms/articles/:id/revisions`
+  - `GET /api/cms/articles/:id/revisions/:revision`
+  - `GET /api/cms/articles/:id/revisions/diff?from=<uuid>&to=<uuid>`
+  - `POST /api/cms/articles/:id/revisions/:revision/restore`
+- 新增 CLI：`npm run v2:revisions:compare`。
+- 新增环境变量：`CONTENT_PUBLISH_MODE`；`.env.example` 和 Compose 默认均为
+  `legacy_git`。
+- 新增或升级 npm 依赖：无；`package-lock.json` 未变化。
+
+### 一致性比较结果与已知差异
+
+隔离集成测试文章最终有 6 个 Revision 和 6 个 Git Commit：
+
+- mismatch 0；
+- unmatched Git Commit 0；
+- 首个 backfill Revision 通过完整原文/SHA 推断到初始 Commit；
+- 后续发布和两类恢复通过显式 operation UUID/Commit 一一关联；
+- 发布时间、作者、审核、正文和哈希检查全部通过。
+
+真实仓库中 V2 前的历史存在设计上已知差异：阶段 1 只回填每篇文章当时的当前版本，
+没有导入过去每个 Git Commit。对真实长历史文章运行报告时，旧提交可能显示为
+`unmatchedGitCommits`。本阶段只报告，不猜测补写、不删除历史、不自动修正生产数据。
+
+### 自动化验证
+
+- 阶段 2 专用：1 个文件、7 项通过；测试内实际运行对账 CLI。
+- 完整 CMS：10 个文件、57 项通过，包含 V1 发布集成回归。
+- 全新隔离 PostgreSQL 17 数据库重放全部 Migration 通过，并核对 2 列和 2 唯一索引。
+- 备份恢复：checksum、空目标恢复、forward Migration、应用健康、非空拒绝和卷隔离
+  通过。
+- 自动部署、自动部署安装、部署缓存清理三套集成测试通过。
+- Wiki 检查 226 个文件通过。
+- Drizzle check、Shell 语法、`npm run typecheck`、`npm run build` 和
+  `git diff --check` 通过。
+- build 保留基线已有 6 个 `/images/*` 运行时解析 warning，退出码 0；没有新增
+  build error。
+
+### 验证修复记录
+
+- 首轮阶段 2 对账测试将 backfill 首版误推断到后来恢复出的相同内容 Commit，造成 1
+  个旧 Commit 未匹配；修正为显式关联优先的一对一匹配后，7 项全部通过。
+- 首轮完整 CMS 中 49/50 项通过；唯一失败是阶段 1 测试把最后 Migration 写死为
+  `0011`。改为按编号定位后，完整 CMS 57/57 通过。
+- 一次备份恢复并行调用在外层工具返回时仍在运行，未据此宣称成功；等待其自然清理后
+  单独重跑并取得明确退出码 0。
+- 影子开关首次拒绝后曾缓存非法值；代码审查发现后改为验证通过才缓存，并增加重复
+  fail-closed 测试。
+
+### 安全和生产资源边界
+
+- 没有取得或使用生产密钥。
+- 没有连接、迁移、停止或修改既有 `vinci-cms-postgres`。
+- CMS/Migration 测试使用本轮创建、名称明确含 phase2/test 的 PostgreSQL 17 容器和
+  临时数据库；结束后容器自动删除。
+- Git 测试全部使用 `/tmp` 下临时本地 bare remote/worktree，结束后删除。
+- 备份恢复使用隔离 Compose project、临时 volume、无效外部地址和测试凭据，结束后
+  清理。
+- 没有访问生产 PostgreSQL、S3/COS、服务器、代码仓库远端写端点或独立内容仓库。
+- 没有修改 `content/**/*.md`，没有 Push、部署、发布镜像或进入阶段 3。
+
+### 已知限制
+
+- Git 与 PostgreSQL 无法形成跨系统原子事务。只有 Git Push 和随后 DB 事务均成功时
+  API 才返回成功；若 Push 后数据库永久失败，对账会把该 Commit 报为未匹配，但不会
+  自动修复。
+- backfill Revision 没有 operation/Commit 显式关联，只能按原文和 SHA 推断。
+- DB 历史 API 只在测试影子模式开放，前台和正式 CMS 历史仍使用 Git。
+- `legacy_git` 不追加 Revision，这是阶段 2 的明确回滚开关。
+- 对账报告只写 stdout；人工落盘必须放受控测试目录并按本地保留策略清理。持久报告的
+  有界保留和自动清理属于后续运维阶段。
+- `members` 不在本阶段，属于阶段 9。
+
+### 回滚
+
+将 `CONTENT_PUBLISH_MODE` 设回 `legacy_git` 即可关闭影子写入和 DB 历史 API；保留已
+写 Revision 作为审计记录，不删除。应用使用普通
+`git revert <阶段2-commit-sha>`，再运行完整测试、typecheck、build 和 diff check。
+`0012` 为 expand-only，旧应用可忽略，优先保留；不得自动 down、删除 Revision、
+hard reset 或 Force Push。
+
+详细配置回滚、数据库边界、Git 新提交恢复和安全注意事项见
+`docs/v2/PHASE_V2_2_ACCEPTANCE.md`。
+
+### 人工验收
+
+维护者应在隔离 PostgreSQL 17、测试 Git remote 和独立 worktree：
+
+1. 核对 Commit 范围，不含内容、前台来源、Nuxt Content 移除或生产部署切换。
+2. 重放 Migration，确认旧数据不变和新列/索引存在。
+3. 启用测试影子模式，首次和再次发布同一文章，核对 Revision 单调递增和全部关联。
+4. 并发及成功后重试，确认只产生一个 Revision。
+5. 模拟测试远端 Push 失败，确认 Revision 数量不变；修复后重试只追加一次。
+6. 对比 DB/Git 历史、详情和正文 Diff；关闭开关后 DB API 404、Git 入口仍可用。
+7. 分别从 Git 版本和 DB Revision 恢复，确认都以新 Commit/Revision 追加。
+8. 验证成员读取、管理员恢复、CSRF/Origin 和审计。
+9. 运行对账并逐条解释任何 unmatched V2 前提交；不得自动修复。
+10. 重跑全部自动验证，确认无生产连接、Push 或部署。
+11. 全部接受后明确回复“V2 阶段 2 验收通过”。
+
+### Commit
+
+本记录将与阶段 2 独立 Commit 一同提交。最终不可循环自引用的 Commit SHA 由阶段 2
+最终回复报告；在提交完成前不预填或猜测 SHA。

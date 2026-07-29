@@ -2078,3 +2078,22 @@ npm run test:backup-restore
 此命令不得在注入生产凭据的环境运行。正式恢复仍严格按教程九执行，不使用自动化测试替代人工目标核对。
 
 Markdown 原始 HTML 是维护者明确保留的兼容能力，存在已接受的存储型 XSS 风险；详细信任模型与审核要求见 `docs/PHASE9_SECURITY_AND_ACCEPTANCE.md`。不得在未评估内容迁移的情况下临时加入 sanitizer，也不得把这一策略解释为允许不可信作者自动发布。
+
+## 15. V2 阶段 2 隔离验收附录
+
+阶段 2 没有改变本文前述生产部署流程。`.env.example` 和 Compose 新增
+`CONTENT_PUBLISH_MODE`，默认必须保持：
+
+```dotenv
+CONTENT_PUBLISH_MODE=legacy_git
+```
+
+`revision_shadow` 只允许 `NODE_ENV=test` 的隔离环境；Compose 正式应用固定
+`NODE_ENV=production`，因此错误配置会 fail closed，不能以影子模式启动发布或数据库
+历史能力。`database` 属于后续阶段，本阶段同样拒绝。
+
+维护者执行阶段 2 人工验收时必须使用隔离 PostgreSQL、测试 Git 远端和单独 Git
+worktree，不得复用生产 `.env`、deploy key、Compose project 或 volume。完整前置
+条件、命令、预期结果、失败处理、回滚和安全注意事项见
+`docs/v2/PHASE_V2_2_ACCEPTANCE.md`。验收结束后恢复 `legacy_git`；已经创建的测试
+Revision 作为审计数据保留或随整个隔离数据库销毁，不单独删除历史行。

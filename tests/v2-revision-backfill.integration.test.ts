@@ -152,9 +152,12 @@ integration('V2 阶段 1 Migration 与正式 Revision 安全回填', () => {
       const migrations = (await readdir(migrationsRoot))
         .filter(name => /^\d{4}_.+\.sql$/.test(name))
         .sort()
-      const phase1Migration = migrations.at(-1)!
-      expect(phase1Migration.startsWith('0011_')).toBe(true)
-      for (const migration of migrations.slice(0, -1)) {
+      const phase1MigrationIndex = migrations.findIndex(
+        migration => migration.startsWith('0011_')
+      )
+      expect(phase1MigrationIndex).toBeGreaterThanOrEqual(0)
+      const phase1Migration = migrations[phase1MigrationIndex]!
+      for (const migration of migrations.slice(0, phase1MigrationIndex)) {
         await applyMigrationSql(client, join(migrationsRoot, migration))
       }
       const user = await client.query(`

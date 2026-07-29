@@ -34,3 +34,34 @@ export interface CmsArticleVersionDiff {
     value: string
   }>
 }
+
+export interface CmsArticleRevisionHistoryEntry {
+  id: string
+  articleId: string
+  revisionNumber: number
+  contentHash: string
+  sourceKind: 'backfill' | 'publish' | 'restore' | 'member_publish'
+  sourceDraftId: string | null
+  publishedByUserId: string | null
+  reviewedByUserId: string | null
+  restoredFromRevisionId: string | null
+  sourceOperationId: string | null
+  gitCommitHash: string | null
+  createdAt: string
+}
+
+export interface CmsArticleRevision extends CmsArticleRevisionHistoryEntry {
+  markdownSource: string
+  body: string
+  frontmatter: Record<string, unknown>
+}
+
+export interface CmsArticleRevisionDiff {
+  articleId: string
+  fromRevisionId: string
+  toRevisionId: string
+  parts: Array<{
+    type: 'added' | 'removed' | 'same'
+    value: string
+  }>
+}

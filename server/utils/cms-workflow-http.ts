@@ -20,8 +20,12 @@ import {
   CmsPublishPathError,
   CmsPublishStateError
 } from '../services/cms-publishing'
+import { CmsRevisionNotFoundError } from '../services/cms-revisions'
 
 export const throwCmsWorkflowError = (error: unknown): never => {
+  if (error instanceof CmsRevisionNotFoundError) {
+    throw createError({ statusCode: 404, message: '数据库版本不存在' })
+  }
   if (
     error instanceof CmsDraftNotFoundError
     || error instanceof CmsEditLockDraftNotFoundError

@@ -17,6 +17,7 @@ import {
 import { parseCmsMarkdown, writeCmsMarkdown } from '../utils/cms-frontmatter'
 import { getCmsGitConfig } from '../utils/cms-git-config'
 import { describeCmsFailure } from '../utils/cms-sensitive-data'
+import { isCmsRevisionShadowEnabled } from '../utils/cms-v2-flags'
 import {
   atomicWriteCmsGitArticle,
   cmsGitArticlePath,
@@ -30,6 +31,7 @@ import {
   getCmsArticleDirectory,
   getCmsArticlePublicPath
 } from './cms-articles'
+import { appendCmsArticleRevision } from './cms-revisions'
 
 export class CmsPublishNotFoundError extends Error {
   constructor() {
@@ -214,6 +216,7 @@ export const publishCmsDraft = async (
   input: { version: number, relativePath?: string }
 ): Promise<CmsPublishResult> => {
   const db = getDatabase()
+  const revisionShadowEnabled = isCmsRevisionShadowEnabled()
   const [draft] = await db.select().from(drafts).where(and(
     eq(drafts.id, draftId),
     isNull(drafts.deletedAt)
@@ -326,12 +329,29 @@ export const publishCmsDraft = async (
           body: draft.body,
           contentHash
         })
+        const revision = revisionShadowEnabled
+          ? await appendCmsArticleRevision(tx, {
+              articleId: resolvedArticleId,
+              markdownSource: built.source,
+              body: draft.body,
+              frontmatter: built.frontmatter,
+              contentHash,
+              sourceKind: 'publish',
+              sourceDraftId: draftId,
+              publishedByUserId: operatorUserId,
+              reviewedByUserId: review.actorUserId,
+              sourceOperationId: attempt!.id,
+              gitCommitHash: commitHash,
+              createdAt: now
+            })
+          : null
         const [published] = await tx
           .update(drafts)
           .set({
             articleId: resolvedArticleId,
             status: 'published',
             baseContentHash: contentHash,
+            ...(revision ? { baseRevisionId: revision.id } : {}),
             version: draft.version + 1,
             updatedAt: now
           })
@@ -346,7 +366,7 @@ export const publishCmsDraft = async (
           articleId: resolvedArticleId,
           status: 'succeeded',
           commitHash,
-          completedAt: new Date()
+          completedAt: now
         }).where(eq(publishRecords.id, attempt!.id))
         await tx.insert(auditLogs).values({
           actorUserId: operatorUserId,
@@ -357,7 +377,8 @@ export const publishCmsDraft = async (
             draftId,
             reviewerUserId: review.actorUserId,
             relativePath,
-            commitHash
+            commitHash,
+            revisionId: revision?.id || null
           }
         })
         return resolvedArticleId

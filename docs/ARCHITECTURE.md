@@ -487,3 +487,26 @@ lock、锁定文章行、二次读取文件、校验完整原文 SHA-256、插�
 Markdown、不连接或写入独立内容仓库、不修改 V1 发布时间，也不自动运行 Migration。
 详细命令、验证、失败处理和回滚见
 `docs/v2/PHASE_V2_1_ACCEPTANCE.md`。
+
+## 17. V2 阶段 2 已落地：Git-first Revision 影子链路
+
+阶段 2 保持 Git Push 为正式发布和恢复的前置条件。只有测试环境显式设置
+`CONTENT_PUBLISH_MODE=revision_shadow` 时，Push 成功后的同一个数据库事务才追加
+Revision，并同时更新文章当前指针、草稿基线指针、V1 publish record 和审计。Push
+失败不创建 Revision。默认 `legacy_git` 完全保持 V1 行为；`database` 在阶段 5 前
+fail closed。
+
+Revision 新增可空 `source_operation_id` 和 `git_commit_hash`。前者以 V1
+`publish_records.id` 作为业务幂等键，后者把影子 Revision 与 Git Commit 关联；唯一
+约束阻止同一操作或同一文章 Commit 重复写入。阶段 1 backfill 行保持可空，避免改写
+既有数据。
+
+数据库历史列表、详情、正文 Diff 和从 Revision 恢复均已有影子服务及测试 API，但只在
+`NODE_ENV=test` 与 `revision_shadow` 同时满足时开放。读取仍要求登录；恢复继续要求
+管理员、同源和 CSRF。V1 Git 历史、版本、Diff 和恢复入口没有移除，前台与 Nuxt
+Content 也没有切换。
+
+只读对账工具核对发布时间、文章作者、发布/审核身份、来源草稿、正文、完整原文和
+SHA-256，并报告没有对应 Revision 的 Git Commit；它没有自动修复模式。V2 前的完整
+Git 历史未在阶段 1 回填，真实长历史文章出现旧提交未匹配是已知差异。详细命令、失败
+处理、回滚与人工验收见 `docs/v2/PHASE_V2_2_ACCEPTANCE.md`。

@@ -158,6 +158,9 @@ export const articleRevisions = pgTable('article_revisions', {
     .references(() => users.id, { onDelete: 'set null' }),
   restoredFromRevisionId: uuid('restored_from_revision_id')
     .references((): AnyPgColumn => articleRevisions.id, { onDelete: 'restrict' }),
+  sourceOperationId: uuid('source_operation_id')
+    .references((): AnyPgColumn => publishRecords.id, { onDelete: 'restrict' }),
+  gitCommitHash: varchar('git_commit_hash', { length: 64 }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
 }, table => [
   check('article_revisions_number_check', sql`${table.revisionNumber} >= 1`),
@@ -171,6 +174,10 @@ export const articleRevisions = pgTable('article_revisions', {
   ),
   uniqueIndex('article_revisions_article_number_unique')
     .on(table.articleId, table.revisionNumber),
+  uniqueIndex('article_revisions_source_operation_unique')
+    .on(table.sourceOperationId),
+  uniqueIndex('article_revisions_article_git_commit_unique')
+    .on(table.articleId, table.gitCommitHash),
   index('article_revisions_article_created_at_index')
     .on(table.articleId, table.createdAt),
   index('article_revisions_content_hash_index').on(table.contentHash),
