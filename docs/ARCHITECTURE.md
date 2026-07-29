@@ -30,7 +30,10 @@
   - Wiki 主要只有 `title`；
   - 新闻使用 `title`、`date`、`author`、`tags`、`image`、`bvid`、`summary`；
   - 成员使用 `name`、`image`、`role`、`type`、`time`、`advisor`、`grade`、`affiliation`、`links`。
-- 内容中存在 Markdown 之外的扩展语法，包括 `<NuxtLink>` 和少量 `{% include ... %}`。任何可视化编辑器都不得静默丢弃这些语法。
+- 内容中存在 Markdown 之外的扩展语法，包括 `<NuxtLink>`、MDC/Vue 组件、原始 HTML
+  和代码示例中的模板标记。阶段 3 确认实际内容里的三处
+  `{% include section.html %}` 没有对应模板且不会被 Nuxt Content 执行，已按维护者
+  授权精确删除；其他未知语法仍必须可见，不得被编辑器或渲染器静默丢弃。
 
 ### 2.3 Nuxt Studio
 
@@ -510,3 +513,26 @@ Content 也没有切换。
 SHA-256，并报告没有对应 Revision 的 Git Commit；它没有自动修复模式。V2 前的完整
 Git 历史未在阶段 1 回填，真实长历史文章出现旧提交未匹配是已知差异。详细命令、失败
 处理、回滚与人工验收见 `docs/v2/PHASE_V2_2_ACCEPTANCE.md`。
+
+## 18. V2 阶段 3 已落地：Comark 候选渲染与 CodeMirror
+
+阶段 3 没有切换生产前台。新闻、Wiki 和成员的正式页面仍由 Nuxt Content 读取代码
+仓库 `content/`；Comark 只用于 CMS 草稿的“最终效果预览”和后续阶段共用的候选组件。
+内容权威、Git-first 发布事务、Revision 影子链路和部署行为均未改变。
+
+草稿页现在有可视化、源码和最终预览三种模式。源码模式使用 CodeMirror 6，并在客户
+端初始化失败时回退到 `textarea`。模式切换只改变显示层，不在每次按键做
+Milkdown/CodeMirror 双向重建，也不会因切换自动保存。图片上传继续复用既有安全上传
+服务，并按当前模式插入或无损追加 Markdown。
+
+`VinciMarkdownRenderer` 和 `shared/utils/vinci-markdown.ts` 构成候选渲染管线：
+兼容 `<NuxtLink>`、MDC/Vue 组件、原始 HTML、任务列表、表格、Shiki 代码高亮、
+GitHub 风格标题 ID 和目录；未知 Liquid/Jinja 模板标记在非代码文本中被安全编码为
+可见文本。安全层阻断可执行标签、事件属性和危险 URL，同时保留现有内容需要的 HTTPS
+iframe。
+
+批量工具同时解析全部 260 篇现有 Markdown，并保存每篇源码 SHA、旧/新 AST 摘要和
+差异。当前 260 篇均成功解析、无渲染失败；227 篇比较无差异，33 篇有 35 项已记录的
+换行、链接、空标题或代码块计数差异。这些差异不会触发自动正文改写，是阶段 4 影子
+HTTP/DOM 比较和生产切换前的显式审查输入。详细报告、安全边界、回滚和联合人工验收见
+`docs/v2/PHASE_V2_3_ACCEPTANCE.md`。

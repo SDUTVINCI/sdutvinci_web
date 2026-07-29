@@ -478,3 +478,126 @@ hard reset 或 Force Push。
 
 本记录将与阶段 2 独立 Commit 一同提交。最终不可循环自引用的 Commit SHA 由阶段 2
 最终回复报告；在提交完成前不预填或猜测 SHA。
+
+---
+
+## 2026-07-29：阶段 3 Comark 兼容验证、CodeMirror 和最终预览
+
+### 推进授权和基线
+
+- 维护者要求把阶段 2 人工验收延后，与阶段 3 一起执行，并明确授权直接实施阶段 3。
+- 阶段 2 人工验收和总体完成没有因此代勾；联合步骤已写入
+  `docs/v2/PHASE_V2_3_ACCEPTANCE.md`。
+- 分支：`main`。
+- 阶段 3 起始 HEAD：`7cdc8c330042e10a1810b5b784ff38fc63ea007e`。
+- 开始时 `origin/main`：`1752363a306d9c6bc0b44d1eb8a6ce359444637d`。
+- 开始时工作区干净；没有覆盖、丢弃、暂存、回退或改写既有提交。
+- 没有发现适用的 `AGENT.md` 或 `AGENTS.md`。
+
+### `{% include ... %}` 结论
+
+- 实际内容只在张彦斐、宫金良、巩丽三篇教师资料末尾存在
+  `{% include section.html %}`。
+- 当前仓库、全部可达 Git 对象和初始可见提交中均不存在 `section.html` 或
+  `_includes`，Nuxt Content 不执行 Liquid include。
+- 按维护者明确授权，仅精确删除三处无输出尾行及其前导空行，共 84 bytes；教师正文和
+  Frontmatter 完整保留，没有批量格式化 Markdown。
+- 测试和文档中的未知模板语法继续保留。兼容层在非代码文本中把它们安全显示出来，
+  代码块与行内代码保持原文，防止静默删除。
+
+### 实现
+
+- 固定 `@comark/nuxt@0.5.1`，增加共用 `VinciMarkdownRenderer` 和 Vinci Markdown
+  兼容层；生产新闻、Wiki、成员前台仍使用 Nuxt Content。
+- 兼容 `<NuxtLink>`、MDC/Vue、原始 HTML、GFM 表格/任务、Shiki 代码高亮、
+  GitHub 风格标题 ID 和目录。
+- XSS 边界阻断可执行标签、事件属性和危险 URL；被阻断内容显示为安全代码提示，
+  兼容 HTTPS iframe。
+- 草稿源码模式替换为 CodeMirror 6，客户端初始化失败时回退 `textarea`；新增最终
+  效果预览，形成可视化、源码、最终预览三模式。
+- 模式切换不做每键双向重建、不直接调用保存；图片上传按可视化/源码/预览当前模式
+  插入，继续复用既有锁、CSRF、权限和自动保存链路。
+- 新增可复现批量审计和阶段 3 专项测试。
+
+### 兼容报告
+
+`docs/v2/PHASE_V2_3_COMARK_COMPATIBILITY.json` 保存全部 260 篇逐文件 SHA、旧/新 AST
+摘要、语法和差异：
+
+- 260 篇扫描，260 篇 Comark 解析成功，0 render failure。
+- 227 篇比较无差异，33 篇存在 35 项已记录差异。
+- 差异为 22 项 `br`、10 项 `a`、1 项 heading 数量、1 项 heading ID/text 和
+  1 项 `pre` 数量。
+- 审计时安全插件还对 XML 风格代码示例中的 `width:int`、`height:int`、
+  `pitch:float`、`yaw:float` 打印属性移除警告；正文文件未被修改。
+- 这些差异是阶段 4 影子 HTTP/DOM 比较的输入，阶段 3 没有据此授权生产切换。
+
+### 数据库、API、依赖和环境变量
+
+- 数据库：无 Migration、无模型或数据变化。
+- API：无变化。
+- 环境变量和生产配置：无变化。
+- 新运行依赖：
+  `@comark/nuxt@0.5.1`、`@nuxtjs/mdc@0.22.2`、`codemirror@6.0.2`、
+  `@codemirror/lang-markdown@6.5.1`、`@codemirror/state@6.5.2`、
+  `@codemirror/view@6.39.16`、`github-slugger@2.0.0`、
+  `@shikijs/themes@4.3.1`。
+- 新开发依赖：`@vue/server-renderer@3.5.40`。
+- 安装时 `npm audit`：0 vulnerabilities。
+
+### 最终自动验证
+
+- `npm run v2:comark:audit -- --write`：通过；260/260，0 失败，33 篇/35 项差异。
+- `npm run test:v2:phase3`：通过；1 个文件、7 项测试。
+- 隔离 PostgreSQL 17 上
+  `TEST_DATABASE_URL='<phase3-test-url>' npm test`：通过；11 个文件、64 项测试。
+- `npm run v2:phase0:audit`：通过；260 篇、0 symlink、0 include；内容 manifest
+  SHA-256 为 `db36a4ef8c696d95662d5e1cac6c5fd5792ae02610ed6e5aab36d25ef1fe5ede`。
+- `npm run wiki:check`：通过；226 个 Wiki 文件。
+- `npm run test:backup-restore`：单独重跑并明确退出码 0；校验和、空目标恢复、前向
+  Migration、恢复标记、应用健康、非空目标拒绝、隔离卷均通过。
+- `./tests/auto-deploy.integration.sh`：通过。
+- `./tests/install-auto-deploy.integration.sh`：通过。
+- `npm run test:deploy-cache-cleanup`：通过。
+- `npm run typecheck`：通过。
+- `npm run build`：通过；保留既有六条 `/images/...` 构建期解析警告，没有错误。
+- `git diff --check`：通过。
+
+专项测试首次新增静态断言时错误地要求精确 `"shiki"` class、错误的默认模式/变量名和
+预览绑定名；根据实际稳定行为收窄断言后 7/7 通过，没有为了满足测试改动正确运行代码。
+Comark 类型接入和 Nitro shared import 在较早构建中暴露的问题均已修复，最终
+typecheck/build 以本记录所列结果为准。
+
+### 生产资源边界
+
+- 完整测试只使用本轮创建并已删除的 `vinci-v2-phase3-final-test-db` PostgreSQL 17
+  容器；没有连接或修改既有数据库。
+- 备份恢复只使用测试脚本创建的 `/tmp` 根、隔离 Compose project、测试镜像和临时
+  volume，测试结束后清理。
+- 自动部署测试只使用 `/tmp` 本地 bare remote/worktree 和测试替身。
+- 没有取得或使用生产密钥，没有访问生产 PostgreSQL、S3/COS、服务器或远端写端点。
+- 没有接入 `SDUTVINCI/sdutvinci_content` 写权限，没有 Push、部署或进入阶段 4。
+
+### 已知限制
+
+- 33 篇的 35 项结构差异仍需阶段 4 影子 HTTP/DOM 比较和人工视觉判断；阶段 3 只保证
+  全量解析、显式报告和安全预览，不声称像素或 DOM 完全相等。
+- XSS 策略为了兼容现有内容保留 HTTPS iframe；未来生产接入前仍需确定允许域策略。
+- CodeMirror 是客户端组件，SSR/禁用 JavaScript 时使用加载或 `textarea` 回退。
+- 三模式最终视觉、真实中文输入法、浏览器上传、编辑锁和自动保存仍需人工联合验收。
+- 阶段 2 人工验收仍未完成，阶段 2/3 总体完成项均保持未勾选。
+
+### 回滚和人工验收
+
+- 阶段 3 无数据库 down。应用回滚使用
+  `git revert <阶段3-commit-sha>`，然后重跑完整测试、typecheck、build 和 diff check。
+- 不得 hard reset、Force Push、批量覆盖 `content/` 或删除 Revision 历史。
+- 阶段 2 影子链路异常时切回 `CONTENT_PUBLISH_MODE=legacy_git`，保留 Revision 审计。
+- 三处 include 如需恢复，必须用新的审查 Commit 精确恢复，不能推测模板输出。
+- 完整的阶段 2 + 3 联合人工验收、预期结果、失败处理、安全注意事项和明确回复文本见
+  `docs/v2/PHASE_V2_3_ACCEPTANCE.md`。
+
+### Commit
+
+本记录将与阶段 3 独立 Commit 一同提交。最终不可循环自引用的 Commit SHA 由阶段 3
+最终回复报告；在提交完成前不预填或猜测 SHA。

@@ -497,6 +497,15 @@
   text-align: left;
 }
 
+.wiki-content-body > table,
+.wiki-content-body > div > table {
+  display: block;
+  overflow-x: auto;
+  width: 100%;
+  margin: 1.5rem 0;
+  border-collapse: collapse;
+}
+
 .wiki-content-body th {
   background: var(--surface-soft);
   color: var(--ink);

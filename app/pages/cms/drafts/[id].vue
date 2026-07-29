@@ -8,6 +8,8 @@ import type {
 import type { CmsMember } from '../../../../shared/types/cms-members'
 import type { CmsMediaUploadResponse } from '../../../../shared/types/cms-media'
 import CmsMarkdownVisualEditor from '../../../components/cms/CmsMarkdownVisualEditor.client.vue'
+import CmsMarkdownSourceEditor from '../../../components/cms/CmsMarkdownSourceEditor.client.vue'
+import VinciMarkdownRenderer from '../../../components/VinciMarkdownRenderer.vue'
 
 definePageMeta({ layout: 'cms', middleware: 'cms-auth' })
 const route = useRoute()
@@ -58,7 +60,7 @@ const baseContentHash = ref(initial.baseContentHash)
 const lastSavedAt = ref(initial.lastSavedAt)
 const comparison = ref(comparisonData.value?.comparison || null)
 const reviewEvents = ref(eventData.value?.events || [])
-const mode = ref<'source' | 'visual'>('source')
+const mode = ref<'source' | 'visual' | 'preview'>('source')
 const visualKey = ref(0)
 const visualSource = ref('')
 const visualChecking = ref(false)
@@ -71,7 +73,7 @@ const lockState = ref<'idle' | 'loading' | 'acquired' | 'blocked' | 'lost' | 'er
 const lockResponse = ref<CmsEditLockResponse | null>(null)
 const takeoverReason = ref('')
 const visualEditor = ref<InstanceType<typeof CmsMarkdownVisualEditor> | null>(null)
-const sourceEditor = ref<HTMLTextAreaElement | null>(null)
+const sourceEditor = ref<InstanceType<typeof CmsMarkdownSourceEditor> | null>(null)
 const imageInput = ref<HTMLInputElement | null>(null)
 const imageUploading = ref(false)
 const imageDragging = ref(false)
@@ -305,11 +307,11 @@ const scheduleSave = () => {
 
 watch([title, description, body, authorKeys], scheduleSave, { deep: true })
 
-const switchMode = (next: 'source' | 'visual') => {
+const switchMode = (next: 'source' | 'visual' | 'preview') => {
   message.value = ''
   clearTimeout(visualCheckTimer)
-  if (next === 'source') {
-    mode.value = 'source'
+  if (next !== 'visual') {
+    mode.value = next
     visualChecking.value = false
     return
   }
@@ -336,24 +338,7 @@ const insertUploadedMarkdown = async (markdown: string) => {
     return
   }
 
-  if (mode.value === 'source' && sourceEditor.value) {
-    const editor = sourceEditor.value
-    const start = editor.selectionStart
-    const end = editor.selectionEnd
-    const before = body.value.slice(0, start)
-    const after = body.value.slice(end)
-    const prefix = before && !before.endsWith('\n\n')
-      ? before.endsWith('\n') ? '\n' : '\n\n'
-      : ''
-    const suffix = after && !after.startsWith('\n')
-      ? '\n\n'
-      : after.startsWith('\n\n') || !after ? '' : '\n'
-    const inserted = `${prefix}${markdown}${suffix}`
-    body.value = `${before}${inserted}${after}`
-    await nextTick()
-    const cursor = start + inserted.length
-    editor.focus()
-    editor.setSelectionRange(cursor, cursor)
+  if (mode.value === 'source' && sourceEditor.value?.insertMarkdown(markdown)) {
     return
   }
 
@@ -493,6 +478,10 @@ const handleVisualError = (error: string) => {
   mode.value = 'source'
   visualChecking.value = false
   message.value = `可视化编辑器无法加载，已返回源码模式：${error}`
+}
+
+const handleSourceError = (error: string) => {
+  message.value = `CodeMirror 无法加载，已启用 textarea 回退：${error}`
 }
 
 const refreshComparison = async () => {
@@ -873,6 +862,9 @@ onBeforeUnmount(() => {
           <button type="button" :class="{ active: mode === 'source' }" @click="switchMode('source')">
             Markdown 源码
           </button>
+          <button type="button" :class="{ active: mode === 'preview' }" @click="switchMode('preview')">
+            最终效果预览
+          </button>
         </div>
 
         <div v-if="mode === 'visual'" class="cms-visual-editor" :inert="!canEdit">
@@ -890,15 +882,30 @@ onBeforeUnmount(() => {
             </template>
           </ClientOnly>
         </div>
-        <textarea
-          v-else
-          ref="sourceEditor"
-          v-model="body"
-          class="cms-markdown-source"
-          spellcheck="false"
-          aria-label="Markdown 源码"
-          :readonly="!canEdit"
-        />
+        <ClientOnly v-else-if="mode === 'source'">
+          <CmsMarkdownSourceEditor
+            ref="sourceEditor"
+            v-model="body"
+            :readonly="!canEdit"
+            @error="handleSourceError"
+          />
+          <template #fallback>
+            <textarea
+              v-model="body"
+              class="cms-markdown-source"
+              spellcheck="false"
+              aria-label="Markdown 源码临时回退编辑器"
+              :readonly="!canEdit"
+            />
+          </template>
+        </ClientOnly>
+        <section v-else class="cms-final-preview" aria-label="最终效果预览">
+          <header>
+            <strong>Comark 最终效果预览</strong>
+            <span>使用未来前台候选渲染组件；不会改变当前 Nuxt Content 前台。</span>
+          </header>
+          <VinciMarkdownRenderer :markdown="body" />
+        </section>
       </main>
     </div>
 

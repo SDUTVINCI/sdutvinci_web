@@ -2480,6 +2480,59 @@
   tab-size: 2;
 }
 
+.cms-codemirror-shell,
+.cms-codemirror-root {
+  min-height: 72vh;
+}
+
+.cms-codemirror-shell .cm-editor {
+  min-height: 72vh;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.92rem;
+}
+
+.cms-codemirror-shell .cm-editor.cm-focused {
+  outline: 2px solid color-mix(in srgb, var(--cyan) 42%, transparent);
+  outline-offset: -2px;
+}
+
+.cms-codemirror-shell .cm-gutters {
+  border-right-color: var(--line);
+  color: var(--muted);
+}
+
+.cms-final-preview {
+  min-height: 72vh;
+  padding: clamp(18px, 3vw, 36px);
+}
+
+.cms-final-preview > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 12px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.cms-final-preview > header strong {
+  color: var(--ink);
+  font-size: 0.95rem;
+}
+
+.cms-final-preview .vinci-markdown-renderer {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.vinci-markdown-blocked {
+  border-color: color-mix(in srgb, var(--red) 42%, var(--line)) !important;
+}
+
 .cms-visual-editor {
   position: relative;
   min-height: 72vh;
