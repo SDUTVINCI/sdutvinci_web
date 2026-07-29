@@ -751,3 +751,15 @@ SHA 由最终回复报告；在提交完成前不预填或猜测 SHA。
 补充：`scripts/test-cms.sh` 不再在测试护栏读取前删除调用者的 `DATABASE_URL`；数据库
 测试仍由 helper 在连接前删除应用 URL 并换成已验证的 `TEST_DATABASE_URL`。因此专项
 Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库配置。
+
+---
+
+## 2026-07-29：shadow 路径安全错误契约统一
+
+- 维护者在独立自动测试库运行 `npm run test:cms` 时，终端仍显式启用了
+  `revision_shadow`；恶意 `../../.env` 路径被正确拒绝，但 Git worktree 路径校验返回
+  中文错误，测试只接受静态内容读取器的 `CONTENT_PATH_OUTSIDE_ROOT`，因此 57/58。
+- 两条读取路径现统一返回 `CONTENT_PATH_OUTSIDE_ROOT`。没有放宽路径、扩展名、绝对
+  路径或目录穿越校验，也没有读取目标文件。
+- 阶段 2 的既有 7 项测试内新增 shadow Git 路径回归断言，不增加或伪造测试项数量。
+- 本修复没有 Migration、API、依赖或环境变量变化；没有接触生产资源。

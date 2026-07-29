@@ -43,6 +43,7 @@ import {
   CmsPublishGitError,
   publishCmsDraft
 } from '../server/services/cms-publishing'
+import { cmsGitArticlePath } from '../server/services/cms-git-worktree'
 import {
   appendCmsArticleRevision,
   diffCmsArticleRevisions,
@@ -383,6 +384,8 @@ suite('V2 阶段 2 Revision 影子写入、历史与恢复', () => {
   })
 
   it('影子模式在非测试环境 fail closed，恢复入口保留管理员与 CSRF 检查', async () => {
+    expect(() => cmsGitArticlePath('news', '../../.env'))
+      .toThrow('CONTENT_PATH_OUTSIDE_ROOT')
     const originalNodeEnv = process.env.NODE_ENV
     process.env.NODE_ENV = 'production'
     resetCmsV2FlagsForTests()

@@ -116,7 +116,7 @@ const assertRelativeMarkdownPath = (relativePath: string) => {
     || normalized.split('/').includes('..')
     || !normalized.endsWith('.md')
   ) {
-    throw new Error('文章路径必须是安全的相对 Markdown 路径')
+    throw new Error('CONTENT_PATH_OUTSIDE_ROOT')
   }
   return normalized
 }
