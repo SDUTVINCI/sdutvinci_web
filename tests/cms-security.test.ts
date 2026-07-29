@@ -9,6 +9,7 @@ import {
   describeCmsFailure,
   redactCmsSensitiveText
 } from '../server/utils/cms-sensitive-data'
+import { assertCmsTestDatabaseIsolation } from './helpers/cms-test-database'
 
 const originalEnvironment = {
   CMS_AUTH_SECRET: process.env.CMS_AUTH_SECRET,
@@ -96,5 +97,18 @@ describe('CMS 通用安全边界', () => {
       stderr: `remote: ${raw}`
     })
     expect(describeCmsFailure(failure)).not.toContain('super-secret')
+  })
+
+  it('破坏性集成测试拒绝复用应用数据库', () => {
+    const acceptanceUrl =
+      'postgresql://acceptance:secret@127.0.0.1:5432/vinci_phase2_acceptance_test'
+    expect(() => assertCmsTestDatabaseIsolation(
+      acceptanceUrl,
+      acceptanceUrl
+    )).toThrow('TEST_DATABASE_URL 不得与 DATABASE_URL 指向同一数据库')
+    expect(() => assertCmsTestDatabaseIsolation(
+      'postgresql://automated:secret@127.0.0.1:5432/vinci_phase2_automated_test',
+      acceptanceUrl
+    )).not.toThrow()
   })
 })

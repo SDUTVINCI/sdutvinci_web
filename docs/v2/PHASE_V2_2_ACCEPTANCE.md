@@ -402,9 +402,15 @@ npm run v2:revisions:compare -- --article-id='<article-uuid>' \
 
 ### 12.9 自动回归
 
+以下测试会 `TRUNCATE` CMS 业务表。必须另建第二个、名称明确包含
+`automated_test` 的一次性数据库；严禁写成
+`TEST_DATABASE_URL="$DATABASE_URL"`，也不得复用第 12.2–12.8 节的人工验收数据库。
+测试护栏会在两个 URL 指向同一数据库时于任何 Migration/TRUNCATE 前拒绝执行。
+
 ```bash
-TEST_DATABASE_URL='<isolated-test-url>' npm run test:v2:phase2
-TEST_DATABASE_URL='<isolated-test-url>' npm run test:cms
+test "$AUTOMATED_TEST_DATABASE_URL" != "$DATABASE_URL"
+TEST_DATABASE_URL="$AUTOMATED_TEST_DATABASE_URL" npm run test:v2:phase2
+TEST_DATABASE_URL="$AUTOMATED_TEST_DATABASE_URL" npm run test:cms
 npm run test:backup-restore
 ./tests/auto-deploy.integration.sh
 ./tests/install-auto-deploy.integration.sh
@@ -416,6 +422,10 @@ git diff --check
 
 预期全部退出 0。构建若只有文档记录的基线静态图片 warning 且退出 0，可记录后继续；
 任何新增 error、测试 skip 代替执行、或测试连接生产资源都视为失败。
+
+测试结束后先确认进程已释放连接，再删除这个一次性自动测试数据库。人工验收数据库应
+保留到维护者完成全部 SQL/Git/界面证据核对；不得用自动测试夹具覆盖后再宣称其现场仍
+存在。
 
 ## 13. 人工验收清单
 

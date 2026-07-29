@@ -711,3 +711,43 @@ typecheck/build 以本记录所列结果为准。
 
 本记录将与阶段 2 验收热修复的独立 Commit 一同提交。最终不可循环自引用的 Commit
 SHA 由最终回复报告；在提交完成前不预填或猜测 SHA。
+
+---
+
+## 2026-07-29：人工验收库与破坏性自动测试隔离修复
+
+### 现场事实
+
+- 维护者完成 5 个 Revision 的发布、恢复和单文章对账后，按旧验收命令执行
+  `TEST_DATABASE_URL="$DATABASE_URL" npm run test:v2:phase2`。
+- 专项测试 7/7 通过，但测试 `beforeAll` 会 TRUNCATE CMS 业务表，因此人工验收文章
+  UUID 随后已不存在，数据库只剩测试夹具 `news/phase-two.md`。
+- 受影响的仅是名称含 test 的一次性隔离 PostgreSQL；没有连接生产数据库。
+- 隔离内容 worktree 和 bare remote 仍完整保留 5 个验收 Git Commit；运行测试前保存
+  的 `revision-compare.log` 记录 article/revision/git commit 均为 1/5/5，
+  mismatch 和 unmatched commit 均为 0。
+- 验收根目录未发现数据库 dump，不能声称可恢复被 TRUNCATE 的人工数据库现场。
+
+### 修复
+
+- 测试数据库护栏现在同时读取进程启动时的 `TEST_DATABASE_URL` 与 `DATABASE_URL`，
+  忽略凭据、规范化主机/默认端口/数据库名后比较目标；指向同一数据库时在 Migration
+  或 TRUNCATE 前 fail closed，并明确说明集成测试会清空 CMS 业务表。
+- 安全单元测试覆盖相同目标拒绝和独立自动测试库允许。
+- 阶段 2/3 验收文档明确要求人工验收库与一次性 `automated_test` 数据库分离，禁止
+  `TEST_DATABASE_URL="$DATABASE_URL"`，并要求自动测试结束后只清理自动测试库。
+
+### 边界与后续
+
+- 本修复没有 Migration、API、运行时依赖或生产环境变量变化。
+- 旧人工验收数据库内容已不可逆地被隔离测试夹具替换；不伪造或手工拼接审计历史。
+- 已完成的 Git、界面和对账证据仍有效；后续自动测试改用第二个隔离数据库。
+- 没有 Push、部署或进入阶段 4。
+
+### Commit
+
+本记录将与自动测试隔离修复的独立 Commit 一同提交；SHA 由最终回复报告。
+
+补充：`scripts/test-cms.sh` 不再在测试护栏读取前删除调用者的 `DATABASE_URL`；数据库
+测试仍由 helper 在连接前删除应用 URL 并换成已验证的 `TEST_DATABASE_URL`。因此专项
+Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库配置。

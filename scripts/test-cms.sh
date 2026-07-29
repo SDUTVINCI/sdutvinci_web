@@ -2,9 +2,9 @@
 
 set -Eeuo pipefail
 
-# The application expects DATABASE_URL internally, but CMS tests may only derive
-# it from a separately named and validated TEST_DATABASE_URL.
-unset DATABASE_URL
+# Keep the caller's DATABASE_URL visible until the test helper compares its
+# target with TEST_DATABASE_URL. Each database suite then replaces it with the
+# separately named and validated test URL before opening a connection.
 
 exec ./node_modules/.bin/vitest run \
   tests/cms-auth.integration.test.ts \
