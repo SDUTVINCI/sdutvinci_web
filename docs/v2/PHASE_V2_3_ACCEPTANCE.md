@@ -151,10 +151,13 @@ include，正文仍完整。失败时不要清理或回退来源不明改动，�
 
 ### 8.3 阶段 2 数据链路
 
-严格按 `docs/v2/PHASE_V2_2_ACCEPTANCE.md` 第 10 节执行隔离 Migration、影子发布、
+严格按 `docs/v2/PHASE_V2_2_ACCEPTANCE.md` 第 11、12 节执行隔离 Migration、影子发布、
 Push 失败、幂等、历史、Diff、Git/DB 恢复、权限和对账测试。预期只在
 `NODE_ENV=test` 与 `CONTENT_PUBLISH_MODE=revision_shadow` 下开放影子入口；切回
 `legacy_git` 后完全恢复旧行为。任何生产连接迹象都必须立即停止。
+
+若使用 `npm run build` 生成的 `.output` 做验收，还必须先执行阶段 2 验收文档第 15 节
+的运行时 `NODE_ENV` 检查；不得复用修复前的生产构建产物。
 
 ### 8.4 批量兼容
 

@@ -432,4 +432,49 @@ git diff --check
 - 人工验收日期：等待。
 - 实现 Commit：由阶段 2 最终回复报告。
 - 维护者确认原文：等待。
-- 阶段 3 授权：无。
+- 阶段 3 授权：维护者已明确授权实施，但阶段 2 仍等待与阶段 3 联合人工验收。
+
+## 15. 生产构建读取运行时 `NODE_ENV` 的验收修复
+
+2026-07-29 联合人工验收首次发布时，外部进程环境已经是 `NODE_ENV=test` 和
+`CONTENT_PUBLISH_MODE=revision_shadow`，但生产构建产物仍返回：
+
+```text
+revision_shadow 只允许在 NODE_ENV=test 的隔离环境启用
+```
+
+原因是生产 bundler 会把直接读取 `process.env.NODE_ENV` 静态折叠为构建时的
+`production`。因此直接运行 TypeScript 的阶段 2 自动测试通过，但
+`npm run build` 后再以运行时 `NODE_ENV=test` 启动的验收路径被错误拒绝。
+
+修复后影子开关通过反射读取真实运行时环境，生产构建产物必须保留：
+
+```js
+Reflect.get(process.env, "NODE_ENV")
+```
+
+同时，配置边界异常通过工作流错误映射返回明确的 503 信息，不再只显示通用
+`Server Error`。非测试运行时仍然 fail closed，不放宽安全边界。
+
+重新验收前必须停止旧 `.output` 进程，从包含修复 Commit 的源码重新执行：
+
+```bash
+npm ci
+npm run build
+
+rg -n 'Reflect\.get\(process\.env, "NODE_ENV"\)' \
+  .output/server/chunks/nitro/nitro.mjs
+
+NODE_ENV=test \
+CONTENT_PUBLISH_MODE=revision_shadow \
+DATABASE_URL='<isolated-test-url>' \
+CMS_GIT_WORKTREE='<isolated-test-worktree>' \
+CMS_GIT_REMOTE_URL='<isolated-test-remote>' \
+node .output/server/index.mjs
+```
+
+预期 `rg` 至少命中一处；启动后的进程环境仍需单独确认两个开关。不得复用修复前构建
+的 `.output`。首次失败发生在 publish record、Git 工作区创建和 Push 之前时，可继续
+使用同一条 `approved` 测试草稿；先只读确认 `publish_records` 没有该草稿的尝试记录，
+再单击一次发布。若已经存在 succeeded/failed/pending 记录或 Git Commit，则停止并按
+12.3 的完整性检查处理，不得盲目重试。

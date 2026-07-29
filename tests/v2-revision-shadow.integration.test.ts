@@ -47,9 +47,12 @@ import {
 import { parseCmsMarkdown, writeCmsMarkdown } from '../server/utils/cms-frontmatter'
 import { resetCmsGitConfigForTests } from '../server/utils/cms-git-config'
 import {
+  CmsV2ConfigurationError,
   getContentPublishMode,
+  getCmsRuntimeNodeEnvironment,
   resetCmsV2FlagsForTests
 } from '../server/utils/cms-v2-flags'
+import { throwCmsWorkflowError } from '../server/utils/cms-workflow-http'
 import { configureCmsTestDatabase } from './helpers/cms-test-database'
 
 const exec = promisify(execFile)
@@ -372,7 +375,23 @@ suite('V2 阶段 2 Revision 影子写入、历史与恢复', () => {
     expect(() => getContentPublishMode()).toThrow(/只允许/)
     process.env.NODE_ENV = originalNodeEnv
     resetCmsV2FlagsForTests()
+    expect(getCmsRuntimeNodeEnvironment()).toBe('test')
     expect(getContentPublishMode()).toBe('revision_shadow')
+    const flagSource = await readFile(
+      join(process.cwd(), 'server/utils/cms-v2-flags.ts'),
+      'utf8'
+    )
+    expect(flagSource).toContain("Reflect.get(process.env, 'NODE_ENV')")
+    expect(flagSource).not.toMatch(/process\.env(?:\.NODE_ENV|\[['"]NODE_ENV['"]\])/)
+    try {
+      throwCmsWorkflowError(new CmsV2ConfigurationError('测试边界错误'))
+      expect.unreachable('配置错误必须转换为 HTTP 错误')
+    } catch (error: any) {
+      expect(error).toMatchObject({
+        statusCode: 503,
+        message: 'V2 影子发布配置无效：测试边界错误'
+      })
+    }
     const routeSource = await readFile(
       join(
         process.cwd(),

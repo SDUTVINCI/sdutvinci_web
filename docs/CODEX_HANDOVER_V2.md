@@ -601,3 +601,60 @@ typecheck/build 以本记录所列结果为准。
 
 本记录将与阶段 3 独立 Commit 一同提交。最终不可循环自引用的 Commit SHA 由阶段 3
 最终回复报告；在提交完成前不预填或猜测 SHA。
+
+---
+
+## 2026-07-29：阶段 2 联合验收的运行时 `NODE_ENV` 修复
+
+### 现场现象和只读确认
+
+- 维护者在阶段 2 首次影子发布中点击“确认发布到 Git”，页面只显示
+  `Server Error`。
+- 读取隔离验收服务日志后确认实际异常为：
+  `revision_shadow 只允许在 NODE_ENV=test 的隔离环境启用`。
+- `/proc` 中该服务的外部环境实际为 `NODE_ENV=test`、
+  `CONTENT_PUBLISH_MODE=revision_shadow`，未读取或输出数据库 URL、Token 或密钥。
+- 原因是验收运行生产 `.output`，bundler 把直接的 `process.env.NODE_ENV` 静态折叠
+  成构建时 `production`；直接运行 TypeScript 的集成测试没有覆盖这一产物差异。
+- 只读数据库查询确认目标草稿仍为 `approved`、版本 22、publish attempt 为 0。
+- 配置的隔离 CMS Git worktree 尚不存在，证明错误发生在 publish record、文件写入、
+  Commit 和 Push 之前；可以在重建服务后安全重试一次。
+
+### 修复
+
+- `server/utils/cms-v2-flags.ts` 改为
+  `Reflect.get(process.env, 'NODE_ENV')`，使生产构建读取真实运行时边界。
+- `revision_shadow` 在非测试运行时仍 fail closed，没有放宽生产保护。
+- 新增 `CmsV2ConfigurationError`，发布 API 将配置错误映射为明确的 503 信息，不再
+  退化为通用 `Server Error`。
+- 阶段 2 集成测试增加运行时读取和禁止可静态折叠写法的回归断言。
+- 阶段 2、阶段 3 联合验收文档增加旧构建不可复用、构建产物检查、重启和安全重试说明。
+
+### 自动验证
+
+- 首次测试容器数据库名没有独立 `test` 段，被测试安全护栏在执行任何测试前拒绝；
+  该空容器已删除，未把这次拒绝计为测试通过。
+- 合规命名的隔离 PostgreSQL 17：
+  `npm run test:v2:phase2` 通过，1 个文件、7 项测试。
+- 同一隔离库完整 `npm test` 通过，11 个文件、64 项测试。
+- `npm run typecheck` 通过。
+- `npm run build` 通过；只有既有静态图片解析警告。
+- 构建产物检查通过：
+  `.output/server/chunks/nitro/nitro.mjs` 保留
+  `Reflect.get(process.env, "NODE_ENV")`。
+- 临时 PostgreSQL 容器已停止并自动删除。
+- 最终 `git diff --check` 和提交后状态由本修复最终记录补充。
+
+### 生产资源和回滚
+
+- 只读取维护者正在使用的隔离验收服务日志、两个非敏感运行时开关、隔离草稿状态和
+  隔离 Git worktree 状态。
+- 没有修改维护者的隔离数据库、草稿、测试 remote 或旧验收进程；没有接触生产资源。
+- 没有 Push、部署或进入阶段 4。
+- 回滚使用 `git revert <本修复-commit-sha>`；本修复无 Migration 或环境变量变化。
+- 修复后必须从新 Commit 重新构建 `.output`，旧进程不能热更新该服务端逻辑。
+
+### Commit
+
+本记录将与验收修复的独立 Commit 一同提交。最终不可循环自引用的 Commit SHA 由最终
+回复报告；在提交完成前不预填或猜测 SHA。

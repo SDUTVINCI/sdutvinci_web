@@ -21,8 +21,15 @@ import {
   CmsPublishStateError
 } from '../services/cms-publishing'
 import { CmsRevisionNotFoundError } from '../services/cms-revisions'
+import { CmsV2ConfigurationError } from './cms-v2-flags'
 
 export const throwCmsWorkflowError = (error: unknown): never => {
+  if (error instanceof CmsV2ConfigurationError) {
+    throw createError({
+      statusCode: 503,
+      message: `V2 影子发布配置无效：${error.message}`
+    })
+  }
   if (error instanceof CmsRevisionNotFoundError) {
     throw createError({ statusCode: 404, message: '数据库版本不存在' })
   }
