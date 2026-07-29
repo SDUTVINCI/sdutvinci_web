@@ -2,6 +2,46 @@
 
 set -Eeuo pipefail
 
+# Docker Compose gives exported shell variables precedence over the generated
+# test .env. Remove every application-specific override before constructing any
+# project so an acceptance or production URL cannot leak into this test.
+unset \
+  APP_BIND_ADDRESS \
+  APP_IMAGE \
+  APP_IMAGE_TAG \
+  APP_OPS_IMAGE \
+  APP_PORT \
+  BACKUP_ROOT \
+  CMS_AUTH_SECRET \
+  CMS_CONTENT_ROOT \
+  CMS_GIT_AUTHOR_EMAIL \
+  CMS_GIT_AUTHOR_NAME \
+  CMS_GIT_BRANCH \
+  CMS_GIT_KNOWN_HOSTS_FILE \
+  CMS_GIT_REMOTE \
+  CMS_GIT_REMOTE_URL \
+  CMS_GIT_SSH_KEY_FILE \
+  CMS_GIT_SSH_KEY_PATH \
+  CMS_GIT_WORKTREE \
+  CMS_SECURE_COOKIES \
+  COMPOSE_FILE \
+  COMPOSE_PROFILES \
+  COMPOSE_PROJECT_NAME \
+  CONTENT_PUBLISH_MODE \
+  DATABASE_URL \
+  NUXT_PUBLIC_SITE_URL \
+  POSTGRES_DB \
+  POSTGRES_PASSWORD \
+  POSTGRES_USER \
+  RESTORE_CONFIRM \
+  S3_ACCESS_KEY_ID \
+  S3_BUCKET \
+  S3_ENDPOINT \
+  S3_PUBLIC_BASE_URL \
+  S3_REGION \
+  S3_SECRET_ACCESS_KEY \
+  TEST_DATABASE_URL
+
 repository_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 test_root="$(mktemp -d /tmp/vinci-phase9-backup-restore.XXXXXX)"
 source_directory="${test_root}/source-project"
@@ -32,6 +72,10 @@ cleanup() {
       docker compose down --volumes --remove-orphans >/dev/null 2>&1 || true
     )
   fi
+  docker image rm \
+    "${runtime_image}:${image_tag}" \
+    "${operations_image}:${image_tag}" \
+    >/dev/null 2>&1 || true
   rm -rf -- "$test_root"
 }
 trap cleanup EXIT

@@ -763,3 +763,16 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
   路径或目录穿越校验，也没有读取目标文件。
 - 阶段 2 的既有 7 项测试内新增 shadow Git 路径回归断言，不增加或伪造测试项数量。
 - 本修复没有 Migration、API、依赖或环境变量变化；没有接触生产资源。
+
+---
+
+## 2026-07-29：备份恢复测试的调用环境隔离
+
+- 阶段 2 人工验收终端保留了 `DATABASE_URL`、PostgreSQL、CMS Git 和 shadow 开关；
+  Docker Compose 的 shell 环境优先级高于测试生成的 `.env`，旧脚本可能被这些变量
+  覆盖，不能直接作为安全验收命令。
+- `tests/backup-restore.integration.sh` 现在在创建任何目录、容器或 Migration 前清除
+  全部应用专用数据库、Compose、CMS Git、对象存储、认证和恢复确认覆盖变量；Docker
+  连接自身需要的通用环境不变。
+- 隔离测试仍只使用动态 phase9 project、test 数据库、无效外部端点、临时备份根和独立
+  volume；退出 trap 清理精确匹配本次动态标签的测试镜像、容器、volume 和临时目录。
