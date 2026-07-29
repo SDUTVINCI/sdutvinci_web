@@ -898,3 +898,17 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
   `docs/v2/PHASE_V2_4_ACCEPTANCE.md`。
 - 完整机器报告见 `docs/v2/PHASE_V2_4_HTTP_DOM_COMPARISON.json`。
 - 本阶段独立 Commit SHA 由最终回复报告；未 Push、未部署、未进入阶段 5。
+
+---
+
+## 2026-07-29：阶段 4 维护者人工验收通过
+
+- 维护者确认原文：`V2 阶段 4 验收通过`
+- 阶段 4 新闻、Wiki、成员数据库候选、Comark SSR、SEO、数据库搜索、Sitemap、
+  RSS、集合级开关、Revision 缓存键和精确失效接口的实现及自动验证已获确认。
+- 维护者完成旧 Nuxt Content 与数据库/Comark 候选的浏览器验收，并接受报告中完整
+  保留的阶段 3 共 33 篇/35 项差异及阶段 4 额外 25 条非阻断差异。
+- 生产默认仍为 `legacy_git + disabled`；Git-first 发布事务、成员权威、Nuxt
+  Content 和代码仓库 `content/` 均未切换或删除。
+- 阶段 4 人工验收项和总体进度已勾选。阶段 5 具备开始条件，但本次没有开始阶段 5。
+- 没有 Push、部署、生产资源访问、内容仓库读写或测试资源遗留。
