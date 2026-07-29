@@ -29,6 +29,11 @@ import {
   users
 } from '../server/db/schema'
 import {
+  getCmsArticle,
+  listCmsArticles
+} from '../server/services/cms-articles'
+import { getCmsDashboardStats } from '../server/services/cms-dashboard'
+import {
   diffCmsArticleVersions,
   restoreCmsArticleRevision,
   restoreCmsArticleVersion
@@ -139,6 +144,7 @@ suite('V2 阶段 2 Revision 影子写入、历史与恢复', () => {
     process.env.CMS_GIT_BRANCH = 'main'
     process.env.CMS_GIT_AUTHOR_NAME = 'Vinci CMS Test'
     process.env.CMS_GIT_AUTHOR_EMAIL = 'cms@localhost'
+    process.env.CMS_CONTENT_ROOT = join(seedRepository, 'content')
     delete process.env.CMS_GIT_SSH_KEY_PATH
     resetCmsGitConfigForTests()
 
@@ -218,7 +224,9 @@ suite('V2 阶段 2 Revision 影子写入、历史与恢复', () => {
 
   afterAll(async () => {
     delete process.env.CONTENT_PUBLISH_MODE
+    delete process.env.CMS_CONTENT_ROOT
     resetCmsV2FlagsForTests()
+    resetCmsGitConfigForTests()
     await closeDatabase()
     if (temporaryRoot) await rm(temporaryRoot, { recursive: true, force: true })
   })
@@ -248,6 +256,13 @@ suite('V2 阶段 2 Revision 影子写入、历史与恢复', () => {
     expect((await getDatabase().select().from(auditLogs))
       .some(log => log.action === 'article.publish'
         && log.metadata.revisionId === revisions[0]!.id)).toBe(true)
+    await getCmsDashboardStats(operatorUserId, true)
+    const listed = await listCmsArticles()
+    expect(listed.articles.find(item => item.id === articleId)).toMatchObject({
+      isPresent: true,
+      contentHash: hash(currentSource)
+    })
+    expect((await getCmsArticle(articleId))?.body).toBe('首次影子发布正文\n')
     const detail = await getCmsArticleRevision(articleId, revisions[0]!.id)
     const retried = await getDatabase().transaction(tx =>
       appendCmsArticleRevision(tx, {

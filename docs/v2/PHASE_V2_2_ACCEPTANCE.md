@@ -478,3 +478,78 @@ node .output/server/index.mjs
 使用同一条 `approved` 测试草稿；先只读确认 `publish_records` 没有该草稿的尝试记录，
 再单击一次发布。若已经存在 succeeded/failed/pending 记录或 Git Commit，则停止并按
 12.3 的完整性检查处理，不得盲目重试。
+
+## 16. 首次发布后再次提交被误判为“文章已有更新”的验收修复
+
+### 16.1 现场现象与原因
+
+2026-07-29 联合人工验收中，首次影子发布已经成功，测试 Git 远端、工作区和数据库
+Revision 的 Commit SHA 一致；维护者随后从文章列表重新进入该文章并修改正文，第二次
+提交审核却收到：
+
+```text
+当前文章已有更新，请重新同步后再发布。
+```
+
+只读检查确认草稿 `base_content_hash`、文章 `content_hash` 和测试 Git 工作区文件
+SHA-256 完全一致，但 `articles.is_present` 已被改成 false。原因是文章列表和仪表盘
+每次请求都会调用 V1 内容同步，而隔离服务的 `CMS_CONTENT_ROOT` 指向构建时静态
+`content/`；首次发布的新文件只存在于独立 `CMS_GIT_WORKTREE`。旧同步因此把刚发布的
+文章误判为缺失，随后并发保护正确地拒绝了第二次提交。
+
+这不是维护者编辑或审核顺序错误。现场第二次正文仍保存在隔离数据库草稿中，不应点击
+“重新同步”、删除草稿或重新创建文章。
+
+### 16.2 修复后的读取边界
+
+- `legacy_git` 默认模式继续按原 V1 行为从 `CMS_CONTENT_ROOT` 同步，没有生产行为切换。
+- `revision_shadow` 不再在文章列表或仪表盘请求中用静态构建副本重建投影。
+- 影子模式文章详情优先读取 `CMS_GIT_WORKTREE/content/...`；只有目标文件尚不存在时
+  才回退到静态内容根，其他 Git 工作区错误继续 fail closed。
+- 显式 `npm run cms:content:sync` 没有移除；它仍用于首次建库和受控修复。
+- 前台新闻/Wiki 仍由 Nuxt Content 读取，本修复不接入真实内容仓库写权限。
+
+回归测试故意把 `CMS_CONTENT_ROOT` 固定在首次发布前的旧 seed 内容。首次 Push 后再
+调用文章列表和详情，必须确认文章仍为 present、投影哈希等于 Git 当前文件、详情正文
+来自新 Git 文件。这样覆盖了现场失败顺序，而不依赖人工点击。
+
+### 16.3 保留当前草稿的原地恢复步骤
+
+以下命令只适用于当前阶段 2 隔离环境。先确认路径、进程 cwd、容器名和 Git 远端都带有
+明确的 phase2/test 边界；任何检查失败都立即停止，不得把命令改指向生产资源。
+
+1. 停止旧验收进程前，从 `/proc/<pid>/environ` 读入其运行时环境到当前 shell 数组；
+   不打印数组内容，避免泄露隔离数据库口令或会话密钥。
+2. 用 `git fetch origin main` 和 `git merge --ff-only
+   <phase2-shadow-index-fix-commit-sha>` 更新临时 app，不 hard reset。
+3. 在临时 app 重新执行 `npm ci` 和 `npm run build`，旧 `.output` 不可复用。
+4. 只对隔离数据库执行一次显式同步，并临时把 `CMS_CONTENT_ROOT` 覆盖为
+   `<phase2-root>/cms-worktree/content`。预期把受影响文章恢复为 `is_present=true`，
+   不创建 Git Commit、Revision 或发布记录。
+5. 使用原运行时环境重启 `.output`，检查 `/api/health`。
+6. 刷新原草稿；确认第二次正文仍在，保存后重新提交审核。不要先点“重新同步”。
+
+同步后可只读验证：
+
+```sql
+select is_present, content_hash, current_revision_id
+from articles
+where id = '<phase2-article-id>';
+```
+
+预期 `is_present=true`，`content_hash` 等于首次发布 Git 文件 SHA-256，
+`current_revision_id` 仍指向首次发布 Revision。Revision 数量和测试远端 HEAD 在同步
+前后必须不变；否则停止验收并保留日志。
+
+### 16.4 自动验证与回滚
+
+- 隔离 PostgreSQL 17 上 `npm run test:v2:phase2`：1 个文件、7 项测试通过。
+- 同一隔离库完整 `npm test`：11 个文件、64 项测试通过。
+- `npm run typecheck`：通过。
+- `npm run build`：通过。
+- 临时测试数据库容器已停止并自动删除。
+
+本修复没有 Migration、依赖或新环境变量。回滚使用
+`git revert <phase2-shadow-index-fix-commit-sha>` 后重跑阶段 2 专项测试、完整测试、
+typecheck、build 和 `git diff --check`；不得删除现场 Revision、重写测试 Git 历史或
+Force Push。回滚后若继续影子验收，旧缺陷会恢复，因此应停止验收而不是绕过并发保护。

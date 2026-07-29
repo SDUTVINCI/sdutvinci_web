@@ -12,8 +12,22 @@ import { getDatabase } from '../db/client'
 import { articles } from '../db/schema'
 import { listMarkdownFiles, readContentFile } from '../utils/cms-content-path'
 import { parseCmsMarkdown } from '../utils/cms-frontmatter'
+import { isCmsRevisionShadowEnabled } from '../utils/cms-v2-flags'
+import { readCmsGitArticle } from './cms-git-worktree'
 
 const collections: CmsArticleCollection[] = ['news', 'wiki']
+
+const readShadowArticleSource = async (
+  collection: CmsArticleCollection,
+  relativePath: string
+) => {
+  try {
+    return await readCmsGitArticle(collection, relativePath)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    return (await readContentFile(collection, relativePath)).source
+  }
+}
 
 interface ScannedArticle {
   collection: CmsArticleCollection
@@ -89,6 +103,12 @@ export const synchronizeCmsArticles = async () => {
   return scanned.length
 }
 
+export const refreshCmsArticlesForRequest = async () => {
+  if (!isCmsRevisionShadowEnabled()) {
+    await synchronizeCmsArticles()
+  }
+}
+
 const toSummary = (row: typeof articles.$inferSelect): CmsArticleSummary => ({
   id: row.id,
   collection: row.collection as CmsArticleCollection,
@@ -114,7 +134,7 @@ export interface ListCmsArticlesInput {
 export const listCmsArticles = async (
   input: ListCmsArticlesInput = {}
 ): Promise<CmsArticleListResponse> => {
-  await synchronizeCmsArticles()
+  await refreshCmsArticlesForRequest()
   const includeDeleted = input.includeDeleted || input.status === 'deleted' || input.status === 'all'
   const filters = includeDeleted
     ? [or(
@@ -181,7 +201,9 @@ export const getCmsArticle = async (
   const collection = row.collection as CmsArticleCollection
   let source: string
   try {
-    source = (await readContentFile(collection, row.relativePath)).source
+    source = isCmsRevisionShadowEnabled()
+      ? await readShadowArticleSource(collection, row.relativePath)
+      : (await readContentFile(collection, row.relativePath)).source
   } catch (error) {
     if (!includeDeleted) throw error
     source = ''

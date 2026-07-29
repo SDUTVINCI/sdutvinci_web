@@ -3,13 +3,13 @@ import type { CmsDashboardStats } from '../../shared/types/cms-dashboard'
 import { cmsDraftStatuses } from '../../shared/types/cms-drafts'
 import { getDatabase } from '../db/client'
 import { articles, drafts, members } from '../db/schema'
-import { synchronizeCmsArticles } from './cms-articles'
+import { refreshCmsArticlesForRequest } from './cms-articles'
 
 export const getCmsDashboardStats = async (
   userId: string,
   isAdmin: boolean
 ): Promise<CmsDashboardStats> => {
-  await synchronizeCmsArticles()
+  await refreshCmsArticlesForRequest()
   const db = getDatabase()
   const draftFilter = and(
     isNull(drafts.deletedAt),

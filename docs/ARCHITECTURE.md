@@ -509,6 +509,12 @@ Revision 新增可空 `source_operation_id` 和 `git_commit_hash`。前者以 V1
 管理员、同源和 CSRF。V1 Git 历史、版本、Diff 和恢复入口没有移除，前台与 Nuxt
 Content 也没有切换。
 
+影子模式下，发布后的 CMS 列表和仪表盘不会在每次请求时用应用构建目录中的静态
+`content/` 重新同步文章投影；文章详情优先读取独立 `CMS_GIT_WORKTREE`，仅当该路径
+尚未存在时回退到静态内容根。显式的 `cms:content:sync` 仍可用于首次建库或受控修复。
+这是测试影子链路的读取一致性边界，不改变 `legacy_git` 的请求同步行为，也不把生产
+前台从 Nuxt Content 切换到数据库。
+
 只读对账工具核对发布时间、文章作者、发布/审核身份、来源草稿、正文、完整原文和
 SHA-256，并报告没有对应 Revision 的 Git Commit；它没有自动修复模式。V2 前的完整
 Git 历史未在阶段 1 回填，真实长历史文章出现旧提交未匹配是已知差异。详细命令、失败

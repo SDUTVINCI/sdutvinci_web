@@ -658,3 +658,56 @@ typecheck/build 以本记录所列结果为准。
 
 本记录将与验收修复的独立 Commit 一同提交。最终不可循环自引用的 Commit SHA 由最终
 回复报告；在提交完成前不预填或猜测 SHA。
+
+---
+
+## 2026-07-29：阶段 2 再次提交的影子文章索引修复
+
+### 现场证据和根因
+
+- 维护者首次影子发布成功后，数据库已有 1 个 Revision；它的 Git Commit SHA 与隔离
+  CMS worktree、本地 bare 测试远端一致。
+- 第二次编辑正文后，提交审核被提示“当前文章已有更新，请重新同步后再发布”。
+- 只读 SQL 确认草稿基线哈希、文章投影哈希和 Git 文件 SHA-256 相同，但文章
+  `is_present=false`；第二次正文仍保存在原隔离草稿中。
+- 隔离 Git 文件存在于 `CMS_GIT_WORKTREE/content/wiki/v2-phase2-acceptance.md`，
+  而隔离 app 的静态 `CMS_CONTENT_ROOT` 没有该首次发布文件。
+- 根因是文章列表和仪表盘请求继续执行 V1 全量内容同步，扫描旧静态构建副本并把新文章
+  误标为不存在；并发保护随后按设计拒绝提交。
+
+### 修复
+
+- 新增请求级文章刷新边界：`legacy_git` 保持 V1 同步；`revision_shadow` 跳过请求内
+  静态内容全量同步。
+- 影子模式文章详情优先读独立 CMS Git worktree；只有文件尚不存在的 `ENOENT` 才回退
+  到 `CMS_CONTENT_ROOT`，权限、配置等其他错误继续抛出。
+- 阶段 2 回归测试把静态内容根固定在发布前状态，首次发布后访问列表和详情，确认文章
+  不被标成 missing、哈希仍为 Git 当前值且正文来自新提交。
+- 阶段 2、阶段 3 联合人工验收文档增加现场根因、保留现有草稿的一次性修复同步、重建
+  重启、验证、失败处理和回滚步骤。
+
+### 自动验证
+
+- 名称明确含 test 的隔离 PostgreSQL 17：
+  `npm run test:v2:phase2` 通过，1 个文件、7 项测试。
+- 同一隔离库完整 `npm test` 通过，11 个文件、64 项测试。
+- `npm run typecheck` 通过。
+- `npm run build` 通过。
+- 临时 PostgreSQL 容器已停止并自动删除。
+- 最终 `git diff --check` 和提交后工作区状态由本修复最终记录补充。
+
+### 变更边界、限制和回滚
+
+- 没有 Migration、API、依赖或环境变量变化。
+- 没有修改维护者当前隔离数据库、草稿、Git remote、worktree 或进程；只做只读诊断。
+- 没有访问或修改生产 PostgreSQL、服务器、对象存储或真实内容仓库；没有 Push、部署
+  或进入阶段 4。
+- 当前已被旧进程标为 missing 的隔离投影需按阶段 2 文档第 16.3 节做一次显式同步；
+  代码不会在请求中擅自改回，以免隐藏其他真实内容删除。
+- 回滚使用 `git revert <本修复-commit-sha>` 并重跑专项、完整测试、typecheck、build
+  和 diff check；不得删除 Revision、hard reset 或 Force Push。
+
+### Commit
+
+本记录将与阶段 2 验收热修复的独立 Commit 一同提交。最终不可循环自引用的 Commit
+SHA 由最终回复报告；在提交完成前不预填或猜测 SHA。
