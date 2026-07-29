@@ -776,3 +776,20 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
   连接自身需要的通用环境不变。
 - 隔离测试仍只使用动态 phase9 project、test 数据库、无效外部端点、临时备份根和独立
   volume；退出 trap 清理精确匹配本次动态标签的测试镜像、容器、volume 和临时目录。
+
+---
+
+## 2026-07-29：阶段 2 维护者人工验收通过
+
+- 维护者确认原文：`V2 阶段 2 验收通过，接受已记录的登录后 Revision API 404 复验限制。`
+- 人工验收已覆盖隔离 Git/数据库首次与再次发布、Revision 递增、Push 失败不写正式
+  Revision、Git/数据库恢复、权限、Diff 和只读对账；保存的对账报告为 1 篇文章、
+  5 个 Revision、5 个 Git Commit、0 mismatch、0 unmatched。
+- 专项测试 7/7、完整 CMS 测试 58/58、备份恢复、部署缓存清理、typecheck、build 和
+  diff check 均通过；隔离仓库与原源码仓库工作区干净。
+- 人工验收库曾被旧破坏性测试命令覆盖，切回 `legacy_git` 后无法再使用原管理员完成
+  已登录 Revision API 404 复验。已有 Wiki 返回 200，隔离 Git worktree 与 bare
+  remote 均保留验收内容且 HEAD 一致，运行模式和开关断言通过；维护者明确接受此项
+  未完成复验，不将其伪造为已执行。
+- 阶段 2 总体完成项和实际完成的人工验收项已勾选。没有 Push、部署、生产资源访问或
+  内容仓库写入；阶段 3 实现已完成，等待人工验收。
