@@ -1,26 +1,4 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
-import { basename, join } from 'node:path'
 import { getWikiContentMeta } from './utils/wiki-content-meta'
-
-const getMarkdownFiles = (dir: string): string[] =>
-  readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-    const path = join(dir, entry.name)
-
-    if (entry.isDirectory()) {
-      return getMarkdownFiles(path)
-    }
-
-    return entry.isFile() && entry.name.endsWith('.md') ? [path] : []
-  })
-
-const memberRoutes = existsSync('content/members')
-  ? getMarkdownFiles('content/members')
-    .map((file) => {
-      const source = readFileSync(file, 'utf8')
-      const id = source.match(/^id:\s*([a-z][a-z0-9]{2,31})\s*$/m)?.[1]
-      return `/team/${id || basename(file, '.md')}`
-    })
-  : []
 
 export default defineNuxtConfig({
   modules: ['@nuxt/content', '@comark/nuxt'],
@@ -137,25 +115,33 @@ export default defineNuxtConfig({
       ]
     }
   },
+  runtimeConfig: {
+    public: {
+      siteUrl: process.env.NUXT_PUBLIC_SITE_URL || ''
+    }
+  },
   routeRules: {
-    '/': { prerender: true },
+    '/': { prerender: false },
     '/research': { prerender: true },
-    '/team': { prerender: true },
-    '/team/**': { prerender: true },
-    '/news': { prerender: true },
-    '/news/**': { prerender: true },
-    '/wiki': { prerender: true },
-    '/wiki/**': { prerender: true },
+    '/team': { prerender: false },
+    '/team/**': { prerender: false },
+    '/news': { prerender: false },
+    '/news/**': { prerender: false },
+    '/wiki': { prerender: false },
+    '/wiki/**': { prerender: false },
     '/docs': { redirect: '/wiki' },
     '/recruitment': { prerender: true },
     '/contact': { prerender: true },
     '/cms/**': { prerender: false },
-    '/api/cms/**': { prerender: false }
+    '/api/cms/**': { prerender: false },
+    '/api/v2/**': { prerender: false },
+    '/sitemap.xml': { prerender: false },
+    '/rss.xml': { prerender: false }
   },
   nitro: {
     prerender: {
       crawlLinks: true,
-      routes: ['/', '/research', '/team', '/news', '/wiki', '/recruitment', '/contact', ...memberRoutes]
+      routes: ['/research', '/projects', '/recruitment', '/contact']
     }
   }
 })

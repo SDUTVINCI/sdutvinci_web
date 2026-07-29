@@ -542,3 +542,34 @@ iframe。
 换行、链接、空标题或代码块计数差异。这些差异不会触发自动正文改写，是阶段 4 影子
 HTTP/DOM 比较和生产切换前的显式审查输入。详细报告、安全边界、回滚和联合人工验收见
 `docs/v2/PHASE_V2_3_ACCEPTANCE.md`。
+
+## 19. V2 阶段 4 已落地：数据库读取与 Comark 前台候选
+
+阶段 4 增加了统一的正式内容查询服务，但没有改变生产权威或发布事务。未配置新变量
+时，新闻、Wiki 和成员仍由 Nuxt Content 读取代码仓库 `content/`；
+`CONTENT_CANDIDATE_ENV=disabled` 会拒绝数据库候选。只有显式的 `test` 或
+`staging` 候选环境，才能把单个集合设为 `database_shadow` 或 `database`。
+
+```text
+                    ┌─ legacy_git ─────── Nuxt Content ── 旧响应
+页面统一 composable ├─ database_shadow ── 旧查询 + DB 旁路 ── 旧响应
+                    └─ database ───────── current Revision ── Comark SSR
+```
+
+数据库服务对新闻和 Wiki 使用 `articles.current_revision_id` 连接当前
+`article_revisions`，并排除删除或不再存在的文章；Wiki 导航继续使用冻结的路径元数据
+计算文档根、章节顺序、上一页和下一页。成员只建立结构化数据库候选，正文仍只读
+legacy `source_path`，成员权威没有切换。数据库搜索、Sitemap 和 RSS 同样只在显式
+候选环境开放。
+
+详情候选缓存使用包含 Revision UUID 的
+`phase4:<collection>:<articleId>:revision:<revisionId>` 键，并提供管理员、同源和
+CSRF 保护的精确失效接口。缓存有 TTL 和容量上限；本阶段没有把失效接口接入
+Git-first 发布事务。候选页面和 CMS “最终效果预览”共用
+`VinciMarkdownRenderer` 与 `shared/utils/vinci-markdown.ts`，因此使用相同的
+Comark、安全过滤、标题 ID 和代码高亮管线。
+
+完整影子报告覆盖 270 条路由：267 组双方为 200，3 组缺失路径双方为 404，没有状态、
+关键标题或 SEO 缺失级别的不匹配。阶段 3 的 33 篇/35 项差异全部原样映射；另有 25 条
+非阻断 DOM/SEO 内容差异明确保留，未通过批量改写 Markdown 消除。实现边界、报告、
+安全的隔离验收脚本和回滚方式见 `docs/v2/PHASE_V2_4_ACCEPTANCE.md`。

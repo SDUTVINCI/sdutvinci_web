@@ -46,6 +46,17 @@ export const getCmsArticlePublicPath = (
 ) => {
   const stem = `${collection}/${relativePath.slice(0, -extname(relativePath).length)}`
   if (collection === 'wiki') return getWikiContentMeta(stem)?.path || `/${stem}`
+  const legacyNewsStem = stem
+    .split('/')
+    .map(segment => segment
+      .normalize('NFKD')
+      .replace(/[^\x00-\x7F]/g, '')
+      .replace(/[^a-zA-Z0-9._-]+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-+|-+$/g, ''))
+    .filter(Boolean)
+    .join('/')
+  if (collection === 'news') return `/${legacyNewsStem}`
   return `/${stem}`
 }
 

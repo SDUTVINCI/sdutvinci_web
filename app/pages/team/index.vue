@@ -1,13 +1,20 @@
 <script setup lang="ts">
 type Member = Record<string, any>
 
-useHead({
-  title: '成员 | 山东理工大学 Vinci 机器人队'
+const { data: rawMembers } = await usePublicContentQuery<Member[]>({
+  key: 'members:list',
+  collection: 'members',
+  legacy: () => queryCollection('members').all() as Promise<Member[]>,
+  database: async () => (
+    await $fetch<{ items: Member[] }>('/api/v2/content/members')
+  ).items
 })
 
-const { data: rawMembers } = await useAsyncData<Member[]>('members:list', () =>
-  queryCollection('members').all() as Promise<Member[]>
-)
+useContentSeo({
+  title: '成员 | 山东理工大学 Vinci 机器人队',
+  description: '按赛季、职责和专业方向浏览 Vinci 机器人队成员档案。',
+  path: '/team'
+})
 
 const search = ref('')
 const selectedGroup = ref('all')

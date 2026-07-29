@@ -4,9 +4,18 @@ type Member = Record<string, any>
 const route = useRoute()
 const slug = decodeURIComponent(String(route.params.slug ?? ''))
 
-const { data: member } = await useAsyncData<Member | null>(`members:${slug}`, async () => {
-  const byId = await queryCollection('members').where('memberKey', '=', slug).first() as Member | null
-  return byId || queryCollection('members').where('name', '=', slug).first() as Promise<Member | null>
+const { data: member, renderer } = await usePublicContentQuery<Member | null>({
+  key: `members:${slug}`,
+  collection: 'members',
+  legacy: async () => {
+    const byId = await queryCollection('members').where('memberKey', '=', slug).first() as Member | null
+    return byId || queryCollection('members').where('name', '=', slug).first() as Promise<Member | null>
+  },
+  database: async () => (
+    await $fetch<{ item: Member }>(
+      `/api/v2/content/members/${encodeURIComponent(slug)}`
+    )
+  ).item
 })
 
 if (!member.value) {
@@ -16,13 +25,26 @@ if (!member.value) {
   })
 }
 
-const { data: rawMembers } = await useAsyncData<Member[]>('members:related', () =>
-  queryCollection('members').all() as Promise<Member[]>
-)
+const { data: rawMembers } = await usePublicContentQuery<Member[]>({
+  key: 'members:related',
+  collection: 'members',
+  legacy: () => queryCollection('members').all() as Promise<Member[]>,
+  database: async () => (
+    await $fetch<{ items: Member[] }>('/api/v2/content/members')
+  ).items
+})
 
-useHead(() => ({
-  title: `${member.value?.name || '成员'} | Vinci 机器人队`
-}))
+useContentSeo({
+  title: () => `${member.value?.name || '成员'} | Vinci 机器人队`,
+  description: () => String(
+    member.value?.description
+    || member.value?.role
+    || `${member.value?.name || 'Vinci'} 成员档案`
+  ),
+  path: `/team/${encodeURIComponent(slug)}`,
+  image: () => member.value?.image ? String(member.value.image) : undefined,
+  type: 'profile'
+})
 
 const cleanText = (value: unknown) =>
   String(value ?? '')
@@ -138,7 +160,8 @@ const relatedMembers = computed(() => {
 
     <section class="member-profile-content">
       <article class="member-prose">
-        <ContentRenderer :value="member" />
+        <ContentRenderer v-if="renderer === 'nuxt_content'" :value="member" />
+        <VinciMarkdownRenderer v-else :markdown="String(member.body || '')" />
       </article>
 
       <aside v-if="relatedMembers.length" class="related-members">

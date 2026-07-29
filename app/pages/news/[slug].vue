@@ -5,9 +5,16 @@ const route = useRoute()
 const slug = decodeURIComponent(String(route.params.slug ?? ''))
 const newsPath = `/news/${slug}`
 
-const { data: page } = await useAsyncData<NewsItem | null>(`news:${slug}`, () =>
-  queryCollection('news').path(newsPath).first() as Promise<NewsItem | null>
-)
+const { data: page, renderer } = await usePublicContentQuery<NewsItem | null>({
+  key: `news:${slug}`,
+  collection: 'news',
+  legacy: () => queryCollection('news').path(newsPath).first() as Promise<NewsItem | null>,
+  database: async () => (
+    await $fetch<{ item: NewsItem }>(
+      `/api/v2/content/news/${encodeURIComponent(slug)}`
+    )
+  ).item
+})
 
 if (!page.value) {
   throw createError({
@@ -16,9 +23,15 @@ if (!page.value) {
   })
 }
 
-useHead(() => ({
-  title: `${page.value?.title || '新闻'} | Vinci 机器人队`
-}))
+useContentSeo({
+  title: () => `${page.value?.title || '新闻'} | Vinci 机器人队`,
+  description: () => String(
+    page.value?.description || page.value?.summary || page.value?.title || ''
+  ),
+  path: newsPath,
+  image: () => page.value?.image ? String(page.value.image) : undefined,
+  type: 'article'
+})
 
 const formatDate = (value: unknown) => {
   const text = String(value ?? '')
@@ -63,7 +76,8 @@ const bilibiliSrc = computed(() => {
       </div>
 
       <div class="content-prose">
-        <ContentRenderer :value="page" />
+        <ContentRenderer v-if="renderer === 'nuxt_content'" :value="page" />
+        <VinciMarkdownRenderer v-else :markdown="String(page.body || '')" />
       </div>
 
       <div class="article-footer-actions">

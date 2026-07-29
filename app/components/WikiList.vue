@@ -32,8 +32,10 @@ const props = withDefaults(defineProps<{
   limit: Number.POSITIVE_INFINITY
 })
 
-const { data: wikis, pending } = await useAsyncData<WikiListItem[]>('wiki-list-meta', () =>
-  queryCollection('wiki')
+const { data: wikis, pending } = await usePublicContentQuery<WikiListItem[]>({
+  key: 'wiki-list-meta',
+  collection: 'wiki',
+  legacy: () => queryCollection('wiki')
     .select(
       'path',
       'stem',
@@ -48,8 +50,11 @@ const { data: wikis, pending } = await useAsyncData<WikiListItem[]>('wiki-list-m
       'isWikiIndex',
       'wikiDepth'
     )
-    .all() as Promise<WikiListItem[]>
-)
+    .all() as Promise<WikiListItem[]>,
+  database: async () => (
+    await $fetch<{ items: WikiListItem[] }>('/api/v2/content/wiki')
+  ).items
+})
 
 const searchQuery = ref('')
 const expandedDocs = ref(new Set<string>())

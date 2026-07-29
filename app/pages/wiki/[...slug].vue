@@ -30,12 +30,26 @@ interface WikiPage {
 
 const route = useRoute()
 const cleanPath = computed(() => route.path.replace(/\/$/, '') || '/')
-
-const { data: page, pending } = await useAsyncData<WikiPage | null>(
-  computed(() => `wiki-page-${cleanPath.value}`),
-  () => queryCollection('wiki').path(cleanPath.value).first() as Promise<WikiPage | null>,
-  { watch: [cleanPath] }
+const candidateSlug = computed(() =>
+  cleanPath.value
+    .replace(/^\/wiki\/?/, '')
+    .split('/')
+    .filter(Boolean)
+    .map(segment => encodeURIComponent(segment))
+    .join('/')
 )
+
+const { data: page, pending, renderer } = await usePublicContentQuery<WikiPage | null>({
+  key: computed(() => `wiki-page-${cleanPath.value}`),
+  collection: 'wiki',
+  legacy: () => queryCollection('wiki').path(cleanPath.value).first() as Promise<WikiPage | null>,
+  database: async () => (
+    await $fetch<{ item: WikiPage }>(
+      `/api/v2/content/wiki/${candidateSlug.value}`
+    )
+  ).item,
+  watch: [cleanPath]
+})
 
 if (!pending.value && !page.value) {
   throw createError({
@@ -47,34 +61,33 @@ if (!pending.value && !page.value) {
 
 const pageDocKey = computed(() => page.value?.docKey || '')
 
-const { data: docItems } = await useAsyncData<WikiPage[]>(
-  computed(() => `wiki-doc-items-${pageDocKey.value || cleanPath.value}`),
-  async () => {
-    const docKey = page.value?.docKey
+const { data: allWikiItems } = await usePublicContentQuery<WikiPage[]>({
+  key: 'wiki-navigation-items',
+  collection: 'wiki',
+  legacy: () => queryCollection('wiki')
+    .select(
+      'path',
+      'stem',
+      'title',
+      'date',
+      'chapterOrder',
+      'chapterDepth',
+      'docKey',
+      'docRoot',
+      'docTitle',
+      'isWikiDoc',
+      'isWikiIndex'
+    )
+    .all() as Promise<WikiPage[]>,
+  database: async () => (
+    await $fetch<{ items: WikiPage[] }>('/api/v2/content/wiki')
+  ).items
+})
 
-    if (!docKey) {
-      return []
-    }
-
-    return await queryCollection('wiki')
-      .where('docKey', '=', docKey)
-      .select(
-        'path',
-        'stem',
-        'title',
-        'date',
-        'chapterOrder',
-        'chapterDepth',
-        'docKey',
-        'docRoot',
-        'docTitle',
-        'isWikiDoc',
-        'isWikiIndex'
-      )
-      .all() as WikiPage[]
-  },
-  { watch: [pageDocKey] }
-)
+const docItems = computed(() => {
+  if (!pageDocKey.value) return []
+  return (allWikiItems.value || []).filter(item => item.docKey === pageDocKey.value)
+})
 
 const docIndex = computed(() => docItems.value?.find((item) => item.isWikiIndex) || null)
 const chapterItems = computed(() =>
@@ -114,13 +127,19 @@ const pageTitle = computed(() => {
   return currentChapter.value ? `${currentChapter.value} ${page.value.title}` : page.value.title
 })
 
-useHead(() => ({
-  title: `${pageTitle.value} | Vinci Wiki`,
-  meta: [
-    { name: 'description', content: page.value?.title || '' },
-    { property: 'og:title', content: pageTitle.value }
-  ]
-}))
+useContentSeo({
+  title: () => `${pageTitle.value} | Vinci Wiki`,
+  description: () => String(
+    page.value?.frontmatter && typeof page.value.frontmatter === 'object'
+      ? (page.value.frontmatter as Record<string, unknown>).description
+        || page.value?.title
+        || 'Vinci Wiki'
+      : page.value?.title || 'Vinci Wiki'
+  ),
+  path: cleanPath,
+  image: () => page.value?.image ? String(page.value.image) : undefined,
+  type: 'article'
+})
 
 const showDocNav = ref(false)
 const showToc = ref(false)
@@ -721,7 +740,8 @@ function normalizePath(path: string) {
           </header>
 
           <div class="wiki-content-body">
-            <ContentRenderer :value="page" />
+            <ContentRenderer v-if="renderer === 'nuxt_content'" :value="page" />
+            <VinciMarkdownRenderer v-else :markdown="String(page.body || '')" />
           </div>
 
           <footer v-if="previousPage || nextPage" class="wiki-page-navigation">

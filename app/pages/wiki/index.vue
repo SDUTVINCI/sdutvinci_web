@@ -6,15 +6,22 @@ interface WikiMetaItem {
   isWikiDoc?: boolean
 }
 
-useHead({
-  title: 'Wiki | 山东理工大学 Vinci 机器人队'
+const { data: wikiMeta } = await usePublicContentQuery<WikiMetaItem[]>({
+  key: 'wiki:index-stats',
+  collection: 'wiki',
+  legacy: () => queryCollection('wiki')
+    .select('path', 'date', 'docKey', 'isWikiDoc')
+    .all() as Promise<WikiMetaItem[]>,
+  database: async () => (
+    await $fetch<{ items: WikiMetaItem[] }>('/api/v2/content/wiki')
+  ).items
 })
 
-const { data: wikiMeta } = await useAsyncData<WikiMetaItem[]>('wiki:index-stats', () =>
-  queryCollection('wiki')
-    .select('path', 'date', 'docKey', 'isWikiDoc')
-    .all() as Promise<WikiMetaItem[]>
-)
+useContentSeo({
+  title: 'Wiki | 山东理工大学 Vinci 机器人队',
+  description: 'Vinci 机器人队工程实践、环境配置、机器人开发资料与学习笔记。',
+  path: '/wiki'
+})
 
 const wikiPages = computed(() => (wikiMeta.value ?? []).filter((item) => item.isWikiDoc))
 

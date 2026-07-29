@@ -1,13 +1,20 @@
 <script setup lang="ts">
 type NewsItem = Record<string, any>
 
-useHead({
-  title: '新闻 | 山东理工大学 Vinci 机器人队'
+const { data: rawNews } = await usePublicContentQuery<NewsItem[]>({
+  key: 'news:list',
+  collection: 'news',
+  legacy: () => queryCollection('news').all() as Promise<NewsItem[]>,
+  database: async () => (
+    await $fetch<{ items: NewsItem[] }>('/api/v2/content/news')
+  ).items
 })
 
-const { data: rawNews } = await useAsyncData<NewsItem[]>('news:list', () =>
-  queryCollection('news').all() as Promise<NewsItem[]>
-)
+useContentSeo({
+  title: '新闻 | 山东理工大学 Vinci 机器人队',
+  description: '记录 Vinci 机器人队的赛事采访、训练进展、团队活动和阶段性成果。',
+  path: '/news'
+})
 
 const newsList = computed(() =>
   [...(rawNews.value ?? [])].sort((a, b) => String(b.date ?? '').localeCompare(String(a.date ?? '')))

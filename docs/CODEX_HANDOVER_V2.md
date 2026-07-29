@@ -806,3 +806,95 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
   35 项已记录差异；差异不在阶段 3 隐瞒或自动改写，进入阶段 4 影子 HTTP/DOM 对比。
 - 阶段 3 总体完成项和实际完成的人工验收项已勾选。阶段 4 尚未开始；没有 Push、
   部署、生产资源访问、内容权威切换、发布事务修改或内容仓库写入。
+
+---
+
+## 2026-07-29：V2 阶段 4——前台数据库读取与 Comark 影子运行
+
+### 完成状态
+
+- 实现：完成。
+- 自动化验证：完成。
+- 人工验收：等待维护者确认，阶段 4 总体完成项保持未勾选。
+- 下一阶段是否开始：否；不得开始阶段 5。
+
+### 基线与资源边界
+
+- 开始实施时分支为 `main`，HEAD 为
+  `a3f7b77e4de7cdfb23e01e7b2b8b70cbad0104b0`，工作区干净。
+- 本机的 `origin/main` 远程跟踪引用已与 HEAD 相同，和交接中记录的
+  `d50e715d8e99b5f20a3c543851d3cdb665db071f` 不同；没有 fetch、pull、rebase、
+  reset 或改写本地提交。
+- 旧 `/tmp/vinci-v2-phase2-acceptance.*` 和既有容器只读盘点后保持原状。
+- 自动验证仅创建 `vinci-v2-phase4-test-db` /
+  `vinci_v2_phase4_test`，绑定 `127.0.0.1:55444`；测试完成后精确删除。
+- 未访问生产数据库、生产容器、服务器、对象存储、GitHub 写权限或独立内容仓库；
+  没有 Push 或部署。
+
+### 修改内容
+
+- 增加新闻、Wiki、成员和搜索统一数据库查询服务。新闻/Wiki 从
+  `articles.current_revision_id` 读取当前 Revision，排除删除和缺失内容。
+- Wiki 候选提供文档根、目录、章节顺序、上一页和下一页；成员仅提供数据库结构化
+  候选，正文仍只读 legacy 文件，不切换成员权威。
+- 新闻、Wiki 和成员按集合支持 `legacy_git`、`database_shadow` 和 `database`。
+  shadow 并行执行数据库旁路查询但始终返回旧 Nuxt Content 结果。
+- 数据库详情由 `VinciMarkdownRenderer` SSR，与 CMS 最终效果预览复用相同 Comark
+  和安全管线；页面统一生成 SEO、Open Graph 和 canonical。
+- 增加数据库候选搜索、Sitemap、RSS、Revision ID 缓存键及管理员精确失效 API。
+  缓存有 5 分钟 TTL 和 512 项上限，失效接口没有接入正式发布事务。
+- 动态内容页面改为运行时 SSR，以允许同一测试/预发布构建切换来源；Nuxt Content、
+  代码仓库 `content/`、Git-first 发布和生产默认均保留。
+- 新闻数据库投影路径兼容旧 Nuxt Content 对文件名非 ASCII 部分的处理，例如
+  `2024-07-06-接受赛委会采访.md` 仍映射 `/news/2024-07-06`。
+
+### 数据库、API、依赖和环境变量
+
+- Migration 和 Schema：无变化。
+- 新候选读取 API：`/api/v2/content/config`、新闻、Wiki、成员和搜索端点。
+- 新 Feed：`/sitemap.xml`、`/rss.xml`；默认关闭时返回 404。
+- 新缓存 API：`POST /api/cms/v2/content-cache/invalidate`，要求管理员、同源和
+  CSRF；不在发布事务中调用。
+- 新开发依赖：`parse5@8.0.1`，用于确定性 HTTP/DOM 报告；无新运行依赖。
+- 新变量：`CONTENT_SOURCE_NEWS`、`CONTENT_SOURCE_WIKI`、
+  `CONTENT_SOURCE_MEMBERS` 和 `CONTENT_CANDIDATE_ENV`。默认值是
+  `legacy_git + disabled`；候选只允许显式 `test` 或 `staging`。
+
+### 测试、构建与差异
+
+- 阶段 4 数据库专项：1 文件，8/8。
+- 完整 CMS 回归：11 文件，66/66。
+- 普通测试：4 文件、16 项通过；未提供测试 URL 时 8 个数据库文件、57 项安全跳过，
+  数据库路径已由完整 CMS 回归覆盖。
+- V2 内容审计：260 个 Markdown 通过；Wiki 检查：226 个文件通过。
+- typecheck、build、脚本语法、Compose 安全默认配置和 `git diff --check` 通过。
+- 默认无数据库冒烟：`/`、`/news`、`/wiki`、`/team` 为 200；候选 API、
+  Sitemap 和 RSS 为 404。
+- HTTP/DOM 报告比较 270 条路由：267 组双方 200，3 组缺失路径双方 404，0 个状态、
+  关键标题或 SEO 缺失级别不匹配，212 条关键 DOM 等价，7 个候选探针全部通过。
+- 阶段 3 的 33 篇/35 项差异按源文件完整映射并原样保留；没有改写 Markdown。
+  另有 25 条非阻断差异，包括 16 条 description/OG 描述来源差异及 9 条
+  Comark 原始 HTML、空白文本或标签/标题结构差异，等待浏览器抽查。
+
+### 已知限制
+
+- 成员在阶段 9 前没有正式 Revision 正文，数据库候选正文仍来自 legacy 文件。
+- 候选缓存是有界单进程缓存，多实例失效广播不属于阶段 4。
+- shadow 失败只有去敏服务器警告，尚无持久指标系统。
+- 33 篇/35 项既有差异及新增 25 条非阻断差异仍需维护者抽查。
+- 没有在真实预发布或生产域名运行，本阶段不声称完成部署验收。
+
+### 回滚方法
+
+- 运行时立即回退：三个 `CONTENT_SOURCE_*` 全设为 `legacy_git`，
+  `CONTENT_CANDIDATE_ENV=disabled`，然后只重启隔离测试实例。
+- 代码回滚：对本阶段独立 Commit 执行 `git revert <SHA>`，再跑专项、CMS 回归、
+  typecheck、build 和 diff check。
+- 没有 Migration down、Revision 删除、内容仓库操作、hard reset 或 Force Push。
+
+### 人工验收与 Commit
+
+- 浏览器优先步骤、预期结果、失败处理和精确清理见
+  `docs/v2/PHASE_V2_4_ACCEPTANCE.md`。
+- 完整机器报告见 `docs/v2/PHASE_V2_4_HTTP_DOM_COMPARISON.json`。
+- 本阶段独立 Commit SHA 由最终回复报告；未 Push、未部署、未进入阶段 5。

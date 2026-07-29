@@ -4,13 +4,20 @@ import { roboconRecordedYearCount } from '~/data/robocon-achievements'
 
 type Member = Record<string, any>
 
-useHead({
-  title: '山东理工大学 Vinci 机器人队'
+const { data: rawMembers } = await usePublicContentQuery<Member[]>({
+  key: 'members:home-total',
+  collection: 'members',
+  legacy: () => queryCollection('members').all() as Promise<Member[]>,
+  database: async () => (
+    await $fetch<{ items: Member[] }>('/api/v2/content/members')
+  ).items
 })
 
-const { data: rawMembers } = await useAsyncData<Member[]>('members:home-total', () =>
-  queryCollection('members').all() as Promise<Member[]>
-)
+useContentSeo({
+  title: '山东理工大学 Vinci 机器人队',
+  description: '山东理工大学 Vinci 机器人队、机电创新学会，以全国大学生机器人大赛 Robocon 为核心。',
+  path: '/'
+})
 
 const totalMemberCount = computed(() => rawMembers.value?.length ?? 0)
 
