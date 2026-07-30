@@ -1,10 +1,10 @@
 import { Crepe } from '@milkdown/crepe'
+import { remark } from 'remark'
 
-const normalizeMarkdownRoundTrip = (markdown: string) =>
-  markdown
-    .replace(/\r\n?/g, '\n')
-    .replace(/[ \t]+$/gm, '')
-    .trim()
+const markdownSemanticFingerprint = (markdown: string) => JSON.stringify(
+  remark().parse(markdown.replace(/\r\n?/g, '\n')),
+  (key, value) => key === 'position' ? undefined : value
+)
 
 export const cmsVisualEditorFeatures = {
   [Crepe.Feature.AI]: false,
@@ -18,4 +18,4 @@ export const cmsVisualEditorFeatures = {
 export const isCmsVisualRoundTripLossless = (
   source: string,
   serialized: string
-) => normalizeMarkdownRoundTrip(source) === normalizeMarkdownRoundTrip(serialized)
+) => markdownSemanticFingerprint(source) === markdownSemanticFingerprint(serialized)

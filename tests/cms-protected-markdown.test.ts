@@ -54,8 +54,13 @@ describe('CMS 混合可视化 Markdown 保护', () => {
 
     expect(cmsVisualEditorFeatures[Crepe.Feature.ImageBlock]).toBe(false)
     expect(prepareMarkdownForVisualEditor(source)).toBe(source)
-    expect(isCmsVisualRoundTripLossless(source, `${source.trim()}\n`)).toBe(true)
+    expect(isCmsVisualRoundTripLossless(source, source.replace(/\n\n/g, '\n\n\n')))
+      .toBe(true)
     expect(isCmsVisualRoundTripLossless(source, corrupted)).toBe(false)
+    expect(isCmsVisualRoundTripLossless(
+      '```text\n第一行\n\n第三行\n```',
+      '```text\n第一行\n第三行\n```'
+    )).toBe(false)
   })
 
   it('现有全部新闻和 Wiki 正文都能完成可视化预处理', async () => {

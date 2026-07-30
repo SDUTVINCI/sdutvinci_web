@@ -1029,13 +1029,20 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
   忠实地发布了已被可视化编辑器改写的草稿。
 - 修复禁用 `ImageBlock`，保留标准 CommonMark 图片节点和可访问 alt；现有可视化
   “无损往返检查”改为 fail closed，检测到实质差异时恢复原文并退回源码模式。
-- 新回归覆盖中文独立图片 alt、空白规范化允许边界和 `1.00` 有损变化拒绝边界。本机
-  无头 Chrome 使用真实 Crepe 完成往返，输出保留完整中文 alt。
+- 第一次修复后的人工重试被块间冗余空行合并误报为有损；比较逻辑进一步改为对
+  Markdown AST 去除源码位置后做语义指纹比较。等价空行/标记格式允许通过，alt、
+  链接、正文和代码块内容等节点变化仍 fail closed。
+- 新回归覆盖中文独立图片 alt、块间冗余空行允许边界、`1.00` 与代码块空行丢失拒绝
+  边界。本机无头 Chrome 使用真实 Crepe 对完整测试文章往返，语义判定通过且输出保留
+  全部中文 alt。
 - 验证结果：定向 2 文件 11/11；完整 CMS 回归 12 文件 81/81；`npm run typecheck`、
   `npm run build` 和 `git diff --check` 通过。构建只有既有静态图片与 chunk/timing
   warning。
 - 自动回归使用独立容器 `vinci-v2-phase5-fix-test-db` /
   `vinci_v2_phase5_fix_test`，不复用人工验收库；验证后按归属标签精确清理。
+- 空行误报修复再次使用独立容器 `vinci-v2-phase5-fix2-test-db` /
+  `vinci_v2_phase5_fix2_test`：完整 CMS 12 文件 81/81、类型检查和生产构建通过，
+  容器在核对归属标签后精确删除。
 - 首次失败人工库在取证期间保留；修复提交后将精确重建干净人工库并从 Revision #1
   重新验收。阶段 5 人工项和总体完成项保持未勾选。
 - 没有修改 `content/`、Migration、数据库 Schema、发布事务或依赖；没有接触生产、
