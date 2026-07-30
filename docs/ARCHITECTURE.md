@@ -625,4 +625,39 @@ Git-only 正式内容不会自动反向覆盖数据库；重新切回 DB-first �
 
 完整事务边界、自动验证、浏览器验收和精确清理见
 `docs/v2/PHASE_V2_5_ACCEPTANCE.md`。Outbox 领取、重试、内容仓库导出和导出运行记录
-明确属于阶段 6，尚未实现。
+由下一节的阶段 6 实现。
+
+## 21. V2 阶段 6 已落地：独立内容仓库与异步增量导出
+
+阶段 6 保持 PostgreSQL 为新闻/Wiki 权威，在阶段 5 事务之外消费
+`content_export_jobs`，单向导出到唯一正式仓库
+`SDUTVINCI/sdutvinci_content:main`。Worker 使用 PostgreSQL advisory lock、带租约的
+`SKIP LOCKED` 批量领取和 `content_export_runs` 运行记录；同批任务以数据库当前
+Revision 合并为一个普通 Commit。成功状态只在非强制 Push 后远端 SHA 验证完成时写回。
+
+```text
+PostgreSQL current Revision
+  ├─ deterministic Markdown + stable vinciId ── news/ | wiki/
+  ├─ .vinci/snapshot.json
+  └─ manifest.json
+       └─ independent Git workspace ── ordinary commit ── non-force main push
+```
+
+序列化器固定字段顺序、递归排序未知对象键、LF 和单一末尾换行；snapshot/manifest 的
+生成时间取当前 Revision 集合中最大的创建时间，因此同一数据库状态不会因 Worker
+运行时间改变字节。移动和删除只允许受控新闻/Wiki 路径；成员继续保留旧来源和首次复制
+文件。
+
+首次接管必须先用临时只读 clone 生成报告。报告包含 base Commit、clean、逐文件
+write/update/move/delete/noop、preserved files、冲突及整体 SHA；持久工作区和写入只有
+在精确确认令牌后建立。未知文件不删除，双路径或远端变化 fail closed，禁止清空重建和
+Force Push。
+
+Push/网络/权限失败不会触碰数据库正式 Revision。Worker 对任务指数退避，达到上限后
+CMS 显示脱敏错误并允许管理员审计式手动重试；失败补偿只重置带归属标记的独立导出
+workspace。增量运行前会验证 manifest/snapshot 和所有未受本批影响文件，检测漂移即
+停止。凌晨全量发现/修复、PR 反向导入和灾难初始化仍分别属于后续阶段，没有在本阶段
+提前实现。
+
+完整接管报告、权限边界、部署/回滚和浏览器验收见
+`docs/v2/PHASE_V2_6_ACCEPTANCE.md`。

@@ -18,6 +18,7 @@ import {
 import { upsertPublishedArticle } from './cms-publishing-legacy'
 import { appendCmsArticleRevision } from './cms-revisions'
 import { invalidatePublicContentCache } from './public-content-cache'
+import { serializeContentRevision } from './content-export-serialization'
 
 export interface CmsDatabaseDeletionTestHooks {
   failAt?: 'after_state' | 'after_revision' | 'after_outbox'
@@ -77,6 +78,16 @@ export const deleteCmsArticleDatabase = async (
     }
 
     const exportJobId = randomUUID()
+    const serialized = serializeContentRevision({
+      articleId,
+      collection: article.collection as CmsArticleCollection,
+      relativePath: article.relativePath,
+      revisionId: revision.id,
+      revisionNumber: revision.revisionNumber,
+      frontmatter: revision.frontmatter,
+      body: revision.body,
+      revisionCreatedAt: revision.createdAt
+    })
     await tx.insert(contentExportJobs).values({
       id: exportJobId,
       targetType: 'article',
@@ -85,6 +96,9 @@ export const deleteCmsArticleDatabase = async (
       operation: 'delete',
       status: 'pending',
       idempotencyKey: `article:${articleId}:revision:${revision.id}:delete`,
+      targetPath: serialized.path,
+      previousPath: serialized.path,
+      expectedSha256: serialized.sha256,
       nextAttemptAt: now,
       createdAt: now,
       updatedAt: now
@@ -213,6 +227,16 @@ export const restoreCmsDeletedArticleDatabase = async (
     }
 
     const exportJobId = randomUUID()
+    const serialized = serializeContentRevision({
+      articleId,
+      collection: article.collection as CmsArticleCollection,
+      relativePath: article.relativePath,
+      revisionId: revision.id,
+      revisionNumber: revision.revisionNumber,
+      frontmatter: revision.frontmatter,
+      body: revision.body,
+      revisionCreatedAt: revision.createdAt
+    })
     await tx.insert(contentExportJobs).values({
       id: exportJobId,
       targetType: 'article',
@@ -221,6 +245,8 @@ export const restoreCmsDeletedArticleDatabase = async (
       operation: 'update',
       status: 'pending',
       idempotencyKey: `article:${articleId}:revision:${revision.id}:update`,
+      targetPath: serialized.path,
+      expectedSha256: serialized.sha256,
       nextAttemptAt: now,
       createdAt: now,
       updatedAt: now

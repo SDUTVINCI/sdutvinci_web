@@ -160,9 +160,49 @@ services:
     networks:
       - backend
 
+  content-export-worker:
+    image: ${APP_OPS_IMAGE:-sdutvinci-web-ops}:${APP_IMAGE_TAG:-local}
+    build:
+      context: .
+      target: operations
+    profiles: ["content-export"]
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
+      DATABASE_SSL: ${DATABASE_SSL:-false}
+      CMS_CONTENT_ROOT: /app/content
+      CMS_GIT_WORKTREE: /var/lib/vinci-cms/worktree
+      CONTENT_REPOSITORY_ID: ${CONTENT_REPOSITORY_ID:-SDUTVINCI/sdutvinci_content}
+      CONTENT_EXPORT_MODE: ${CONTENT_EXPORT_MODE:-disabled}
+      CONTENT_EXPORT_REMOTE_URL: ${CONTENT_EXPORT_REMOTE_URL:-git@github.com:SDUTVINCI/sdutvinci_content.git}
+      CONTENT_EXPORT_REMOTE: ${CONTENT_EXPORT_REMOTE:-origin}
+      CONTENT_EXPORT_BRANCH: ${CONTENT_EXPORT_BRANCH:-main}
+      CONTENT_EXPORT_WORKSPACE: /var/lib/vinci-cms/content-export
+      CONTENT_EXPORT_AUTHOR_NAME: ${CONTENT_EXPORT_AUTHOR_NAME:-Vinci Content Exporter}
+      CONTENT_EXPORT_AUTHOR_EMAIL: ${CONTENT_EXPORT_AUTHOR_EMAIL:-content-export@localhost}
+      CONTENT_EXPORT_SSH_KEY_FILE: /run/secrets/content_export_ssh_key
+      CONTENT_EXPORT_KNOWN_HOSTS_FILE: /run/secrets/content_export_known_hosts
+      CONTENT_EXPORT_BATCH_SIZE: ${CONTENT_EXPORT_BATCH_SIZE:-50}
+      CONTENT_EXPORT_POLL_SECONDS: ${CONTENT_EXPORT_POLL_SECONDS:-60}
+      CONTENT_EXPORT_LEASE_SECONDS: ${CONTENT_EXPORT_LEASE_SECONDS:-300}
+      CONTENT_EXPORT_MAX_ATTEMPTS: ${CONTENT_EXPORT_MAX_ATTEMPTS:-5}
+      CONTENT_EXPORT_RETRY_BASE_SECONDS: ${CONTENT_EXPORT_RETRY_BASE_SECONDS:-60}
+      CONTENT_EXPORT_RETRY_MAX_SECONDS: ${CONTENT_EXPORT_RETRY_MAX_SECONDS:-3600}
+    command: ["npm", "run", "v2:content:worker"]
+    volumes:
+      - content_export_worktree:/var/lib/vinci-cms/content-export
+    networks:
+      - backend
+
 volumes:
   postgres_data:
   cms_git_worktree:
+  content_export_worktree:
   gateway_config:
 
 networks:

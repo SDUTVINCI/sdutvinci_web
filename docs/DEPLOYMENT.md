@@ -2201,3 +2201,158 @@ Compose 文件，并确认活动容器不再挂载这两个 Git secret。
 
 阶段 5 不实现从 Git 自动覆盖数据库、内容仓库 Worker、对账修复或 Force Push。隔离
 浏览器验收和精确资源清理见 `docs/v2/PHASE_V2_5_ACCEPTANCE.md`。
+
+## 17. V2 阶段 6 内容导出部署、接管与回滚
+
+阶段 6 增加 expand-only Migration `0014_tranquil_magdalene.sql`、独立 Worker 和
+独立内容工作区。本文只定义安全部署顺序；实现阶段没有执行生产 Migration、Push 或
+部署。
+
+### 17.1 Migration 与禁用态上线
+
+先备份并验证可恢复，再在蓝绿切换前执行 Migration。`0014` 新建运行表并给 Outbox
+增加可空列；旧槽位仍可按阶段 5 字段插入 job。不要 down migration。
+
+```bash
+docker compose --profile tools run --rm migrate
+docker compose exec -T postgres psql \
+  --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
+  --set ON_ERROR_STOP=1 \
+  --command "select to_regclass('public.content_export_runs');"
+```
+
+应用先以 `CONTENT_EXPORT_MODE=disabled` 上线。此时 DB-first 发布继续生成 pending
+Outbox，但没有内容仓库写入。不要把 pending 手改为 succeeded。
+
+### 17.2 真实仓库只读 Dry Run
+
+唯一正式仓库固定为 `SDUTVINCI/sdutvinci_content`、分支固定为 `main`。首次真实接管
+必须从生产数据库当前 Revision 生成新的只读报告；历史隔离报告不能复用为确认。
+
+```dotenv
+CONTENT_REPOSITORY_ID=SDUTVINCI/sdutvinci_content
+CONTENT_EXPORT_MODE=dry_run
+CONTENT_EXPORT_REMOTE_URL=https://github.com/SDUTVINCI/sdutvinci_content.git
+CONTENT_EXPORT_REMOTE=origin
+CONTENT_EXPORT_BRANCH=main
+CONTENT_EXPORT_WORKSPACE=/var/lib/vinci-cms/content-export
+```
+
+在活动应用同版本的 operations 环境中运行：
+
+```bash
+npm run v2:content:takeover
+```
+
+Dry Run 只能走公开 HTTPS，不挂载写 key。保存完整 JSON，并核对：
+
+- repository/branch/base Commit 与 GitHub 页面一致，`clean: true`；
+- tracked、database active/deleted 数量；
+- 每一个 write/update/move/delete/noop；
+- preserved files，尤其阶段 9 前的成员；
+- conflicts 必须为空；
+- 再运行一次，完整报告与 `reportSha256` 必须一致；
+- 运行前后 `git ls-remote` 的 `main` SHA 必须不变。
+
+任何数量、路径、哈希、未知文件或分支不符合预期都停止。不得为得到“干净报告”删除
+仓库或 Force Push。
+
+### 17.3 仓库级写凭据
+
+维护者批准报告后，在 GitHub 仓库 Settings 中为
+`SDUTVINCI/sdutvinci_content` 创建独立 SSH deploy key，并只给该仓库写权限。不得
+复用代码仓库 deploy key、主机用户 key、个人全局 token 或应用 Git-first 回滚 key。
+把 GitHub SSH 主机键写入独立 known_hosts；两文件权限应仅部署用户可读。
+
+```dotenv
+CONTENT_EXPORT_MODE=enabled
+CONTENT_EXPORT_REMOTE_URL=git@github.com:SDUTVINCI/sdutvinci_content.git
+CONTENT_EXPORT_SSH_KEY_FILE=/absolute/host/path/content_export_key
+CONTENT_EXPORT_KNOWN_HOSTS_FILE=/absolute/host/path/content_export_known_hosts
+CONTENT_EXPORT_BATCH_SIZE=50
+CONTENT_EXPORT_POLL_SECONDS=60
+CONTENT_EXPORT_LEASE_SECONDS=300
+CONTENT_EXPORT_MAX_ATTEMPTS=5
+CONTENT_EXPORT_RETRY_BASE_SECONDS=60
+CONTENT_EXPORT_RETRY_MAX_SECONDS=3600
+```
+
+基础 Compose 不挂载内容仓库 key。只有显式 overlay 按只读 bind 挂载两个文件，Worker
+使用独立 `content_export_worktree` volume 且只连接 internal backend：
+
+```bash
+docker compose -f compose.yaml -f compose.content-export.yaml \
+  --profile content-export config --quiet
+```
+
+核对渲染配置中没有 key 内容、URL 没有用户名密码、workspace 不与 `/app`、
+`/app/content` 或旧 worktree 重叠。
+
+### 17.4 精确确认接管
+
+从维护者已批准且 base Commit 仍未变化的报告复制完整
+`TAKEOVER:<base>:<reportSha256>`：
+
+```bash
+npm run v2:content:takeover -- \
+  --apply --confirm='TAKEOVER:<base>:<reportSha256>'
+```
+
+接管命令会重新 fetch、重新计算报告并比较令牌。它逐项移动/写入/删除已识别内容，保留
+未知文件，生成 README/snapshot/manifest，创建普通 Commit并以非强制 Push 验证远端
+SHA。令牌、base、报告、分支或工作区任一不匹配都会拒绝。
+
+接管成功并人工检查 GitHub Commit 后才启动 Worker：
+
+```bash
+docker compose -f compose.yaml -f compose.content-export.yaml \
+  --profile content-export up -d content-export-worker
+```
+
+不要把内容仓库接入网站镜像构建 webhook。`main` 只作为数据库只读快照；proposal
+分支不得直接 Merge 到 `main` 作为发布。
+
+### 17.5 运行、监控与手动重试
+
+至少监控：
+
+- pending/processing/failed 数量、最老 pending、租约过期数；
+- Worker run 成功/失败、批量 job/写/删/noop 数；
+- 最近结果 Commit 与远端 `main`；
+- 非快进、remote changed、base drift、凭据/网络错误；
+- 手动重试审计和一致性报告 issue。
+
+只读一致性命令：
+
+```bash
+npm run v2:phase6:consistency
+```
+
+它检查 job/run 状态、租约、结果 Commit、数据库当前 Revision、snapshot、tombstone、
+导出文件和 manifest 哈希；只报告，不 Push、不修复。失败时先保存 JSON 和日志。
+
+达到最大次数的 job 在 CMS 文章详情显示“导出失败”。管理员修复权限或网络后点击
+“手动重试导出”；接口要求登录管理员、同源和 CSRF，并写 audit log。不要直接 SQL
+改 job 状态。
+
+### 17.6 故障停用与回滚
+
+内容导出回滚与发布权威回滚相互独立。最小安全回滚：
+
+1. 设置 `CONTENT_EXPORT_MODE=disabled`；
+2. 停止 `content-export-worker`；
+3. 保留 `content_export_jobs`、`content_export_runs`、Revision 和 volume；
+4. 继续 DB-first 发布和数据库前台；
+5. 保存脱敏日志、job/run/Commit、远端 HEAD 和一致性 JSON。
+
+不要 down migration、删除 Outbox、把失败行改成功、reset/force 内容仓库或让代码部署
+读取内容仓库。Worker 自身 Push 失败会把带归属标记的 workspace 重置到远端；数据库
+正式版本不回滚。
+
+若远端被维护者改写或出现非快进，保持 Worker 停止并人工审计。确需撤销一个内容仓库
+Commit 时只能在确认影响后做普通 `git revert`，随后制定数据库一致导出方案；阶段 6
+没有凌晨全量自动修复。若另行切回 Git-first 发布，按 16.3 同时切换阶段 5 的五个
+开关并处理 Git-only 回填。
+
+完整自动与浏览器验收、真实只读基线和隔离脚本见
+`docs/v2/PHASE_V2_6_ACCEPTANCE.md`。

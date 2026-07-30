@@ -27,6 +27,7 @@ import {
   upsertPublishedArticle
 } from './cms-publishing-legacy'
 import { appendCmsArticleRevision } from './cms-revisions'
+import { serializeContentRevision } from './content-export-serialization'
 
 const sha256 = (source: string) =>
   createHash('sha256').update(source).digest('hex')
@@ -181,6 +182,16 @@ export const publishCmsDraftDatabase = async (
     }
 
     const exportJobId = randomUUID()
+    const serialized = serializeContentRevision({
+      articleId,
+      collection,
+      relativePath,
+      revisionId: revision.id,
+      revisionNumber: revision.revisionNumber,
+      frontmatter: revision.frontmatter,
+      body: revision.body,
+      revisionCreatedAt: revision.createdAt
+    })
     await tx.insert(contentExportJobs).values({
       id: exportJobId,
       targetType: 'article',
@@ -190,6 +201,8 @@ export const publishCmsDraftDatabase = async (
       status: 'pending',
       idempotencyKey:
         `article:${articleId}:revision:${revision.id}:${existingArticle ? 'update' : 'create'}`,
+      targetPath: serialized.path,
+      expectedSha256: serialized.sha256,
       nextAttemptAt: now,
       createdAt: now,
       updatedAt: now
@@ -354,6 +367,16 @@ export const restoreCmsArticleRevisionDatabase = async (
     }
 
     const exportJobId = randomUUID()
+    const serialized = serializeContentRevision({
+      articleId,
+      collection: article.collection as CmsArticleCollection,
+      relativePath: article.relativePath,
+      revisionId: revision.id,
+      revisionNumber: revision.revisionNumber,
+      frontmatter: revision.frontmatter,
+      body: revision.body,
+      revisionCreatedAt: revision.createdAt
+    })
     await tx.insert(contentExportJobs).values({
       id: exportJobId,
       targetType: 'article',
@@ -362,6 +385,8 @@ export const restoreCmsArticleRevisionDatabase = async (
       operation: 'update',
       status: 'pending',
       idempotencyKey: `article:${articleId}:revision:${revision.id}:update`,
+      targetPath: serialized.path,
+      expectedSha256: serialized.sha256,
       nextAttemptAt: now,
       createdAt: now,
       updatedAt: now

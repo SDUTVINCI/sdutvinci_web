@@ -193,7 +193,7 @@ suite('V2 阶段 5 数据库权威与 DB-first 发布事务', () => {
     resetCmsV2FlagsForTests()
     invalidatePublicContentCache()
     await getDatabase().execute(`
-      truncate table rate_limit_buckets, media_assets, content_export_jobs,
+      truncate table rate_limit_buckets, media_assets, content_export_jobs, content_export_runs,
       article_deletion_events, publish_records, edit_locks, review_events,
       audit_logs, sessions, draft_authors, article_revisions, drafts,
       user_members, user_roles, articles, members, users

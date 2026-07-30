@@ -309,6 +309,40 @@ export const articleDeletionEvents = pgTable('article_deletion_events', {
   index('article_deletion_events_created_at_index').on(table.createdAt)
 ])
 
+export const contentExportRuns = pgTable('content_export_runs', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  trigger: varchar('trigger', { length: 32 }).notNull(),
+  status: varchar('status', { length: 32 }).default('processing').notNull(),
+  workerId: varchar('worker_id', { length: 128 }),
+  baseCommitHash: varchar('base_commit_hash', { length: 64 }),
+  localCommitHash: varchar('local_commit_hash', { length: 64 }),
+  resultCommitHash: varchar('result_commit_hash', { length: 64 }),
+  jobCount: integer('job_count').default(0).notNull(),
+  fileWriteCount: integer('file_write_count').default(0).notNull(),
+  fileDeleteCount: integer('file_delete_count').default(0).notNull(),
+  noopCount: integer('noop_count').default(0).notNull(),
+  errorCode: varchar('error_code', { length: 64 }),
+  errorSummary: text('error_summary'),
+  report: jsonb('report').$type<Record<string, unknown>>().default({}).notNull(),
+  startedAt: timestamp('started_at', { withTimezone: true }).defaultNow().notNull(),
+  completedAt: timestamp('completed_at', { withTimezone: true })
+}, table => [
+  check(
+    'content_export_runs_trigger_check',
+    sql`${table.trigger} in ('worker', 'manual_retry', 'takeover')`
+  ),
+  check(
+    'content_export_runs_status_check',
+    sql`${table.status} in ('processing', 'succeeded', 'failed')`
+  ),
+  check('content_export_runs_job_count_check', sql`${table.jobCount} >= 0`),
+  check('content_export_runs_file_write_count_check', sql`${table.fileWriteCount} >= 0`),
+  check('content_export_runs_file_delete_count_check', sql`${table.fileDeleteCount} >= 0`),
+  check('content_export_runs_noop_count_check', sql`${table.noopCount} >= 0`),
+  index('content_export_runs_status_started_index').on(table.status, table.startedAt),
+  index('content_export_runs_completed_at_index').on(table.completedAt)
+])
+
 export const contentExportJobs = pgTable('content_export_jobs', {
   id: uuid('id').defaultRandom().primaryKey(),
   targetType: varchar('target_type', { length: 32 }).notNull(),
@@ -323,6 +357,16 @@ export const contentExportJobs = pgTable('content_export_jobs', {
     .defaultNow()
     .notNull(),
   lastError: text('last_error'),
+  lastErrorCode: varchar('last_error_code', { length: 64 }),
+  targetPath: text('target_path'),
+  previousPath: text('previous_path'),
+  expectedSha256: varchar('expected_sha256', { length: 64 }),
+  leaseOwner: varchar('lease_owner', { length: 128 }),
+  leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }),
+  latestRunId: uuid('latest_run_id')
+    .references(() => contentExportRuns.id, { onDelete: 'set null' }),
+  exportedPath: text('exported_path'),
+  exportedSha256: varchar('exported_sha256', { length: 64 }),
   exportedCommitHash: varchar('exported_commit_hash', { length: 64 }),
   completedAt: timestamp('completed_at', { withTimezone: true }),
   ...timestamps
@@ -340,6 +384,14 @@ export const contentExportJobs = pgTable('content_export_jobs', {
     sql`${table.status} in ('pending', 'processing', 'succeeded', 'failed')`
   ),
   check('content_export_jobs_attempt_count_check', sql`${table.attemptCount} >= 0`),
+  check(
+    'content_export_jobs_expected_sha256_check',
+    sql`${table.expectedSha256} is null or ${table.expectedSha256} ~ '^[0-9a-f]{64}$'`
+  ),
+  check(
+    'content_export_jobs_exported_sha256_check',
+    sql`${table.exportedSha256} is null or ${table.exportedSha256} ~ '^[0-9a-f]{64}$'`
+  ),
   uniqueIndex('content_export_jobs_idempotency_key_unique').on(table.idempotencyKey),
   uniqueIndex('content_export_jobs_revision_operation_unique')
     .on(table.revisionId, table.operation)
@@ -348,7 +400,9 @@ export const contentExportJobs = pgTable('content_export_jobs', {
     .on(table.status, table.nextAttemptAt, table.createdAt),
   index('content_export_jobs_target_index')
     .on(table.targetType, table.targetId, table.createdAt),
-  index('content_export_jobs_revision_id_index').on(table.revisionId)
+  index('content_export_jobs_revision_id_index').on(table.revisionId),
+  index('content_export_jobs_lease_index').on(table.status, table.leaseExpiresAt),
+  index('content_export_jobs_latest_run_id_index').on(table.latestRunId)
 ])
 
 export const editLocks = pgTable('edit_locks', {

@@ -11,6 +11,7 @@ const draftError = ref('')
 const actionMessage = ref('')
 const actionError = ref('')
 const actionBusy = ref(false)
+const retryingExport = ref(false)
 const autoOpening = ref(false)
 const returnTo = computed(() => {
   const value = typeof route.query.returnTo === 'string' ? route.query.returnTo : ''
@@ -90,6 +91,26 @@ const changeDeletionState = async (restore: boolean) => {
     actionError.value = error?.data?.message || `${restore ? '恢复' : '删除'}失败`
   } finally {
     actionBusy.value = false
+  }
+}
+
+const retryExport = async () => {
+  const jobId = article.value?.exportStatus.currentJobId
+  if (!isAdmin.value || !jobId || retryingExport.value) return
+  retryingExport.value = true
+  actionMessage.value = ''
+  actionError.value = ''
+  try {
+    await $fetch(`/api/cms/content-export/jobs/${jobId}/retry`, {
+      method: 'POST',
+      headers: csrfHeaders()
+    })
+    actionMessage.value = '导出任务已重新进入等待队列；数据库正式内容未发生变化。'
+    await refresh()
+  } catch (error: any) {
+    actionError.value = error?.data?.message || '重新排队导出任务失败'
+  } finally {
+    retryingExport.value = false
   }
 }
 
@@ -195,6 +216,25 @@ onMounted(async () => {
         <p v-if="article.exportStatus.latestExportedRevisionId" class="cms-muted">
           最近导出 Revision：<code>{{ article.exportStatus.latestExportedRevisionId }}</code>
         </p>
+        <p v-if="article.exportStatus.currentJobAttemptCount !== null" class="cms-muted">
+          已尝试 {{ article.exportStatus.currentJobAttemptCount }} 次
+          <template v-if="article.exportStatus.currentJobNextAttemptAt">
+            · 下次：{{ new Date(article.exportStatus.currentJobNextAttemptAt).toLocaleString() }}
+          </template>
+        </p>
+        <p v-if="article.exportStatus.currentJobLastErrorCode" class="cms-alert cms-alert-error">
+          {{ article.exportStatus.currentJobLastErrorCode }}：
+          {{ article.exportStatus.currentJobLastError || '导出失败详情已脱敏' }}
+        </p>
+        <button
+          v-if="isAdmin && article.exportStatus.canRetry"
+          class="cms-button cms-button-primary"
+          type="button"
+          :disabled="retryingExport"
+          @click="retryExport"
+        >
+          {{ retryingExport ? '正在重新排队…' : '手动重试导出' }}
+        </button>
       </aside>
     </div>
   </section>

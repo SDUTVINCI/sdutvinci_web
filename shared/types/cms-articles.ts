@@ -33,6 +33,11 @@ export interface CmsArticleDetail extends CmsArticleSummary {
     currentRevisionId: string | null
     currentJobId: string | null
     currentJobStatus: 'pending' | 'processing' | 'succeeded' | 'failed' | null
+    currentJobAttemptCount: number | null
+    currentJobNextAttemptAt: string | null
+    currentJobLastErrorCode: string | null
+    currentJobLastError: string | null
+    canRetry: boolean
     latestExportedRevisionId: string | null
     latestExportedCommitHash: string | null
   }

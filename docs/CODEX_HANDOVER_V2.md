@@ -1070,3 +1070,69 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
   Commit 为 `a523cbb` 和 `8bf1067`；验收记录 Commit 由最终回复报告。
 - 没有 Push、部署、生产资源访问、真实 GitHub/内容仓库写入、Outbox 导出或阶段 6
   实施。
+
+---
+
+## 2026-07-30：V2 阶段 6 实现与自动验证完成，等待维护者人工验收
+
+### 范围与结果
+
+- 实现数据库到唯一正式内容仓库
+  `SDUTVINCI/sdutvinci_content:main` 的单向异步增量导出；没有写真实仓库。
+- Migration `0014_tranquil_magdalene.sql` 新增 `content_export_runs`，并给阶段 5
+  Outbox 增加目标/旧路径、预期哈希、租约、运行关联和实际导出结果；全部为
+  expand-only，新列可空，旧槽位写法保留。
+- 确定性 serializer 写稳定 `vinciId`、固定 frontmatter/嵌套键顺序、LF 和单一末尾
+  换行；生成 version 1 的 `.vinci/snapshot.json` 与根 `manifest.json`。
+- Worker 使用 PostgreSQL advisory lock、`SKIP LOCKED` 批量领取、租约回收、指数
+  退避、最大重试、批量普通 Commit、远端 base/SHA 验证和非强制 Push；失败只补偿带
+  精确归属标记的独立 workspace，不回滚数据库 Revision。
+- 过期租约会同时关闭遗留 processing run；手动重试保留旧尝试数到审计并重置新一轮
+  预算。CMS 文章详情显示状态/尝试/下次时间/脱敏错误，管理员重试接口要求权限、同源、
+  CSRF 并写审计。
+- 增量前验证 snapshot/manifest 和未受影响文件；配置拒绝非官方仓库、非 `main`、
+  内嵌凭据、重叠 workspace、符号链接和越界路径。正式 enabled 要求独立 SSH key 与
+  known_hosts；测试远端只在 `NODE_ENV=test` 显式开放。
+- Compose 增加独立 operations Worker、backend-only 网络、独立 named volume 和显式
+  凭据 overlay；基础 DB-first 应用仍不挂载内容仓库写凭据。
+
+### 首次复制只读盘点
+
+- 通过公开 HTTPS 对真实内容仓库重复执行两次只读 dry-run，远端始终为
+  `7636bca74a1591f78f7268927cbfa8ab677b24bb`，branch `main`、clean、260 个 tracked
+  files。
+- 明确隔离数据库从代码仓库现有 `content/` 回填 228 篇新闻/Wiki；报告为 228 个
+  `move_and_update`、32 个 `content/members/**` preserved、0 conflict。
+- 228 个旧文件全部与隔离数据库原 Revision 字节一致；拟导出哈希变化只来自目录移动、
+  `vinciId` 和确定性 frontmatter。两次报告完全一致，SHA 为
+  `376c61414b6e7f8f8da703a48d28d7201eff94106a68bfaa3b6bbd5702fd68f4`。
+- 该报告不是生产数据库报告，也不是接管授权。真实接管前必须用当时生产数据库重新
+  dry-run，由维护者核对新 base/report SHA 并明确提供确认令牌。
+
+### 自动验证
+
+- 阶段 6 专项：1 文件，9/9；覆盖 dry-run 零变更/重复、确认接管、advisory lock、
+  新增/修改/移动/删除、批量幂等、Push 拒绝与补偿、退避/上限/恢复、过期租约、人工
+  重试、错误遮盖、serializer/config/path 和一致性。
+- 完整 CMS 回归：13 文件，90/90。
+- 普通测试：4 文件、17 项通过；10 个数据库文件、80 项在无测试 URL 时安全跳过，
+  数据库路径由完整 CMS 回归覆盖。
+- Phase 0 基线 260 个 Markdown、Wiki 226 个文件通过。
+- `npm run typecheck`、`npm run build`、基础/内容导出 Compose config、全部 shell
+  脚本语法和 `git diff --check` 通过。构建只有既有静态图片和 timing warning。
+- 隔离人工脚本冒烟完成 260 文件测试仓库的逐项接管：2 news、226 wiki、32 preserved
+  members、0 code workflow、snapshot/manifest 228 项、`issueCount: 0`；故障钩子恢复
+  后精确清理。
+
+### 资源、边界与下一步
+
+- 自动数据库只使用 `vinci-v2-phase6-test-db`、`55447` 及两个名称含 test 的数据库；
+  测试使用 `mkdtemp` 本地裸远端/工作区。人工冒烟只使用 `55448`、`34161` 和
+  `/tmp/vinci-v2-phase6-manual-test`。
+- 最终按容器标签和临时根归属标记精确清理。`55447`、`55448`、`34161`、dry-run
+  clone 和阶段 6 临时根均无残留；仅保留任务开始前已有的 `vinci-cms-postgres`。
+- 代码仓库 `content/` 无任何修改。没有生产数据库、真实写凭据、真实内容仓库写入、
+  Force Push、代码 Push、部署或阶段 7 实现。
+- 完整权限、接管、回滚、失败取证和一次性浏览器步骤见
+  `docs/v2/PHASE_V2_6_ACCEPTANCE.md`；维护者人工验收清单与总体阶段 6 进度保持未勾选。
+- 阶段 6 独立 Commit SHA 由最终回复报告；完成自动验证后停止，等待维护者人工验收。

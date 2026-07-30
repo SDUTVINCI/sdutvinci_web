@@ -14,6 +14,11 @@ export const getCmsArticleExportStatus = async (
       currentRevisionId,
       currentJobId: null,
       currentJobStatus: null,
+      currentJobAttemptCount: null,
+      currentJobNextAttemptAt: null,
+      currentJobLastErrorCode: null,
+      currentJobLastError: null,
+      canRetry: false,
       latestExportedRevisionId: null,
       latestExportedCommitHash: null
     }
@@ -71,6 +76,11 @@ export const getCmsArticleExportStatus = async (
     currentRevisionId,
     currentJobId: currentJob?.id || null,
     currentJobStatus: currentJobStatus || null,
+    currentJobAttemptCount: currentJob?.attemptCount ?? null,
+    currentJobNextAttemptAt: currentJob?.nextAttemptAt.toISOString() || null,
+    currentJobLastErrorCode: currentJob?.lastErrorCode || null,
+    currentJobLastError: currentJob?.lastError || null,
+    canRetry: currentJobStatus === 'failed',
     latestExportedRevisionId: latestExported?.revisionId || null,
     latestExportedCommitHash: latestExported?.exportedCommitHash || null
   }
