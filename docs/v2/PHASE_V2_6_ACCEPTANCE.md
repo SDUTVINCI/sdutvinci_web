@@ -244,6 +244,17 @@ docker compose -f compose.yaml -f compose.content-export.yaml \
 本地裸远端、独立 workspace、日志和临时目录。不得运行宽泛 Docker prune 或删除其他
 阶段资源。
 
+### 7.4 首轮人工验收发现与修复
+
+维护者首轮发布已确认数据库版本立即生效、前台显示新正文。截图同时证明文章详情只显示
+64 位“基线 SHA-256”，没有显示阶段 6 要求的 40 位内容仓库 Commit。只读核对确认
+Worker 尚未启动，并发现 API 已返回 `latestExportedCommitHash`、页面却没有渲染该字段。
+
+验收随即停止，没有把基线哈希误判为导出 Commit。页面已增加“内容仓库 Commit”显示，
+仅在存在最近成功导出时渲染。修复后重新通过 `npm run typecheck`、完整 CMS 13 文件
+90/90 和 `npm run build`；旧隔离环境已按归属标记精确清理。下轮必须在重新接管并启动
+Worker 后，通过浏览器确认该字段为 40 位 Git SHA；本节不代表人工验收通过。
+
 ## 8. 人工验收清单
 
 - [ ] 我检查真实内容仓库的只读盘点报告，确认仓库和首次复制内容未被修改。

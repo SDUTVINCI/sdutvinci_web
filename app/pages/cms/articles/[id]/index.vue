@@ -216,6 +216,9 @@ onMounted(async () => {
         <p v-if="article.exportStatus.latestExportedRevisionId" class="cms-muted">
           最近导出 Revision：<code>{{ article.exportStatus.latestExportedRevisionId }}</code>
         </p>
+        <p v-if="article.exportStatus.latestExportedCommitHash" class="cms-muted">
+          内容仓库 Commit：<code>{{ article.exportStatus.latestExportedCommitHash }}</code>
+        </p>
         <p v-if="article.exportStatus.currentJobAttemptCount !== null" class="cms-muted">
           已尝试 {{ article.exportStatus.currentJobAttemptCount }} 次
           <template v-if="article.exportStatus.currentJobNextAttemptAt">
