@@ -1170,3 +1170,22 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
   复验数据库已精确清理；人工数据库、管理员、测试内容仓库和 Worker 原地保留。
 - 维护者仍需刷新确认提示消失，然后继续多篇批量、远端拒绝、数据库不回滚和手动重试。
   人工清单和阶段总体项仍未勾选。
+
+---
+
+## 2026-07-30：阶段 6 故障验收保留提前重试证据并收紧 CMS 错误摘要
+
+- 两个不同文章任务同批导出成功，共享
+  `52e8006a6efebbb346653bfacf6ae1600d3203c9`，Commit 信息为
+  `content: export 2 database changes`，一致性 `issueCount: 0`。
+- 隔离远端拒绝 Push 后，Revision #4 和前台正文立即生效；任务两次失败，数据库未
+  回滚，远端保持旧成功 Commit。
+- 维护者在修复远端前提前点击手动重试。系统记录一条 `content_export.retry`，保留
+  `previousAttemptCount: 2`；新预算再次尝试两次后安全回到 `failed`。这不写真实
+  仓库，也未破坏测试状态。
+- 截图发现 CMS 虽遮盖远端 URL，仍回显 Git 命令和远端 stderr。运行/job 记录继续
+  保留已脱敏运维详情，CMS 改为按错误码输出固定安全摘要，拒绝把存储错误返回浏览器。
+- 新增断言验证 `CONTENT_EXPORT_GIT_FAILED` 安全摘要不含 `git push` 或
+  `pre-receive`。阶段 6 专项 9/9、完整 CMS 90/90、typecheck 和 build 通过。
+- 人工应用原地重启后 failed/2、重试审计、管理员、测试远端与 Worker 均保留。下一步
+  刷新确认摘要，修复隔离远端，再执行一次手动重试并核对最终一致性。人工项仍未勾选。

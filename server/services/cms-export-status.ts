@@ -3,6 +3,17 @@ import type { CmsArticleDetail } from '../../shared/types/cms-articles'
 import { getDatabase } from '../db/client'
 import { contentExportJobs } from '../db/schema'
 
+const cmsExportFailureMessage = (code: string) => {
+  switch (code) {
+    case 'CONTENT_EXPORT_GIT_FAILED':
+      return '内容仓库暂时不可写或拒绝了更新；数据库正式状态不受影响。'
+    case 'CONTENT_EXPORT_CONSISTENCY_FAILED':
+      return '内容仓库一致性检查未通过；导出已安全停止，数据库正式状态不受影响。'
+    default:
+      return '导出失败详情已记录并脱敏；数据库正式状态不受影响。'
+  }
+}
+
 export const getCmsArticleExportStatus = async (
   articleId: string,
   currentRevisionId: string | null,
@@ -81,7 +92,9 @@ export const getCmsArticleExportStatus = async (
       ? currentJob?.nextAttemptAt.toISOString() || null
       : null,
     currentJobLastErrorCode: currentJob?.lastErrorCode || null,
-    currentJobLastError: currentJob?.lastError || null,
+    currentJobLastError: currentJob?.lastErrorCode
+      ? cmsExportFailureMessage(currentJob.lastErrorCode)
+      : null,
     canRetry: currentJobStatus === 'failed',
     latestExportedRevisionId: latestExported?.revisionId || null,
     latestExportedCommitHash: latestExported?.exportedCommitHash || null

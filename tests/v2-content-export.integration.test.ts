@@ -610,6 +610,12 @@ suite('V2 阶段 6 独立内容仓库与异步增量导出', () => {
     )
     expect(status.state).toBe('export_failed')
     expect(status.canRetry).toBe(true)
+    expect(status.currentJobLastErrorCode).toBe('CONTENT_EXPORT_GIT_FAILED')
+    expect(status.currentJobLastError).toBe(
+      '内容仓库暂时不可写或拒绝了更新；数据库正式状态不受影响。'
+    )
+    expect(status.currentJobLastError).not.toContain('git push')
+    expect(status.currentJobLastError).not.toContain('pre-receive')
 
     const retried = await retryContentExportJob(next.jobId, actorUserId)
     expect(retried.status).toBe('pending')
