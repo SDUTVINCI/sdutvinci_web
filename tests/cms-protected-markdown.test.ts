@@ -1,7 +1,12 @@
 import { readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { Crepe } from '@milkdown/crepe'
 import { prepareMarkdownForVisualEditor } from '../app/utils/cms-protected-markdown'
+import {
+  cmsVisualEditorFeatures,
+  isCmsVisualRoundTripLossless
+} from '../app/utils/cms-visual-editor'
 import { assessMarkdownVisualSafety } from '../shared/utils/cms-markdown-safety'
 
 describe('CMS 混合可视化 Markdown 保护', () => {
@@ -33,6 +38,24 @@ describe('CMS 混合可视化 Markdown 保护', () => {
       .toBe(true)
     expect(assessMarkdownVisualSafety('{% include section.html %}').allowed)
       .toBe(true)
+  })
+
+  it('保留独立 Markdown 图片的可访问说明并拒绝有损往返', () => {
+    const source = `正文
+
+![Vinci 机器人队参加 Robocon 排球赛](/images/news/competition.jpg)
+
+下一段
+`
+    const corrupted = source.replace(
+      '![Vinci 机器人队参加 Robocon 排球赛]',
+      '![1.00]'
+    )
+
+    expect(cmsVisualEditorFeatures[Crepe.Feature.ImageBlock]).toBe(false)
+    expect(prepareMarkdownForVisualEditor(source)).toBe(source)
+    expect(isCmsVisualRoundTripLossless(source, `${source.trim()}\n`)).toBe(true)
+    expect(isCmsVisualRoundTripLossless(source, corrupted)).toBe(false)
   })
 
   it('现有全部新闻和 Wiki 正文都能完成可视化预处理', async () => {

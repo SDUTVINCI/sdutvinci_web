@@ -10,6 +10,7 @@ import type { CmsMediaUploadResponse } from '../../../../shared/types/cms-media'
 import CmsMarkdownVisualEditor from '../../../components/cms/CmsMarkdownVisualEditor.client.vue'
 import CmsMarkdownSourceEditor from '../../../components/cms/CmsMarkdownSourceEditor.client.vue'
 import VinciMarkdownRenderer from '../../../components/VinciMarkdownRenderer.vue'
+import { isCmsVisualRoundTripLossless } from '../../../utils/cms-visual-editor'
 
 definePageMeta({ layout: 'cms', middleware: 'cms-auth' })
 const route = useRoute()
@@ -467,8 +468,9 @@ const handleImagePaste = (event: ClipboardEvent) => {
 
 const handleVisualReady = (serialized: string) => {
   clearTimeout(visualCheckTimer)
-  if (serialized !== visualSource.value) {
-    message.value = '已进入混合可视化模式；HTML、Vue 等扩展语法已作为只读区域保护。'
+  if (!isCmsVisualRoundTripLossless(visualSource.value, serialized)) {
+    handleVisualError('无损往返检查未通过；原文已保留，请使用 Markdown 源码模式编辑')
+    return
   }
   visualChecking.value = false
 }

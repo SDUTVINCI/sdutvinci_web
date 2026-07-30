@@ -1016,3 +1016,27 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
   Git 和 HTTP；不会使用 GitHub Token 或真实内容仓库。
 - 自动测试容器在最终提交前按名称和归属标签精确删除，无测试 HTTP/Git 进程遗留。
 - 本阶段独立 Commit SHA 由最终回复报告；未 Push、未部署、未进入阶段 6。
+
+---
+
+## 2026-07-30：阶段 5 人工验收修复——可视化图片 alt 无损往返
+
+- 维护者首次执行阶段 5 浏览器验收时，在 Revision #1/#2 Diff 中发现多张独立
+  Markdown 图片的中文 alt 文本被改为 `1.00`。只读数据库核对确认这是真实 Revision
+  内容变化，不是 Diff 显示问题；图片 URL 未变化。
+- 根因是 Crepe 7.21.3 默认 `ImageBlock` 明确把独立图片 alt 解析为数值 ratio，并在
+  Markdown 序列化时输出两位小数。该编辑器行为早于 V2 阶段 5；DB-first 事务正确但
+  忠实地发布了已被可视化编辑器改写的草稿。
+- 修复禁用 `ImageBlock`，保留标准 CommonMark 图片节点和可访问 alt；现有可视化
+  “无损往返检查”改为 fail closed，检测到实质差异时恢复原文并退回源码模式。
+- 新回归覆盖中文独立图片 alt、空白规范化允许边界和 `1.00` 有损变化拒绝边界。本机
+  无头 Chrome 使用真实 Crepe 完成往返，输出保留完整中文 alt。
+- 验证结果：定向 2 文件 11/11；完整 CMS 回归 12 文件 81/81；`npm run typecheck`、
+  `npm run build` 和 `git diff --check` 通过。构建只有既有静态图片与 chunk/timing
+  warning。
+- 自动回归使用独立容器 `vinci-v2-phase5-fix-test-db` /
+  `vinci_v2_phase5_fix_test`，不复用人工验收库；验证后按归属标签精确清理。
+- 首次失败人工库在取证期间保留；修复提交后将精确重建干净人工库并从 Revision #1
+  重新验收。阶段 5 人工项和总体完成项保持未勾选。
+- 没有修改 `content/`、Migration、数据库 Schema、发布事务或依赖；没有接触生产、
+  真实 GitHub/内容仓库、Push、部署或阶段 6。

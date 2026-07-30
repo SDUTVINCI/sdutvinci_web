@@ -7,6 +7,7 @@ import {
   cmsProtectedMarkdownPlugins,
   prepareMarkdownForVisualEditor
 } from '../../utils/cms-protected-markdown'
+import { cmsVisualEditorFeatures } from '../../utils/cms-visual-editor'
 
 const props = defineProps<{
   modelValue: string
@@ -37,9 +38,7 @@ onMounted(async () => {
     crepe = new Crepe({
       root: root.value,
       defaultValue: prepareMarkdownForVisualEditor(props.modelValue),
-      features: {
-        [Crepe.Feature.AI]: false
-      }
+      features: cmsVisualEditorFeatures
     })
     crepe.editor.use(cmsProtectedMarkdownPlugins)
     crepe.on((listener) => {
