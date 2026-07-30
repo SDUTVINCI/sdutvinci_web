@@ -30,7 +30,7 @@ import {
 } from './content-export-snapshot'
 import { sha256ContentBytes } from './content-export-serialization'
 
-const workerLockName = 'vinci:v2:content-export-worker'
+export const CONTENT_EXPORT_LOCK_NAME = 'vinci:v2:content-export-worker'
 
 interface ClaimedContentExportJob {
   id: string
@@ -451,7 +451,7 @@ export const runContentExportWorkerOnce = async (): Promise<ContentExportWorkerR
   try {
     acquired = Boolean((await lockClient.query<{ acquired: boolean }>(
       'select pg_try_advisory_lock(hashtextextended($1, 0)) as acquired',
-      [workerLockName]
+      [CONTENT_EXPORT_LOCK_NAME]
     )).rows[0]?.acquired)
     if (!acquired) {
       return {
@@ -527,7 +527,7 @@ export const runContentExportWorkerOnce = async (): Promise<ContentExportWorkerR
     if (acquired) {
       await lockClient.query(
         'select pg_advisory_unlock(hashtextextended($1, 0))',
-        [workerLockName]
+        [CONTENT_EXPORT_LOCK_NAME]
       )
     }
     lockClient.release()
@@ -560,7 +560,7 @@ export const applyContentTakeover = async (
   try {
     acquired = Boolean((await lockClient.query<{ acquired: boolean }>(
       'select pg_try_advisory_lock(hashtextextended($1, 0)) as acquired',
-      [workerLockName]
+      [CONTENT_EXPORT_LOCK_NAME]
     )).rows[0]?.acquired)
     if (!acquired) throw new Error('CONTENT_EXPORT_WORKER_BUSY')
 
@@ -690,7 +690,7 @@ export const applyContentTakeover = async (
     if (acquired) {
       await lockClient.query(
         'select pg_advisory_unlock(hashtextextended($1, 0))',
-        [workerLockName]
+        [CONTENT_EXPORT_LOCK_NAME]
       )
     }
     lockClient.release()

@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Vinci CMS backup daily before content reconciliation
+
+[Timer]
+OnCalendar=*-*-* 02:00:00 Asia/Shanghai
+Persistent=true
+RandomizedDelaySec=5min
+Unit=vinci-cms-backup.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,10 @@
+[Unit]
+Description=Vinci CMS safe retention cleanup
+After=vinci-cms-backup.service vinci-cms-content-reconcile.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/vinci-cms
+ExecStart=/opt/vinci-cms/scripts/v2-maintenance-cleanup.sh
+TimeoutStartSec=30min
+UMask=0077

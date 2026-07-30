@@ -9,3 +9,13 @@ services:
         source: ${CONTENT_EXPORT_KNOWN_HOSTS_FILE:?CONTENT_EXPORT_KNOWN_HOSTS_FILE is required}
         target: /run/secrets/content_export_known_hosts
         read_only: true
+  content-reconcile:
+    volumes:
+      - type: bind
+        source: ${CONTENT_EXPORT_SSH_KEY_FILE:?CONTENT_EXPORT_SSH_KEY_FILE is required}
+        target: /run/secrets/content_export_ssh_key
+        read_only: true
+      - type: bind
+        source: ${CONTENT_EXPORT_KNOWN_HOSTS_FILE:?CONTENT_EXPORT_KNOWN_HOSTS_FILE is required}
+        target: /run/secrets/content_export_known_hosts
+        read_only: true

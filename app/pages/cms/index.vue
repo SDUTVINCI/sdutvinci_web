@@ -77,6 +77,31 @@ const avatarUrl = computed(() =>
     </div>
 
     <div class="cms-card-grid cms-dashboard-grid">
+      <article class="cms-card cms-card-role" data-tone="green">
+        <span class="cms-card-top">
+          <span class="cms-card-icon"><CmsIcon name="activity" /></span>
+          <span class="cms-card-index">03:00 / RECONCILIATION</span>
+        </span>
+        <span class="cms-card-label">最近全量对账</span>
+        <span class="cms-card-metric">
+          <strong>
+            {{ stats?.reconciliation
+              ? ({ succeeded: '成功', failed: '失败', busy: '互斥跳过', processing: '进行中' }[stats.reconciliation.status])
+              : '尚未运行' }}
+          </strong>
+        </span>
+        <span v-if="stats?.reconciliation" class="cms-card-footer">
+          {{ new Date(stats.reconciliation.completedAt || stats.reconciliation.startedAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) }}
+          · {{ stats.reconciliation.differenceCount }} 项差异
+          <template v-if="stats.reconciliation.resultCommitHash">
+            · {{ stats.reconciliation.resultCommitHash.slice(0, 12) }}
+          </template>
+        </span>
+        <span v-else class="cms-card-footer">Asia/Shanghai 每日凌晨 3 点</span>
+        <small v-if="stats?.reconciliation?.summary" class="cms-muted">
+          {{ stats.reconciliation.summary }}
+        </small>
+      </article>
       <NuxtLink class="cms-card cms-card-link" data-tone="cyan" to="/cms/articles">
         <span class="cms-card-top">
           <span class="cms-card-icon"><CmsIcon name="articles" /></span>

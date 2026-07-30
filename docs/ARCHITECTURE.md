@@ -661,3 +661,43 @@ workspace。增量运行前会验证 manifest/snapshot 和所有未受本批影�
 
 完整接管报告、权限边界、部署/回滚和浏览器验收见
 `docs/v2/PHASE_V2_6_ACCEPTANCE.md`。
+
+## 22. V2 阶段 7 已落地：全量对账、空库初始化与灾难恢复
+
+阶段 7 在阶段 6 增量 Outbox 之外增加每日完整校验，但不改变 PostgreSQL 权威关系：
+
+```text
+03:00 Asia/Shanghai
+  └─ shared content-export advisory lock
+       ├─ database current Revision full snapshot
+       ├─ repository news/wiki + snapshot/manifest comparison
+       ├─ auditable redacted report
+       ├─ no differences → no commit
+       └─ differences → ordinary corrective commit → non-force push
+```
+
+`content_reconciliation_runs` 保存最近运行、差异分类、报告哈希和结果 Commit；CMS
+工作台只显示安全摘要。完整快照、报告和 staging 位于独立、带归属标记的
+`content_reconciliation_data`，不与代码、旧 `content/` 或导出 workspace 重叠。
+全量对账复用 `vinci:v2:content-export-worker` session advisory lock，因此不会和增量
+Worker、首次接管或另一轮对账并发写同一仓库。
+
+空库初始化和灾难恢复通过独立 operations CLI 和 Compose profile 提供。它检查空库、
+version 1 snapshot/manifest、UUID、受控路径、字节/哈希、确定性序列化和成员引用，
+要求绑定 mode/snapshot/report/item count 的精确令牌。member、article、Revision、
+import run/item 和 audit 在单一事务中同成同败。普通应用没有启动导入钩子；本入口不读取
+PR Diff、不创建提案草稿，也不属于阶段 8。
+
+Migration `0015_chubby_scorpion.sql` 只新增
+`content_reconciliation_runs`、`content_import_runs` 和 `content_import_items`，
+没有删除或收紧旧表。完整 PostgreSQL dump 仍是正常迁移和完整灾备来源；Markdown
+快照不包含用户、草稿、审核、完整历史和全部审计。
+
+备份链路升级到 V2 manifest，增加互斥、磁盘阈值、重试、checksum/`pg_restore --list`
+校验、最近成功状态和 JSONL 告警。分层保留始终保护最新成功、最近隔离验证可恢复和
+维护者锁定备份；快照、报告和临时目录按独立期限安全清理。所有删除先验证绝对根、
+相对路径、普通文件/目录、UID、符号链接和精确归属标记。
+
+部署、权限、失败取证、回滚和操作教程见
+`docs/v2/BACKUP_AND_RECOVERY.md`；自动与浏览器验收见
+`docs/v2/PHASE_V2_7_ACCEPTANCE.md`。

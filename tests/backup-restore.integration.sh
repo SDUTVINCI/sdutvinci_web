@@ -239,10 +239,84 @@ backup_directory="$(
   printf '未找到测试备份目录\n' >&2
   exit 1
 }
+grep -qx 'format=vinci-cms-backup-v2' "${backup_directory}/manifest.env"
+test -f "${backup_directory}/.vinci-backup-owner"
+test -f "${backup_root}/.vinci-state/latest-success.json"
+test -f "${backup_root}/.vinci-state/owner"
 (
   cd -- "$backup_directory"
   sha256sum --check --strict SHA256SUMS
 )
+(
+  cd -- "$source_directory"
+  ./scripts/backup-verify.sh "$backup_directory"
+)
+test -f "${backup_directory}/.vinci-integrity-verified"
+
+backup_count_before="$(
+  find "$backup_root" -mindepth 1 -maxdepth 1 -type d \
+    -name "${source_project}-*" | wc -l
+)"
+mkdir -p "${source_directory}/.deploy/operation.lock"
+if (
+  cd -- "$source_directory"
+  ./scripts/backup.sh
+) > "${test_root}/backup-lock.log" 2>&1; then
+  printf '备份互斥锁错误地允许并发运行\n' >&2
+  exit 1
+fi
+grep -q '已有部署、备份或恢复操作正在执行' "${test_root}/backup-lock.log"
+rmdir "${source_directory}/.deploy/operation.lock"
+test "$(
+  find "$backup_root" -mindepth 1 -maxdepth 1 -type d \
+    -name "${source_project}-*" | wc -l
+)" = "$backup_count_before"
+
+if (
+  cd -- "$source_directory"
+  BACKUP_MIN_FREE_BYTES=999999999999999999 \
+  BACKUP_CRITICAL_FREE_BYTES=999999999999999999 \
+    ./scripts/backup.sh
+) > "${test_root}/backup-disk.log" 2>&1; then
+  printf '备份错误地忽略了磁盘保护阈值\n' >&2
+  exit 1
+fi
+grep -q '备份磁盘剩余空间低于保护阈值' "${test_root}/backup-disk.log"
+grep -q 'BACKUP_DISK_CRITICAL' "${backup_root}/.vinci-state/alerts.jsonl"
+test "$(
+  find "$backup_root" -mindepth 1 -maxdepth 1 -type d \
+    -name "${source_project}-*" | wc -l
+)" = "$backup_count_before"
+
+real_docker="$(command -v docker)"
+mkdir -p "${test_root}/retry-bin"
+retry_counter="${test_root}/retry-counter"
+{
+  printf '%s\n' '#!/usr/bin/env bash'
+  printf '%s\n' 'set -Eeuo pipefail'
+  printf '%s\n' 'if printf "%s\n" "$*" | grep -q "pg_dump"; then'
+  printf '  count="$(cat %q 2>/dev/null || printf 0)"\n' "$retry_counter"
+  printf '%s\n' '  count=$((count + 1))'
+  printf '  printf "%%s\\n" "$count" > %q\n' "$retry_counter"
+  printf '%s\n' '  if [ "$count" -le 2 ]; then exit 1; fi'
+  printf '%s\n' 'fi'
+  printf 'exec %q "$@"\n' "$real_docker"
+} > "${test_root}/retry-bin/docker"
+chmod 0755 "${test_root}/retry-bin/docker"
+sleep 1
+(
+  cd -- "$source_directory"
+  PATH="${test_root}/retry-bin:${PATH}" \
+  BACKUP_RETRY_ATTEMPTS=3 \
+  BACKUP_RETRY_DELAY_SECONDS=0 \
+    ./scripts/backup.sh
+)
+test "$(cat "$retry_counter")" = 3
+grep -q 'BACKUP_DUMP_RETRY' "${backup_root}/.vinci-state/alerts.jsonl"
+test "$(
+  find "$backup_root" -mindepth 1 -maxdepth 1 -type d \
+    -name "${source_project}-*" | wc -l
+)" = "$((backup_count_before + 1))"
 
 (
   cd -- "$target_directory"
@@ -290,6 +364,12 @@ backup_directory="$(
   test "$revision_count" = 1
   curl --fail --silent --show-error \
     "http://127.0.0.1:${target_port}/api/health" >/dev/null
+  (
+    cd -- "$source_directory"
+    RECOVERY_VERIFICATION_CONFIRM="RECOVERABLE:$(basename -- "$backup_directory")" \
+      ./scripts/backup-mark-recoverable.sh "$backup_directory"
+  )
+  test -f "${backup_directory}/.vinci-verified"
 
   if RESTORE_CONFIRM="${target_project}:${target_database}" \
     ./scripts/restore.sh "$backup_directory" \

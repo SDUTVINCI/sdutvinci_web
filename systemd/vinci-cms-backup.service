@@ -1,0 +1,11 @@
+[Unit]
+Description=Vinci CMS verified database and configuration backup
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/vinci-cms
+ExecStart=/opt/vinci-cms/scripts/backup.sh
+ExecStartPost=/opt/vinci-cms/scripts/backup-prune.sh
+TimeoutStartSec=60min
+UMask=0077

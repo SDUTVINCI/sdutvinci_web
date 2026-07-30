@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Vinci CMS safe retention cleanup daily
+
+[Timer]
+OnCalendar=*-*-* 04:00:00 Asia/Shanghai
+Persistent=true
+RandomizedDelaySec=10min
+Unit=vinci-cms-maintenance-cleanup.service
+
+[Install]
+WantedBy=timers.target

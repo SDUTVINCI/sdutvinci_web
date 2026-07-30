@@ -18,5 +18,6 @@ exec ./node_modules/.bin/vitest run \
   tests/v2-public-content-shadow.integration.test.ts \
   tests/v2-database-authority.integration.test.ts \
   tests/v2-content-export.integration.test.ts \
+  tests/v2-phase7-reconciliation-recovery.integration.test.ts \
   tests/cms-protected-markdown.test.ts \
   tests/cms-security.test.ts

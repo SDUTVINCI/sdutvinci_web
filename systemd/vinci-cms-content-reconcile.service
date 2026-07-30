@@ -1,0 +1,11 @@
+[Unit]
+Description=Vinci CMS full database-to-content reconciliation
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/vinci-cms
+ExecStart=/usr/bin/docker compose -f compose.yaml -f compose.content-export.yaml --profile content-reconcile run --rm content-reconcile
+TimeoutStartSec=45min
+UMask=0077

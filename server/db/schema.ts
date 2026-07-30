@@ -405,6 +405,107 @@ export const contentExportJobs = pgTable('content_export_jobs', {
   index('content_export_jobs_latest_run_id_index').on(table.latestRunId)
 ])
 
+export const contentReconciliationRuns = pgTable('content_reconciliation_runs', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  trigger: varchar('trigger', { length: 32 }).notNull(),
+  status: varchar('status', { length: 32 }).default('processing').notNull(),
+  baseCommitHash: varchar('base_commit_hash', { length: 64 }),
+  resultCommitHash: varchar('result_commit_hash', { length: 64 }),
+  reportSha256: varchar('report_sha256', { length: 64 }),
+  reportPath: text('report_path'),
+  addedCount: integer('added_count').default(0).notNull(),
+  missingCount: integer('missing_count').default(0).notNull(),
+  modifiedCount: integer('modified_count').default(0).notNull(),
+  extraCount: integer('extra_count').default(0).notNull(),
+  metadataMismatchCount: integer('metadata_mismatch_count').default(0).notNull(),
+  errorCode: varchar('error_code', { length: 64 }),
+  errorSummary: text('error_summary'),
+  report: jsonb('report').$type<Record<string, unknown>>().default({}).notNull(),
+  startedAt: timestamp('started_at', { withTimezone: true }).defaultNow().notNull(),
+  completedAt: timestamp('completed_at', { withTimezone: true })
+}, table => [
+  check(
+    'content_reconciliation_runs_trigger_check',
+    sql`${table.trigger} in ('schedule', 'manual')`
+  ),
+  check(
+    'content_reconciliation_runs_status_check',
+    sql`${table.status} in ('processing', 'succeeded', 'failed', 'busy')`
+  ),
+  check('content_reconciliation_runs_added_check', sql`${table.addedCount} >= 0`),
+  check('content_reconciliation_runs_missing_check', sql`${table.missingCount} >= 0`),
+  check('content_reconciliation_runs_modified_check', sql`${table.modifiedCount} >= 0`),
+  check('content_reconciliation_runs_extra_check', sql`${table.extraCount} >= 0`),
+  check(
+    'content_reconciliation_runs_metadata_check',
+    sql`${table.metadataMismatchCount} >= 0`
+  ),
+  index('content_reconciliation_runs_started_index').on(table.startedAt),
+  index('content_reconciliation_runs_status_index').on(table.status, table.completedAt)
+])
+
+export const contentImportRuns = pgTable('content_import_runs', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  mode: varchar('mode', { length: 32 }).notNull(),
+  status: varchar('status', { length: 32 }).default('dry_run').notNull(),
+  sourceCommitHash: varchar('source_commit_hash', { length: 64 }),
+  snapshotSha256: varchar('snapshot_sha256', { length: 64 }).notNull(),
+  confirmationHash: varchar('confirmation_hash', { length: 64 }),
+  actorLabel: varchar('actor_label', { length: 128 }).notNull(),
+  itemCount: integer('item_count').default(0).notNull(),
+  errorCode: varchar('error_code', { length: 64 }),
+  errorSummary: text('error_summary'),
+  report: jsonb('report').$type<Record<string, unknown>>().default({}).notNull(),
+  startedAt: timestamp('started_at', { withTimezone: true }).defaultNow().notNull(),
+  completedAt: timestamp('completed_at', { withTimezone: true })
+}, table => [
+  check(
+    'content_import_runs_mode_check',
+    sql`${table.mode} in ('empty_database_initialization', 'disaster_recovery')`
+  ),
+  check(
+    'content_import_runs_status_check',
+    sql`${table.status} in ('dry_run', 'succeeded', 'failed')`
+  ),
+  check('content_import_runs_item_count_check', sql`${table.itemCount} >= 0`),
+  check(
+    'content_import_runs_snapshot_sha_check',
+    sql`${table.snapshotSha256} ~ '^[0-9a-f]{64}$'`
+  ),
+  index('content_import_runs_started_index').on(table.startedAt),
+  index('content_import_runs_status_index').on(table.status, table.completedAt)
+])
+
+export const contentImportItems = pgTable('content_import_items', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  runId: uuid('run_id')
+    .notNull()
+    .references(() => contentImportRuns.id, { onDelete: 'cascade' }),
+  articleId: uuid('article_id').notNull(),
+  revisionId: uuid('revision_id').notNull(),
+  collection: varchar('collection', { length: 32 }).notNull(),
+  relativePath: text('relative_path').notNull(),
+  sha256: varchar('sha256', { length: 64 }).notNull(),
+  status: varchar('status', { length: 32 }).notNull(),
+  errorCode: varchar('error_code', { length: 64 }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
+}, table => [
+  check(
+    'content_import_items_collection_check',
+    sql`${table.collection} in ('news', 'wiki')`
+  ),
+  check(
+    'content_import_items_status_check',
+    sql`${table.status} in ('validated', 'imported', 'failed')`
+  ),
+  check(
+    'content_import_items_sha_check',
+    sql`${table.sha256} ~ '^[0-9a-f]{64}$'`
+  ),
+  uniqueIndex('content_import_items_run_article_unique').on(table.runId, table.articleId),
+  index('content_import_items_run_index').on(table.runId)
+])
+
 export const editLocks = pgTable('edit_locks', {
   id: uuid('id').defaultRandom().primaryKey(),
   targetType: varchar('target_type', { length: 32 }).notNull(),
@@ -501,5 +602,7 @@ export type PublishRecord = typeof publishRecords.$inferSelect
 export type MediaAsset = typeof mediaAssets.$inferSelect
 export type ArticleDeletionEvent = typeof articleDeletionEvents.$inferSelect
 export type ContentExportJob = typeof contentExportJobs.$inferSelect
+export type ContentReconciliationRun = typeof contentReconciliationRuns.$inferSelect
+export type ContentImportRun = typeof contentImportRuns.$inferSelect
 export type EditLock = typeof editLocks.$inferSelect
 export type AuditLog = typeof auditLogs.$inferSelect

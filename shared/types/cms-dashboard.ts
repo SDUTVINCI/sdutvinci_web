@@ -12,4 +12,12 @@ export interface CmsDashboardStats {
   }
   pendingReviews: number
   members: number
+  reconciliation: {
+    status: 'processing' | 'succeeded' | 'failed' | 'busy'
+    startedAt: string
+    completedAt: string | null
+    resultCommitHash: string | null
+    differenceCount: number
+    summary: string | null
+  } | null
 }

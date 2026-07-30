@@ -28,7 +28,10 @@ done
 )
 
 format="$(awk -F= '$1 == "format" { print $2; exit }' "${backup_directory}/manifest.env")"
-[ "$format" = "vinci-cms-backup-v1" ] || ops_die "不支持的备份格式：${format:-未知}"
+case "$format" in
+  vinci-cms-backup-v1|vinci-cms-backup-v2) ;;
+  *) ops_die "不支持的备份格式：${format:-未知}" ;;
+esac
 
 database="$(ops_required_compose_env POSTGRES_DB)"
 database_user="$(ops_required_compose_env POSTGRES_USER)"
@@ -63,4 +66,5 @@ docker compose exec -T postgres \
   < "${backup_directory}/postgresql.dump"
 
 ops_info "数据库恢复完成。请立即执行：docker compose --profile tools run --rm migrate"
-ops_info "CMS Git 异常资料仅供人工审查，不会自动覆盖正式工作区；Markdown 仍以 GitHub 为准。"
+ops_info "CMS Git 异常资料仅供人工审查，不会自动覆盖数据库或内容仓库。"
+ops_info "正常迁移必须使用本 PostgreSQL 备份；Markdown 快照只用于独立灾难恢复入口。"

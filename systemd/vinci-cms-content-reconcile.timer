@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Vinci CMS full reconciliation daily at 03:00 Asia/Shanghai
+
+[Timer]
+OnCalendar=*-*-* 03:00:00 Asia/Shanghai
+Persistent=true
+RandomizedDelaySec=0
+Unit=vinci-cms-content-reconcile.service
+
+[Install]
+WantedBy=timers.target

@@ -1214,3 +1214,91 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
   `55447`、`55448`、`34161` 均无监听。
 - 阶段 6 实现/修复 Commit 为 `d3528bf`、`a535ce2`、`18baf8a`、`09369b3`；验收
   记录 Commit 由最终回复报告。没有 Push、部署、真实内容仓库写入或阶段 7 实施。
+
+---
+
+## 2026-07-30：V2 阶段 7——凌晨 3 点全量对账、初始化和灾难恢复
+
+### 完成状态
+
+- 实现：完成。
+- 自动化验证：完成并通过。
+- 人工验收：等待维护者，不勾选阶段 7 人工项或总体完成项。
+- 下一阶段是否开始：否；不得进入阶段 8。
+
+### 修改内容
+
+- 增加 `Asia/Shanghai` 03:00 全量数据库到内容仓库对账，与阶段 6 Worker 共用
+  advisory lock；无差异不 Commit，有差异生成普通非强制修正 Commit。
+- 对账生成完整临时快照、snapshot/manifest 和带双方 SHA-256、差异分类、base/result
+  Commit、report hash 的脱敏报告；CMS 工作台显示最近时间和安全结果。
+- 增加全部业务表严格空库 initialize dry-run、精确确认令牌、格式/ID/路径/哈希/引用、
+  manifest 外受管文件及 active/tombstone 冲突校验、单事务导入/审计，以及与未来普通
+  PR 导入完全分离的 disaster recovery CLI/profile。
+- 增加 V2 PostgreSQL/配置状态清单备份、互斥、重试、完整性校验、最近成功状态、
+  JSONL 告警、磁盘保护、分层保留和带归属标记的安全清理。
+- 增加 snapshot 恢复后的向前 Migration、pointer/hash 完整性与本机健康检查流程。
+
+### 数据库和接口
+
+- expand-only Migration `0015_chubby_scorpion.sql` 新增
+  `content_reconciliation_runs`、`content_import_runs`、`content_import_items`；
+  无删除、重命名或收紧旧列。
+- 既有 CMS dashboard 响应增加 `reconciliation` 安全摘要；没有浏览器恢复写 API。
+- 普通应用启动没有自动导入钩子，非空数据库没有 override。
+
+### 配置、调度和权限
+
+- `.env.example` 记录对账根、恢复禁用态、备份重试/磁盘阈值、三层备份与三类对账资产
+  保留期限；运维包装脚本从 Compose 环境读取这些值。
+- 项目内 systemd timer 定义 02:00 备份、03:00 对账、04:00 cleanup，均为
+  `Asia/Shanghai`；本阶段未安装或修改宿主机 timer。
+- 恢复使用独立 operations profile、只读 source mount 和一次性确认变量；没有复用 CMS
+  或未来 PR 导入权限。
+
+### 测试与构建
+
+- 阶段 7 专项：数据库/Git 5/5 和运维安全 shell 通过，覆盖 no-op、篡改/缺失/新增/
+  多余、metadata、互斥、空库/非空、错误格式/哈希/令牌、事务回滚、分层保留、失败门禁、
+  latest/verified/locked、过期资产、磁盘、根路径、symlink 和错误 UID。
+- 完整 CMS：14 文件 95/95；普通测试：4 文件 17/17，另 11 文件 85 项在无数据库的
+  普通模式按设计跳过。
+- 真实 custom dump 隔离演练通过：checksum、两次失败后第三次成功、空库 restore、
+  后置 Migration、应用健康、可恢复标记和非空拒绝。
+- phase 0 内容审计通过：260 Markdown、0 symlink，字节清单 SHA-256
+  `db36a4ef8c696d95662d5e1cac6c5fd5792ae02610ed6e5aab36d25ef1fe5ede`；
+  Wiki 226 文件通过。
+- typecheck、build、基础/reconcile/recovery Compose config、全部 shell syntax、
+  systemd syntax/calendar、`git diff --check` 通过；两种 npm audit 均为 0。
+- 最终自动验证曾发现运维 fixture 把月度应保留备份误当过期；已保留轨迹、改为真实
+  过期 fixture，并以标签化瞬时容器动态验证错误 UID 后重跑上述专项、CMS、typecheck
+  和 build。
+
+### 安全和生产资源边界
+
+- 仅使用 `vinci-v2-phase7-test-db`、名称含 test 的数据库、动态隔离 Compose project、
+  本地裸 Git 远端、独立 workspace/backup/snapshot/report/tmp 和回环端口。
+- 没有使用生产数据库、生产 Git 凭据、真实内容仓库写权限、真实备份存储或部署环境；
+  没有 Push、Force Push、部署、真实 GitHub 写操作或宿主机 timer 安装。
+- 代码仓库 260 个 `content/` Markdown 字节清单保持不变。
+
+### 已知限制和回滚
+
+- Markdown snapshot 不包含用户、草稿、审核、会话、完整 Revision/审计历史或 S3
+  二进制，正常迁移仍必须使用 PostgreSQL dump 和独立对象存储备份。
+- 配置备份只记录 set/missing 和示例键，不保存密钥值；可恢复标记必须来自真实隔离演练。
+- 阶段 8 普通 PR 修改导入尚未实现。
+- 回滚时停用三个新 timer/profile 并保留 run/report/backup，再普通
+  `git revert <阶段7实现Commit>`；保留 expand-only `0015` 表，不 down Migration，
+  不 reset/force 内容仓库，不删除旧 `content/`。
+
+### 人工验收
+
+完整的一次性浏览器优先步骤、预期结果和异常证据见
+`docs/v2/PHASE_V2_7_ACCEPTANCE.md` 第 14 节。维护者无需真实 GitHub 写权限；Codex
+准备和清理隔离数据库、本地远端、应用、故障注入、恢复根、日志、端口及确认令牌。
+
+### Commit
+
+- 阶段 7 独立本地 Commit 由最终回复报告。
+- 未 Push、未部署、未进入阶段 8；等待维护者人工验收。

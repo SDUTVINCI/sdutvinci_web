@@ -36,6 +36,17 @@ ops_required_compose_env() {
   printf '%s' "$value"
 }
 
+ops_config_value() {
+  local key="$1"
+  local fallback="$2"
+  local value="${!key:-}"
+
+  if [ -z "$value" ]; then
+    value="$(ops_compose_env "$key")"
+  fi
+  printf '%s' "${value:-$fallback}"
+}
+
 ops_validate_identifier() {
   local label="$1"
   local value="$2"
@@ -112,4 +123,31 @@ ops_acquire_lock() {
     ops_die "已有部署、备份或恢复操作正在执行：${OPS_LOCK_DIRECTORY}"
   fi
   trap 'rmdir -- "$OPS_LOCK_DIRECTORY" 2>/dev/null || true' EXIT
+}
+
+ops_assert_owned_directory() {
+  local label="$1"
+  local path="$2"
+  local owner mode
+
+  [ -d "$path" ] || ops_die "${label} 不是目录：${path}"
+  [ ! -L "$path" ] || ops_die "${label} 不得是符号链接：${path}"
+  owner="$(stat -c '%u' "$path")"
+  [ "$owner" = "$EUID" ] \
+    || ops_die "${label} 属主错误：期望 UID ${EUID}，实际 ${owner}"
+  mode="$(stat -c '%a' "$path")"
+  case "$mode" in
+    700|750) ;;
+    *) ops_die "${label} 权限必须为 0700 或 0750，实际为 ${mode}" ;;
+  esac
+}
+
+ops_available_bytes() {
+  df --output=avail -B1 -- "$1" | awk 'NR == 2 { print $1 }'
+}
+
+ops_validate_nonnegative_integer() {
+  local label="$1"
+  local value="$2"
+  [[ "$value" =~ ^[0-9]+$ ]] || ops_die "${label} 必须是非负整数"
 }

@@ -2356,3 +2356,85 @@ Commit 时只能在确认影响后做普通 `git revert`，随后制定数据库
 
 完整自动与浏览器验收、真实只读基线和隔离脚本见
 `docs/v2/PHASE_V2_6_ACCEPTANCE.md`。
+
+## 18. V2 阶段 7 全量对账、自动备份和灾难恢复
+
+阶段 7 增加 Migration `0015_chubby_scorpion.sql`、三个独立 operations profile/unit
+定义和 V2 备份/保留入口。实现和自动测试没有安装宿主机 timer、写真实内容仓库、Push
+代码或部署。完整逐步教程见 `docs/v2/BACKUP_AND_RECOVERY.md`，本节只记录部署顺序。
+
+### 18.1 禁用态上线和 Migration
+
+先创建并完成一次可恢复性验证的 PostgreSQL 备份，再运行 expand-only Migration：
+
+```bash
+docker compose --profile tools run --rm migrate
+docker compose exec -T postgres psql \
+  --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
+  --command "select to_regclass('public.content_reconciliation_runs'), \
+                    to_regclass('public.content_import_runs');"
+```
+
+新应用、Worker 和对账服务先保持
+`CONTENT_EXPORT_MODE=disabled`；`content-recovery` profile 不常驻。Migration 不会
+自动导入 Markdown，也不会修改现有文章或 Revision。
+
+### 18.2 对账配置和手动验收
+
+复用阶段 6 已批准的唯一仓库级 SSH key、known_hosts、远端、`main` 和 workspace，
+另行准备只归运行用户所有的
+`/var/lib/vinci-cms/content-reconciliation`。先在隔离内容远端手动运行：
+
+```bash
+docker compose -f compose.yaml -f compose.content-export.yaml \
+  --profile content-reconcile config --quiet
+docker compose -f compose.yaml -f compose.content-export.yaml \
+  --profile content-reconcile run --rm content-reconcile
+```
+
+无差异时结果 Commit 等于 base 且不会产生空 Commit。有差异时只允许受控
+`news/`、`wiki/`、`.vinci/snapshot.json`、`manifest.json` 和 README 生成一个普通
+修正 Commit。先完成无差异、篡改、缺失、新增和多余文件隔离验收，再由维护者决定是否在
+测试服务器安装 `systemd/vinci-cms-content-reconcile.*`。timer 的
+`OnCalendar` 必须保持 `03:00:00 Asia/Shanghai`。
+
+### 18.3 自动备份、验证和保留
+
+`scripts/backup.sh` 同时创建 PostgreSQL custom dump 和不含值的配置清单，成功后才更新
+latest-success。systemd 定义在 02:00 Shanghai 运行备份，成功后才运行 prune。
+
+```bash
+BACKUP_ROOT=/外部/绝对/备份根 ./scripts/backup.sh
+./scripts/backup-verify.sh /外部/绝对/备份目录
+BACKUP_ROOT=/外部/绝对/备份根 ./scripts/backup-prune.sh --dry-run
+./scripts/v2-maintenance-cleanup.sh --dry-run
+```
+
+完整性 marker 和“已验证可恢复” marker 不同。只有隔离 restore、向前 Migration、
+完整性和健康检查全部通过后，才使用
+`scripts/backup-mark-recoverable.sh` 的精确确认令牌。自动清理始终保护最新成功、
+最近可恢复和 `.vinci-locked` 备份。新备份失败不更新成功门禁，不执行旧备份删除。
+
+### 18.4 空库初始化和灾难恢复
+
+普通服务器迁移不要使用本入口；使用完整 PostgreSQL 备份。只有全库备份不可用且目标为
+全新空库时，才运行：
+
+```bash
+./scripts/content-disaster-recovery.sh \
+  dry-run /绝对/内容快照 维护者标识
+```
+
+核对报告后，把精确 `INITIALIZE:disaster_recovery:...` 令牌和本机隔离健康 URL 传给
+`apply`。流程在导入后再次运行 Migration、pointer/hash 完整性和健康检查。数据库非空、
+格式/哈希/引用错误或令牌不匹配都会拒绝；事务错误不留半导入数据。
+
+### 18.5 停用、取证和回滚
+
+- 对账故障：停用 timer/profile，保留 run/report/snapshot/远端 HEAD；增量发布和网站
+  继续 DB-first。
+- 备份故障：保留旧备份和 alerts，不手工推进 latest-success；修复空间或数据库后重试。
+- cleanup 故障：保存拒绝原因，检查路径/属主/symlink；不得放宽校验或宽泛删除。
+- 恢复故障：保留隔离数据库、Migration 输出、完整性 JSON 和健康响应；从新的空库重演。
+- 代码回滚：普通 `git revert`；保留 `0015` 新表，不执行 destructive down。
+- 内容仓库修正错误：先核对数据库与报告，再用普通 `git revert`；禁止 Force Push。

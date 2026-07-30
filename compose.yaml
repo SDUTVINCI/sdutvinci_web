@@ -199,10 +199,82 @@ services:
     networks:
       - backend
 
+  content-reconcile:
+    image: ${APP_OPS_IMAGE:-sdutvinci-web-ops}:${APP_IMAGE_TAG:-local}
+    build:
+      context: .
+      target: operations
+    profiles: ["content-reconcile"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      TZ: Asia/Shanghai
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
+      DATABASE_SSL: ${DATABASE_SSL:-false}
+      CMS_CONTENT_ROOT: /app/content
+      CMS_GIT_WORKTREE: /var/lib/vinci-cms/worktree
+      CONTENT_REPOSITORY_ID: ${CONTENT_REPOSITORY_ID:-SDUTVINCI/sdutvinci_content}
+      CONTENT_EXPORT_MODE: ${CONTENT_EXPORT_MODE:-disabled}
+      CONTENT_EXPORT_REMOTE_URL: ${CONTENT_EXPORT_REMOTE_URL:-git@github.com:SDUTVINCI/sdutvinci_content.git}
+      CONTENT_EXPORT_REMOTE: ${CONTENT_EXPORT_REMOTE:-origin}
+      CONTENT_EXPORT_BRANCH: ${CONTENT_EXPORT_BRANCH:-main}
+      CONTENT_EXPORT_WORKSPACE: /var/lib/vinci-cms/content-export
+      CONTENT_EXPORT_AUTHOR_NAME: ${CONTENT_EXPORT_AUTHOR_NAME:-Vinci Content Exporter}
+      CONTENT_EXPORT_AUTHOR_EMAIL: ${CONTENT_EXPORT_AUTHOR_EMAIL:-content-export@localhost}
+      CONTENT_EXPORT_SSH_KEY_FILE: /run/secrets/content_export_ssh_key
+      CONTENT_EXPORT_KNOWN_HOSTS_FILE: /run/secrets/content_export_known_hosts
+      CONTENT_RECONCILIATION_ROOT: /var/lib/vinci-cms/content-reconciliation
+      CONTENT_RECOVERY_MODE: disabled
+    command: ["npm", "run", "v2:content:reconcile", "--", "--scheduled"]
+    volumes:
+      - content_export_worktree:/var/lib/vinci-cms/content-export
+      - content_reconciliation_data:/var/lib/vinci-cms/content-reconciliation
+    networks:
+      - backend
+
+  content-recovery:
+    image: ${APP_OPS_IMAGE:-sdutvinci-web-ops}:${APP_IMAGE_TAG:-local}
+    build:
+      context: .
+      target: operations
+    profiles: ["content-recovery"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
+      DATABASE_SSL: ${DATABASE_SSL:-false}
+      CMS_CONTENT_ROOT: /app/content
+      CMS_GIT_WORKTREE: /var/lib/vinci-cms/worktree
+      CONTENT_REPOSITORY_ID: ${CONTENT_REPOSITORY_ID:-SDUTVINCI/sdutvinci_content}
+      CONTENT_EXPORT_MODE: disabled
+      CONTENT_EXPORT_REMOTE_URL: ${CONTENT_EXPORT_REMOTE_URL:-git@github.com:SDUTVINCI/sdutvinci_content.git}
+      CONTENT_EXPORT_REMOTE: ${CONTENT_EXPORT_REMOTE:-origin}
+      CONTENT_EXPORT_BRANCH: ${CONTENT_EXPORT_BRANCH:-main}
+      CONTENT_EXPORT_WORKSPACE: /var/lib/vinci-cms/content-export
+      CONTENT_RECONCILIATION_ROOT: /var/lib/vinci-cms/content-reconciliation
+      CONTENT_RECOVERY_MODE: enabled
+    command: ["npm", "run", "v2:content:recover", "--"]
+    volumes:
+      - content_export_worktree:/var/lib/vinci-cms/content-export
+      - content_reconciliation_data:/var/lib/vinci-cms/content-reconciliation
+      - type: bind
+        source: ${CONTENT_RECOVERY_SOURCE_ROOT:-/var/empty/vinci-content-recovery-disabled}
+        target: /recovery-source
+        read_only: true
+    networks:
+      - backend
+
 volumes:
   postgres_data:
   cms_git_worktree:
   content_export_worktree:
+  content_reconciliation_data:
   gateway_config:
 
 networks:
