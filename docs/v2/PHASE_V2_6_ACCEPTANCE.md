@@ -255,6 +255,17 @@ Worker 尚未启动，并发现 API 已返回 `latestExportedCommitHash`、页�
 90/90 和 `npm run build`；旧隔离环境已按归属标记精确清理。下轮必须在重新接管并启动
 Worker 后，通过浏览器确认该字段为 40 位 Git SHA；本节不代表人工验收通过。
 
+第二轮单篇发布确认数据库 Revision #2 和前台正文立即生效，详情显示“数据库与最近导出
+版本一致”及 40 位 Commit
+`8926e2b4a34ae28db080ef3423f5f4dfd1dda1c4`。只读检查确认远端 HEAD 完全相同，
+该 Commit 只修改目标 Markdown、snapshot 和 manifest，`issueCount: 0`。
+
+同一截图发现成功状态仍显示已经过去的“下次”调度时间。数据库记录证明任务实际为
+`succeeded`，时间是领取前的初始 `next_attempt_at`，不是未来重试。CMS 状态服务已改为
+仅在 `pending` 时返回该字段，并补充成功状态回归断言。修复后阶段 6 专项 9/9、
+完整 CMS 90/90、typecheck 和 build 通过；应用在保留人工数据库、管理员、内容仓库和
+Worker 的情况下原地重启。维护者仍需刷新确认成功状态不再显示“下次”。
+
 ## 8. 人工验收清单
 
 - [ ] 我检查真实内容仓库的只读盘点报告，确认仓库和首次复制内容未被修改。

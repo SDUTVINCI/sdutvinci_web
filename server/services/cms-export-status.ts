@@ -77,7 +77,9 @@ export const getCmsArticleExportStatus = async (
     currentJobId: currentJob?.id || null,
     currentJobStatus: currentJobStatus || null,
     currentJobAttemptCount: currentJob?.attemptCount ?? null,
-    currentJobNextAttemptAt: currentJob?.nextAttemptAt.toISOString() || null,
+    currentJobNextAttemptAt: currentJobStatus === 'pending'
+      ? currentJob?.nextAttemptAt.toISOString() || null
+      : null,
     currentJobLastErrorCode: currentJob?.lastErrorCode || null,
     currentJobLastError: currentJob?.lastError || null,
     canRetry: currentJobStatus === 'failed',

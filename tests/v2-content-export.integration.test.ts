@@ -622,11 +622,14 @@ suite('V2 阶段 6 独立内容仓库与异步增量导出', () => {
     await rm(hook)
     const recovered = await runContentExportWorkerOnce()
     expect(recovered.state).toBe('succeeded')
-    expect((await getCmsArticleExportStatus(
+    const recoveredStatus = await getCmsArticleExportStatus(
       next.articleId,
       next.revisionId,
       true
-    )).state).toBe('synchronized')
+    )
+    expect(recoveredStatus.state).toBe('synchronized')
+    expect(recoveredStatus.currentJobNextAttemptAt).toBeNull()
+    expect(recoveredStatus.latestExportedCommitHash).toBe(recovered.commitHash)
     const consistency = await checkContentExportConsistency()
     expect(consistency.issueCount).toBe(0)
     expect(consistency.repository.head).toBe(await remoteHead())
