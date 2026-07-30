@@ -1047,3 +1047,26 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
   重新验收。阶段 5 人工项和总体完成项保持未勾选。
 - 没有修改 `content/`、Migration、数据库 Schema、发布事务或依赖；没有接触生产、
   真实 GitHub/内容仓库、Push、部署或阶段 6。
+
+---
+
+## 2026-07-30：阶段 5 维护者人工验收通过
+
+- 维护者确认原文：`V2 阶段 5 验收通过。`
+- 修复后从干净 Revision #1 重建隔离人工环境；维护者重新完成 DB-first 发布和立即
+  刷新、无效 Git 远端、当前 Revision/等待导出、多人旧基线冲突、历史/Diff/恢复、
+  删除/恢复删除以及 Git-first 回滚和切回数据库，并确认浏览器测试全部通过。
+- 可视化编辑器不再把中文图片 alt 改为 `1.00`，完整文章的 Markdown 语义往返保护
+  正常；块间等价空行整理不会误报，实质内容变化仍 fail closed。
+- 最终只读一致性检查统计 228 篇文章、231 个 Revision、3 次数据库操作、4 个 Outbox
+  job 和 2 个删除事件，`issueCount: 0`、`issues: []`。
+- 回滚时配置核对为 `disabled` 且 news/wiki/members 均为 `legacy_git`；切回后为
+  `production`、news/wiki=`database`、members=`legacy_git`，应用和数据库健康。
+- 最终确认代码仓库 `content/` 无改动。人工脚本核对归属标记后精确删除
+  `vinci-v2-phase5-manual-test-db`、`/tmp/vinci-v2-phase5-manual-test` 并停止
+  34160；`status` 和独立复查均确认无人工测试资源残留。
+- 阶段 5 人工验收项和总体进度已全部勾选，允许在新的独立任务中开始阶段 6。
+- 阶段 5 实现 Commit 为 `86c034cb91231053affcf860765540d3ced50c8b`，人工发现修复
+  Commit 为 `a523cbb` 和 `8bf1067`；验收记录 Commit 由最终回复报告。
+- 没有 Push、部署、生产资源访问、真实 GitHub/内容仓库写入、Outbox 导出或阶段 6
+  实施。
