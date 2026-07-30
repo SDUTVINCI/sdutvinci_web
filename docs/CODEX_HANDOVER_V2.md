@@ -1189,3 +1189,28 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
   `pre-receive`。阶段 6 专项 9/9、完整 CMS 90/90、typecheck 和 build 通过。
 - 人工应用原地重启后 failed/2、重试审计、管理员、测试远端与 Worker 均保留。下一步
   刷新确认摘要，修复隔离远端，再执行一次手动重试并核对最终一致性。人工项仍未勾选。
+
+---
+
+## 2026-07-30：V2 阶段 6 人工验收通过并正式收尾
+
+- 维护者确认修复后的安全错误摘要不再显示 Git 命令、远端 stderr、URL、凭据或绝对
+  路径；随后隔离拒绝钩子按精确归属标记移除。
+- 最终手动重试新一轮尝试 1 次成功，job 与远端 HEAD 均为
+  `7cc16a05caca1a0619116d6256e43b1a33e55e42`。数据库 Revision #4 和前台正文在整个
+  故障窗口未回滚。
+- 两条 `content_export.retry` 审计均保留 `previousAttemptCount: 2`，覆盖维护者在
+  远端仍拒绝时的提前重试和远端修复后的最终重试。
+- 最终 Markdown 含稳定 `vinciId: ba859e42-1048-48bd-879e-9a5f32ec2292`、单篇/
+  批量/故障测试正文；snapshot 指向 Revision
+  `34c058d5-34b3-4c9b-990d-85df403b2bab`（#4）。
+- snapshot 与 manifest 中目标文件 SHA-256 同为
+  `c0aded2177f7663d3bb6d5334d587141c4de01ba6f4c469ac7a31705f37994e0`；
+  2 news、226 wiki、32 members preserved、0 code workflow，最终 `issueCount: 0`。
+- 维护者明确回复“V2 阶段 6 验收通过”。验收清单和总体阶段 6 进度已据此勾选；真实
+  生产接管、真实细粒度写凭据等未执行部署门禁保持未勾选。
+- 人工数据库、应用、Worker、本地裸远端、独立 workspace、日志及
+  `/tmp/vinci-v2-phase6-manual-test` 已按容器标签、PID 命令和归属标记精确清理；
+  `55447`、`55448`、`34161` 均无监听。
+- 阶段 6 实现/修复 Commit 为 `d3528bf`、`a535ce2`、`18baf8a`、`09369b3`；验收
+  记录 Commit 由最终回复报告。没有 Push、部署、真实内容仓库写入或阶段 7 实施。
