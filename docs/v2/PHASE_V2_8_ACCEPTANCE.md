@@ -1,6 +1,6 @@
 # V2 阶段 8 自动验证与人工验收记录
 
-状态：实现和自动验证完成；人工验收未执行、未勾选。未 Push、未部署、未进入阶段 9。
+状态：实现、自动验证和维护者人工验收均已通过。未 Push、未部署、未进入阶段 9。
 
 ## 1. 实现范围
 
@@ -74,7 +74,7 @@ journal schema，迁移器因此认为表已存在，10 项在 beforeEach 统一
 
 ## 4. 人工验收环境
 
-当前已启动并保留给维护者：
+人工验收期间使用：
 
 - CMS：`http://127.0.0.1:34162/cms/login`
 - 账号：`phase8admin`
@@ -87,7 +87,7 @@ journal schema，迁移器因此认为表已存在，10 项在 beforeEach 统一
 资源是三个带 `com.sdutvinci.scope=v2-phase8-manual-test` 标签的容器、本地裸 Git 远端、
 测试 PR fixture 和回环 mock API。没有真实 GitHub 请求或写操作，不需要真实 GitHub
 Token；“评论”和“关闭”只写本地 JSONL/state。代码仓库现有 `content/` 不作为夹具写入
-目标，也没有被修改。
+目标，也没有被修改。维护者明确验收通过后，这些资源已按名称、标签和 marker 精确清理。
 
 异常时不要刷新、关闭页面或自行清理。保留截图（含分类/路径/时间）、浏览器 Network 的
 request URL/status/response、Console 输出，并告诉 Codex；Codex 会保留容器、数据库、
@@ -189,9 +189,8 @@ request URL/status/response、Console 输出，并告诉 Codex；Codex 会保留
 - 若通过，明确回复“V2 阶段 8 验收通过”；
 - 若有问题，指出步骤、item 路径和已保留的证据，不要勉强判定通过。
 
-Codex 收到明确结果后才会记录人工验收；在此之前不勾选需求文档 24.5、阶段 8 总进度或
-总体完成项。验收结束后由 Codex 执行 `npm run v2:phase8:manual -- inspect` 保存只读摘要，
-再运行 `stop` 精确清理全部人工资源。
+维护者已明确回复“V2 阶段 8 验收通过”。随后 Codex 执行
+`npm run v2:phase8:manual -- inspect` 保存只读摘要，再运行 `stop` 精确清理全部人工资源。
 
 ## 6. 最终自动验证记录
 
@@ -210,4 +209,31 @@ Codex 收到明确结果后才会记录人工验收；在此之前不勾选需�
 - [x] `content/` Markdown 字节清单仍为
   `7aea323bcdc27bb0da37a7023d409dd9fd249eb65c8190b54f0ed6e76b698656`
 
-这些是自动验收项，最终重跑成功后可以勾选；本文件不包含任何人工验收通过声明。
+这些自动验收项已全部通过。
+
+## 7. 人工验收结果
+
+- [x] 登录、入口权限与不批准/不发布/不 Merge 警告符合预期。
+- [x] 7 个 Diff 文件完整分类为 5 个可导入、2 个冲突或阻止。
+- [x] Base / Current / Proposed / Merge 四方材料和段落级三方结果符合预期。
+- [x] 安全修改先单独导入，重复 Dry Run 没有产生重复 run 或草稿。
+- [x] 自动合并、新文章、重命名和删除提案共创建 5 个草稿/提案；冲突和高风险项未导入。
+- [x] 正式文章、旧路径和删除目标未被自动修改，新文章未自动发布。
+- [x] 脱敏评论和关闭 PR 均为独立确认的本地 mock 动作，没有 Merge。
+- [x] 维护者于 2026-08-01 明确回复“V2 阶段 8 验收通过”。
+
+清理前只读摘要：
+
+```text
+runs=1
+items=7
+drafts=5
+formal_revisions=9
+external_actions=2
+```
+
+`external_actions=2` 分别是只含 Head/数量摘要的本地 mock 评论和关闭动作。正式 Revision
+始终保持 9，证明导入没有自动发布。随后 `stop` 已清理人工数据库、三个容器、本地裸 Git
+远端、PR fixture、mock state、日志和 `/tmp/vinci-v2-phase8-manual-test`；回环端口
+`55452`、`34162`、`34163` 均已释放。没有真实 GitHub、生产数据库、生产凭据、Push、部署
+或阶段 9 操作。

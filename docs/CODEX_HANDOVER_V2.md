@@ -1443,3 +1443,21 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
 - 最终构建已重启到人工验收容器；1 run、7 items、0 drafts、9 正式 Revision、0 external
   action 的现有验收进度保持不变。本次另建本地修正 Commit，不 amend、不 Push、不部署、
   不进入阶段 9。
+
+---
+
+## 2026-08-01：V2 阶段 8 人工验收通过并正式收尾
+
+- 维护者完成完整浏览器流程并明确回复“V2 阶段 8 验收通过”。期间提出四方材料中文解释
+  和文件卡片内联展示两项可用性意见，分别由本地 Commit
+  `ee738bea0a2d07ed64191c14bb174853565e5da5`、
+  `84f66b71e25199f6dee62fda9af71eb2d0d2980e` 修正，均重跑阶段 8 专项 10/10、完整 CMS
+  105/105、typecheck 和 production build。
+- 清理前 `npm run v2:phase8:manual -- inspect` 为 1 run、7 items、5 drafts、9 formal
+  revisions、2 external actions。5 个安全项创建草稿/提案，2 个冲突/高风险项未导入；
+  正式 Revision 数未增加。外部动作仅为脱敏本地 mock 评论和关闭，没有 Merge。
+- 随后 `npm run v2:phase8:manual -- stop` 已按名称、标签和 marker 清理人工数据库、三个
+  容器、本地裸 Git 远端、PR fixture、mock state、日志和临时目录；`55452/34162/34163`
+  均释放。代码仓库 `content/` 未修改，没有真实 GitHub、生产数据库/凭据、Push 或部署。
+- 需求文档 24.5 和阶段 8 总体进度已据维护者明确结论勾选；阶段 9～11 仍未开始。
+  阶段 8 验收记录 Commit 由最终回复报告完整 SHA。现在停止开发，不进入阶段 9。
