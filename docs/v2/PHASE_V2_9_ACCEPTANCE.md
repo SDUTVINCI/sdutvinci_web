@@ -1,7 +1,7 @@
 # V2 阶段 9：成员资料数据库权威与提案导入验收
 
 日期：2026-08-01
-状态：实现与自动验证完成，等待维护者人工验收
+状态：维护者人工验收通过，已正式收尾
 前置基线：阶段 8 验收记录 `a087ba8139622f875db1b1d4042f50920ed95a49`
 
 ## 1. 本阶段结论边界
@@ -112,5 +112,9 @@ npm run v2:phase9:manual -- stop
 
 ## 7. 验收结论
 
-只有维护者完成以上检查并明确回复“V2 阶段 9 验收通过”后，才能勾选总体阶段 9、记录通过
-Commit 并清理人工环境。在此之前停止开发，不进入阶段 10。
+维护者于 2026-08-02 明确回复“V2 阶段 9 验收通过”。最终只读状态为 32 members、37
+member revisions、1 PR run、5 PR items、2 pending proposals、37/37 member export jobs
+succeeded、0 bindings、32 repository member files、32 snapshot members，且
+`legacy_member_links=32`、`repository_matches_database=yes`。另有 1 条经维护者明确授权的
+本地 mock PR 评论；PR 保持 open，没有关闭、Merge 或真实 GitHub 写入。阶段 9 总体进度和
+人工验收项已据维护者结论勾选；验收记录 Commit 后精确清理人工环境，不进入阶段 10。

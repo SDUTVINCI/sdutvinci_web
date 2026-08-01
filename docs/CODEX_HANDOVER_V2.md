@@ -1514,3 +1514,20 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
 - 新的带 label 隔离 PostgreSQL 上重跑阶段 9 专项 35/35、完整 CMS 108/108、typecheck、
   wiki check 和 production build 均通过，测试库随后精确清理。修正使用新的本地 Commit，
   不 amend、不 Push、不部署、不进入阶段 10；继续等待维护者从回退检查处恢复人工验收。
+
+---
+
+## 2026-08-02：V2 阶段 9 人工验收通过并正式收尾
+
+- 维护者完成浏览器流程并明确回复“V2 阶段 9 验收通过”。最终只读状态为 32 members、
+  37 member revisions、1 PR run、5 PR items、2 pending proposals、37/37 member export jobs
+  succeeded、0 bindings、32 repository member files、32 snapshot members，且
+  `legacy_member_links=32`、`repository_matches_database=yes`。
+- 3 个可导入项只创建成员提案；明确接受 `dongjiahui` 后才建立正式 Revision。`zouchangdi`
+  和 `likun` 的提案仍 pending，删除未自动生效；冲突和敏感项未导入。维护者额外明确授权了
+  1 条本地 mock PR 评论，PR 仍 open，没有关闭、Merge 或真实 GitHub 写入。
+- 验收中发现并修复 34174 Nuxt Content 运行时 SQLite 只读路径问题；修复后数据库权威与
+  legacy Git 页面各显示 32 名成员，相关专项/CMS/typecheck/build 已重跑通过。需求文档 25.5
+  和阶段 9 总体进度已据维护者明确结论勾选。
+- 阶段 9 人工数据库、五个容器、本地裸 Git、PR fixture、mock state、日志和临时目录将在本次
+  验收记录 Commit 后按 label/marker 精确清理。没有 Push、部署、真实外部写入或阶段 10 工作。
