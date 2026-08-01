@@ -646,6 +646,8 @@ suite('V2 阶段 8 本地 Markdown PR 导入与三方冲突', () => {
     expect(page).toContain('Current Source（数据库当前正式内容）')
     expect(page).toContain('Proposed Source（PR 提议的新内容）')
     expect(page).toContain('Merge Result（三方合并后的草稿候选）')
+    expect(page).toContain("artifact?.id === item.id")
+    expect(page).toContain('收起三方审计材料')
     expect(closeApi).toContain("roles.includes('admin')")
     expect(artifactApi).toContain('redactCmsSensitiveText')
     expect(artifactApi).not.toContain('mergePullRequest')

@@ -124,7 +124,8 @@ request URL/status/response、Console 输出，并告诉 Codex；Codex 会保留
 
 材料标题依次显示为 `Base Source（PR 分支起点内容）`、
 `Current Source（数据库当前正式内容）`、`Proposed Source（PR 提议的新内容）` 和
-`Merge Result（三方合并后的草稿候选）`。
+`Merge Result（三方合并后的草稿候选）`。点击某文件的查看按钮后，材料应直接展开在该
+按钮下方；点击“收起三方审计材料”或“关闭”后原地收起，不应跳到整页底部。
 
 1. 点 safe 的“查看 Base / Current / Proposed / Merge”。预期 Base=Current，Proposed 和
    Merge 都含“安全 PR 修改”。关闭材料。

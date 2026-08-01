@@ -93,6 +93,10 @@ const importSelected = async () => {
 
 const showArtifact = async (itemId: string) => {
   if (!run.value) return
+  if (artifact.value?.id === itemId) {
+    artifact.value = null
+    return
+  }
   const response = await $fetch<{ artifact: NonNullable<typeof artifact.value> }>(
     `/api/cms/content-imports/${run.value.id}/items/${itemId}`
   )
@@ -198,18 +202,32 @@ const externalAction = async (action: 'comment' | 'close') => {
             <summary>冲突 / 路径 / 引用审计详情</summary>
             <pre>{{ JSON.stringify(item.conflictDetails, null, 2) }}</pre>
           </details>
-          <button class="cms-button cms-button-quiet" type="button" @click="showArtifact(item.id)">查看 Base（分支起点）/ Current（数据库当前）/ Proposed（PR 提议）/ Merge（合并结果）</button>
+          <button
+            class="cms-button cms-button-quiet"
+            type="button"
+            :aria-expanded="artifact?.id === item.id"
+            :aria-controls="`artifact-${item.id}`"
+            @click="showArtifact(item.id)"
+          >
+            {{ artifact?.id === item.id ? '收起三方审计材料' : '查看 Base（分支起点）/ Current（数据库当前）/ Proposed（PR 提议）/ Merge（合并结果）' }}
+          </button>
+          <section
+            v-if="artifact?.id === item.id"
+            :id="`artifact-${item.id}`"
+            class="cms-import-artifact"
+          >
+            <div class="cms-section-heading">
+              <h3>三方审计材料</h3>
+              <button class="cms-button cms-button-quiet" type="button" @click="artifact = null">关闭</button>
+            </div>
+            <div v-for="key in artifactKeys" :key="key">
+              <h4>{{ artifactLabels[key] }}</h4>
+              <pre>{{ artifact[key] ?? '（无）' }}</pre>
+            </div>
+          </section>
         </article>
       </div>
     </template>
-
-    <section v-if="artifact" class="cms-card cms-import-artifact">
-      <div class="cms-section-heading"><h2>三方审计材料</h2><button class="cms-button cms-button-quiet" @click="artifact = null">关闭</button></div>
-      <div v-for="key in artifactKeys" :key="key">
-        <h3>{{ artifactLabels[key] }}</h3>
-        <pre>{{ artifact[key] ?? '（无）' }}</pre>
-      </div>
-    </section>
   </section>
 </template>
 
@@ -223,7 +241,7 @@ const externalAction = async (action: 'comment' | 'close') => {
 .cms-import-item code, .cms-import-summary code { overflow-wrap: anywhere; }
 .cms-import-categories, .cms-import-actions { display: flex; flex-wrap: wrap; gap: .5rem 1.25rem; padding-left: 1.25rem; }
 .cms-import-conflict pre { max-height: 240px; overflow: auto; white-space: pre-wrap; }
-.cms-import-artifact { margin-top: 1rem; }
+.cms-import-artifact { margin-top: 1rem; border-top: 1px solid rgba(127,127,127,.25); padding-top: 1rem; }
 .cms-import-artifact pre { max-height: 360px; overflow: auto; white-space: pre-wrap; border: 1px solid rgba(127,127,127,.25); padding: 1rem; }
 @media (max-width: 900px) { .cms-import-form { grid-template-columns: 1fr; } }
 </style>

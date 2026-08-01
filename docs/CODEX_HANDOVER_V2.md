@@ -1429,3 +1429,17 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
   1 run、7 items、0 drafts、9 正式 Revision、0 external action；保留该进度，不重置。
 - 本次使用新的本地修正 Commit，不 amend、不改写阶段 8 实现 Commit；未 Push、未部署、
   未进入阶段 9，继续等待维护者人工验收。
+
+---
+
+## 2026-08-01：阶段 8 三方审计材料改为文件卡片内联展开
+
+- 维护者要求查看材料后不要跳到页面底部。现在点击某个 Diff 文件的查看按钮，会把四方
+  材料直接展开在该按钮下方；再次点击同一按钮或点击“关闭”均原地收起。切换到另一文件
+  时只展开新文件的材料，并用 `aria-expanded`/`aria-controls` 表达可访问状态。
+- 静态 UI 回归增加内联定位和收起文案断言；阶段 8 专项 10/10、完整 CMS 15 files
+  105/105、typecheck、wiki check 和 production build 均通过。独立自动测试数据库已按
+  名称和标签清理，`content/` 未修改。
+- 最终构建已重启到人工验收容器；1 run、7 items、0 drafts、9 正式 Revision、0 external
+  action 的现有验收进度保持不变。本次另建本地修正 Commit，不 amend、不 Push、不部署、
+  不进入阶段 9。
