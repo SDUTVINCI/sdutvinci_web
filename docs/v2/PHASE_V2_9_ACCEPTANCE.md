@@ -70,6 +70,7 @@ npm run v2:phase9:manual -- start
 3. 打开 PR 未涉及的 `wangziming`，修改一个公开字段并保存；无需构建/部署，刷新
    `http://127.0.0.1:34172/team/wangziming` 应立即变化。同时刷新
    `http://127.0.0.1:34174/team/wangziming`，应仍显示 Git 基线值，证明回退开关独立有效。
+   隔离导出 Worker 最多约 2 秒后会把新 Revision 确定性导出到本地内容仓库。
 4. 核对版本从 v1 增加，版本历史有 SHA；恢复旧版本后应创建更高的新版本，不覆盖历史。
 5. 在账号绑定面板绑定/解绑 `phase9admin`，确认资料版本不增加、公开 Markdown 字段不出现账号。
 6. 进入“外部内容导入”，仓库保持 `SDUTVINCI/sdutvinci_content`，PR 填 `9`，执行完整
@@ -85,7 +86,8 @@ npm run v2:phase9:manual -- start
 10. 不需要也不要连接真实 GitHub；全部 PR API、评论和关闭都只指向回环 mock。
 11. 运行 `npm run v2:phase9:manual -- inspect`，记录 members、Revision、PR run/item、
    pending proposal、member Outbox、binding、内容仓库成员文件和 snapshot members 数量；
-   后两项应均为 32。
+   后两项应均为 32，`member_export_jobs_succeeded` 应等于全部 member jobs，且
+   `repository_matches_database=yes`。
 
 ## 5. 异常时保留证据
 
@@ -102,7 +104,7 @@ npm run v2:phase9:manual -- inspect
 npm run v2:phase9:manual -- stop
 ```
 
-脚本会先核对 label 和 marker，再精确删除四个阶段 9 容器与临时目录。应用回滚只用普通
+脚本会先核对 label 和 marker，再精确删除五个阶段 9 容器与临时目录。应用回滚只用普通
 `git revert <阶段9实现Commit>`；保留 expand-only `0017`、Revision、Proposal、Outbox 与审计，
 不执行 down migration。公开读取可临时显式切回 `CONTENT_SOURCE_MEMBERS=legacy_git`。
 

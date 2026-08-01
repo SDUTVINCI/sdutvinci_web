@@ -7,6 +7,7 @@ container_name="vinci-v2-phase9-manual-test-db"
 application_container_name="vinci-v2-phase9-manual-test-app"
 rollback_container_name="vinci-v2-phase9-manual-test-rollback-app"
 mock_container_name="vinci-v2-phase9-manual-test-mock"
+worker_container_name="vinci-v2-phase9-manual-test-export-worker"
 database_name="vinci_v2_phase9_manual_test"
 database_user="phase9_manual_test"
 database_password="phase9_manual_test_only"
@@ -33,7 +34,7 @@ require_owned_state() {
 
 stop_resources() {
   [[ ! -e "${state_root}" ]] || require_owned_state
-  for target_name in "${application_container_name}" "${rollback_container_name}" "${mock_container_name}" "${container_name}"; do
+  for target_name in "${worker_container_name}" "${application_container_name}" "${rollback_container_name}" "${mock_container_name}" "${container_name}"; do
     if docker inspect "${target_name}" >/dev/null 2>&1; then
       is_owned_container "${target_name}" || { echo "拒绝删除不属于阶段 9 的同名容器。" >&2; return 1; }
       docker rm -f "${target_name}" >/dev/null
@@ -63,8 +64,24 @@ wait_for_app() {
   return 1
 }
 
+wait_for_exports() {
+  local job_counts pending_or_processing failed
+  for _ in $(seq 1 60); do
+    job_counts="$(docker exec "${container_name}" psql -U "${database_user}" -d "${database_name}" -Atc \
+      "select count(*) filter (where status in ('pending', 'processing'))||':'||count(*) filter (where status='failed') from content_export_jobs;")"
+    pending_or_processing="${job_counts%%:*}"
+    failed="${job_counts##*:}"
+    if [[ "${pending_or_processing}" == "0" ]]; then
+      [[ "${failed}" == "0" ]] || { echo "成员导出 Worker 产生 ${failed} 个失败任务。" >&2; return 1; }
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
 start_resources() {
-  if docker inspect "${container_name}" >/dev/null 2>&1 || docker inspect "${application_container_name}" >/dev/null 2>&1 || docker inspect "${rollback_container_name}" >/dev/null 2>&1 || docker inspect "${mock_container_name}" >/dev/null 2>&1 || [[ -e "${state_root}" ]]; then
+  if docker inspect "${container_name}" >/dev/null 2>&1 || docker inspect "${application_container_name}" >/dev/null 2>&1 || docker inspect "${rollback_container_name}" >/dev/null 2>&1 || docker inspect "${mock_container_name}" >/dev/null 2>&1 || docker inspect "${worker_container_name}" >/dev/null 2>&1 || [[ -e "${state_root}" ]]; then
     echo "阶段 9 人工验收资源已存在；请先核对并运行 $0 stop。" >&2
     return 1
   fi
@@ -124,6 +141,21 @@ start_resources() {
     -e S3_PUBLIC_BASE_URL=http://127.0.0.1:1/phase9-test \
     node:24-bookworm-slim node .output/server/index.mjs >/dev/null
   wait_for_app "${rollback_port}"
+  docker run -d --name "${worker_container_name}" --label "${resource_label}" --network host \
+    --user "$(id -u):$(id -g)" \
+    -v "${repository_root}:${repository_root}:ro" -v "${state_root}:${state_root}" -w "${repository_root}" \
+    -e NODE_ENV=test -e "DATABASE_URL=${database_url}" \
+    -e CONTENT_REPOSITORY_ID=SDUTVINCI/sdutvinci_content -e CONTENT_EXPORT_MODE=enabled \
+    -e "CONTENT_EXPORT_REMOTE_URL=${state_root}/content-remote.git" -e CONTENT_EXPORT_REMOTE=origin \
+    -e CONTENT_EXPORT_BRANCH=main -e "CONTENT_EXPORT_WORKSPACE=${state_root}/export-workspace" \
+    -e CONTENT_EXPORT_AUTHOR_NAME="Vinci Phase 9 Test Exporter" \
+    -e CONTENT_EXPORT_AUTHOR_EMAIL=phase9-export@example.invalid -e CONTENT_EXPORT_BATCH_SIZE=50 \
+    -e CONTENT_EXPORT_POLL_SECONDS=2 -e CONTENT_EXPORT_LEASE_SECONDS=30 -e CONTENT_EXPORT_MAX_ATTEMPTS=3 \
+    -e CONTENT_EXPORT_RETRY_BASE_SECONDS=1 -e CONTENT_EXPORT_RETRY_MAX_SECONDS=2 \
+    -e CONTENT_EXPORT_TEST_MODE=true -e "CMS_CONTENT_ROOT=${repository_root}/content" \
+    -e "CMS_GIT_WORKTREE=${state_root}/legacy-cms-worktree-do-not-create" \
+    node:24-bookworm ./node_modules/.bin/tsx scripts/v2-content-export-worker.ts >/dev/null
+  wait_for_exports
   trap - ERR INT TERM
   echo "阶段 9 隔离 CMS：http://127.0.0.1:${application_port}/cms/login"
   echo "账号：phase9admin"
@@ -137,10 +169,11 @@ show_status() {
   is_owned_container "${application_container_name}" && echo "隔离应用：运行中且归属正确" || echo "隔离应用：未运行"
   is_owned_container "${rollback_container_name}" && echo "legacy Git 回退应用：运行中且归属正确" || echo "legacy Git 回退应用：未运行"
   is_owned_container "${mock_container_name}" && echo "mock GitHub：运行中且归属正确" || echo "mock GitHub：未运行"
+  is_owned_container "${worker_container_name}" && echo "成员导出 Worker：运行中且归属正确" || echo "成员导出 Worker：未运行"
 }
 
 inspect_resources() {
-  local repository_member_files snapshot_members
+  local database_member_hashes repository_member_hashes repository_member_files snapshot_members
   require_owned_state
   is_owned_container "${container_name}" || { echo "隔离数据库未运行。" >&2; return 1; }
   docker exec "${container_name}" psql -U "${database_user}" -d "${database_name}" -Atc \
@@ -150,11 +183,18 @@ inspect_resources() {
      select 'pr_items='||count(*) from content_pr_import_items;
      select 'pending_proposals='||count(*) from member_proposals where status='pending';
      select 'member_export_jobs='||count(*) from content_export_jobs where target_type='member';
+     select 'member_export_jobs_'||status||'='||count(*) from content_export_jobs where target_type='member' group by status order by status;
      select 'bindings='||count(*) from user_members;"
   repository_member_files="$(git --git-dir="${state_root}/content-remote.git" ls-tree -r --name-only main -- members | wc -l | tr -d ' ')"
   snapshot_members="$(git --git-dir="${state_root}/content-remote.git" show main:.vinci/snapshot.json | node -e 'let input="";process.stdin.on("data",chunk=>input+=chunk).on("end",()=>console.log(JSON.parse(input).members.length))')"
   echo "repository_member_files=${repository_member_files}"
   echo "snapshot_members=${snapshot_members}"
+  database_member_hashes="$(docker exec "${container_name}" psql -U "${database_user}" -d "${database_name}" -Atc \
+    "select m.member_key||':'||r.content_hash from members m join member_revisions r on r.id=m.current_revision_id where m.deleted_at is null order by m.member_key;")"
+  repository_member_hashes="$(git --git-dir="${state_root}/content-remote.git" show main:.vinci/snapshot.json | node -e 'let input="";process.stdin.on("data",chunk=>input+=chunk).on("end",()=>console.log(JSON.parse(input).members.map(item=>`${item.memberKey}:${item.sha256}`).sort().join("\n")))')"
+  [[ "${database_member_hashes}" == "${repository_member_hashes}" ]] \
+    && echo "repository_matches_database=yes" \
+    || echo "repository_matches_database=no"
 }
 
 case "${action}" in
