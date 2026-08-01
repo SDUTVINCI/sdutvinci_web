@@ -122,6 +122,10 @@ request URL/status/response、Console 输出，并告诉 Codex；Codex 会保留
 
 ### 5.3 四方材料与三方算法
 
+材料标题依次显示为 `Base Source（PR 分支起点内容）`、
+`Current Source（数据库当前正式内容）`、`Proposed Source（PR 提议的新内容）` 和
+`Merge Result（三方合并后的草稿候选）`。
+
 1. 点 safe 的“查看 Base / Current / Proposed / Merge”。预期 Base=Current，Proposed 和
    Merge 都含“安全 PR 修改”。关闭材料。
 2. 点 automatic。预期 Base 两段都是 Base；Current 含“第一段数据库 Current 修改”；

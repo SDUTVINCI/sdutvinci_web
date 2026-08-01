@@ -37,6 +37,12 @@ const labels: Record<ContentImportClassification, string> = {
 }
 const isAdmin = computed(() => session.value?.user.roles.includes('admin') ?? false)
 const artifactKeys = ['baseSource', 'currentSource', 'proposedSource', 'mergedSource'] as const
+const artifactLabels: Record<(typeof artifactKeys)[number], string> = {
+  baseSource: 'Base Source（PR 分支起点内容）',
+  currentSource: 'Current Source（数据库当前正式内容）',
+  proposedSource: 'Proposed Source（PR 提议的新内容）',
+  mergedSource: 'Merge Result（三方合并后的草稿候选）'
+}
 const selectable = computed(() => run.value?.items.filter(item => item.importable && item.status === 'pending') || [])
 const categoryCounts = computed(() => Object.entries(
   (run.value?.items || []).reduce<Record<string, number>>((result, item) => {
@@ -129,7 +135,7 @@ const externalAction = async (action: 'comment' | 'close') => {
       <div>
         <p class="cms-eyebrow">PULL REQUEST / THREE-WAY REVIEW</p>
         <h1>外部内容导入</h1>
-        <p>只读取配置内容仓库 PR 的 Base、Head 与 Diff；数据库仍是正式内容权威。</p>
+        <p>只读取配置内容仓库 PR 的 Base（分支起点）、Head（最新提交）与 Diff（变更文件）；数据库仍是正式内容权威。</p>
       </div>
     </header>
 
@@ -154,8 +160,8 @@ const externalAction = async (action: 'comment' | 'close') => {
     <template v-if="run">
       <section class="cms-card cms-import-summary">
         <h2>PR #{{ run.pullRequestNumber }} · {{ run.status }}</h2>
-        <p>Base <code>{{ run.baseCommitHash }}</code></p>
-        <p>Head <code>{{ run.headCommitHash }}</code></p>
+        <p>Base Commit（PR 分支起点提交） <code>{{ run.baseCommitHash }}</code></p>
+        <p>Head Commit（PR 最新提交） <code>{{ run.headCommitHash }}</code></p>
         <p>{{ run.itemCount }} 个 Diff 文件 · {{ run.importableCount }} 个可导入 · {{ run.conflictCount }} 个阻止/冲突 · {{ run.importedCount }} 个已导入</p>
         <p>审计状态：Dry Run 已记录；外部动作 {{ run.externalActions.length }} 条。</p>
         <ul class="cms-import-categories">
@@ -192,7 +198,7 @@ const externalAction = async (action: 'comment' | 'close') => {
             <summary>冲突 / 路径 / 引用审计详情</summary>
             <pre>{{ JSON.stringify(item.conflictDetails, null, 2) }}</pre>
           </details>
-          <button class="cms-button cms-button-quiet" type="button" @click="showArtifact(item.id)">查看 Base / Current / Proposed / Merge</button>
+          <button class="cms-button cms-button-quiet" type="button" @click="showArtifact(item.id)">查看 Base（分支起点）/ Current（数据库当前）/ Proposed（PR 提议）/ Merge（合并结果）</button>
         </article>
       </div>
     </template>
@@ -200,7 +206,7 @@ const externalAction = async (action: 'comment' | 'close') => {
     <section v-if="artifact" class="cms-card cms-import-artifact">
       <div class="cms-section-heading"><h2>三方审计材料</h2><button class="cms-button cms-button-quiet" @click="artifact = null">关闭</button></div>
       <div v-for="key in artifactKeys" :key="key">
-        <h3>{{ key }}</h3>
+        <h3>{{ artifactLabels[key] }}</h3>
         <pre>{{ artifact[key] ?? '（无）' }}</pre>
       </div>
     </section>

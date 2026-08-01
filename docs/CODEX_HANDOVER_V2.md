@@ -1413,3 +1413,19 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
 
 - 阶段 8 独立本地 Commit 由最终回复报告完整 SHA。
 - 未 Push、未部署、未自动 Merge；现在停止开发，等待维护者明确人工验收，不进入阶段 9。
+
+---
+
+## 2026-08-01：阶段 8 人工验收前四方材料中文标签修正
+
+- 维护者反馈 `baseSource` 等字段名不易理解。CMS 现显示
+  `Base Source（PR 分支起点内容）`、`Current Source（数据库当前正式内容）`、
+  `Proposed Source（PR 提议的新内容）`、`Merge Result（三方合并后的草稿候选）`；页面
+  摘要、说明和查看按钮中的 Base、Head、Diff 也补充中文解释，英文仍保留以对应审计字段。
+- 新增静态 UI 断言；阶段 8 专项 10/10、完整 CMS 15 files 105/105、typecheck、wiki check
+  和 production build 均通过。独立测试数据库已按名称和标签精确清理，没有真实 GitHub
+  请求或写操作，代码仓库 `content/` 未修改。
+- 最终构建已重启到原人工验收容器。维护者此前已执行一次 Dry Run，当前只读状态为
+  1 run、7 items、0 drafts、9 正式 Revision、0 external action；保留该进度，不重置。
+- 本次使用新的本地修正 Commit，不 amend、不改写阶段 8 实现 Commit；未 Push、未部署、
+  未进入阶段 9，继续等待维护者人工验收。
