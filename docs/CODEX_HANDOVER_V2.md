@@ -1494,3 +1494,23 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
   补充；专项 35/35、完整 CMS 108/108、完整测试 123/123、typecheck、build、0000→0017
   fresh Migration、content audit、wiki check 与 diff check 已通过。人工环境另提供 34174
   legacy Git 只读回退站点；现在应停止开发并等待人工验收，不进入阶段 10。
+
+---
+
+## 2026-08-02：阶段 9 人工验收 legacy Git 回退站点修正
+
+- 维护者在浏览器发现 34174 没有成员。现场保留并核对：34172 成员 API/列表/详情均为 200，
+  34174 `/team` 外壳为 200，但 Nuxt Content 查询为 `SQLITE_CANTOPEN`，成员详情为 404。
+  根因是回退容器只读挂载仓库，而 Node preset 把运行时 `contents.sqlite` 相对
+  `.output/server/index.mjs` 解析到只读构建目录；原健康检查只检查 `/team` 状态码，未发现空列表。
+- 34174 现在通过 `NITRO_CONTENT_DATABASE_FILENAME` 把运行时 SQLite 精确指向阶段 9 临时目录；
+  源码和 `.output` 继续只读。回退启动检查必须从 `/team/wangziming` 实际读到“王子铭”。新增
+  `restart-rollback` 只替换带正确 label 的回退容器，不重置 PostgreSQL、Revision、Outbox、
+  本地内容仓库、PR fixture 或其他验收进度。
+- 原地修复后 34172/34174 的 `/team` 和 `/team/wangziming` 均为 200，两边各渲染 32 个唯一
+  成员链接，34174 不再记录 SQLite 错误。维护者已完成的在线修改与恢复得到保留：当前为
+  32 members、36 revisions、36/36 member export jobs succeeded，仓库/snapshot 各 32，
+  `repository_matches_database=yes`，PR run/item/proposal 仍为 0。
+- 新的带 label 隔离 PostgreSQL 上重跑阶段 9 专项 35/35、完整 CMS 108/108、typecheck、
+  wiki check 和 production build 均通过，测试库随后精确清理。修正使用新的本地 Commit，
+  不 amend、不 Push、不部署、不进入阶段 10；继续等待维护者从回退检查处恢复人工验收。

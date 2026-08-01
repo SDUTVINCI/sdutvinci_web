@@ -64,6 +64,45 @@ wait_for_app() {
   return 1
 }
 
+wait_for_legacy_app() {
+  for _ in $(seq 1 60); do
+    curl --fail --silent "http://127.0.0.1:${rollback_port}/team/wangziming" \
+      | grep -q '王子铭' && return 0
+    sleep 1
+  done
+  return 1
+}
+
+start_rollback_app() {
+  mkdir -p "${state_root}/legacy-runtime-root"
+  docker run -d --name "${rollback_container_name}" --label "${resource_label}" --network host \
+    -v "${repository_root}:${repository_root}:ro" -v "${state_root}:${state_root}" \
+    -w "${state_root}/legacy-runtime-root" \
+    -e NODE_ENV=test -e "DATABASE_URL=${database_url}" -e NITRO_HOST=127.0.0.1 -e "NITRO_PORT=${rollback_port}" \
+    -e "NITRO_CONTENT_DATABASE_FILENAME=${state_root}/legacy-runtime-root/contents.sqlite" \
+    -e "NUXT_PUBLIC_SITE_URL=http://127.0.0.1:${rollback_port}" \
+    -e CMS_AUTH_SECRET=phase9-manual-rollback-secret-32-bytes-minimum -e CMS_SECURE_COOKIES=false \
+    -e "CMS_CONTENT_ROOT=${repository_root}/content" -e CONTENT_CANDIDATE_ENV=test \
+    -e CONTENT_PUBLISH_MODE=database -e CONTENT_SOURCE_NEWS=database -e CONTENT_SOURCE_WIKI=database \
+    -e CONTENT_SOURCE_MEMBERS=legacy_git -e CONTENT_EXPORT_MODE=disabled -e CONTENT_PR_IMPORT_MODE=disabled \
+    -e S3_ENDPOINT=http://127.0.0.1:1 -e S3_REGION=phase9-test -e S3_BUCKET=phase9-test \
+    -e S3_ACCESS_KEY_ID=phase9-test -e S3_SECRET_ACCESS_KEY=phase9-test \
+    -e S3_PUBLIC_BASE_URL=http://127.0.0.1:1/phase9-test \
+    node:24-bookworm-slim node "${repository_root}/.output/server/index.mjs" >/dev/null
+  wait_for_legacy_app
+}
+
+restart_rollback_app() {
+  require_owned_state
+  if docker inspect "${rollback_container_name}" >/dev/null 2>&1; then
+    is_owned_container "${rollback_container_name}" || { echo "拒绝删除不属于阶段 9 的回退容器。" >&2; return 1; }
+    docker rm -f "${rollback_container_name}" >/dev/null
+  fi
+  rm -rf -- "${state_root}/legacy-runtime-root"
+  start_rollback_app
+  echo "legacy Git 回退站点已保留现有验收数据并重启：http://127.0.0.1:${rollback_port}/team"
+}
+
 wait_for_exports() {
   local job_counts pending_or_processing failed
   for _ in $(seq 1 60); do
@@ -128,19 +167,7 @@ start_resources() {
     -e S3_PUBLIC_BASE_URL=http://127.0.0.1:1/phase9-test \
     node:24-bookworm-slim node .output/server/index.mjs >/dev/null
   wait_for_app "${application_port}"
-  docker run -d --name "${rollback_container_name}" --label "${resource_label}" --network host \
-    -v "${repository_root}:${repository_root}:ro" -w "${repository_root}" \
-    -e NODE_ENV=test -e "DATABASE_URL=${database_url}" -e NITRO_HOST=127.0.0.1 -e "NITRO_PORT=${rollback_port}" \
-    -e "NUXT_PUBLIC_SITE_URL=http://127.0.0.1:${rollback_port}" \
-    -e CMS_AUTH_SECRET=phase9-manual-rollback-secret-32-bytes-minimum -e CMS_SECURE_COOKIES=false \
-    -e "CMS_CONTENT_ROOT=${repository_root}/content" -e CONTENT_CANDIDATE_ENV=test \
-    -e CONTENT_PUBLISH_MODE=database -e CONTENT_SOURCE_NEWS=database -e CONTENT_SOURCE_WIKI=database \
-    -e CONTENT_SOURCE_MEMBERS=legacy_git -e CONTENT_EXPORT_MODE=disabled -e CONTENT_PR_IMPORT_MODE=disabled \
-    -e S3_ENDPOINT=http://127.0.0.1:1 -e S3_REGION=phase9-test -e S3_BUCKET=phase9-test \
-    -e S3_ACCESS_KEY_ID=phase9-test -e S3_SECRET_ACCESS_KEY=phase9-test \
-    -e S3_PUBLIC_BASE_URL=http://127.0.0.1:1/phase9-test \
-    node:24-bookworm-slim node .output/server/index.mjs >/dev/null
-  wait_for_app "${rollback_port}"
+  start_rollback_app
   docker run -d --name "${worker_container_name}" --label "${resource_label}" --network host \
     --user "$(id -u):$(id -g)" \
     -v "${repository_root}:${repository_root}:ro" -v "${state_root}:${state_root}" -w "${repository_root}" \
@@ -167,13 +194,19 @@ start_resources() {
 show_status() {
   is_owned_container "${container_name}" && echo "隔离数据库：运行中且归属正确" || echo "隔离数据库：未运行"
   is_owned_container "${application_container_name}" && echo "隔离应用：运行中且归属正确" || echo "隔离应用：未运行"
-  is_owned_container "${rollback_container_name}" && echo "legacy Git 回退应用：运行中且归属正确" || echo "legacy Git 回退应用：未运行"
+  if is_owned_container "${rollback_container_name}"; then
+    curl --fail --silent "http://127.0.0.1:${rollback_port}/team/wangziming" | grep -q '王子铭' \
+      && echo "legacy Git 回退应用：运行中、归属正确且成员读取正常" \
+      || echo "legacy Git 回退应用：运行中但成员读取异常"
+  else
+    echo "legacy Git 回退应用：未运行"
+  fi
   is_owned_container "${mock_container_name}" && echo "mock GitHub：运行中且归属正确" || echo "mock GitHub：未运行"
   is_owned_container "${worker_container_name}" && echo "成员导出 Worker：运行中且归属正确" || echo "成员导出 Worker：未运行"
 }
 
 inspect_resources() {
-  local database_member_hashes repository_member_hashes repository_member_files snapshot_members
+  local database_member_hashes legacy_member_links repository_member_hashes repository_member_files snapshot_members
   require_owned_state
   is_owned_container "${container_name}" || { echo "隔离数据库未运行。" >&2; return 1; }
   docker exec "${container_name}" psql -U "${database_user}" -d "${database_name}" -Atc \
@@ -189,6 +222,9 @@ inspect_resources() {
   snapshot_members="$(git --git-dir="${state_root}/content-remote.git" show main:.vinci/snapshot.json | node -e 'let input="";process.stdin.on("data",chunk=>input+=chunk).on("end",()=>console.log(JSON.parse(input).members.length))')"
   echo "repository_member_files=${repository_member_files}"
   echo "snapshot_members=${snapshot_members}"
+  legacy_member_links="$(curl --fail --silent "http://127.0.0.1:${rollback_port}/team" \
+    | grep -oE 'href="/team/[^"#?]+' | sort -u | wc -l | tr -d ' ')"
+  echo "legacy_member_links=${legacy_member_links}"
   database_member_hashes="$(docker exec "${container_name}" psql -U "${database_user}" -d "${database_name}" -Atc \
     "select m.member_key||':'||r.content_hash from members m join member_revisions r on r.id=m.current_revision_id where m.deleted_at is null order by m.member_key;")"
   repository_member_hashes="$(git --git-dir="${state_root}/content-remote.git" show main:.vinci/snapshot.json | node -e 'let input="";process.stdin.on("data",chunk=>input+=chunk).on("end",()=>console.log(JSON.parse(input).members.map(item=>`${item.memberKey}:${item.sha256}`).sort().join("\n")))')"
@@ -199,8 +235,9 @@ inspect_resources() {
 
 case "${action}" in
   start) start_resources ;;
+  restart-rollback) restart_rollback_app ;;
   status) show_status ;;
   inspect) inspect_resources ;;
   stop) stop_resources ;;
-  *) echo "用法：$0 {start|status|inspect|stop}" >&2; exit 2 ;;
+  *) echo "用法：$0 {start|restart-rollback|status|inspect|stop}" >&2; exit 2 ;;
 esac

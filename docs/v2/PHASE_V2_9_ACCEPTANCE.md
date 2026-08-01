@@ -60,7 +60,9 @@ npm run v2:phase9:manual -- start
 `/tmp/vinci-v2-phase9-manual-test` marker。
 
 另有 `http://127.0.0.1:34174/team` 以 `CONTENT_SOURCE_MEMBERS=legacy_git` 启动，只用于
-与 34172 的数据库权威页面并排核对回退开关；它不开放导入，也不写数据库。
+与 34172 的数据库权威页面并排核对回退开关；它不开放导入，也不写 PostgreSQL。源码和
+构建产物保持只读，Nuxt Content 运行时 SQLite 只写入阶段 9 临时目录。启动健康检查必须
+实际读到 `wangziming`，空列表或详情 404 会直接拒绝启动。
 
 ## 4. 维护者一次性浏览器验收
 
