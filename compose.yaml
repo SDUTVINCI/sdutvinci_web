@@ -40,7 +40,7 @@ x-app: &app
     CONTENT_PUBLISH_MODE: ${CONTENT_PUBLISH_MODE:-database}
     CONTENT_SOURCE_NEWS: ${CONTENT_SOURCE_NEWS:-database}
     CONTENT_SOURCE_WIKI: ${CONTENT_SOURCE_WIKI:-database}
-    CONTENT_SOURCE_MEMBERS: ${CONTENT_SOURCE_MEMBERS:-legacy_git}
+    CONTENT_SOURCE_MEMBERS: ${CONTENT_SOURCE_MEMBERS:-database}
     CONTENT_CANDIDATE_ENV: ${CONTENT_CANDIDATE_ENV:-production}
     # Phase 8 imports selected PR diff items into drafts/proposals only.
     CONTENT_PR_IMPORT_MODE: ${CONTENT_PR_IMPORT_MODE:-disabled}

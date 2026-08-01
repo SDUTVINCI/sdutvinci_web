@@ -16,6 +16,9 @@ import {
   contentPrImportItems,
   contentPrImportRuns,
   drafts,
+  memberProposals,
+  memberRevisions,
+  members,
   reviewEvents,
   users
 } from '../server/db/schema'
@@ -36,6 +39,8 @@ import {
 import { mergeMarkdownThreeWay } from '../server/services/content-import-merge'
 import { publishCmsDraftDatabase } from '../server/services/cms-publishing-database'
 import { getPublicArticleFromDatabase } from '../server/services/public-content'
+import { applyMemberProposal } from '../server/services/cms-members'
+import { memberProfileFromMarkdown, profileRecord, serializeMemberProfile } from '../server/services/member-profile'
 import {
   buildContentRepositoryMetadata,
   serializeContentRevision
@@ -68,6 +73,20 @@ interface SeedArticle {
     bytes: number
   }
 }
+
+interface SeedMember {
+  memberId: string
+  baseRevisionId: string
+  currentRevisionId: string
+  path: string
+  baseSource: string
+  snapshotFile: ReturnType<typeof seedMemberSnapshotShape>
+}
+
+const seedMemberSnapshotShape = (value: {
+  memberId: string, memberKey: string, revisionId: string, revisionNumber: number,
+  sourcePath: string, path: string, sha256: string, bytes: number
+}) => value
 
 class FakeGitHub {
   pull: GitHubPullRequest = {
@@ -218,6 +237,53 @@ suite('V2 阶段 8 本地 Markdown PR 导入与三方冲突', () => {
         sha256: baseSerialized.sha256,
         bytes: baseSerialized.bytes
       }
+    }
+  }
+
+  const seedMember = async (
+    memberKey: string,
+    baseSource: string,
+    currentTransform?: (source: string) => string
+  ): Promise<SeedMember> => {
+    const memberId = randomUUID()
+    const baseRevisionId = randomUUID()
+    const sourcePath = `${memberKey}.md`
+    const baseProfile = memberProfileFromMarkdown(baseSource, sourcePath)
+    const baseSerialized = serializeMemberProfile(baseProfile)
+    await getDatabase().insert(members).values({
+      id: memberId, memberKey, name: baseProfile.name, avatarUrl: baseProfile.avatarUrl,
+      sourcePath, role: baseProfile.role, memberType: baseProfile.memberType,
+      seasons: baseProfile.seasons, advisorSeasons: baseProfile.advisorSeasons,
+      grade: baseProfile.grade, affiliation: baseProfile.affiliation, links: baseProfile.links,
+      body: baseProfile.body, sortOrder: baseProfile.sortOrder, metadata: baseProfile.metadata
+    })
+    await getDatabase().insert(memberRevisions).values({
+      id: baseRevisionId, memberId, revisionNumber: 1, memberKey, sourcePath,
+      profile: profileRecord(baseProfile), markdownSource: baseSerialized.source,
+      contentHash: baseSerialized.sha256, sourceKind: 'backfill'
+    })
+    let currentRevisionId = baseRevisionId
+    if (currentTransform) {
+      const currentProfile = memberProfileFromMarkdown(currentTransform(baseSerialized.source), sourcePath)
+      const currentSerialized = serializeMemberProfile(currentProfile)
+      currentRevisionId = randomUUID()
+      await getDatabase().insert(memberRevisions).values({
+        id: currentRevisionId, memberId, revisionNumber: 2, memberKey, sourcePath,
+        profile: profileRecord(currentProfile), markdownSource: currentSerialized.source,
+        contentHash: currentSerialized.sha256, sourceKind: 'cms_update'
+      })
+      await getDatabase().update(members).set({
+        role: currentProfile.role, grade: currentProfile.grade, version: 2
+      }).where(eq(members.id, memberId))
+    }
+    await getDatabase().update(members).set({ currentRevisionId }).where(eq(members.id, memberId))
+    return {
+      memberId, baseRevisionId, currentRevisionId, path: baseSerialized.path,
+      baseSource: baseSerialized.source,
+      snapshotFile: seedMemberSnapshotShape({
+        memberId, memberKey, revisionId: baseRevisionId, revisionNumber: 1,
+        sourcePath, path: baseSerialized.path, sha256: baseSerialized.sha256, bytes: baseSerialized.bytes
+      })
     }
   }
 
@@ -391,6 +457,83 @@ suite('V2 阶段 8 本地 Markdown PR 导入与三方冲突', () => {
     expect((await getDatabase().select({ value: count() }).from(drafts))[0]!.value).toBe(0)
     expect((await getDatabase().select().from(articles).where(eq(articles.id, seeded.articleId)))[0]!.currentRevisionId)
       .toBe(nextRevisionId)
+  })
+
+  it('成员 PR 只生成字段级提案，冲突和敏感字段阻止，明确接受后才创建 Revision', async () => {
+    const source = (id: string, name: string, extra = '') =>
+      `---\nid: ${id}\nname: ${name}\nrole: Member\ngrade: 2024\n${extra}---\nprofile\n`
+    const safe = await seedMember('membersafe', source('membersafe', 'Safe'))
+    const merge = await seedMember('membermerge', source('membermerge', 'Merge'), value => value.replace('role: Member', 'role: Captain'))
+    const conflict = await seedMember('memberconflict', source('memberconflict', 'Conflict'), value => value.replace('role: Member', 'role: Captain'))
+    const sensitive = await seedMember('membersensitive', source('membersensitive', 'Sensitive'))
+    const deleted = await seedMember('memberdelete', source('memberdelete', 'Delete'))
+    const seeded = [safe, merge, conflict, sensitive, deleted]
+    const metadata = buildContentRepositoryMetadata([], [], new Date('2026-01-01T00:00:00.000Z'), seeded.map(item => item.snapshotFile))
+    const fake = new FakeGitHub()
+    fake.contents.set(`${BASE}:.vinci/snapshot.json`, metadata.snapshotSource)
+    for (const item of seeded) fake.contents.set(`${BASE}:${item.path}`, item.baseSource)
+    fake.contents.set(`${HEAD}:${safe.path}`, safe.baseSource.replace('name: Safe', 'name: Safe Proposed'))
+    fake.contents.set(`${HEAD}:${merge.path}`, merge.baseSource.replace('grade: 2024', 'grade: 2025'))
+    fake.contents.set(`${HEAD}:${conflict.path}`, conflict.baseSource.replace('role: Member', 'role: Advisor'))
+    fake.contents.set(`${HEAD}:${sensitive.path}`, sensitive.baseSource.replace(/grade:.*\n/, 'metadata:\n  account: stolen\n'))
+    fake.files = [
+      { filename: safe.path, status: 'modified', changes: 2 },
+      { filename: merge.path, status: 'modified', changes: 2 },
+      { filename: conflict.path, status: 'modified', changes: 2 },
+      { filename: sensitive.path, status: 'modified', changes: 2 },
+      { filename: deleted.path, status: 'removed', changes: 2 }
+    ]
+    const run = (await dryRunContentPrImport(actorUserId, {
+      repository: 'SDUTVINCI/sdutvinci_content', pullRequestNumber: 8
+    }, fake as unknown as ContentImportGitHubClient))!
+    expect(run.items.map(item => item.classification)).toEqual([
+      'member_safe_change', 'member_auto_merge', 'member_conflict',
+      'member_sensitive_rejected', 'member_deletion_proposal'
+    ])
+    expect(run.items.every(item => item.targetType === 'member')).toBe(true)
+    expect((await getContentPrImportArtifact(run.id, run.items[3]!.id))?.proposedSource).toBeNull()
+    const importable = run.items.filter(item => item.importable).map(item => item.id)
+    await importContentPrItems(run.id, importable, actorUserId)
+    expect(await getDatabase().select().from(memberProposals)).toHaveLength(3)
+    expect((await getDatabase().select().from(members).where(eq(members.id, safe.memberId)))[0]!.name).toBe('Safe')
+    const safeItem = (await getDatabase().select().from(contentPrImportItems)
+      .where(eq(contentPrImportItems.id, run.items[0]!.id)))[0]!
+    await applyMemberProposal(safeItem.memberProposalId!, 1, 'APPLY_MEMBER_PROPOSAL', actorUserId)
+    expect((await getDatabase().select().from(members).where(eq(members.id, safe.memberId)))[0])
+      .toMatchObject({ name: 'Safe Proposed', version: 2 })
+    expect(await getDatabase().select().from(memberRevisions).where(eq(memberRevisions.memberId, safe.memberId))).toHaveLength(2)
+    await importContentPrItems(run.id, importable, actorUserId)
+    expect(await getDatabase().select().from(memberProposals)).toHaveLength(3)
+  })
+
+  it('成员 Dry Run 后 Current 再变化会阻止提案且不覆盖正式资料', async () => {
+    const seeded = await seedMember('memberstale', '---\nid: memberstale\nname: Stale\nrole: Member\n---\nbase\n')
+    const metadata = buildContentRepositoryMetadata([], [], new Date(), [seeded.snapshotFile])
+    const fake = new FakeGitHub()
+    fake.contents.set(`${BASE}:.vinci/snapshot.json`, metadata.snapshotSource)
+    fake.contents.set(`${BASE}:${seeded.path}`, seeded.baseSource)
+    fake.contents.set(`${HEAD}:${seeded.path}`, seeded.baseSource.replace('name: Stale', 'name: Proposed'))
+    fake.files = [{ filename: seeded.path, status: 'modified', changes: 2 }]
+    const run = (await dryRunContentPrImport(actorUserId, {
+      repository: 'SDUTVINCI/sdutvinci_content', pullRequestNumber: 8
+    }, fake as unknown as ContentImportGitHubClient))!
+    const nextSource = seeded.baseSource.replace('name: Stale', 'name: Database Newer')
+    const profile = memberProfileFromMarkdown(nextSource, 'memberstale.md')
+    const serialized = serializeMemberProfile(profile)
+    const nextRevisionId = randomUUID()
+    await getDatabase().insert(memberRevisions).values({
+      id: nextRevisionId, memberId: seeded.memberId, revisionNumber: 2,
+      memberKey: 'memberstale', sourcePath: 'memberstale.md', profile: profileRecord(profile),
+      markdownSource: serialized.source, contentHash: serialized.sha256, sourceKind: 'cms_update'
+    })
+    await getDatabase().update(members).set({
+      name: profile.name, currentRevisionId: nextRevisionId, version: 2
+    }).where(eq(members.id, seeded.memberId))
+    const result = await importContentPrItems(run.id, [run.items[0]!.id], actorUserId)
+    expect(result.results[0]).toMatchObject({ blocked: true, proposalId: null })
+    expect(await getDatabase().select().from(memberProposals)).toEqual([])
+    expect((await getDatabase().select().from(members).where(eq(members.id, seeded.memberId)))[0]!.name)
+      .toBe('Database Newer')
   })
 
   it('新增、同目录重命名和删除都只先建提案，人工批准发布后才生效', async () => {

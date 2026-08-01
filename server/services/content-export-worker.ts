@@ -37,6 +37,7 @@ interface ClaimedContentExportJob {
   targetType: string
   targetId: string
   revisionId: string | null
+  memberRevisionId: string | null
   operation: string
   attemptCount: number
   targetPath: string | null
@@ -152,6 +153,7 @@ const claimJobs = async (
       target_type: string
       target_id: string
       revision_id: string | null
+      member_revision_id: string | null
       operation: string
       attempt_count: number
       target_path: string | null
@@ -169,7 +171,7 @@ const claimJobs = async (
           updated_at = now()
         where id = any($1::uuid[])
         returning
-          id, target_type, target_id, revision_id, operation, attempt_count,
+          id, target_type, target_id, revision_id, member_revision_id, operation, attempt_count,
           target_path, previous_path, expected_sha256
       `,
       [ids, owner, config.CONTENT_EXPORT_LEASE_SECONDS, runId]
@@ -182,6 +184,7 @@ const claimJobs = async (
         targetType: row.target_type,
         targetId: row.target_id,
         revisionId: row.revision_id,
+        memberRevisionId: row.member_revision_id,
         operation: row.operation,
         attemptCount: row.attempt_count,
         targetPath: row.target_path,
@@ -198,7 +201,8 @@ const claimJobs = async (
 }
 
 const verifyRepositoryBase = async (
-  affectedArticleIds: Set<string>
+  affectedArticleIds: Set<string>,
+  affectedMemberIds: Set<string>
 ) => {
   const config = getContentExportConfig()
   const snapshotSource = await readRepositoryFile(
@@ -230,6 +234,13 @@ const verifyRepositoryBase = async (
       throw new Error('CONTENT_EXPORT_BASE_DRIFT')
     }
   }
+  for (const file of parsed.members) {
+    if (affectedMemberIds.has(file.memberId)) continue
+    const source = await readRepositoryFile(config.CONTENT_EXPORT_WORKSPACE, file.path)
+    if (source === null || sha256ContentBytes(source) !== file.sha256) {
+      throw new Error('CONTENT_EXPORT_BASE_DRIFT')
+    }
+  }
 }
 
 const applyCurrentDatabaseState = async (
@@ -238,8 +249,10 @@ const applyCurrentDatabaseState = async (
   const config = getContentExportConfig()
   const snapshot = await loadDatabaseContentExportSnapshot()
   const itemByArticle = new Map(snapshot.items.map(item => [item.articleId, item]))
-  const affectedArticleIds = new Set(jobs.map(job => job.targetId))
-  await verifyRepositoryBase(affectedArticleIds)
+  const itemByMember = new Map(snapshot.memberItems.map(item => [item.memberId, item]))
+  const affectedArticleIds = new Set(jobs.filter(job => job.targetType === 'article').map(job => job.targetId))
+  const affectedMemberIds = new Set(jobs.filter(job => job.targetType === 'member').map(job => job.targetId))
+  await verifyRepositoryBase(affectedArticleIds, affectedMemberIds)
 
   let fileWriteCount = 0
   let fileDeleteCount = 0
@@ -249,13 +262,37 @@ const applyCurrentDatabaseState = async (
     sha256: string | null
   }>()
   const jobsByArticle = new Map<string, ClaimedContentExportJob[]>()
+  const jobsByMember = new Map<string, ClaimedContentExportJob[]>()
   for (const job of jobs) {
-    if (job.targetType !== 'article') {
-      throw new Error('CONTENT_EXPORT_MEMBER_NOT_ENABLED')
-    }
-    const grouped = jobsByArticle.get(job.targetId) || []
+    const target = job.targetType === 'article' ? jobsByArticle
+      : job.targetType === 'member' ? jobsByMember : null
+    if (!target) throw new Error('CONTENT_EXPORT_TARGET_INVALID')
+    const grouped = target.get(job.targetId) || []
     grouped.push(job)
-    jobsByArticle.set(job.targetId, grouped)
+    target.set(job.targetId, grouped)
+  }
+
+  for (const [memberId, memberJobs] of jobsByMember) {
+    const item = itemByMember.get(memberId)
+    if (!item) throw new Error('CONTENT_EXPORT_MEMBER_REVISION_MISSING')
+    if (item.deleted) {
+      if (await removeContentExportFile(item.serialized.path)) fileDeleteCount += 1
+      else noopCount += 1
+      for (const job of memberJobs) finalByJob.set(job.id, { path: null, sha256: null })
+      continue
+    }
+    const changed = await writeContentExportFile(item.serialized.path, item.serialized.source)
+    if (changed) fileWriteCount += 1
+    else noopCount += 1
+    for (const job of memberJobs) {
+      if (job.memberRevisionId === item.revisionId && job.targetPath && job.targetPath !== item.serialized.path) {
+        throw new Error('CONTENT_EXPORT_JOB_TARGET_MISMATCH')
+      }
+      if (job.memberRevisionId === item.revisionId && job.expectedSha256 && job.expectedSha256 !== item.serialized.sha256) {
+        throw new Error('CONTENT_EXPORT_JOB_HASH_MISMATCH')
+      }
+      finalByJob.set(job.id, { path: item.serialized.path, sha256: item.serialized.sha256 })
+    }
   }
 
   for (const [articleId, articleJobs] of jobsByArticle) {
@@ -584,7 +621,7 @@ export const applyContentTakeover = async (
       status: 'processing',
       workerId: workerId(),
       baseCommitHash: baseCommit,
-      jobCount: snapshot.items.length,
+      jobCount: snapshot.items.length + snapshot.memberItems.length,
       report: JSON.parse(JSON.stringify(report)) as Record<string, unknown>
     })
     let localCommitHash: string | null = null
@@ -612,6 +649,10 @@ export const applyContentTakeover = async (
       } else {
         noopCount += 1
       }
+    }
+    for (const item of snapshot.activeMemberItems) {
+      if (await writeContentExportFile(item.serialized.path, item.serialized.source)) fileWriteCount += 1
+      else noopCount += 1
     }
     for (const file of takeoverMetadataFiles(snapshot)) {
       if (await writeContentExportFile(file.path, file.source)) fileWriteCount += 1
@@ -646,6 +687,18 @@ export const applyContentTakeover = async (
             eq(contentExportJobs.targetId, item.articleId),
             ne(contentExportJobs.status, 'succeeded')
           ))
+      }
+      for (const item of snapshot.memberItems) {
+        await tx.update(contentExportJobs).set({
+          status: 'succeeded', lastError: null, lastErrorCode: null,
+          leaseOwner: null, leaseExpiresAt: null, latestRunId: runId,
+          exportedPath: item.deleted ? null : item.serialized.path,
+          exportedSha256: item.deleted ? null : item.serialized.sha256,
+          exportedCommitHash: commitHash, completedAt: new Date(), updatedAt: new Date()
+        }).where(and(
+          eq(contentExportJobs.targetType, 'member'),
+          eq(contentExportJobs.targetId, item.memberId), ne(contentExportJobs.status, 'succeeded')
+        ))
       }
       await tx
         .update(contentExportRuns)

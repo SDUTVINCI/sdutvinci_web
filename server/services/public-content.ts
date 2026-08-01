@@ -6,7 +6,8 @@ import {
   eq,
   ilike,
   isNull,
-  or
+  or,
+  sql
 } from 'drizzle-orm'
 import type {
   PublicArticle,
@@ -22,8 +23,6 @@ import {
   articles,
   members
 } from '../db/schema'
-import { readContentFile } from '../utils/cms-content-path'
-import { parseCmsMarkdown } from '../utils/cms-frontmatter'
 import {
   createPublicRevisionCacheKey,
   getCachedPublicRevision,
@@ -234,10 +233,7 @@ export const searchPublicArticlesFromDatabase = async (
   })
 }
 
-const toPublicMember = (
-  row: typeof members.$inferSelect,
-  body = ''
-): PublicMember => {
+const toPublicMember = (row: typeof members.$inferSelect): PublicMember => {
   const metadata = row.metadata || {}
   const memberKey = row.memberKey
   const updatedAt = row.updatedAt.toISOString()
@@ -251,9 +247,17 @@ const toPublicMember = (
     image: row.avatarUrl || (
       typeof metadata.image === 'string' ? metadata.image : null
     ),
-    body,
+    role: row.role,
+    type: row.memberType,
+    time: row.seasons.length ? row.seasons.join(',') : null,
+    advisor: row.advisorSeasons.length ? row.advisorSeasons.join(',') : null,
+    grade: row.grade,
+    affiliation: row.affiliation,
+    links: row.links,
+    body: row.body,
     metadata,
-    cacheKey: `phase4:members:${row.id}:projection:${updatedAt}`,
+    revisionId: row.currentRevisionId,
+    cacheKey: `phase9:members:${row.id}:${row.currentRevisionId || 'projection'}:${updatedAt}`,
     updatedAt
   }
 }
@@ -262,7 +266,8 @@ export const listPublicMembersFromDatabase = async (): Promise<PublicMember[]> =
   const rows = await getDatabase()
     .select()
     .from(members)
-    .orderBy(asc(members.memberKey))
+    .where(and(isNull(members.deletedAt), sql`${members.currentRevisionId} is not null`))
+    .orderBy(asc(members.sortOrder), asc(members.memberKey))
   return rows.map(row => toPublicMember(row))
 }
 
@@ -272,17 +277,13 @@ export const getPublicMemberFromDatabase = async (
   const [row] = await getDatabase()
     .select()
     .from(members)
-    .where(or(
-      eq(members.memberKey, slug),
-      eq(members.name, slug)
+    .where(and(
+      isNull(members.deletedAt),
+      sql`${members.currentRevisionId} is not null`,
+      or(eq(members.memberKey, slug), eq(members.name, slug))
     ))
     .limit(1)
   if (!row) return null
 
-  let body = ''
-  if (row.sourcePath) {
-    const source = await readContentFile('members', row.sourcePath)
-    body = parseCmsMarkdown(source.source).body
-  }
-  return toPublicMember(row, body)
+  return toPublicMember(row)
 }

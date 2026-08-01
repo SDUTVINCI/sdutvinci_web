@@ -15,7 +15,7 @@ import { sha256ContentBytes } from './content-export-serialization'
 
 export interface ContentExportConsistencyIssue {
   code: string
-  targetType: 'job' | 'run' | 'repository' | 'article'
+  targetType: 'job' | 'run' | 'repository' | 'article' | 'member'
   targetId: string
   message: string
 }
@@ -220,6 +220,23 @@ export const checkContentExportConsistency = async () => {
         })
       }
     }
+    const fileByMember = new Map(repositorySnapshot.members.map(file => [file.memberId, file]))
+    for (const item of databaseSnapshot.activeMemberItems) {
+      const file = fileByMember.get(item.memberId)
+      if (!file || file.revisionId !== item.revisionId || file.path !== item.serialized.path || file.sha256 !== item.serialized.sha256) {
+        issues.push({ code: 'MEMBER_SNAPSHOT_MISMATCH', targetType: 'member', targetId: item.memberId, message: '成员当前 Revision 与 snapshot 不一致' })
+        continue
+      }
+      const source = await readRepositoryFile(config.CONTENT_EXPORT_WORKSPACE, file.path)
+      if (source === null || sha256ContentBytes(source) !== file.sha256) {
+        issues.push({ code: 'MEMBER_FILE_MISMATCH', targetType: 'member', targetId: item.memberId, message: '成员 Markdown 缺失或哈希不一致' })
+      }
+    }
+    for (const item of databaseSnapshot.memberItems.filter(item => item.deleted)) {
+      if (await readRepositoryFile(config.CONTENT_EXPORT_WORKSPACE, item.serialized.path) !== null) {
+        issues.push({ code: 'DELETED_MEMBER_FILE_PRESENT', targetType: 'member', targetId: item.memberId, message: '已删除成员仍存在于导出仓库' })
+      }
+    }
     const manifest = JSON.parse(manifestSource) as {
       snapshot?: { sha256?: string }
     }
@@ -243,7 +260,7 @@ export const checkContentExportConsistency = async () => {
     counts: {
       jobs: jobs.length,
       runs: runs.length,
-      databaseFiles: databaseSnapshot.activeItems.length,
+      databaseFiles: databaseSnapshot.activeItems.length + databaseSnapshot.activeMemberItems.length,
       databaseTombstones: databaseSnapshot.deletedItems.length
     },
     issueCount: issues.length,

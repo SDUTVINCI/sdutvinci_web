@@ -755,3 +755,25 @@ configured content repository PR
 完整分类、段落级合并算法、文件边界、权限、失败取证与回滚见
 `docs/v2/PR_IMPORT.md`；自动与浏览器验收见
 `docs/v2/PHASE_V2_8_ACCEPTANCE.md`。
+
+## 24. V2 阶段 9 已实现：成员资料数据库权威与提案导入
+
+成员资料的正式读取和写入现在以 PostgreSQL `members.current_revision_id` 为权威。
+`member_revisions` 保存不可变的结构化快照、确定性 Markdown、SHA-256、来源与操作者；
+CMS 创建、编辑、恢复和明确接受提案都在一个事务中推进 pointer/version、写审计并建立
+member export Outbox。`user_members` 仍是独立一对一绑定关系，不进入公开 profile、Revision、
+Markdown 或 PR 字段集合。
+
+现有 32 份 `content/members/**/*.md` 只通过显式、默认 Dry Run 的一次性迁移入口导入。
+普通 CMS list/get、应用启动和 `cms:content:sync` 均不再反向同步成员文件。公开团队列表与详情
+读取数据库结构化字段和正文；`CONTENT_SOURCE_MEMBERS=legacy_git` 只保留为验收期间显式
+回滚开关，production 默认是 `database`。
+
+成员 Revision 使用固定字段顺序导出到内容仓库 `members/`，并进入相同 snapshot/manifest、
+增量 Worker、takeover、凌晨对账、一致性检查和空库恢复链路。PR Dry Run 对成员做字段级
+Base/Current/Proposed 合并；导入只创建 `member_proposals`，不会修改 `members`。管理员还须
+在成员页输入独立确认语义后才创建新 Revision；删除提案同样不会自动删除。
+
+Markdown 白名单不含账号、绑定、角色权限、登录 ID、密码或安全状态；递归敏感键、内网/
+localhost URL、非法路径和稳定 ID 变化均 fail closed。完整部署、回滚和验收见
+`docs/v2/PHASE_V2_9_ACCEPTANCE.md`。

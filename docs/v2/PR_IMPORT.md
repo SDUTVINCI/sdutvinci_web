@@ -79,8 +79,9 @@ Article 删除并创建 export outbox；导入本身不会删除任何正式内�
 
 ## 6. 文件安全
 
-受管路径只能是 NFC 编码的 `news/**/*.md` 或 `wiki/**/*.md`。拒绝绝对路径、反斜线、
-NUL、`.`/`..`/`.git` 段、跨 collection 或跨目录移动、members、metadata、README、
+文章受管路径只能是 NFC 编码的 `news/**/*.md` 或 `wiki/**/*.md`；阶段 9 另允许已在 Base
+snapshot 登记的 `members/**/*.md` 做原路径修改或删除提案。拒绝绝对路径、反斜线、
+NUL、`.`/`..`/`.git` 段、跨 collection 或跨目录移动、成员新增/重命名、README、
 manifest 外文件、重复路径/vinciId、非法 UTF-8、二进制、符号链接、非 file API 类型、
 超限文件和超限 PR。新文章不得自带 vinciId；正式 ID 只能由数据库分配。
 
@@ -125,3 +126,18 @@ Migration `0016_flowery_war_machine.sql` 是 expand-only：只增加 PR run/item
 34163、`/tmp/vinci-v2-phase8-manual-test` 归属标记、本地裸 Git 远端和 mock GitHub API。
 它不会访问真实 GitHub、生产数据库、生产仓库权限或部署环境。完整步骤见
 `PHASE_V2_8_ACCEPTANCE.md`。
+
+## 10. 阶段 9 成员提案扩展
+
+成员 snapshot 条目绑定 `memberId`、稳定 `memberKey`、Base `revisionId`、源路径、字节数与
+SHA-256。允许修改的 Markdown 字段仅为姓名、头像、展示角色/类型、参与与指导届次、年级、
+单位、公开链接、简介正文、公开 metadata 和排序号。账号绑定、登录账号/密码、系统角色与
+权限、安全状态等不在 profile 中，递归出现敏感键时整项分类为
+`member_sensitive_rejected`，且 Proposed 原文不进入可查看 artifact。
+
+`member_safe_change` 与 `member_auto_merge` 可被选择导入为 `member_proposals`；
+`member_conflict`、`member_sensitive_rejected` 和 `member_invalid` 保持阻止状态；
+`member_deletion_proposal` 只建立删除提案。导入事务复核 Current Revision，但绝不更新成员
+pointer。管理员必须在成员页再次明确接受，服务再次用 `members.version` 和 Revision pointer
+加锁校验，随后才创建不可变 Revision、审计和 export Outbox。PR 评论/关闭边界保持阶段 8
+不变，没有 Merge API。

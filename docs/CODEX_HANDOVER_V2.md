@@ -1461,3 +1461,36 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
   均释放。代码仓库 `content/` 未修改，没有真实 GitHub、生产数据库/凭据、Push 或部署。
 - 需求文档 24.5 和阶段 8 总体进度已据维护者明确结论勾选；阶段 9～11 仍未开始。
   阶段 8 验收记录 Commit 由最终回复报告完整 SHA。现在停止开发，不进入阶段 9。
+
+---
+
+## 2026-08-01：V2 阶段 9 实现完成，等待人工验收
+
+- 基线为阶段 8 验收记录 `a087ba8139622f875db1b1d4042f50920ed95a49`；开始时 `main`
+  工作区干净。阶段 9 没有改写既有 Commit，没有 Push、部署、真实 GitHub 写入或阶段 10 工作。
+- `members` 已扩展为结构化数据库投影并使用 version/current pointer；新增不可变
+  `member_revisions` 和显式 `member_proposals`。CMS create/update/restore/apply proposal 均为
+  DB-first 事务，写结构化 before/after audit 与 member Outbox。账号绑定仍独立使用
+  `user_members`，不会进入公开资料或 Markdown。
+- 显式迁移命令 `v2:members:migrate` 默认 Dry Run，Apply 必须提供
+  `--apply --confirm=MIGRATE_MEMBER_PROFILES`。它扫描 32 份既有文件、验证稳定 ID/字段/URL、
+  保留已有 member UUID，并只为无 current pointer 的成员建立初始 Revision；重复运行幂等。
+  普通 list/get、应用启动和 `cms:content:sync` 不再同步成员 Markdown。
+- 公开团队列表与详情完全读取 PostgreSQL。production 成员默认 `database`；
+  `CONTENT_SOURCE_MEMBERS=legacy_git` 仍是验收期显式读取回滚开关。代码仓库成员文件未改动。
+- 成员确定性 serializer 已接入内容仓库 `members/`、snapshot/manifest、增量 Worker、takeover、
+  一致性、凌晨对账和空库恢复。恢复使用 snapshot 中的 member/revision UUID、字节与 SHA，
+  不降级为缺少历史指针的稀疏 member 行。
+- PR Dry Run 现支持成员安全修改、字段级自动合并、冲突、敏感拒绝和删除提案。导入只创建
+  `member_proposals`；管理员在成员页再次明确接受并通过 version/pointer 复核后才创建正式
+  Revision。账号、密码、绑定、系统角色权限、安全状态、内网 URL、稳定 ID/路径变化均拒绝；
+  敏感 Proposed 原文不进入可查看 artifact。评论/关闭保持阶段 8 边界，没有 Merge API。
+- Migration 为 expand-only `0017_pale_betty_ross.sql`。部署顺序、迁移/回滚、PR 分类和本地
+  人工步骤分别记录在 `DEPLOYMENT.md`、`PR_IMPORT.md` 与
+  `PHASE_V2_9_ACCEPTANCE.md`。`v2:phase9:manual` 可建立带精确 label/marker 的隔离 CMS，内置
+  32 名成员、管理员、本地裸 Git 和 mock GitHub PR #9；PR 覆盖安全修改、字段自动合并、
+  同字段冲突、敏感拒绝与删除提案，启动时不会预先创建正式提案。
+- 维护者尚未回复“V2 阶段 9 验收通过”，所以总体进度仍未勾选。本地实现 Commit 由最终回复
+  补充；专项 35/35、完整 CMS 108/108、完整测试 123/123、typecheck、build、0000→0017
+  fresh Migration、content audit、wiki check 与 diff check 已通过。人工环境另提供 34174
+  legacy Git 只读回退站点；现在应停止开发并等待人工验收，不进入阶段 10。

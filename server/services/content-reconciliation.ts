@@ -110,6 +110,7 @@ const managedRepositoryPaths = async (workspace: string) => {
   }
   await visit(join(workspace, 'news'), 'news')
   await visit(join(workspace, 'wiki'), 'wiki')
+  await visit(join(workspace, 'members'), 'members')
   return result.sort()
 }
 
@@ -129,7 +130,7 @@ const writeSnapshotDirectory = async (
     flag: 'wx',
     mode: 0o600
   })
-  for (const item of snapshot.activeItems) {
+  for (const item of [...snapshot.activeItems, ...snapshot.activeMemberItems]) {
     const target = resolve(staging, item.serialized.path)
     if (!target.startsWith(`${staging}${sep}`)) {
       throw new Error('CONTENT_RECONCILIATION_PATH_OUTSIDE_SNAPSHOT')
@@ -155,21 +156,22 @@ const buildReport = async (
   const repositoryPaths = await managedRepositoryPaths(workspace)
   const repositorySnapshot = await readContentRepositorySnapshot(workspace)
   const repositorySnapshotIds = new Set(
-    repositorySnapshot?.files.map(item => item.articleId) || []
+    [...(repositorySnapshot?.files.map(item => item.articleId) || []), ...(repositorySnapshot?.members.map(item => item.memberId) || [])]
   )
   const expectedByPath = new Map(
-    snapshot.activeItems.map(item => [item.serialized.path, item])
+    [...snapshot.activeItems, ...snapshot.activeMemberItems].map(item => [item.serialized.path, item])
   )
   const differences: ContentReconciliationDifference[] = []
-  for (const item of snapshot.activeItems) {
+  for (const item of [...snapshot.activeItems, ...snapshot.activeMemberItems]) {
+    const targetId = 'articleId' in item ? item.articleId : item.memberId
     const source = await readRepositoryFile(workspace, item.serialized.path)
     if (source === null) {
       differences.push({
-        category: repositorySnapshotIds.has(item.articleId)
+        category: repositorySnapshotIds.has(targetId)
           ? 'repository_missing'
           : 'database_new',
         path: item.serialized.path,
-        articleId: item.articleId,
+        articleId: targetId,
         databaseSha256: item.serialized.sha256,
         repositorySha256: null
       })
@@ -179,7 +181,7 @@ const buildReport = async (
         differences.push({
           category: 'modified',
           path: item.serialized.path,
-          articleId: item.articleId,
+          articleId: targetId,
           databaseSha256: item.serialized.sha256,
           repositorySha256
         })
@@ -232,7 +234,7 @@ const buildReport = async (
     branch: 'main' as const,
     baseCommit,
     generatedAt: new Date().toISOString(),
-    databaseFileCount: snapshot.activeItems.length,
+    databaseFileCount: snapshot.activeItems.length + snapshot.activeMemberItems.length,
     repositoryManagedFileCount: repositoryPaths.length,
     snapshotSha256: snapshot.metadata.snapshotSha256,
     manifestSha256: snapshot.metadata.manifestSha256,
@@ -293,10 +295,13 @@ export const runContentReconciliation = async (
           await removeContentExportFile(difference.path)
         }
       }
-      for (const item of snapshot.activeItems) {
+      for (const item of [...snapshot.activeItems, ...snapshot.activeMemberItems]) {
         await writeContentExportFile(item.serialized.path, item.serialized.source)
       }
       for (const item of snapshot.deletedItems) {
+        await removeContentExportFile(item.serialized.path)
+      }
+      for (const item of snapshot.memberItems.filter(item => item.deleted)) {
         await removeContentExportFile(item.serialized.path)
       }
       for (const file of takeoverMetadataFiles(snapshot)) {

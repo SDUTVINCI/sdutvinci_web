@@ -251,8 +251,10 @@ const assertManagedGitPath = (gitPath: string) => {
     || !(
       normalized.startsWith('news/')
       || normalized.startsWith('wiki/')
+      || normalized.startsWith('members/')
       || normalized.startsWith('content/news/')
       || normalized.startsWith('content/wiki/')
+      || normalized.startsWith('content/members/')
       || normalized === '.vinci/snapshot.json'
       || normalized === 'manifest.json'
       || normalized === 'README.md'

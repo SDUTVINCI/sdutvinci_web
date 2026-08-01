@@ -1,13 +1,11 @@
 import { closeDatabase } from '../server/db/client'
 import { runMigrations } from '../server/db/migrate'
 import { synchronizeCmsArticles } from '../server/services/cms-articles'
-import { synchronizeCmsMembers } from '../server/services/cms-members'
 
 try {
   await runMigrations()
-  const memberCount = await synchronizeCmsMembers(true)
   const articleCount = await synchronizeCmsArticles()
-  console.log(`CMS content synchronized: ${memberCount} members, ${articleCount} articles.`)
+  console.log(`CMS content synchronized: ${articleCount} articles. Members are database-authoritative; use v2:members:migrate explicitly.`)
 } catch (error) {
   console.error(
     'CMS content synchronization failed:',

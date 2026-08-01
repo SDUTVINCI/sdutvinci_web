@@ -9,6 +9,12 @@ export const contentImportClassifications = [
   'invalid_file',
   'unknown_syntax',
   'high_risk_syntax'
+  ,'member_safe_change'
+  ,'member_auto_merge'
+  ,'member_conflict'
+  ,'member_deletion_proposal'
+  ,'member_sensitive_rejected'
+  ,'member_invalid'
 ] as const
 
 export type ContentImportClassification = typeof contentImportClassifications[number]
@@ -19,12 +25,17 @@ export interface CmsContentImportItem {
   ordinal: number
   changeType: 'added' | 'modified' | 'renamed' | 'removed' | 'invalid'
   classification: ContentImportClassification
+  targetType: 'article' | 'member'
   importable: boolean
   oldPath: string | null
   newPath: string | null
   articleId: string | null
   baseRevisionId: string | null
   currentRevisionId: string | null
+  memberId: string | null
+  baseMemberRevisionId: string | null
+  currentMemberRevisionId: string | null
+  memberProposalId: string | null
   proposedArticleId: string | null
   baseSha256: string | null
   currentSha256: string | null

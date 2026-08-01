@@ -19,6 +19,8 @@ import {
   contentPrImportRuns,
   draftAuthors,
   drafts,
+  memberProposals,
+  memberRevisions,
   members
 } from '../db/schema'
 import { getCmsArticleDirectory, getCmsArticlePublicPath } from './cms-articles'
@@ -33,6 +35,7 @@ import { parseCmsMarkdown } from '../utils/cms-frontmatter'
 import { CONTENT_REPOSITORY_ID } from '../utils/content-export-config'
 import { getContentImportConfig } from '../utils/content-import-config'
 import { redactCmsSensitiveText } from '../utils/cms-sensitive-data'
+import { memberFieldDiff, memberProfileFromMarkdown, mergeMemberProfiles, profileFromRecord, profileRecord, serializeMemberProfile } from './member-profile'
 
 const snapshotSchema = z.object({
   formatVersion: z.literal(1),
@@ -49,6 +52,11 @@ const snapshotSchema = z.object({
     sha256: z.string().regex(/^[0-9a-f]{64}$/),
     bytes: z.number().int().nonnegative()
   })),
+  members: z.array(z.object({
+    memberId: z.string().uuid(), memberKey: z.string().min(1), revisionId: z.string().uuid(),
+    revisionNumber: z.number().int().positive(), sourcePath: z.string().min(1), path: z.string().min(1),
+    sha256: z.string().regex(/^[0-9a-f]{64}$/), bytes: z.number().int().nonnegative()
+  })).default([]),
   tombstones: z.array(z.object({
     articleId: z.string().uuid(),
     revisionId: z.string().uuid(),
@@ -153,6 +161,7 @@ const preservedFrontmatter = (frontmatter: Record<string, unknown>) => Object.fr
 )
 
 interface PlannedItem {
+  targetType?: 'article' | 'member'
   ordinal: number
   changeType: 'added' | 'modified' | 'renamed' | 'removed' | 'invalid'
   classification: ContentImportClassification
@@ -162,6 +171,9 @@ interface PlannedItem {
   articleId: string | null
   baseRevisionId: string | null
   currentRevisionId: string | null
+  memberId?: string | null
+  baseMemberRevisionId?: string | null
+  currentMemberRevisionId?: string | null
   baseSource: string | null
   currentSource: string | null
   proposedSource: string | null
@@ -176,6 +188,7 @@ const invalidPlan = (
   code: string,
   details: Record<string, unknown> = {}
 ): PlannedItem => ({
+  targetType: 'article',
   ordinal,
   changeType: 'invalid',
   classification: code.includes('PATH') ? 'path_conflict' : 'invalid_file',
@@ -185,6 +198,9 @@ const invalidPlan = (
   articleId: null,
   baseRevisionId: null,
   currentRevisionId: null,
+  memberId: null,
+  baseMemberRevisionId: null,
+  currentMemberRevisionId: null,
   baseSource: null,
   currentSource: null,
   proposedSource: null,
@@ -451,17 +467,131 @@ const planFile = async (
   }
 }
 
+const parseMemberPath = (path: string) => {
+  if (!path.startsWith('members/')) throw new ContentPrImportError('IMPORT_MEMBER_PATH_INVALID')
+  const sourcePath = path.slice('members/'.length)
+  if (!sourcePath || !sourcePath.endsWith('.md') || sourcePath.includes('\\') || sourcePath.includes('\0')
+    || sourcePath.split('/').some(part => !part || part === '.' || part === '..' || part === '.git')) {
+    throw new ContentPrImportError('IMPORT_MEMBER_PATH_INVALID')
+  }
+  return { path: `members/${sourcePath}`, sourcePath }
+}
+
+const invalidMemberPlan = (ordinal: number, file: GitHubPullFile, code: string): PlannedItem => ({
+  ...invalidPlan(ordinal, file, code), targetType: 'member', classification: code.includes('SENSITIVE')
+    ? 'member_sensitive_rejected' : 'member_invalid'
+})
+
+const planMemberFile = async (
+  client: ContentImportGitHubClient,
+  repositoryId: string,
+  baseCommit: string,
+  headCommit: string,
+  snapshot: Snapshot,
+  file: GitHubPullFile,
+  ordinal: number
+): Promise<PlannedItem> => {
+  if (!['modified', 'removed'].includes(file.status)) {
+    return invalidMemberPlan(ordinal, file, 'IMPORT_MEMBER_CREATE_OR_RENAME_FORBIDDEN')
+  }
+  if (file.changes > getContentImportConfig().CONTENT_PR_IMPORT_MAX_FILE_BYTES) {
+    return invalidMemberPlan(ordinal, file, 'IMPORT_MEMBER_FILE_TOO_LARGE')
+  }
+  let managed
+  try { managed = parseMemberPath(file.previous_filename || file.filename) } catch {
+    return invalidMemberPlan(ordinal, file, 'IMPORT_MEMBER_PATH_INVALID')
+  }
+  if (file.filename !== managed.path) return invalidMemberPlan(ordinal, file, 'IMPORT_MEMBER_RENAME_FORBIDDEN')
+  let baseSource: string
+  let proposedSource: string | null = null
+  try {
+    baseSource = await client.readFile(repositoryId, managed.path, baseCommit)
+    if (file.status !== 'removed') proposedSource = await client.readFile(repositoryId, managed.path, headCommit)
+  } catch { return invalidMemberPlan(ordinal, file, 'IMPORT_MEMBER_FILE_READ_FAILED') }
+  const snapshotItem = snapshot.members.find(item => item.path === managed.path)
+  if (!snapshotItem || snapshotItem.sha256 !== sha256ContentBytes(baseSource) || snapshotItem.bytes !== Buffer.byteLength(baseSource)) {
+    return invalidMemberPlan(ordinal, file, 'IMPORT_MEMBER_BASE_SNAPSHOT_MISMATCH')
+  }
+  let baseProfile
+  try { baseProfile = memberProfileFromMarkdown(baseSource, managed.sourcePath) } catch {
+    return invalidMemberPlan(ordinal, file, 'IMPORT_MEMBER_BASE_INVALID')
+  }
+  const [current] = await getDatabase().select({
+    memberId: members.id, memberKey: members.memberKey, currentRevisionId: members.currentRevisionId,
+    deletedAt: members.deletedAt, profile: memberRevisions.profile, markdownSource: memberRevisions.markdownSource
+  }).from(members).innerJoin(memberRevisions, eq(members.currentRevisionId, memberRevisions.id))
+    .where(eq(members.id, snapshotItem.memberId)).limit(1)
+  if (!current || current.deletedAt || current.memberKey !== snapshotItem.memberKey) {
+    return invalidMemberPlan(ordinal, file, 'IMPORT_MEMBER_NOT_CURRENT')
+  }
+  const [baseRevision] = await getDatabase().select({ id: memberRevisions.id }).from(memberRevisions)
+    .where(and(eq(memberRevisions.id, snapshotItem.revisionId), eq(memberRevisions.memberId, snapshotItem.memberId))).limit(1)
+  if (!baseRevision) return invalidMemberPlan(ordinal, file, 'IMPORT_MEMBER_BASE_REVISION_UNKNOWN')
+  const currentProfile = profileFromRecord(current.profile)
+  const baseEqualsCurrent = current.currentRevisionId === snapshotItem.revisionId
+    && current.markdownSource === baseSource
+  const common = {
+    targetType: 'member' as const, ordinal, oldPath: managed.path,
+    articleId: null, baseRevisionId: null, currentRevisionId: null,
+    memberId: current.memberId, baseMemberRevisionId: snapshotItem.revisionId,
+    currentMemberRevisionId: current.currentRevisionId, baseSource,
+    currentSource: current.markdownSource
+  }
+  if (file.status === 'removed') return {
+    ...common, changeType: 'removed', newPath: null,
+    classification: baseEqualsCurrent ? 'member_deletion_proposal' : 'member_conflict',
+    importable: baseEqualsCurrent, proposedSource: null, mergedSource: null,
+    warningCodes: baseEqualsCurrent ? [] : ['CURRENT_CHANGED_SINCE_BASE'],
+    conflictDetails: baseEqualsCurrent ? {} : { reason: 'current_revision_changed' }
+  }
+  let proposedProfile
+  try { proposedProfile = memberProfileFromMarkdown(proposedSource!, managed.sourcePath) } catch (error) {
+    const code = error instanceof Error ? error.message : 'IMPORT_MEMBER_INVALID'
+    const sensitive = code.startsWith('MEMBER_SENSITIVE_FIELD_REJECTED')
+    return {
+      ...invalidMemberPlan(ordinal, file, sensitive ? 'IMPORT_MEMBER_SENSITIVE_FIELD_REJECTED' : 'IMPORT_MEMBER_INVALID'),
+      oldPath: managed.path, newPath: managed.path, memberId: current.memberId,
+      baseMemberRevisionId: snapshotItem.revisionId, currentMemberRevisionId: current.currentRevisionId,
+      baseSource, currentSource: current.markdownSource,
+      proposedSource: sensitive ? null : proposedSource,
+      warningCodes: [sensitive ? 'IMPORT_MEMBER_SENSITIVE_FIELD_REJECTED' : code]
+    }
+  }
+  if (proposedProfile.memberKey !== current.memberKey || proposedProfile.sourcePath !== currentProfile.sourcePath) {
+    return { ...invalidMemberPlan(ordinal, file, 'IMPORT_MEMBER_ID_IMMUTABLE'), ...common, newPath: managed.path }
+  }
+  const merge = mergeMemberProfiles(baseProfile, currentProfile, proposedProfile)
+  return {
+    ...common, changeType: 'modified', newPath: managed.path,
+    classification: merge.merged === null ? 'member_conflict'
+      : baseEqualsCurrent ? 'member_safe_change' : 'member_auto_merge',
+    importable: merge.merged !== null, proposedSource,
+    mergedSource: merge.merged ? serializeMemberProfile(merge.merged).source : null,
+    warningCodes: baseEqualsCurrent ? [] : ['CURRENT_CHANGED_SINCE_BASE'],
+    conflictDetails: {
+      conflicts: merge.conflicts,
+      proposedFieldChanges: memberFieldDiff(baseProfile, proposedProfile),
+      mergedFieldChanges: merge.merged ? memberFieldDiff(currentProfile, merge.merged) : {}
+    }
+  }
+}
+
 const itemResponse = (row: typeof contentPrImportItems.$inferSelect): CmsContentImportItem => ({
   id: row.id,
   ordinal: row.ordinal,
   changeType: row.changeType as CmsContentImportItem['changeType'],
   classification: row.classification as ContentImportClassification,
+  targetType: row.targetType as 'article' | 'member',
   importable: row.importable,
   oldPath: row.oldPath,
   newPath: row.newPath,
   articleId: row.articleId,
   baseRevisionId: row.baseRevisionId,
   currentRevisionId: row.currentRevisionId,
+  memberId: row.memberId,
+  baseMemberRevisionId: row.baseMemberRevisionId,
+  currentMemberRevisionId: row.currentMemberRevisionId,
+  memberProposalId: row.memberProposalId,
   proposedArticleId: row.proposedArticleId,
   baseSha256: row.baseSha256,
   currentSha256: row.currentSha256,
@@ -553,6 +683,7 @@ export const dryRunContentPrImport = async (
   }
   const snapshotPaths = new Set<string>()
   const snapshotIds = new Set<string>()
+  const snapshotMemberKeys = new Set<string>()
   for (const item of snapshot.files) {
     const path = parseManagedPath(item.path)
     if (path.collection !== item.collection || path.relativePath !== item.relativePath
@@ -571,6 +702,16 @@ export const dryRunContentPrImport = async (
     snapshotPaths.add(item.path)
     snapshotIds.add(item.articleId)
   }
+  for (const item of snapshot.members) {
+    const path = parseMemberPath(item.path)
+    if (path.sourcePath !== item.sourcePath || snapshotPaths.has(item.path) || snapshotIds.has(item.memberId)
+      || snapshotMemberKeys.has(item.memberKey)) {
+      throw new ContentPrImportError('IMPORT_BASE_SNAPSHOT_DUPLICATE')
+    }
+    snapshotPaths.add(item.path)
+    snapshotIds.add(item.memberId)
+    snapshotMemberKeys.add(item.memberKey)
+  }
 
   const files = await client.listPullFiles(repositoryId, pull.number)
   if (!files.length || files.length > getContentImportConfig().CONTENT_PR_IMPORT_MAX_FILES) {
@@ -578,8 +719,11 @@ export const dryRunContentPrImport = async (
   }
   const planned: PlannedItem[] = []
   for (const [ordinal, file] of files.entries()) {
-    if (['.vinci/snapshot.json', 'manifest.json', 'README.md'].includes(file.filename)
-      || file.filename.startsWith('members/')) {
+    if (file.filename.startsWith('members/')) {
+      planned.push(await planMemberFile(client, repositoryId, pull.base.sha, pull.head.sha, snapshot, file, ordinal))
+      continue
+    }
+    if (['.vinci/snapshot.json', 'manifest.json', 'README.md'].includes(file.filename)) {
       planned.push(invalidPlan(ordinal, file, 'IMPORT_FILE_OUTSIDE_MANIFEST'))
       continue
     }
@@ -598,12 +742,13 @@ export const dryRunContentPrImport = async (
   const idOwners = new Map<string, PlannedItem[]>()
   for (const item of planned) {
     if (item.newPath) pathOwners.set(item.newPath, [...(pathOwners.get(item.newPath) || []), item])
-    if (item.articleId) idOwners.set(item.articleId, [...(idOwners.get(item.articleId) || []), item])
+    const targetId = item.articleId || item.memberId
+    if (targetId) idOwners.set(targetId, [...(idOwners.get(targetId) || []), item])
   }
   for (const owners of [...pathOwners.values(), ...idOwners.values()]) {
     if (owners.length < 2) continue
     for (const item of owners) {
-      item.classification = 'path_conflict'
+      item.classification = item.targetType === 'member' ? 'member_conflict' : 'path_conflict'
       item.importable = false
       item.warningCodes = [...new Set([...item.warningCodes, 'IMPORT_DUPLICATE_PATH_OR_VINCI_ID'])]
     }
@@ -655,6 +800,7 @@ export const dryRunContentPrImport = async (
     const inserted = await tx.insert(contentPrImportItems).values(planned.map(item => ({
       runId: created.id,
       ordinal: item.ordinal,
+      targetType: item.targetType || 'article',
       changeType: item.changeType,
       classification: item.classification,
       importable: item.importable,
@@ -663,6 +809,9 @@ export const dryRunContentPrImport = async (
       articleId: item.articleId,
       baseRevisionId: item.baseRevisionId,
       currentRevisionId: item.currentRevisionId,
+      memberId: item.memberId || null,
+      baseMemberRevisionId: item.baseMemberRevisionId || null,
+      currentMemberRevisionId: item.currentMemberRevisionId || null,
       proposedArticleId: item.classification === 'new_article' ? undefined : null,
       baseSource: item.baseSource,
       currentSource: item.currentSource,
@@ -716,7 +865,53 @@ const importOneItem = async (runId: string, itemId: string, actorUserId: string)
       eq(contentPrImportItems.id, itemId), eq(contentPrImportItems.runId, runId)
     )).limit(1).for('update')
     if (!item) throw new ContentPrImportError('IMPORT_ITEM_NOT_FOUND', 404)
+    if (item.status === 'imported' && item.memberProposalId) {
+      return { itemId, draftId: null, proposalId: item.memberProposalId, imported: false }
+    }
     if (item.status === 'imported' && item.draftId) return { itemId, draftId: item.draftId, imported: false }
+    if (item.targetType === 'member') {
+      if (!item.importable || !item.memberId || !item.baseMemberRevisionId || !item.currentMemberRevisionId
+        || (!item.mergedSource && item.classification !== 'member_deletion_proposal')) {
+        return { itemId, draftId: null, proposalId: null, imported: false, blocked: true }
+      }
+      const [current] = await tx.select({
+        id: members.id, currentRevisionId: members.currentRevisionId,
+        profile: memberRevisions.profile, deletedAt: members.deletedAt
+      }).from(members).innerJoin(memberRevisions, eq(members.currentRevisionId, memberRevisions.id))
+        .where(eq(members.id, item.memberId)).limit(1).for('update')
+      if (!current || current.deletedAt || current.currentRevisionId !== item.currentMemberRevisionId) {
+        await tx.update(contentPrImportItems).set({
+          status: 'blocked', importable: false, classification: 'member_conflict',
+          warningCodes: [...new Set([...item.warningCodes, 'CURRENT_CHANGED_AFTER_DRY_RUN'])]
+        }).where(eq(contentPrImportItems.id, item.id))
+        return { itemId, draftId: null, proposalId: null, imported: false, blocked: true }
+      }
+      const action = item.classification === 'member_deletion_proposal' ? 'delete' as const : 'update' as const
+      const proposedProfile = action === 'update'
+        ? memberProfileFromMarkdown(item.mergedSource!, (item.newPath || '').replace(/^members\//, ''))
+        : null
+      const [proposal] = await tx.insert(memberProposals).values({
+        memberId: item.memberId,
+        baseRevisionId: item.baseMemberRevisionId,
+        currentRevisionId: item.currentMemberRevisionId,
+        action,
+        proposedProfile: proposedProfile ? profileRecord(proposedProfile) : null,
+        fieldChanges: proposedProfile ? memberFieldDiff(profileFromRecord(current.profile), proposedProfile) : {},
+        sourceImportItemId: item.id,
+        createdByUserId: actorUserId
+      }).returning({ id: memberProposals.id })
+      const now = new Date()
+      await tx.update(contentPrImportItems).set({
+        status: 'imported', memberProposalId: proposal!.id, importedAt: now
+      }).where(eq(contentPrImportItems.id, item.id))
+      await tx.insert(auditLogs).values({
+        actorUserId, action: 'content_pr_import.member_proposal_created',
+        targetType: 'member_proposal', targetId: proposal!.id,
+        metadata: { runId, itemId: item.id, memberId: item.memberId, action,
+          baseRevisionId: item.baseMemberRevisionId, currentRevisionId: item.currentMemberRevisionId }
+      })
+      return { itemId, draftId: null, proposalId: proposal!.id, imported: true }
+    }
     if (!item.importable || !item.mergedSource && item.classification !== 'deletion_proposal') {
       return { itemId, draftId: null, imported: false, blocked: true }
     }

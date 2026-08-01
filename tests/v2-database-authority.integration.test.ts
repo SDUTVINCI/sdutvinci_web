@@ -246,7 +246,7 @@ suite('V2 阶段 5 数据库权威与 DB-first 发布事务', () => {
         sources: {
           news: 'database',
           wiki: 'database',
-          members: 'legacy_git'
+          members: 'database'
         }
       })
     } finally {

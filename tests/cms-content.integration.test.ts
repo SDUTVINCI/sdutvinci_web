@@ -66,16 +66,16 @@ integration('CMS 成员与文章只读管理', () => {
     ]).toEqual(['dongjiahui', 'dongjiahui1', 'dongjiahui2'])
   })
 
-  it('为旧成员资料写入稳定 ID，姓名变化后不改变 ID', async () => {
+  it('一次性导入已有稳定 ID，之后 Markdown 变化不再覆盖数据库权威资料', async () => {
     await mkdir(join(contentRoot, 'members', '2026'))
-    for (const [file, name] of [['a.md', '董佳辉'], ['b.md', '董佳辉'], ['c.md', '董佳辉']]) {
+    for (const [file, name, id] of [['a.md', '董佳辉', 'dongjiahui'], ['b.md', '董佳辉', 'dongjiahui1'], ['c.md', '董佳辉', 'dongjiahui2']]) {
       await writeFile(
         join(contentRoot, 'members', '2026', file),
-        markdown(`name: ${name}\nimage: /avatar.jpg`)
+        markdown(`id: ${id}\nname: ${name}\nimage: /avatar.jpg`)
       )
     }
 
-    expect(await synchronizeCmsMembers(true)).toBe(3)
+    expect(await synchronizeCmsMembers()).toBe(3)
     const firstPass = await listCmsMembers()
     expect(firstPass.map(member => member.memberKey)).toEqual([
       'dongjiahui',
@@ -87,10 +87,10 @@ integration('CMS 成员与文章只读管理', () => {
     const memberPath = join(contentRoot, 'members', first.sourcePath)
     const original = await readFile(memberPath, 'utf8')
     await writeFile(memberPath, original.replace('name: 董佳辉', 'name: 新姓名'))
-    await synchronizeCmsMembers(false)
+    await synchronizeCmsMembers()
     const source = await readFile(memberPath, 'utf8')
     expect(source).toContain(`id: ${first.memberKey}`)
-    expect((await listCmsMembers()).find(member => member.id === first.id)?.name).toBe('新姓名')
+    expect((await listCmsMembers()).find(member => member.id === first.id)?.name).toBe('董佳辉')
   })
 
   it('管理员能创建和维护成员，且同 ID 账号自动绑定', async () => {

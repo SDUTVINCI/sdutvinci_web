@@ -72,7 +72,6 @@ export const getPublicContentSourceMode = (
   const value = runtimeEnvironmentValue(key)
     || (
       runtimeEnvironmentValue('NODE_ENV') === 'production'
-      && collection !== 'members'
         ? 'database'
         : 'legacy_git'
     )
@@ -94,14 +93,13 @@ export const getPublicContentSourceMode = (
     environment === 'production'
     && (
       mode === 'database_shadow'
-      || (collection === 'members' && mode !== 'legacy_git')
     )
   ) {
     throw new PublicContentConfigurationError(
-      `${key}=${mode} 不允许在阶段 5 的 production 权威配置中启用`
+      `${key}=${mode} 不允许在 production 权威配置中启用`
     )
   }
-  if (environment === 'production' && collection !== 'members') {
+  if (environment === 'production') {
     const publishMode =
       runtimeEnvironmentValue('CONTENT_PUBLISH_MODE') || 'database'
     if (!['database', 'legacy_git'].includes(publishMode)) {

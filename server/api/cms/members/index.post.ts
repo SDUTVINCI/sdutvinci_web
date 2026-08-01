@@ -2,27 +2,14 @@ import { createError, readValidatedBody } from 'h3'
 import { z } from 'zod'
 import { cmsAccountPattern } from '../../../../shared/types/cms-auth'
 import { createCmsMember } from '../../../services/cms-members'
+import { isSafeMemberPublicUrl } from '../../../services/member-profile'
 import {
   requireCmsCsrf,
   requireCmsRequestAuth
 } from '../../../utils/cms-http'
 
-const safeAvatarUrl = z.string().trim().max(2048).refine((value) => {
-  if (
-    value.startsWith('/')
-    && !value.startsWith('//')
-    && !value.includes('\\')
-    && !/[\u0000-\u001f\u007f]/.test(value)
-  ) return true
-  try {
-    const url = new URL(value)
-    return ['http:', 'https:'].includes(url.protocol)
-      && !url.username
-      && !url.password
-  } catch {
-    return false
-  }
-}, '头像地址必须是站内路径或 HTTP(S) URL')
+const safeAvatarUrl = z.string().trim().max(2048)
+  .refine(value => isSafeMemberPublicUrl(value, true), '头像地址不安全')
 
 const metadataSchema = z.record(z.string(), z.unknown()).refine(
   value => JSON.stringify(value).length <= 100_000,
@@ -33,6 +20,16 @@ const schema = z.object({
   memberKey: z.string().trim().toLowerCase().regex(cmsAccountPattern),
   name: z.string().trim().min(1).max(100),
   avatarUrl: safeAvatarUrl.nullable().optional(),
+  sourcePath: z.string().trim().max(400).optional(),
+  role: z.string().trim().max(100).nullable().optional(),
+  memberType: z.string().trim().max(100).nullable().optional(),
+  seasons: z.array(z.string().trim().min(1).max(100)).max(100).optional(),
+  advisorSeasons: z.array(z.string().trim().min(1).max(100)).max(100).optional(),
+  grade: z.string().trim().max(100).nullable().optional(),
+  affiliation: z.string().trim().max(200).nullable().optional(),
+  links: z.record(z.string(), z.string().trim().max(2048).nullable()).optional(),
+  body: z.string().max(1_000_000).optional(),
+  sortOrder: z.number().int().min(0).max(1_000_000).optional(),
   metadata: metadataSchema.optional()
 }).strict()
 

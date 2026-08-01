@@ -4,7 +4,7 @@ import { and, asc, eq, inArray, isNotNull } from 'drizzle-orm'
 import { z } from 'zod'
 import type { CmsArticleCollection } from '../../shared/types/cms-articles'
 import { getDatabase } from '../db/client'
-import { articleRevisions, articles } from '../db/schema'
+import { articleRevisions, articles, memberRevisions, members } from '../db/schema'
 import {
   buildContentRepositoryMetadata,
   CONTENT_REPOSITORY_README,
@@ -12,9 +12,11 @@ import {
   serializeContentRevision,
   sha256ContentBytes,
   type ContentSnapshotFile,
+  type ContentSnapshotMember,
   type ContentSnapshotTombstone,
   type SerializedContentRevision
 } from './content-export-serialization'
+import { profileFromRecord, serializeMemberProfile } from './member-profile'
 import { runContentExportGit } from './content-export-repository'
 
 const snapshotSchema = z.object({
@@ -32,6 +34,16 @@ const snapshotSchema = z.object({
     sha256: z.string().regex(/^[0-9a-f]{64}$/),
     bytes: z.number().int().nonnegative()
   })),
+  members: z.array(z.object({
+    memberId: z.string().uuid(),
+    memberKey: z.string().min(1),
+    revisionId: z.string().uuid(),
+    revisionNumber: z.number().int().positive(),
+    sourcePath: z.string().min(1),
+    path: z.string().min(1),
+    sha256: z.string().regex(/^[0-9a-f]{64}$/),
+    bytes: z.number().int().nonnegative()
+  })).default([]),
   tombstones: z.array(z.object({
     articleId: z.string().uuid(),
     revisionId: z.string().uuid(),
@@ -61,8 +73,22 @@ export interface DatabaseContentExportSnapshot {
   deletedItems: DatabaseContentExportItem[]
   files: ContentSnapshotFile[]
   tombstones: ContentSnapshotTombstone[]
+  memberItems: DatabaseMemberExportItem[]
+  activeMemberItems: DatabaseMemberExportItem[]
+  memberFiles: ContentSnapshotMember[]
   maximumRevisionCreatedAt: Date | null
   metadata: ReturnType<typeof buildContentRepositoryMetadata>
+}
+
+export interface DatabaseMemberExportItem {
+  memberId: string
+  memberKey: string
+  revisionId: string
+  revisionNumber: number
+  revisionCreatedAt: Date
+  sourcePath: string
+  deleted: boolean
+  serialized: SerializedContentRevision
 }
 
 export const loadDatabaseContentExportSnapshot = async (
@@ -92,6 +118,18 @@ export const loadDatabaseContentExportSnapshot = async (
       isNotNull(articles.currentRevisionId)
     ))
     .orderBy(asc(articles.collection), asc(articles.relativePath))
+
+  const memberRows = await database.select({
+    memberId: members.id,
+    memberKey: members.memberKey,
+    deletedAt: members.deletedAt,
+    revisionId: memberRevisions.id,
+    revisionNumber: memberRevisions.revisionNumber,
+    sourcePath: memberRevisions.sourcePath,
+    profile: memberRevisions.profile,
+    revisionCreatedAt: memberRevisions.createdAt
+  }).from(members).innerJoin(memberRevisions, eq(members.currentRevisionId, memberRevisions.id))
+    .where(isNotNull(members.currentRevisionId)).orderBy(asc(members.memberKey))
 
   const items: DatabaseContentExportItem[] = rows.map((row) => {
     const collection = row.collection as CmsArticleCollection
@@ -135,7 +173,28 @@ export const loadDatabaseContentExportSnapshot = async (
     relativePath: item.relativePath,
     path: item.serialized.path
   }))
-  const maximumRevisionCreatedAt = items.reduce<Date | null>(
+  const memberItems: DatabaseMemberExportItem[] = memberRows.map(row => ({
+    memberId: row.memberId,
+    memberKey: row.memberKey,
+    revisionId: row.revisionId,
+    revisionNumber: row.revisionNumber,
+    revisionCreatedAt: row.revisionCreatedAt,
+    sourcePath: row.sourcePath,
+    deleted: Boolean(row.deletedAt),
+    serialized: serializeMemberProfile(profileFromRecord(row.profile))
+  }))
+  const activeMemberItems = memberItems.filter(item => !item.deleted)
+  const memberFiles: ContentSnapshotMember[] = activeMemberItems.map(item => ({
+    memberId: item.memberId,
+    memberKey: item.memberKey,
+    revisionId: item.revisionId,
+    revisionNumber: item.revisionNumber,
+    sourcePath: item.sourcePath,
+    path: item.serialized.path,
+    sha256: item.serialized.sha256,
+    bytes: item.serialized.bytes
+  }))
+  const maximumRevisionCreatedAt = [...items, ...memberItems].reduce<Date | null>(
     (maximum, item) =>
       !maximum || item.revisionCreatedAt > maximum
         ? item.revisionCreatedAt
@@ -148,11 +207,15 @@ export const loadDatabaseContentExportSnapshot = async (
     deletedItems,
     files,
     tombstones,
+    memberItems,
+    activeMemberItems,
+    memberFiles,
     maximumRevisionCreatedAt,
     metadata: buildContentRepositoryMetadata(
       files,
       tombstones,
-      maximumRevisionCreatedAt
+      maximumRevisionCreatedAt,
+      memberFiles
     )
   }
 }
@@ -286,6 +349,45 @@ export const buildContentTakeoverReport = async (
     })
   }
 
+  for (const item of snapshot.activeMemberItems) {
+    const targetPath = item.serialized.path
+    const legacyPath = `content/${targetPath}`
+    recognized.add(targetPath)
+    recognized.add(legacyPath)
+    const [targetSource, legacySource] = await Promise.all([
+      readRepositoryFile(workspace, targetPath), readRepositoryFile(workspace, legacyPath)
+    ])
+    if (targetSource !== null && legacySource !== null) {
+      conflicts.push(`${targetPath}: target and legacy paths both exist`)
+      continue
+    }
+    const repositorySource = targetSource ?? legacySource
+    actions.push({
+      articleId: item.memberId,
+      revisionId: item.revisionId,
+      action: targetSource === item.serialized.source
+        ? legacySource === null ? 'noop' : 'remove_legacy'
+        : legacySource !== null ? 'move_and_update' : targetSource !== null ? 'update' : 'write',
+      sourcePath: legacySource !== null ? legacyPath : null,
+      targetPath,
+      repositorySha256: repositorySource === null ? null : sha256ContentBytes(repositorySource),
+      databaseSha256: item.serialized.sha256,
+      legacyMatchesRevisionBytes: null
+    })
+  }
+
+  for (const item of snapshot.memberItems.filter(item => item.deleted)) {
+    for (const path of [item.serialized.path, `content/${item.serialized.path}`]) {
+      recognized.add(path)
+      const source = await readRepositoryFile(workspace, path)
+      if (source !== null) actions.push({
+        articleId: item.memberId, revisionId: item.revisionId, action: 'delete',
+        sourcePath: path, targetPath: path, repositorySha256: sha256ContentBytes(source),
+        databaseSha256: null, legacyMatchesRevisionBytes: null
+      })
+    }
+  }
+
   for (const item of snapshot.deletedItems) {
     const targetPath = item.serialized.path
     const legacyPath = `content/${targetPath}`
@@ -318,8 +420,8 @@ export const buildContentTakeoverReport = async (
     baseCommit,
     clean: !dirty,
     trackedFileCount: tracked.length,
-    databaseFileCount: snapshot.activeItems.length,
-    databaseDeletedCount: snapshot.deletedItems.length,
+    databaseFileCount: snapshot.activeItems.length + snapshot.activeMemberItems.length,
+    databaseDeletedCount: snapshot.deletedItems.length + snapshot.memberItems.filter(item => item.deleted).length,
     actions,
     preservedFiles,
     conflicts,

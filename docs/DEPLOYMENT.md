@@ -2519,3 +2519,37 @@ content、评论和关闭，不向 GitHub 发请求。停止时逐个验证容�
 
 完整算法、安全边界和失败取证见 `docs/v2/PR_IMPORT.md`；浏览器步骤和自动证据见
 `docs/v2/PHASE_V2_8_ACCEPTANCE.md`。
+
+## 20. V2 阶段 9 成员数据库权威上线与回滚
+
+Migration `0017_pale_betty_ross.sql` 是 expand-only：扩展 `members`，新增
+`member_revisions`/`member_proposals`，并给导出与 PR item 增加 nullable 成员引用。先备份，
+再按既有蓝绿流程执行 Migration；旧应用可忽略新增列和表，不执行 down migration。
+
+上线前对当前代码仓库的只读成员文件执行：
+
+```bash
+npm run v2:members:migrate -- --dry-run
+npm run v2:members:migrate -- --apply --confirm=MIGRATE_MEMBER_PROFILES
+```
+
+Dry Run 必须显示 32 条、稳定 ID 无重复、数据库没有 Markdown 外额外成员且无 blocker。
+Apply 使用事务 advisory lock，保留已有 member UUID，只为尚无 current pointer 的成员建立
+Revision 与 Outbox，重复执行不增加 Revision。禁止把 migration 接回应用启动或普通同步命令。
+
+候选确认后使用 `CONTENT_SOURCE_MEMBERS=database`；生产默认也是 database。若应用读取出现
+问题，可暂时将其显式改为 `legacy_git` 并正常蓝绿发布配置，这只回滚公开读取，不反向覆盖
+数据库。CMS 写入应在故障窗口暂停；保留数据库 Revision、Outbox、审计和旧 `content/members`。
+代码回滚用普通 `git revert`，不删除 `0017` 表/列，不 Force Push 内容仓库。
+
+本地隔离人工环境：
+
+```bash
+npm run v2:phase9:manual -- start
+npm run v2:phase9:manual -- status
+npm run v2:phase9:manual -- inspect
+npm run v2:phase9:manual -- stop
+```
+
+脚本只使用带精确 label 的临时 PostgreSQL/应用容器、回环端口和 `/tmp` marker；内置 32 名
+成员、管理员、本地裸 Git 与 mock GitHub 成员 PR，不连接真实 GitHub、生产数据库或内容仓库写权限。

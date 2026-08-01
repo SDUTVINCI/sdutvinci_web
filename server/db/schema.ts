@@ -63,11 +63,97 @@ export const members = pgTable('members', {
   name: varchar('name', { length: 100 }).notNull(),
   avatarUrl: text('avatar_url'),
   sourcePath: text('source_path'),
+  role: text('role'),
+  memberType: text('member_type'),
+  seasons: jsonb('seasons').$type<string[]>().default([]).notNull(),
+  advisorSeasons: jsonb('advisor_seasons').$type<string[]>().default([]).notNull(),
+  grade: varchar('grade', { length: 32 }),
+  affiliation: text('affiliation'),
+  links: jsonb('links').$type<Record<string, string | null>>().default({}).notNull(),
+  body: text('body').default('').notNull(),
+  sortOrder: integer('sort_order').default(0).notNull(),
+  version: integer('version').default(1).notNull(),
+  currentRevisionId: uuid('current_revision_id')
+    .references((): AnyPgColumn => memberRevisions.id, { onDelete: 'restrict' }),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  deletedByUserId: uuid('deleted_by_user_id')
+    .references(() => users.id, { onDelete: 'set null' }),
   metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}).notNull(),
   ...timestamps
 }, table => [
+  check('members_version_check', sql`${table.version} >= 1`),
+  check('members_sort_order_check', sql`${table.sortOrder} >= 0`),
   uniqueIndex('members_member_key_unique').on(table.memberKey),
-  uniqueIndex('members_source_path_unique').on(table.sourcePath)
+  uniqueIndex('members_source_path_unique').on(table.sourcePath),
+  index('members_deleted_at_index').on(table.deletedAt),
+  index('members_sort_index').on(table.sortOrder, table.memberKey)
+])
+
+export const memberRevisions = pgTable('member_revisions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  memberId: uuid('member_id')
+    .notNull()
+    .references(() => members.id, { onDelete: 'restrict' }),
+  revisionNumber: integer('revision_number').notNull(),
+  memberKey: varchar('member_key', { length: 100 }).notNull(),
+  sourcePath: text('source_path').notNull(),
+  profile: jsonb('profile').$type<Record<string, unknown>>().default({}).notNull(),
+  markdownSource: text('markdown_source').notNull(),
+  contentHash: varchar('content_hash', { length: 64 }).notNull(),
+  sourceKind: varchar('source_kind', { length: 32 }).notNull(),
+  actorUserId: uuid('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
+  restoredFromRevisionId: uuid('restored_from_revision_id')
+    .references((): AnyPgColumn => memberRevisions.id, { onDelete: 'restrict' }),
+  sourceProposalId: uuid('source_proposal_id')
+    .references((): AnyPgColumn => memberProposals.id, { onDelete: 'restrict' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
+}, table => [
+  check('member_revisions_number_check', sql`${table.revisionNumber} >= 1`),
+  check(
+    'member_revisions_hash_check',
+    sql`${table.contentHash} ~ '^[0-9a-f]{64}$'`
+  ),
+  check(
+    'member_revisions_source_kind_check',
+    sql`${table.sourceKind} in ('backfill', 'cms_create', 'cms_update', 'proposal_apply', 'restore', 'delete')`
+  ),
+  uniqueIndex('member_revisions_member_number_unique')
+    .on(table.memberId, table.revisionNumber),
+  uniqueIndex('member_revisions_source_proposal_unique').on(table.sourceProposalId),
+  index('member_revisions_member_created_index').on(table.memberId, table.createdAt)
+])
+
+export const memberProposals = pgTable('member_proposals', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  memberId: uuid('member_id')
+    .notNull()
+    .references(() => members.id, { onDelete: 'restrict' }),
+  baseRevisionId: uuid('base_revision_id')
+    .notNull()
+    .references(() => memberRevisions.id, { onDelete: 'restrict' }),
+  currentRevisionId: uuid('current_revision_id')
+    .notNull()
+    .references(() => memberRevisions.id, { onDelete: 'restrict' }),
+  action: varchar('action', { length: 16 }).notNull(),
+  status: varchar('status', { length: 16 }).default('pending').notNull(),
+  proposedProfile: jsonb('proposed_profile').$type<Record<string, unknown>>(),
+  fieldChanges: jsonb('field_changes').$type<Record<string, unknown>>().default({}).notNull(),
+  sourceImportItemId: uuid('source_import_item_id')
+    .references((): AnyPgColumn => contentPrImportItems.id, { onDelete: 'restrict' }),
+  createdByUserId: uuid('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  appliedByUserId: uuid('applied_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  appliedRevisionId: uuid('applied_revision_id')
+    .references(() => memberRevisions.id, { onDelete: 'restrict' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true })
+}, table => [
+  check('member_proposals_action_check', sql`${table.action} in ('update', 'delete')`),
+  check(
+    'member_proposals_status_check',
+    sql`${table.status} in ('pending', 'conflicted', 'applied', 'rejected')`
+  ),
+  uniqueIndex('member_proposals_import_item_unique').on(table.sourceImportItemId),
+  index('member_proposals_member_status_index').on(table.memberId, table.status, table.createdAt)
 ])
 
 export const articles = pgTable('articles', {
@@ -364,6 +450,8 @@ export const contentExportJobs = pgTable('content_export_jobs', {
   targetId: uuid('target_id').notNull(),
   revisionId: uuid('revision_id')
     .references(() => articleRevisions.id, { onDelete: 'restrict' }),
+  memberRevisionId: uuid('member_revision_id')
+    .references(() => memberRevisions.id, { onDelete: 'restrict' }),
   operation: varchar('operation', { length: 32 }).notNull(),
   status: varchar('status', { length: 32 }).default('pending').notNull(),
   idempotencyKey: varchar('idempotency_key', { length: 200 }).notNull(),
@@ -411,11 +499,15 @@ export const contentExportJobs = pgTable('content_export_jobs', {
   uniqueIndex('content_export_jobs_revision_operation_unique')
     .on(table.revisionId, table.operation)
     .where(sql`${table.revisionId} is not null`),
+  uniqueIndex('content_export_jobs_member_revision_operation_unique')
+    .on(table.memberRevisionId, table.operation)
+    .where(sql`${table.memberRevisionId} is not null`),
   index('content_export_jobs_pending_index')
     .on(table.status, table.nextAttemptAt, table.createdAt),
   index('content_export_jobs_target_index')
     .on(table.targetType, table.targetId, table.createdAt),
   index('content_export_jobs_revision_id_index').on(table.revisionId),
+  index('content_export_jobs_member_revision_id_index').on(table.memberRevisionId),
   index('content_export_jobs_lease_index').on(table.status, table.leaseExpiresAt),
   index('content_export_jobs_latest_run_id_index').on(table.latestRunId)
 ])
@@ -578,6 +670,7 @@ export const contentPrImportItems = pgTable('content_pr_import_items', {
     .notNull()
     .references(() => contentPrImportRuns.id, { onDelete: 'cascade' }),
   ordinal: integer('ordinal').notNull(),
+  targetType: varchar('target_type', { length: 16 }).default('article').notNull(),
   changeType: varchar('change_type', { length: 16 }).notNull(),
   classification: varchar('classification', { length: 32 }).notNull(),
   importable: boolean('importable').default(false).notNull(),
@@ -588,6 +681,11 @@ export const contentPrImportItems = pgTable('content_pr_import_items', {
     .references(() => articleRevisions.id, { onDelete: 'restrict' }),
   currentRevisionId: uuid('current_revision_id')
     .references(() => articleRevisions.id, { onDelete: 'restrict' }),
+  memberId: uuid('member_id').references(() => members.id, { onDelete: 'restrict' }),
+  baseMemberRevisionId: uuid('base_member_revision_id')
+    .references(() => memberRevisions.id, { onDelete: 'restrict' }),
+  currentMemberRevisionId: uuid('current_member_revision_id')
+    .references(() => memberRevisions.id, { onDelete: 'restrict' }),
   proposedArticleId: uuid('proposed_article_id').defaultRandom(),
   baseSource: text('base_source'),
   currentSource: text('current_source'),
@@ -601,17 +699,23 @@ export const contentPrImportItems = pgTable('content_pr_import_items', {
   conflictDetails: jsonb('conflict_details').$type<Record<string, unknown>>().default({}).notNull(),
   status: varchar('status', { length: 16 }).default('pending').notNull(),
   draftId: uuid('draft_id').references(() => drafts.id, { onDelete: 'set null' }),
+  memberProposalId: uuid('member_proposal_id')
+    .references(() => memberProposals.id, { onDelete: 'set null' }),
   importedAt: timestamp('imported_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
 }, table => [
   check('content_pr_import_items_ordinal_check', sql`${table.ordinal} >= 0`),
+  check(
+    'content_pr_import_items_target_type_check',
+    sql`${table.targetType} in ('article', 'member')`
+  ),
   check(
     'content_pr_import_items_change_type_check',
     sql`${table.changeType} in ('added', 'modified', 'renamed', 'removed', 'invalid')`
   ),
   check(
     'content_pr_import_items_classification_check',
-    sql`${table.classification} in ('safe_change', 'auto_merge', 'content_conflict', 'new_article', 'move_or_rename', 'deletion_proposal', 'path_conflict', 'invalid_file', 'unknown_syntax', 'high_risk_syntax')`
+    sql`${table.classification} in ('safe_change', 'auto_merge', 'content_conflict', 'new_article', 'move_or_rename', 'deletion_proposal', 'path_conflict', 'invalid_file', 'unknown_syntax', 'high_risk_syntax', 'member_safe_change', 'member_auto_merge', 'member_conflict', 'member_deletion_proposal', 'member_sensitive_rejected', 'member_invalid')`
   ),
   check(
     'content_pr_import_items_status_check',
@@ -624,7 +728,9 @@ export const contentPrImportItems = pgTable('content_pr_import_items', {
   uniqueIndex('content_pr_import_items_run_ordinal_unique').on(table.runId, table.ordinal),
   index('content_pr_import_items_run_index').on(table.runId, table.ordinal),
   index('content_pr_import_items_article_index').on(table.articleId),
-  index('content_pr_import_items_draft_index').on(table.draftId)
+  index('content_pr_import_items_member_index').on(table.memberId),
+  index('content_pr_import_items_draft_index').on(table.draftId),
+  index('content_pr_import_items_member_proposal_index').on(table.memberProposalId)
 ])
 
 export const contentPrExternalActions = pgTable('content_pr_external_actions', {
@@ -752,6 +858,8 @@ export type Role = typeof roles.$inferSelect
 export type Session = typeof sessions.$inferSelect
 export type RateLimitBucket = typeof rateLimitBuckets.$inferSelect
 export type Member = typeof members.$inferSelect
+export type MemberRevision = typeof memberRevisions.$inferSelect
+export type MemberProposal = typeof memberProposals.$inferSelect
 export type Article = typeof articles.$inferSelect
 export type ArticleRevision = typeof articleRevisions.$inferSelect
 export type Draft = typeof drafts.$inferSelect

@@ -146,6 +146,17 @@ export interface ContentSnapshotTombstone {
   path: string
 }
 
+export interface ContentSnapshotMember {
+  memberId: string
+  memberKey: string
+  revisionId: string
+  revisionNumber: number
+  sourcePath: string
+  path: string
+  sha256: string
+  bytes: number
+}
+
 export interface ContentRepositoryMetadata {
   snapshotSource: string
   snapshotSha256: string
@@ -159,7 +170,8 @@ const deterministicJson = (value: unknown) =>
 export const buildContentRepositoryMetadata = (
   files: ContentSnapshotFile[],
   tombstones: ContentSnapshotTombstone[],
-  maximumRevisionCreatedAt: Date | null
+  maximumRevisionCreatedAt: Date | null,
+  members: ContentSnapshotMember[] = []
 ): ContentRepositoryMetadata => {
   const sortedFiles = [...files].sort((left, right) =>
     compareCodePoints(left.path, right.path)
@@ -167,6 +179,7 @@ export const buildContentRepositoryMetadata = (
   const sortedTombstones = [...tombstones].sort((left, right) =>
     compareCodePoints(left.articleId, right.articleId)
   )
+  const sortedMembers = [...members].sort((left, right) => compareCodePoints(left.path, right.path))
   const generatedAt = maximumRevisionCreatedAt?.toISOString() || null
   const snapshotSource = deterministicJson({
     formatVersion: CONTENT_EXPORT_FORMAT_VERSION,
@@ -183,6 +196,7 @@ export const buildContentRepositoryMetadata = (
       sha256: file.sha256,
       bytes: file.bytes
     })),
+    members: sortedMembers,
     tombstones: sortedTombstones
   })
   const snapshotSha256 = sha256ContentBytes(snapshotSource)
@@ -195,7 +209,7 @@ export const buildContentRepositoryMetadata = (
       path: '.vinci/snapshot.json',
       sha256: snapshotSha256
     },
-    files: sortedFiles.map(file => ({
+    files: [...sortedFiles, ...sortedMembers].sort((left, right) => compareCodePoints(left.path, right.path)).map(file => ({
       path: file.path,
       sha256: file.sha256,
       bytes: file.bytes

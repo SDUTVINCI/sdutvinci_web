@@ -7,6 +7,7 @@ import { runMigrations } from '../server/db/migrate'
 import {
   articleRevisions,
   articles,
+  memberRevisions,
   members
 } from '../server/db/schema'
 import { getCmsArticlePublicPath } from '../server/services/cms-articles'
@@ -32,6 +33,7 @@ import {
 } from '../server/utils/public-content-flags'
 import { compareWikiChapters, numberWikiChapters } from '../utils/wiki-chapters'
 import { configureCmsTestDatabase } from './helpers/cms-test-database'
+import { memberProfileFromMarkdown, profileRecord, serializeMemberProfile } from '../server/services/member-profile'
 
 const enabled = configureCmsTestDatabase()
 const databaseSuite = enabled ? describe : describe.skip
@@ -200,17 +202,25 @@ databaseSuite('V2 阶段 4 正式内容查询、缓存与候选 Feed', () => {
       body: '不应公开',
       isPresent: 'false'
     })
-    await getDatabase().insert(members).values({
-      memberKey: 'phase4-member',
+    const memberSource = '---\nid: phase4member\nname: 阶段四成员\nimage: /images/logo.png\nrole: 控制组\ntime: 2026\nlinks:\n  github: https://example.test/phase4\n---\n数据库成员正文\n'
+    const memberProfile = memberProfileFromMarkdown(memberSource, '2018/王虓.md')
+    const memberSerialized = serializeMemberProfile(memberProfile)
+    const [member] = await getDatabase().insert(members).values({
+      memberKey: 'phase4member',
       name: '阶段四成员',
       avatarUrl: '/images/logo.png',
       sourcePath: '2018/王虓.md',
-      metadata: {
-        role: '控制组',
-        time: '2026',
-        links: { github: 'https://example.test/phase4' }
-      }
-    })
+      role: memberProfile.role, seasons: memberProfile.seasons,
+      links: memberProfile.links, body: memberProfile.body, metadata: {}
+    }).returning()
+    const [memberRevision] = await getDatabase().insert(memberRevisions).values({
+      memberId: member!.id, revisionNumber: 1, memberKey: member!.memberKey,
+      sourcePath: member!.sourcePath, profile: profileRecord(memberProfile),
+      markdownSource: memberSerialized.source, contentHash: memberSerialized.sha256,
+      sourceKind: 'backfill'
+    }).returning()
+    await getDatabase().update(members).set({ currentRevisionId: memberRevision!.id })
+      .where(eq(members.id, member!.id))
     process.env.NUXT_PUBLIC_SITE_URL = 'https://phase4.test'
   })
 
@@ -265,18 +275,18 @@ databaseSuite('V2 阶段 4 正式内容查询、缓存与候选 Feed', () => {
       .toEqual(['阶段四测试', '开始', '继续'])
   })
 
-  it('成员候选保持数据库结构化读取，详情只读复用 legacy 正文', async () => {
+  it('成员列表和详情都只读取数据库结构化资料与正文', async () => {
     const list = await listPublicMembersFromDatabase()
     expect(list).toMatchObject([{
-      memberKey: 'phase4-member',
+      memberKey: 'phase4member',
       name: '阶段四成员',
       role: '控制组',
-      body: ''
+      body: '数据库成员正文\n'
     }])
-    const detail = await getPublicMemberFromDatabase('phase4-member')
-    expect(detail?.body.length).toBeGreaterThan(0)
+    const detail = await getPublicMemberFromDatabase('phase4member')
+    expect(detail?.body).toBe('数据库成员正文\n')
     expect(await getPublicMemberFromDatabase('阶段四成员')).toMatchObject({
-      memberKey: 'phase4-member'
+      memberKey: 'phase4member'
     })
     expect(await getPublicMemberFromDatabase('missing')).toBeNull()
   })
@@ -295,7 +305,7 @@ databaseSuite('V2 阶段 4 正式内容查询、缓存与候选 Feed', () => {
       '<loc>https://phase4.test/news/phase4-test-news</loc>'
     )
     expect(sitemap).toContain(
-      '<loc>https://phase4.test/team/phase4-member</loc>'
+      '<loc>https://phase4.test/team/phase4member</loc>'
     )
     expect(sitemap).not.toContain('phase4-test-deleted')
     expect(rss).toContain('<title>阶段四数据库新闻</title>')

@@ -33,7 +33,13 @@ const labels: Record<ContentImportClassification, string> = {
   path_conflict: '路径冲突',
   invalid_file: '非法文件',
   unknown_syntax: '未知语法',
-  high_risk_syntax: '高风险 HTML / Vue / MDC'
+  high_risk_syntax: '高风险 HTML / Vue / MDC',
+  member_safe_change: '成员安全修改提案',
+  member_auto_merge: '成员字段级自动合并提案',
+  member_conflict: '成员字段冲突',
+  member_deletion_proposal: '成员删除提案',
+  member_sensitive_rejected: '成员敏感字段已拒绝',
+  member_invalid: '非法成员资料'
 }
 const isAdmin = computed(() => session.value?.user.roles.includes('admin') ?? false)
 const artifactKeys = ['baseSource', 'currentSource', 'proposedSource', 'mergedSource'] as const
@@ -144,8 +150,9 @@ const externalAction = async (action: 'comment' | 'close') => {
     </header>
 
     <div class="cms-alert cms-alert-warning">
-      Dry Run 和导入都不会批准、发布、Merge 或写正式 Revision。删除仅创建提案；高风险语法和冲突默认阻止。
+      Dry Run 和导入都不会批准、发布、Merge 或写正式 Revision。成员变更与删除只创建提案，管理员还须在成员页再次明确接受；敏感字段直接拒绝。
     </div>
+    <p class="cms-muted">成员 PR 白名单：姓名、头像、对外职责/类型、参与/指导届次、年级、单位、公开链接、简介正文、公开 metadata、排序号。登录账号/密码、账号绑定、系统角色权限、会话和安全状态不允许修改。</p>
     <div v-if="message" class="cms-alert cms-alert-success">{{ message }}</div>
     <div v-if="failure" class="cms-alert cms-alert-error" role="alert">{{ failure }}</div>
 
@@ -195,7 +202,7 @@ const externalAction = async (action: 'comment' | 'close') => {
             <strong>{{ labels[item.classification] }}</strong>
           </label>
           <code>{{ item.oldPath || '∅' }} → {{ item.newPath || '∅' }}</code>
-          <p>状态：{{ item.status }}<template v-if="item.draftId"> · 草稿 {{ item.draftId }}</template></p>
+          <p>对象：{{ item.targetType === 'member' ? '成员资料' : '文章' }} · 状态：{{ item.status }}<template v-if="item.draftId"> · 草稿 {{ item.draftId }}</template><template v-if="item.memberProposalId"> · 成员提案 {{ item.memberProposalId }}</template></p>
           <p v-if="item.proposedArticleId">数据库预分配文章 ID：<code>{{ item.proposedArticleId }}</code></p>
           <p v-if="item.warningCodes.length" class="cms-alert cms-alert-warning">{{ item.warningCodes.join('、') }}</p>
           <details v-if="Object.keys(item.conflictDetails).length" class="cms-import-conflict">

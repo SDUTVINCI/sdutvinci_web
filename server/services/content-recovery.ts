@@ -9,6 +9,7 @@ import {
   auditLogs,
   contentImportItems,
   contentImportRuns,
+  memberRevisions,
   members
 } from '../db/schema'
 import { describeCmsFailure } from '../utils/cms-sensitive-data'
@@ -23,6 +24,7 @@ import {
   serializeContentRevision,
   sha256ContentBytes
 } from './content-export-serialization'
+import { memberProfileFromMarkdown, profileRecord, serializeMemberProfile, type MemberProfileSnapshot } from './member-profile'
 
 type RecoveryMode = 'empty_database_initialization' | 'disaster_recovery'
 
@@ -40,10 +42,15 @@ interface ValidatedRecoveryItem {
 }
 
 interface ValidatedMember {
+  memberId: string
+  revisionId: string
+  revisionNumber: number
   memberKey: string
   name: string
   sourcePath: string
-  frontmatter: Record<string, unknown>
+  source: string
+  sha256: string
+  profile: MemberProfileSnapshot
 }
 
 export interface ContentRecoveryReport {
@@ -101,7 +108,7 @@ const walkMarkdown = async (root: string, prefix = ''): Promise<string[]> => {
   return result.sort()
 }
 
-const loadMembers = async (root: string): Promise<ValidatedMember[]> => {
+const loadLegacyMembers = async (root: string): Promise<ValidatedMember[]> => {
   const candidates = ['members', 'content/members']
   const membersByKey = new Map<string, ValidatedMember>()
   for (const candidate of candidates) {
@@ -118,10 +125,15 @@ const loadMembers = async (root: string): Promise<ValidatedMember[]> => {
         throw new Error(`CONTENT_RECOVERY_MEMBER_DUPLICATE:${key}`)
       }
       membersByKey.set(key, {
+        memberId: randomUUID(),
+        revisionId: randomUUID(),
+        revisionNumber: 1,
         memberKey: key,
         name,
-        sourcePath: memberPath,
-        frontmatter: parsed.frontmatter
+        sourcePath: memberPath.replace(/^content\/members\/|^members\//, ''),
+        source,
+        sha256: sha256ContentBytes(source),
+        profile: memberProfileFromMarkdown(source, memberPath.replace(/^content\/members\/|^members\//, ''), { allowLegacyUnknownFields: true })
       })
     }
   }
@@ -160,16 +172,36 @@ const loadAndValidate = async (
   const manifestByPath = new Map(
     (manifest.files || []).map(item => [item.path, item])
   )
-  if (manifestByPath.size !== snapshot.files.length) {
+  if (manifestByPath.size !== snapshot.files.length + snapshot.members.length) {
     throw new Error('CONTENT_RECOVERY_MANIFEST_FILE_COUNT_MISMATCH')
   }
-  const membersToImport = await loadMembers(root)
+  const membersToImport: ValidatedMember[] = snapshot.members.length ? [] : await loadLegacyMembers(root)
+  for (const file of snapshot.members) {
+    const source = await readRepositoryFile(root, file.path)
+    if (source === null || sha256ContentBytes(source) !== file.sha256 || Buffer.byteLength(source) !== file.bytes) {
+      throw new Error(`CONTENT_RECOVERY_MEMBER_HASH_MISMATCH:${file.path}`)
+    }
+    const manifestFile = manifestByPath.get(file.path)
+    if (manifestFile?.sha256 !== file.sha256 || manifestFile.bytes !== file.bytes) {
+      throw new Error(`CONTENT_RECOVERY_MEMBER_MANIFEST_INVALID:${file.path}`)
+    }
+    const profile = memberProfileFromMarkdown(source, file.sourcePath)
+    if (profile.memberKey !== file.memberKey || serializeMemberProfile(profile).source !== source) {
+      throw new Error(`CONTENT_RECOVERY_MEMBER_SERIALIZATION_MISMATCH:${file.path}`)
+    }
+    membersToImport.push({
+      memberId: file.memberId, revisionId: file.revisionId, revisionNumber: file.revisionNumber,
+      memberKey: file.memberKey, name: profile.name, sourcePath: file.sourcePath,
+      source, sha256: file.sha256, profile
+    })
+  }
   const memberKeys = new Set(membersToImport.map(item => item.memberKey))
   const managedPaths = [
     ...await walkMarkdown(root, 'news'),
-    ...await walkMarkdown(root, 'wiki')
+    ...await walkMarkdown(root, 'wiki'),
+    ...(snapshot.members.length ? await walkMarkdown(root, 'members') : [])
   ]
-  const snapshotPaths = new Set(snapshot.files.map(item => item.path))
+  const snapshotPaths = new Set([...snapshot.files.map(item => item.path), ...snapshot.members.map(item => item.path)])
   if (
     managedPaths.length !== snapshotPaths.size
     || managedPaths.some(path => !snapshotPaths.has(path))
@@ -305,6 +337,8 @@ const assertEmptyDatabase = async (tx = getDatabase()) => {
       + (select count(*) from members)
       + (select count(*) from articles)
       + (select count(*) from article_revisions)
+      + (select count(*) from member_revisions)
+      + (select count(*) from member_proposals)
       + (select count(*) from drafts)
       + (select count(*) from review_events)
       + (select count(*) from publish_records)
@@ -366,16 +400,31 @@ export const applyContentRecovery = async (
       })
       if (validated.members.length) {
         await tx.insert(members).values(validated.members.map(item => ({
+          id: item.memberId,
           memberKey: item.memberKey,
           name: item.name,
           sourcePath: item.sourcePath,
-          avatarUrl: typeof item.frontmatter.avatar === 'string'
-            ? item.frontmatter.avatar
-            : typeof item.frontmatter.image === 'string'
-              ? item.frontmatter.image
-              : null,
-          metadata: item.frontmatter
+          avatarUrl: item.profile.avatarUrl,
+          role: item.profile.role,
+          memberType: item.profile.memberType,
+          seasons: item.profile.seasons,
+          advisorSeasons: item.profile.advisorSeasons,
+          grade: item.profile.grade,
+          affiliation: item.profile.affiliation,
+          links: item.profile.links,
+          body: item.profile.body,
+          sortOrder: item.profile.sortOrder,
+          metadata: item.profile.metadata
         })))
+        await tx.insert(memberRevisions).values(validated.members.map(item => ({
+          id: item.revisionId, memberId: item.memberId, revisionNumber: item.revisionNumber,
+          memberKey: item.memberKey, sourcePath: item.sourcePath, profile: profileRecord(item.profile),
+          markdownSource: item.source, contentHash: item.sha256, sourceKind: 'backfill' as const,
+          createdAt: new Date(validated.snapshot.generatedAt || Date.now())
+        })))
+        for (const item of validated.members) await tx.execute(sql`
+          update members set current_revision_id = ${item.revisionId}::uuid where id = ${item.memberId}::uuid
+        `)
       }
       for (const [index, item] of validated.items.entries()) {
         const title = item.frontmatter.title

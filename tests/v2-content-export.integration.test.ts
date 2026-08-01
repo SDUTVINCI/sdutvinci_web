@@ -21,10 +21,12 @@ import {
   auditLogs,
   contentExportJobs,
   contentExportRuns,
+  members,
   users
 } from '../server/db/schema'
 import { checkContentExportConsistency } from '../server/services/content-export-consistency'
 import { getCmsArticleExportStatus } from '../server/services/cms-export-status'
+import { createCmsMember, updateCmsMember } from '../server/services/cms-members'
 import {
   applyContentTakeover,
   retryContentExportJob,
@@ -518,6 +520,36 @@ suite('V2 阶段 6 独立内容仓库与异步增量导出', () => {
     expect((await getDatabase().select().from(contentExportJobs).where(
       eq(contentExportJobs.id, deleteJob!.id)
     ))[0]?.status).toBe('succeeded')
+  })
+
+  it('成员 Revision 增量导出到 members/，Push 失败不回滚数据库且可幂等重试', async () => {
+    const article = await seedArticle('news', 'member-export-base.md', 'Base', 'base\n')
+    await takeOver([article])
+    const created = await createCmsMember({
+      memberKey: 'phase6member', name: 'Phase 6 Member', role: 'Member', body: 'member v1'
+    }, actorUserId)
+    expect((await runContentExportWorkerOnce()).state).toBe('succeeded')
+    expect(await remoteFile('members/cms/phase6member.md')).toContain('member v1')
+    const snapshot = JSON.parse(await remoteFile('.vinci/snapshot.json'))
+    expect(snapshot.members).toMatchObject([{ memberId: created!.id, memberKey: 'phase6member' }])
+
+    const updated = await updateCmsMember(created!.id, {
+      name: 'Phase 6 Member', body: 'member database v2', expectedVersion: 1
+    }, actorUserId)
+    const [job] = await getDatabase().select().from(contentExportJobs)
+      .where(eq(contentExportJobs.memberRevisionId, updated!.currentRevisionId!)).limit(1)
+    const hook = join(remote, 'hooks', 'pre-receive')
+    await writeFile(hook, '#!/bin/sh\necho member-export-failure >&2\nexit 1\n')
+    await chmod(hook, 0o755)
+    expect((await runContentExportWorkerOnce()).state).toBe('failed')
+    expect((await getDatabase().select().from(contentExportJobs).where(eq(contentExportJobs.id, job!.id)))[0]!.status).toBe('pending')
+    expect((await getDatabase().select().from(members).where(eq(members.id, created!.id)))[0])
+      .toMatchObject({ body: 'member database v2', version: 2 })
+    expect(await remoteFile('members/cms/phase6member.md')).toContain('member v1')
+    await rm(hook)
+    await getDatabase().update(contentExportJobs).set({ nextAttemptAt: new Date(0) }).where(eq(contentExportJobs.id, job!.id))
+    expect((await runContentExportWorkerOnce()).state).toBe('succeeded')
+    expect(await remoteFile('members/cms/phase6member.md')).toContain('member database v2')
   })
 
   it('Push 失败指数退避且不回滚数据库；修复远端后继续成功并遮盖凭据', async () => {
