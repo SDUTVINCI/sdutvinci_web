@@ -1302,3 +1302,32 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
 
 - 阶段 7 独立本地 Commit 由最终回复报告。
 - 未 Push、未部署、未进入阶段 8；等待维护者人工验收。
+
+---
+
+## 2026-08-01：V2 阶段 7 人工验收通过并正式收尾
+
+- 维护者依次确认初始状态、无差异对账、四类差异修正、互斥跳过、锁释放后重跑、
+  空库初始化、灾难恢复、运维状态与最终工作台均正常，并明确回复
+  “V2 阶段 7 验收通过”。
+- 无差异对账保持本地测试远端 HEAD
+  `d26b4fa00fce6d11c119197a152aebfd251a1260`；数据库新增、仓库缺失、修改及多余文件
+  由普通非强制修正 Commit `79da63982905efa5256989ac00f0ba3da098e36f` 一次纠正。
+- 阶段 6 Worker 共用锁占用时对账以 busy/exit 75 跳过且不写远端；释放后无差异重跑
+  成功，HEAD 继续保持修正 Commit。
+- initialize 与 disaster recovery 分别使用独立空测试数据库和 mode 绑定确认令牌；错误
+  令牌、跨 mode 令牌、非空库及事务故障注入均 fail closed，故障后无半导入数据。
+  两次正确恢复均导入 229 篇文章和 32 名成员，后置 Migration、pointer/hash 完整性和
+  应用健康检查通过。
+- 运维复验覆盖 Shanghai 02:00/03:00/04:00 调度、备份互斥与失败重试、custom dump
+  完整性、状态/告警、分层保留 Dry Run、失败备份门禁、latest/verified/locked 保护、
+  过期资产、磁盘阈值、路径越界、符号链接和错误归属拒绝。
+- 页面验收期间发现隔离应用误设 production 不允许的 `CONTENT_SOURCE_MEMBERS=database`；
+  当时数据库与 API 正常，改回 `legacy_git` 后页面正常，判定为人工测试环境配置而非
+  产品缺陷，因此没有验收修复代码 Commit。
+- 人工数据库、容器、本地裸 Git 远端、workspace、日志、备份/快照/报告/临时目录及
+  `55450`、`34162`、`34163` 端口均按名称、标签和归属标记精确清理；既有
+  `vinci-cms-postgres` 保持运行，代码仓库 `content/` 未修改。
+- 阶段 7 实现 Commit 为 `45f4a5934d4dac9bfeb55ff406fed016d714b97b`；验收记录 Commit
+  由最终回复报告。没有 Push、部署、真实 GitHub/内容仓库写操作、宿主机 timer 安装或
+  阶段 8 实施。
