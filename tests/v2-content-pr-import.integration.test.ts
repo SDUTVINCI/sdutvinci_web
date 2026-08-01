@@ -47,6 +47,10 @@ import {
 } from '../server/services/content-export-serialization'
 import { writeCmsMarkdown } from '../server/utils/cms-frontmatter'
 import { resetContentImportConfigForTests } from '../server/utils/content-import-config'
+import {
+  buildContentImportContext,
+  buildContentImportDiff
+} from '../shared/utils/content-import-diff'
 import { configureCmsTestDatabase } from './helpers/cms-test-database'
 
 const enabled = configureCmsTestDatabase()
@@ -322,6 +326,22 @@ suite('V2 阶段 8 本地 Markdown PR 导入与三方冲突', () => {
     )
     expect(conflict.merged).toBeNull()
     expect(conflict.conflicts.length).toBeGreaterThan(0)
+  })
+
+  it('四方材料按 Git diff 行号和增删类型高亮', () => {
+    expect(buildContentImportContext('第一行\n第二行\n')).toEqual([
+      { kind: 'context', prefix: ' ', text: '第一行', oldLine: 1, newLine: 1 },
+      { kind: 'context', prefix: ' ', text: '第二行', oldLine: 2, newLine: 2 }
+    ])
+    expect(buildContentImportDiff(
+      '保留\n旧内容\n',
+      '保留\n新内容\n新增行\n'
+    )).toEqual([
+      { kind: 'context', prefix: ' ', text: '保留', oldLine: 1, newLine: 1 },
+      { kind: 'removed', prefix: '-', text: '旧内容', oldLine: 2, newLine: null },
+      { kind: 'added', prefix: '+', text: '新内容', oldLine: null, newLine: 2 },
+      { kind: 'added', prefix: '+', text: '新增行', oldLine: null, newLine: 3 }
+    ])
   })
 
   it('完整 Dry Run 分类安全/合并/冲突/新增/移动/删除/非法/高风险，并只导入所选安全项且幂等', async () => {
@@ -785,10 +805,15 @@ suite('V2 阶段 8 本地 Markdown PR 导入与三方冲突', () => {
     ])
     expect(page).toContain('只导入所选安全项目')
     expect(page).toContain('不会批准、发布、Merge')
-    expect(page).toContain('Base Source（PR 分支起点内容）')
-    expect(page).toContain('Current Source（数据库当前正式内容）')
-    expect(page).toContain('Proposed Source（PR 提议的新内容）')
-    expect(page).toContain('Merge Result（三方合并后的草稿候选）')
+    expect(page).toContain('Base（开始修改时的原文）')
+    expect(page).toContain('Current（数据库现在的正式内容）')
+    expect(page).toContain('Proposed（这个 PR 想改成的内容）')
+    expect(page).toContain('Merge（导入后将进入草稿的内容）')
+    expect(page).toContain('把检查结果留言到 PR')
+    expect(page).toContain('关闭这个 PR（仅管理员）')
+    expect(page).toContain("action.status === 'succeeded' ? '✓'")
+    expect(page).toContain(':data-kind="line.kind"')
+    expect(page).toContain('绿色整行和“+”表示新增')
     expect(page).toContain("artifact?.id === item.id")
     expect(page).toContain('收起三方审计材料')
     expect(closeApi).toContain("roles.includes('admin')")

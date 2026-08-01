@@ -237,3 +237,25 @@ external_actions=2
 远端、PR fixture、mock state、日志和 `/tmp/vinci-v2-phase8-manual-test`；回环端口
 `55452`、`34162`、`34163` 均已释放。没有真实 GitHub、生产数据库、生产凭据、Push、部署
 或阶段 9 操作。
+
+## 8. 阶段 9 后续可用性修正
+
+阶段 9 验收完成后，维护者要求继续改进阶段 8 的 PR 导入页面，但不改变阶段 8/9 的数据、
+权限或发布边界。修正内容如下：
+
+- “明确授权：评论 PR”改为“把检查结果留言到 PR”，并直接说明只发送脱敏数量摘要，
+  不会 Merge、批准或发布；
+- “管理员明确关闭 PR”改为“关闭这个 PR（仅管理员）”，并说明关闭只改变 PR 状态，
+  不删除已创建的草稿或成员提案；
+- `comment · succeeded` / `close · failed` 等内部值改为中文动作和中文状态卡片，成功、
+  失败、执行中分别使用图标、粗边框和整块背景，不只依靠字体颜色；
+- Base / Current / Proposed / Merge 改用白话标题，并以 Git diff 风格显示旧/新行号、
+  `+`/`-`、绿色新增整行和红色删除整行；Current/Proposed 分别与 Base 比较，Merge 与
+  Current 比较；
+- 新增行级 diff 自动化测试；成员 PR 的字段级合并材料使用同一显示，没有修改成员
+  PostgreSQL 权威、Revision、Proposal、Outbox 或敏感字段拒绝规则。
+
+本修正最终验证：阶段 8 专项 1 file / 13 tests、阶段 9 专项 5 files / 36 tests、完整
+CMS 15 files / 109 tests、typecheck、wiki check、production build 和 `git diff --check`
+均通过。首次 production build 暴露共享 helper 相对路径无法被 Nitro 最终解析；改用
+Nuxt 根别名后重新构建通过，没有放宽任何运行时边界。

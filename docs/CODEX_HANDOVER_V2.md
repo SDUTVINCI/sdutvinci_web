@@ -1531,3 +1531,28 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
   和阶段 9 总体进度已据维护者明确结论勾选。
 - 阶段 9 人工数据库、五个容器、本地裸 Git、PR fixture、mock state、日志和临时目录将在本次
   验收记录 Commit 后按 label/marker 精确清理。没有 Push、部署、真实外部写入或阶段 10 工作。
+
+---
+
+## 2026-08-02：阶段 8 PR 导入页面可读性与 Diff 高亮修正
+
+- 在阶段 9 验收后的干净 `main` 上实施；开始时 HEAD 为阶段 9 验收记录
+  `4eec1709d20f82220adc3de409141bea4efc2c49`，相对本地 `origin/main` behind 0 / ahead 16。
+  全部既有本地提交保持原样，没有 reset、rebase、amend、squash、覆盖或丢弃历史。
+- PR 外部操作改为白话说明：“把检查结果留言到 PR”只发送脱敏数量摘要；“关闭这个 PR
+  （仅管理员）”只关闭 PR。两者都明确说明不会 Merge、批准、发布或删除已创建的草稿/
+  成员提案。确认框和成功消息同步改为同一语义。
+- 外部动作记录不再直接显示 `comment · succeeded`。页面使用中文动作、中文状态、明显的
+  ✓/!/… 图标、2px 状态边框和整块背景区分成功、失败、执行中，不只改变字体颜色。
+- Base / Current / Proposed / Merge 使用白话标题和 Git diff 风格行视图：Base 为基准，
+  Current/Proposed 与 Base 比，Merge 与 Current 比；显示旧/新行号、`+`/`-`、绿色新增
+  整行、红色删除整行和无底色上下文。删除、冲突、新文章和敏感成员材料使用明确空状态。
+- 新增独立共享行 diff helper 和真实增删/行号测试。服务端 GitHub 写入、权限、脱敏、
+  三方合并、导入事务、成员资料数据库权威、Revision、Proposal、Outbox 和导出逻辑均未改。
+- 自动验证：阶段 8 专项 13/13；阶段 9 专项 36/36；完整 CMS 109/109；typecheck、wiki
+  226 文件、production build 和 `git diff --check` 通过。第一次 build 因源码相对路径无法
+  被 Nitro 最终打包解析而失败，改用既有 Nuxt 根别名后重跑成功。
+- 验证只使用带 `com.sdutvinci.scope=v2-pr-ui-test` 标签的临时 PostgreSQL 17 容器和名称
+  含 `test` 的独立数据库；最终按精确名称和标签清理。没有真实 GitHub 请求、内容仓库写入、
+  生产数据库/S3/服务器访问、Push、部署或阶段 10 工作。
+- 本修正使用新的独立本地 Commit；SHA 由最终回复报告，不改写阶段 8、阶段 9 既有 Commit。
