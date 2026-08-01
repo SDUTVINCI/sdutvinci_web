@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { lstat, readFile, readdir } from 'node:fs/promises'
-import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path'
+import { basename, isAbsolute, relative, resolve, sep } from 'node:path'
 import { sql } from 'drizzle-orm'
 import { getDatabase } from '../db/client'
 import {
@@ -24,6 +24,7 @@ import {
   serializeContentRevision,
   sha256ContentBytes
 } from './content-export-serialization'
+import { getCmsArticleDirectory, getCmsArticlePublicPath } from './cms-articles'
 import { memberProfileFromMarkdown, profileRecord, serializeMemberProfile, type MemberProfileSnapshot } from './member-profile'
 
 type RecoveryMode = 'empty_database_initialization' | 'disaster_recovery'
@@ -435,8 +436,8 @@ export const applyContentRecovery = async (
           id: item.articleId,
           collection: item.collection,
           relativePath: item.relativePath,
-          publicPath: `/${item.collection}/${item.relativePath.replace(/index\.md$|\.md$/u, '')}`,
-          directory: dirname(item.relativePath).replaceAll('\\', '/'),
+          publicPath: getCmsArticlePublicPath(item.collection, item.relativePath),
+          directory: getCmsArticleDirectory(item.collection, item.relativePath),
           title,
           frontmatter: item.frontmatter,
           searchText: `${title}\n${item.body}`.toLowerCase(),

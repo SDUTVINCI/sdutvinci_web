@@ -1,11 +1,11 @@
-# V2 阶段 7：备份、全量对账、初始化与灾难恢复手册
+# V2：备份、独立内容仓库、对账与灾难恢复手册
 
 ## 1. 适用范围和权威边界
 
 本手册覆盖 V2 阶段 7 已实现的 PostgreSQL 备份、配置清单、凌晨全量对账、分层保留、
 空数据库 Markdown 初始化和灾难恢复。它不包含阶段 8 的普通 PR 导入。
 
-- PostgreSQL 是新闻和 Wiki 线上正式内容的唯一权威。
+- PostgreSQL 是新闻、Wiki 和成员线上正式内容的唯一权威。
 - 正常换服务器必须恢复完整 PostgreSQL custom-format dump。
 - 内容仓库是可读快照和受控灾难恢复材料，不包含用户、会话、草稿、审核、完整 Revision
   历史或全部审计，不能代替正常数据库备份。
@@ -73,7 +73,7 @@ CONTENT_RECONCILIATION_ROOT=/var/lib/vinci-cms/content-reconciliation
 该根目录必须：
 
 - 是绝对普通目录，不是 `/`，不经过符号链接；
-- 与代码、`content/`、旧 CMS worktree 和内容导出 workspace 不重叠；
+- 与代码仓库、独立内容仓库 clone 和内容导出 workspace 不重叠；
 - 只归运行用户所有；
 - 包含精确归属标记；
 - 下分 `snapshots/`、`reports/` 和 `tmp/`。
@@ -178,7 +178,8 @@ BACKUP_ROOT=/绝对/外部/备份根 ./scripts/backup-prune.sh --dry-run
 
 安全清理逐项验证根、相对路径、命名格式、普通文件/目录、归属标记、UID 和符号链接。
 遇到未知目录、路径越界、错误属主、symlink 或特殊文件时整轮拒绝，不做部分猜测删除。
-不使用 Docker/system-wide prune，也不删除代码仓库 `content/`。
+不使用 Docker/system-wide prune。阶段 10 后代码仓库不再存在三类正式内容目录；清理器
+也不得把代码仓库或独立内容仓库根当作清理目标。
 
 清理失败只使 cleanup unit 失败；备份、对账、网站和数据库发布不依赖清理成功。
 
@@ -196,8 +197,8 @@ BACKUP_ROOT=/绝对/外部/备份根 ./scripts/backup-prune.sh --dry-run
 8. 完成隔离演练后才标记 `.vinci-verified`；
 9. 切换流量前保留旧服务器回滚窗口。
 
-恢复脚本发现任一用户表时拒绝，不会清空、drop 或覆盖非空数据库。CMS Git 异常资料只供
-取证，不会自动覆盖数据库或内容仓库。
+恢复脚本发现任一用户表时拒绝，不会清空、drop 或覆盖非空数据库。备份中的独立内容仓库
+检查清单只供取证，不会自动覆盖数据库或内容仓库；实际 bundle 必须单独验证和保护。
 
 ## 7. 空数据库 Markdown 初始化和内容灾难恢复
 
@@ -303,3 +304,33 @@ RECOVERY_HEALTH_URL='http://127.0.0.1:<隔离端口>/api/health' \
 
 测试资源只能在核对名称、Compose label、数据库名、端口和根目录归属标记后精确删除。
 禁止宽泛 `docker system prune`、`docker volume prune` 或删除 `/tmp`、备份根、项目根。
+
+## 9. 阶段 10 后的内容仓库与代码恢复点
+
+代码仓库不再包含 `content/news`、`content/wiki` 或 `content/members`。普通应用 build、
+runtime 和前台查询不读取内容 snapshot。独立内容仓库继续包含：
+
+- `news/`、`wiki/`、`members/` 三类确定性 Markdown；
+- `.vinci/snapshot.json` 与 `manifest.json`；
+- 普通 Git 历史，作为导出、凌晨对账和 PR Base 的载体。
+
+备份独立内容仓库时必须同时保存 refs/bundle 与工作树 snapshot/manifest，核对三类文件数、
+总字节、逐路径 SHA-256、snapshot SHA 和 manifest SHA。只复制 Markdown 而遗漏 metadata
+不能作为合格恢复材料。
+
+阶段 10 删除前的代码恢复点为本地 annotated tag
+`v2-phase10-pre-removal-20260802-08a1c49`，指向
+`08a1c4908c8890dad5284e9682304e1ac0c7550e`。标签没有 Push。回滚演练只允许创建临时
+worktree 读取该 tag，核对 260 个文件 manifest 后精确删除临时 worktree；不要 reset、
+rebase 或移动当前分支。业务内容恢复仍优先使用 PostgreSQL dump，其次才是独立内容仓库
+受控空库初始化，不能用旧代码 tag 覆盖现有数据库。
+
+`wiki:check` 和全量 Comark/迁移兼容测试必须显式提供独立 snapshot 根：
+
+```bash
+WIKI_CHECK_SOURCE=/绝对/独立内容仓库快照 npm run wiki:check
+V2_CONTENT_SNAPSHOT_SOURCE=/绝对/独立内容仓库快照 npm run test:v2:phase3
+```
+
+检查器拒绝代码仓库内目录和符号链接。production build 不设置这些变量，也不运行内容
+snapshot 检查。

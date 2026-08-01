@@ -2,7 +2,6 @@ import { createError, getQuery } from 'h3'
 import { z } from 'zod'
 import type { PublicArticleCollection } from '../../../../shared/types/public-content'
 import { searchPublicArticlesFromDatabase } from '../../../services/public-content'
-import { requirePublicDatabaseCandidate } from '../../../utils/public-content-http'
 
 const querySchema = z.object({
   q: z.string().trim().min(1).max(200),
@@ -15,15 +14,6 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: '搜索参数无效' })
   }
   const collection = parsed.data.collection as PublicArticleCollection | undefined
-  if (collection) {
-    requirePublicDatabaseCandidate(collection)
-  } else {
-    try {
-      requirePublicDatabaseCandidate('news')
-    } catch {
-      requirePublicDatabaseCandidate('wiki')
-    }
-  }
   return {
     items: await searchPublicArticlesFromDatabase(parsed.data.q, collection)
   }

@@ -1,5 +1,5 @@
 import { readFile, readdir } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { Crepe } from '@milkdown/crepe'
 import { prepareMarkdownForVisualEditor } from '../app/utils/cms-protected-markdown'
@@ -64,7 +64,10 @@ describe('CMS 混合可视化 Markdown 保护', () => {
   })
 
   it('现有全部新闻和 Wiki 正文都能完成可视化预处理', async () => {
-    const roots = ['content/news', 'content/wiki']
+    const snapshotSource = process.env.V2_CONTENT_SNAPSHOT_SOURCE
+    expect(snapshotSource, 'V2_CONTENT_SNAPSHOT_SOURCE 必须指向独立内容仓库快照')
+      .toBeTruthy()
+    const roots = ['news', 'wiki'].map(area => resolve(snapshotSource!, area))
     const paths = (
       await Promise.all(roots.map(async root =>
         (await readdir(root, { recursive: true }))

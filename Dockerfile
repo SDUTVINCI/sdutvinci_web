@@ -15,7 +15,7 @@ RUN npm run build
 FROM node:24-bookworm-slim AS runtime
 
 RUN apt-get update \
-  && apt-get install --yes --no-install-recommends ca-certificates git gosu openssh-client \
+  && apt-get install --yes --no-install-recommends ca-certificates gosu \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -24,10 +24,11 @@ ENV NODE_ENV=production \
   PORT=3000
 
 COPY --from=build --chown=node:node /app/.output ./.output
-COPY --from=build --chown=node:node /app/content ./content
 COPY --chown=root:root docker/entrypoint.sh /usr/local/bin/vinci-entrypoint
 
-RUN chmod 0755 /usr/local/bin/vinci-entrypoint
+RUN chmod 0755 /usr/local/bin/vinci-entrypoint \
+  && test ! -e /app/content \
+  && ! find /app -type f -name '*.md' -print -quit | grep -q .
 
 EXPOSE 3000
 ENTRYPOINT ["vinci-entrypoint"]

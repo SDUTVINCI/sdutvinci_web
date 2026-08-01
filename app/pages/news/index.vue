@@ -3,8 +3,6 @@ type NewsItem = Record<string, any>
 
 const { data: rawNews } = await usePublicContentQuery<NewsItem[]>({
   key: 'news:list',
-  collection: 'news',
-  legacy: () => queryCollection('news').all() as Promise<NewsItem[]>,
   database: async () => (
     await $fetch<{ items: NewsItem[] }>('/api/v2/content/news')
   ).items

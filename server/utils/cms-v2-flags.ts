@@ -22,11 +22,11 @@ export const getContentPublishMode = (): ContentPublishMode => {
   if (!cachedMode) {
     const mode = contentPublishModeSchema.parse(
       process.env.CONTENT_PUBLISH_MODE
-      || (getCmsRuntimeNodeEnvironment() === 'production' ? 'database' : 'legacy_git')
+      || 'database'
     )
-    if (mode === 'revision_shadow' && getCmsRuntimeNodeEnvironment() !== 'test') {
+    if (mode !== 'database' && getCmsRuntimeNodeEnvironment() !== 'test') {
       throw new CmsV2ConfigurationError(
-        'revision_shadow 只允许在 NODE_ENV=test 的隔离环境启用'
+        `${mode} 只允许在 NODE_ENV=test 的隔离回归测试中启用；正式运行固定为 database`
       )
     }
     cachedMode = mode

@@ -411,7 +411,10 @@ integration('V2 阶段 1 Migration 与正式 Revision 安全回填', () => {
   })
 
   it('可对仓库全部 228 篇正式文章回填并逐篇核对 SHA-256', async () => {
-    process.env.CMS_CONTENT_ROOT = resolve(process.cwd(), 'content')
+    const snapshotSource = process.env.V2_CONTENT_SNAPSHOT_SOURCE
+    expect(snapshotSource, 'V2_CONTENT_SNAPSHOT_SOURCE 必须指向独立内容仓库快照')
+      .toBeTruthy()
+    process.env.CMS_CONTENT_ROOT = resolve(snapshotSource!)
     expect(await synchronizeCmsArticles()).toBe(228)
     const dryRun = await dryRunArticleRevisionBackfill()
     expect(dryRun.summary).toMatchObject({

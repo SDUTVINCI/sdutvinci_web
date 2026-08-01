@@ -28,6 +28,7 @@ import {
   normalizeMarkdownRoundTrip
 } from '../shared/utils/cms-markdown-safety'
 import { configureCmsTestDatabase } from './helpers/cms-test-database'
+import { resetCmsV2FlagsForTests } from '../server/utils/cms-v2-flags'
 
 const integration = configureCmsTestDatabase() ? describe : describe.skip
 let contentRoot = ''
@@ -43,6 +44,8 @@ const markdown = (frontmatter: string, body = '') =>
 
 integration('CMS Markdown 编辑器与草稿系统', () => {
   beforeAll(async () => {
+    process.env.CONTENT_PUBLISH_MODE = 'legacy_git'
+    resetCmsV2FlagsForTests()
     process.env.CMS_AUTH_SECRET ??= 'test-only-secret-with-at-least-32-characters'
     contentRoot = await mkdtemp(join(tmpdir(), 'vinci-cms-drafts-'))
     process.env.CMS_CONTENT_ROOT = contentRoot
@@ -74,6 +77,8 @@ integration('CMS Markdown 编辑器与草稿系统', () => {
   })
 
   afterAll(async () => {
+    delete process.env.CONTENT_PUBLISH_MODE
+    resetCmsV2FlagsForTests()
     await closeDatabase()
     if (contentRoot.startsWith(tmpdir())) {
       await rm(contentRoot, { recursive: true, force: true })

@@ -5,10 +5,8 @@ const route = useRoute()
 const slug = decodeURIComponent(String(route.params.slug ?? ''))
 const newsPath = `/news/${slug}`
 
-const { data: page, renderer } = await usePublicContentQuery<NewsItem | null>({
+const { data: page } = await usePublicContentQuery<NewsItem | null>({
   key: `news:${slug}`,
-  collection: 'news',
-  legacy: () => queryCollection('news').path(newsPath).first() as Promise<NewsItem | null>,
   database: async () => (
     await $fetch<{ item: NewsItem }>(
       `/api/v2/content/news/${encodeURIComponent(slug)}`
@@ -76,8 +74,7 @@ const bilibiliSrc = computed(() => {
       </div>
 
       <div class="content-prose">
-        <ContentRenderer v-if="renderer === 'nuxt_content'" :value="page" />
-        <VinciMarkdownRenderer v-else :markdown="String(page.body || '')" />
+        <VinciMarkdownRenderer :markdown="String(page.body || '')" />
       </div>
 
       <div class="article-footer-actions">

@@ -91,6 +91,9 @@ mkdir -p -- "$source_directory" "$target_directory" "$backup_root"
 (
   cd -- "$repository_root"
   git ls-files --cached --others --exclude-standard -z \
+    | while IFS= read -r -d '' path; do
+        [ ! -e "$path" ] || printf '%s\0' "$path"
+      done \
     | tar --null --verbatim-files-from --files-from=- --create --file=-
 ) | tar --extract --file=- --directory "$source_directory"
 cp -a -- "$source_directory/." "$target_directory/"

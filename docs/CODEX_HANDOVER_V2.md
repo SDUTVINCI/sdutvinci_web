@@ -1556,3 +1556,48 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
   含 `test` 的独立数据库；最终按精确名称和标签清理。没有真实 GitHub 请求、内容仓库写入、
   生产数据库/S3/服务器访问、Push、部署或阶段 10 工作。
 - 本修正使用新的独立本地 Commit；SHA 由最终回复报告，不改写阶段 8、阶段 9 既有 Commit。
+
+---
+
+## 2026-08-02：V2 阶段 10 实现与自动验证完成，等待人工验收
+
+- 从基线 `08a1c4908c8890dad5284e9682304e1ac0c7550e` 继续实施。接手时发现阶段 10 已执行到
+  删除内容并修改代码/文档的中间状态；完整保留既有 Commit 和当时工作区，没有 reset、
+  rebase、amend、squash 或覆盖。当前本地 `origin/main` 追踪引用也指向该基线；本轮没有
+  fetch、Push、部署、真实 GitHub/S3/COS 写入或阶段 11 工作。
+- 删除前 annotated tag 为 `v2-phase10-pre-removal-20260802-08a1c49`。带 marker 的恢复根
+  `/tmp/vinci-v2-phase10-pre-removal-08a1c49` 保存 260 文件清单、tar、完整 Git bundle 和三次
+  SHA 对照。稳定路径清单摘要为 `7aea323b...8656`；tar 为 `740ab40c...d402`，bundle 为
+  `0bce06bc...f261`，bundle verify 与标签临时 worktree 回滚对照均通过。
+- 代码仓库正式 `content/news`、`content/wiki`、`content/members` 共 260 个 Markdown 已删除；
+  独立内容仓库仍为 2 news、226 wiki、32 members、snapshot 228 articles + 32 members、
+  manifest 260，HEAD `33da6612aeff549cd15ba33b3866ffbcefacee90`。数据库、文件、snapshot
+  和 manifest 全量一致性 `issueCount: 0`。
+- Nuxt Content 模块、配置、hook、transformer、`queryCollection`/`ContentRenderer`、候选来源
+  HTTP 配置及仅由其需要的依赖已移除。`@nuxt/content`、`better-sqlite3`、`@nuxtjs/mdc`
+  不在安装树；Comark 所需 `shiki` 改为显式直接依赖。新闻、Wiki、成员、搜索、Sitemap 和
+  RSS 固定从 PostgreSQL Current Revision 读取，动态正式内容固定 SSR。
+- runtime 镜像只复制 Nitro `.output`，不含正式 Markdown、Git、SSH 或内容 workspace；
+  operations 镜像继续承担 migration、导出、对账和受控恢复。Compose app 不再挂载代码仓库
+  内容 worktree/凭据。代码、文档和配置变化统一分类 `application`，Actions/自动部署不再有
+  纯 `content` 镜像通道；CMS 发布仍只写数据库 Revision/Outbox，由 Worker 更新独立内容仓库。
+- Schema/Migration 无变化，继续为 0000～0017。删除公开 API
+  `GET /api/v2/content/config`，三类公开内容 API 路径不变。退役
+  `CONTENT_SOURCE_NEWS/WIKI/MEMBERS`、`CONTENT_CANDIDATE_ENV` 和旧 CMS Git worktree/SSH
+  变量；内容导出、对账、PR 导入、S3/COS 和受控恢复变量保持。
+- 从独立 snapshot 向两个名称含 `test` 的空库完成 mode 绑定 Dry Run/Apply，每库恢复
+  228 articles、228 article revisions、32 members、32 member revisions。正常 PostgreSQL
+  custom dump 的 checksum、空目标恢复、前向 migration、marker、应用健康、非空拒绝和隔离
+  volume 演练也通过。snapshot 仍不能恢复账号、会话、草稿、完整审核/审计和全部历史，不能
+  替代数据库完整备份。
+- 自动验证：阶段 10 33/33、阶段 8 13/13、阶段 9 36/36、完整 CMS 109/109、完整测试
+  131/131、typecheck、production build、fresh 18 migrations/no-change generate、Phase 0、
+  Comark 260/260、Wiki 226/226、Compose 全 profile、所有 Shell 语法、部署/备份恢复集成、
+  runtime 镜像检查、HTTP/SEO/feed/404、两类 npm audit 0 vulnerability 和 diff check 全通过。
+  阶段 9 第一次未提供外部 snapshot 被前置检查按设计拒绝，补齐后全绿；build 刻意不提供
+  snapshot 仍通过。
+- 隔离站点继续在 `127.0.0.1:34175` 提供人工只读验收；阶段 9/10 数据库、本地内容仓库、
+  PR mock、恢复库、回滚 tag 与恢复包暂不清理。详细浏览器步骤和异常取证模板见
+  `docs/v2/PHASE_V2_10_ACCEPTANCE.md`。维护者尚未明确回复“V2 阶段 10 验收通过”，所以人工
+  项、阶段总体完成项仍不勾选；本实现使用新的本地 Commit，完整 SHA 由最终回复报告，随后
+  停止开发并等待人工验收。

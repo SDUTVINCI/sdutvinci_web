@@ -1,5 +1,5 @@
 import { readdir, readFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   isSafeMemberPublicUrl,
@@ -8,10 +8,12 @@ import {
   serializeMemberProfile
 } from '../server/services/member-profile'
 
-const root = join(process.cwd(), 'content', 'members')
-
 describe('V2 阶段 9 成员资料边界与确定性序列化', () => {
   it('完整解析 32 份既有成员资料且序列化结果确定', async () => {
+    const snapshotSource = process.env.V2_CONTENT_SNAPSHOT_SOURCE
+    expect(snapshotSource, 'V2_CONTENT_SNAPSHOT_SOURCE 必须指向独立内容仓库快照')
+      .toBeTruthy()
+    const root = resolve(snapshotSource!, 'members')
     const walk = async (directory: string, prefix = ''): Promise<string[]> => {
       const result: string[] = []
       for (const entry of await readdir(directory, { withFileTypes: true })) {

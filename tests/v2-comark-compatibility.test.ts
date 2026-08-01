@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import { createSSRApp, h } from 'vue'
 import { renderToString } from '@vue/server-renderer'
 import { EditorState } from '@codemirror/state'
@@ -14,7 +15,7 @@ import {
 } from '../shared/utils/vinci-markdown'
 
 describe('V2 阶段 3 Comark、CodeMirror 与最终预览', () => {
-  it('全部现有 Markdown 都能由 Nuxt Content 和 Comark 扫描并生成逐文件报告', async () => {
+  it('独立内容仓库全部现有 Markdown 都能由 Comark 扫描并生成逐文件报告', async () => {
     const report = await buildV2ComarkCompatibilityReport()
     expect(report.summary).toMatchObject({
       scanned: 260,
@@ -127,12 +128,14 @@ const ok = true
 
   it('只删除三个没有模板来源的 section include，不损失教师正文', async () => {
     const files = [
-      ['content/members/teacher/张彦斐.md', '机器视觉与三维场景重构'],
-      ['content/members/teacher/宫金良.md', '特种机器人装备研发'],
-      ['content/members/teacher/巩丽.md', '12号教学楼']
+      ['members/teacher/张彦斐.md', '机器视觉与三维场景重构'],
+      ['members/teacher/宫金良.md', '特种机器人装备研发'],
+      ['members/teacher/巩丽.md', '12号教学楼']
     ] as const
+    const sourceRoot = process.env.V2_CONTENT_SNAPSHOT_SOURCE
+    expect(sourceRoot, 'V2_CONTENT_SNAPSHOT_SOURCE 必须指向独立内容仓库快照').toBeTruthy()
     for (const [path, retainedText] of files) {
-      const source = await readFile(path, 'utf8')
+      const source = await readFile(resolve(sourceRoot!, path), 'utf8')
       expect(source).toContain(retainedText)
       expect(source).not.toContain('{% include section.html %}')
     }

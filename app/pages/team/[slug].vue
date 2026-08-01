@@ -4,13 +4,8 @@ type Member = Record<string, any>
 const route = useRoute()
 const slug = decodeURIComponent(String(route.params.slug ?? ''))
 
-const { data: member, renderer } = await usePublicContentQuery<Member | null>({
+const { data: member } = await usePublicContentQuery<Member | null>({
   key: `members:${slug}`,
-  collection: 'members',
-  legacy: async () => {
-    const byId = await queryCollection('members').where('memberKey', '=', slug).first() as Member | null
-    return byId || queryCollection('members').where('name', '=', slug).first() as Promise<Member | null>
-  },
   database: async () => (
     await $fetch<{ item: Member }>(
       `/api/v2/content/members/${encodeURIComponent(slug)}`
@@ -27,8 +22,6 @@ if (!member.value) {
 
 const { data: rawMembers } = await usePublicContentQuery<Member[]>({
   key: 'members:related',
-  collection: 'members',
-  legacy: () => queryCollection('members').all() as Promise<Member[]>,
   database: async () => (
     await $fetch<{ items: Member[] }>('/api/v2/content/members')
   ).items
@@ -160,8 +153,7 @@ const relatedMembers = computed(() => {
 
     <section class="member-profile-content">
       <article class="member-prose">
-        <ContentRenderer v-if="renderer === 'nuxt_content'" :value="member" />
-        <VinciMarkdownRenderer v-else :markdown="String(member.body || '')" />
+        <VinciMarkdownRenderer :markdown="String(member.body || '')" />
       </article>
 
       <aside v-if="relatedMembers.length" class="related-members">

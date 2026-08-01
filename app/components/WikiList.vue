@@ -34,23 +34,6 @@ const props = withDefaults(defineProps<{
 
 const { data: wikis, pending } = await usePublicContentQuery<WikiListItem[]>({
   key: 'wiki-list-meta',
-  collection: 'wiki',
-  legacy: () => queryCollection('wiki')
-    .select(
-      'path',
-      'stem',
-      'title',
-      'date',
-      'chapterOrder',
-      'chapterDepth',
-      'docKey',
-      'docRoot',
-      'docTitle',
-      'isWikiDoc',
-      'isWikiIndex',
-      'wikiDepth'
-    )
-    .all() as Promise<WikiListItem[]>,
   database: async () => (
     await $fetch<{ items: WikiListItem[] }>('/api/v2/content/wiki')
   ).items

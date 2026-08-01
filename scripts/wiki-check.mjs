@@ -1,9 +1,26 @@
 import { promises as fs } from 'node:fs'
+import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { pinyin } from 'pinyin-pro'
 
-const rootDir = process.cwd()
-const wikiDir = path.join(rootDir, 'content', 'wiki')
+const requestedSource = String(process.env.WIKI_CHECK_SOURCE || '').trim()
+if (!requestedSource) {
+  console.error('Wiki 检查需要 WIKI_CHECK_SOURCE 指向独立内容仓库 snapshot 根目录。')
+  process.exit(2)
+}
+
+const rootDir = path.resolve(requestedSource)
+if (rootDir === path.parse(rootDir).root) {
+  console.error('WIKI_CHECK_SOURCE 不得是文件系统根目录。')
+  process.exit(2)
+}
+const rootStat = await fs.lstat(rootDir).catch(() => null)
+if (!rootStat?.isDirectory() || rootStat.isSymbolicLink()) {
+  console.error('WIKI_CHECK_SOURCE 必须是普通目录且不得为符号链接。')
+  process.exit(2)
+}
+
+const wikiDir = path.join(rootDir, 'wiki')
 const files = await collectMarkdownFiles(wikiDir)
 const errors = []
 const paths = new Map()
@@ -48,6 +65,8 @@ for (const file of files) {
     errors.push(`${relativePath}: 仍在使用旧 ch 章节前缀`)
   }
 }
+
+await validateSnapshotAndManifest()
 
 for (const file of files) {
   const source = await fs.readFile(file, 'utf8')
@@ -106,4 +125,57 @@ function toPinyinSlug(value) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
+}
+
+async function validateSnapshotAndManifest() {
+  const snapshotPath = path.join(rootDir, '.vinci', 'snapshot.json')
+  const manifestPath = path.join(rootDir, 'manifest.json')
+  const [snapshotSource, manifestSource] = await Promise.all([
+    fs.readFile(snapshotPath, 'utf8'),
+    fs.readFile(manifestPath, 'utf8')
+  ]).catch(() => {
+    errors.push('独立内容仓库缺少 .vinci/snapshot.json 或 manifest.json')
+    return [null, null]
+  })
+  if (!snapshotSource || !manifestSource) return
+
+  let snapshot
+  let manifest
+  try {
+    snapshot = JSON.parse(snapshotSource)
+    manifest = JSON.parse(manifestSource)
+  } catch {
+    errors.push('snapshot 或 manifest 不是有效 JSON')
+    return
+  }
+
+  const snapshotWiki = Array.isArray(snapshot.files)
+    ? snapshot.files.filter(item => item?.collection === 'wiki')
+    : []
+  const snapshotByPath = new Map(snapshotWiki.map(item => [item.path, item]))
+  const manifestByPath = new Map(
+    (Array.isArray(manifest.files) ? manifest.files : []).map(item => [item.path, item])
+  )
+  const actualPaths = files.map(file => path.relative(rootDir, file).replace(/\\/g, '/')).sort()
+
+  if (snapshotByPath.size !== actualPaths.length) {
+    errors.push(`snapshot Wiki 条目数 ${snapshotByPath.size} 与文件数 ${actualPaths.length} 不一致`)
+  }
+
+  for (const gitPath of actualPaths) {
+    const source = await fs.readFile(path.join(rootDir, gitPath))
+    const sha256 = createHash('sha256').update(source).digest('hex')
+    const snapshotItem = snapshotByPath.get(gitPath)
+    const manifestItem = manifestByPath.get(gitPath)
+    if (!snapshotItem) {
+      errors.push(`${gitPath}: 不在 snapshot 中`)
+      continue
+    }
+    if (snapshotItem.sha256 !== sha256 || snapshotItem.bytes !== source.byteLength) {
+      errors.push(`${gitPath}: snapshot SHA-256 或字节数不匹配`)
+    }
+    if (manifestItem?.sha256 !== sha256 || manifestItem?.bytes !== source.byteLength) {
+      errors.push(`${gitPath}: manifest SHA-256 或字节数不匹配`)
+    }
+  }
 }

@@ -86,7 +86,7 @@ fi
 
 deploy_mode="$("$OPS_REPOSITORY_ROOT/scripts/classify-deployment.sh" "$current_commit" "$target_commit")"
 case "$deploy_mode" in
-  content|application) ;;
+  application) ;;
   *) ops_die "无法识别自动部署模式：${deploy_mode:-空}" ;;
 esac
 
@@ -100,8 +100,7 @@ if ! docker manifest inspect "$runtime_reference" >/dev/null 2>&1; then
   exit 0
 fi
 
-if [ "$deploy_mode" = "application" ] \
-  && ! docker manifest inspect "$operations_reference" >/dev/null 2>&1; then
+if ! docker manifest inspect "$operations_reference" >/dev/null 2>&1; then
   ops_info "operations 镜像尚未发布，等待下一轮：${operations_reference}"
   exit 0
 fi

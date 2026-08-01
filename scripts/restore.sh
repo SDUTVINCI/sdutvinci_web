@@ -66,5 +66,5 @@ docker compose exec -T postgres \
   < "${backup_directory}/postgresql.dump"
 
 ops_info "数据库恢复完成。请立即执行：docker compose --profile tools run --rm migrate"
-ops_info "CMS Git 异常资料仅供人工审查，不会自动覆盖数据库或内容仓库。"
-ops_info "正常迁移必须使用本 PostgreSQL 备份；Markdown 快照只用于独立灾难恢复入口。"
+ops_info "独立内容仓库检查清单仅供人工审查，不会自动覆盖数据库或内容仓库。"
+ops_info "正常迁移必须使用本 PostgreSQL 备份；独立 snapshot 只用于受控灾难恢复入口。"

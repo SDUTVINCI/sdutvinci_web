@@ -6,8 +6,6 @@ type Member = Record<string, any>
 
 const { data: rawMembers } = await usePublicContentQuery<Member[]>({
   key: 'members:home-total',
-  collection: 'members',
-  legacy: () => queryCollection('members').all() as Promise<Member[]>,
   database: async () => (
     await $fetch<{ items: Member[] }>('/api/v2/content/members')
   ).items

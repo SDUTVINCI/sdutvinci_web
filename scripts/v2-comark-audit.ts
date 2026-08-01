@@ -2,11 +2,10 @@
 
 import type { ComarkNode, ComarkTree } from 'comark'
 import { createHash } from 'node:crypto'
-import { readFile, readdir, writeFile } from 'node:fs/promises'
+import { readFile, readdir, realpath, writeFile } from 'node:fs/promises'
 import { relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parse } from 'comark'
-import { parseMarkdown } from '@nuxtjs/mdc/runtime'
 import {
   createVinciMarkdownPlugins,
   protectVinciTemplateTokens,
@@ -14,7 +13,6 @@ import {
 } from '../shared/utils/vinci-markdown'
 
 const repositoryRoot = resolve(import.meta.dirname, '..')
-const contentRoot = resolve(repositoryRoot, 'content')
 const defaultReportPath = resolve(
   repositoryRoot,
   'docs/v2/PHASE_V2_3_COMARK_COMPATIBILITY.json'
@@ -91,40 +89,6 @@ const snapshotComark = (tree: ComarkTree) => {
   return snapshot
 }
 
-const snapshotNuxt = (root: any) => {
-  const snapshot = emptySnapshot()
-  const visit = (node: any) => {
-    if (!node || typeof node !== 'object') return
-    if (node.type === 'text') {
-      snapshot.text += String(node.value || '')
-      return
-    }
-    if (node.type === 'element') {
-      const tag = normalizedTag(String(node.tag || ''))
-      incrementSemanticTag(snapshot, tag)
-      if (/^h[1-6]$/.test(tag)) {
-        const before = snapshot.text
-        const headingText = { value: '' }
-        const collect = (child: any) => {
-          if (child?.type === 'text') headingText.value += String(child.value || '')
-          for (const nested of child?.children || []) collect(nested)
-        }
-        for (const child of node.children || []) collect(child)
-        snapshot.headings.push({
-          tag,
-          id: String(node.props?.id || ''),
-          text: normalizeText(headingText.value)
-        })
-        snapshot.text = before
-      }
-    }
-    for (const child of node.children || []) visit(child)
-  }
-  visit(root)
-  snapshot.text = normalizeText(snapshot.text)
-  return snapshot
-}
-
 const listMarkdown = async (directory: string): Promise<string[]> => {
   const entries = await readdir(directory, { withFileTypes: true })
   const nested = await Promise.all(entries.map(async (entry) => {
@@ -135,34 +99,21 @@ const listMarkdown = async (directory: string): Promise<string[]> => {
   return nested.flat().sort()
 }
 
-const compareSnapshots = (
-  legacy: SemanticSnapshot,
-  comark: SemanticSnapshot
-): CompatibilityIssue[] => {
-  const issues: CompatibilityIssue[] = []
-  for (const tag of semanticTags) {
-    if (legacy.counts[tag] !== comark.counts[tag]) {
-      issues.push({
-        kind: `tag-count:${tag}`,
-        legacy: legacy.counts[tag],
-        comark: comark.counts[tag],
-        resolution: '已记录结构差异；阶段 4 影子页视觉核对前不切换生产前台'
-      })
-    }
-  }
-  if (JSON.stringify(legacy.headings) !== JSON.stringify(comark.headings)) {
-    issues.push({
-      kind: 'heading-id-or-text',
-      legacy: legacy.headings,
-      comark: comark.headings,
-      resolution: 'Vinci heading 插件使用与 Nuxt Content 相同的 github-slugger 规则'
-    })
-  }
-  return issues
-}
-
 export const buildV2ComarkCompatibilityReport = async () => {
-  const paths = await listMarkdown(contentRoot)
+  const configuredSource = process.env.V2_CONTENT_SNAPSHOT_SOURCE?.trim()
+  if (!configuredSource) {
+    throw new Error('V2_CONTENT_SNAPSHOT_SOURCE 必须指向独立内容仓库快照根目录')
+  }
+  const contentRoot = await realpath(resolve(configuredSource))
+  const codeRoot = await realpath(repositoryRoot)
+  if (contentRoot === codeRoot || contentRoot.startsWith(`${codeRoot}${sep}`)) {
+    throw new Error('Comark 审计拒绝读取代码仓库内目录')
+  }
+  const paths = (await Promise.all(
+    ['news', 'wiki', 'members'].map(collection =>
+      listMarkdown(resolve(contentRoot, collection))
+    )
+  )).flat().sort()
   const plugins = createVinciMarkdownPlugins()
   const files = []
   let rendered = 0
@@ -171,22 +122,18 @@ export const buildV2ComarkCompatibilityReport = async () => {
   let issueCount = 0
 
   for (const absolutePath of paths) {
-    const path = posixPath(relative(repositoryRoot, absolutePath))
+    const path = posixPath(relative(contentRoot, absolutePath))
     const source = await readFile(absolutePath, 'utf8')
     const body = source.replace(frontmatterPattern, '')
     const preparedBody = protectVinciTemplateTokens(body)
     const sourceHash = createHash('sha256').update(source).digest('hex')
     try {
-      const [legacyTree, comarkTree] = await Promise.all([
-        parseMarkdown(body),
-        parse(preparedBody, {
-          ...vinciMarkdownOptions,
-          plugins
-        })
-      ])
-      const legacy = snapshotNuxt(legacyTree.body)
+      const comarkTree = await parse(preparedBody, {
+        ...vinciMarkdownOptions,
+        plugins
+      })
       const comark = snapshotComark(comarkTree)
-      const issues = compareSnapshots(legacy, comark)
+      const issues: CompatibilityIssue[] = []
       const templateTokens = [...body.matchAll(
         /\{%[\s\S]*?%\}|\{\{[\s\S]*?\}\}|\{#[\s\S]*?#\}/g
       )]
@@ -217,10 +164,7 @@ export const buildV2ComarkCompatibilityReport = async () => {
           templateTokens: templateTokens.length,
           rawHtml: (body.match(/<\/?[A-Za-z][^>\n]*>/g) || []).length
         },
-        legacy: {
-          counts: legacy.counts,
-          headings: legacy.headings
-        },
+        legacy: null,
         comark: {
           counts: comark.counts,
           headings: comark.headings
@@ -240,24 +184,27 @@ export const buildV2ComarkCompatibilityReport = async () => {
           kind: 'render-failed',
           legacy: null,
           comark: error instanceof Error ? error.message : String(error),
-          resolution: '阻塞阶段 4 影子运行；修复前继续保留 Nuxt Content'
+          resolution: '阻塞独立内容仓库的 Comark 完整性验收'
         }]
       })
     }
   }
 
   return {
-    formatVersion: 1,
+    formatVersion: 2,
+    source: {
+      kind: 'independent-content-repository-snapshot',
+      root: contentRoot
+    },
     renderer: {
       comark: '0.5.1',
-      nuxtContentMdc: '0.22.2',
       headingSlugger: 'github-slugger@2.0.0',
       security: {
         blockedTags: ['script', 'style', 'object', 'embed', 'base', 'meta', 'link'],
         removesEventHandlers: true,
         blocksUnsafeProtocols: true,
         allowsLegacyIframe: true,
-        trustBoundary: 'CMS preview is sanitized; production remains Nuxt Content in phase 3'
+        trustBoundary: 'CMS preview and production pages use the same sanitized Comark pipeline'
       }
     },
     summary: {

@@ -19,6 +19,7 @@ import {
 } from '../server/services/cms-members'
 import { bootstrapCmsAdmin } from '../server/services/cms-auth'
 import { allocateMemberKey, memberKeyFromName } from '../server/utils/member-key'
+import { resetCmsV2FlagsForTests } from '../server/utils/cms-v2-flags'
 import { configureCmsTestDatabase } from './helpers/cms-test-database'
 
 const integration = configureCmsTestDatabase() ? describe : describe.skip
@@ -29,6 +30,8 @@ const markdown = (frontmatter: string, body = '') =>
 
 integration('CMS 成员与文章只读管理', () => {
   beforeAll(async () => {
+    process.env.CONTENT_PUBLISH_MODE = 'legacy_git'
+    resetCmsV2FlagsForTests()
     process.env.CMS_AUTH_SECRET ??= 'test-only-secret-with-at-least-32-characters'
     contentRoot = await mkdtemp(join(tmpdir(), 'vinci-cms-content-'))
     process.env.CMS_CONTENT_ROOT = contentRoot
@@ -50,6 +53,8 @@ integration('CMS 成员与文章只读管理', () => {
   })
 
   afterAll(async () => {
+    delete process.env.CONTENT_PUBLISH_MODE
+    resetCmsV2FlagsForTests()
     await closeDatabase()
     if (contentRoot.startsWith(tmpdir())) {
       await rm(contentRoot, { recursive: true, force: true })

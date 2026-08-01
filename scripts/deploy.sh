@@ -15,10 +15,8 @@ target_commit="${DEPLOY_COMMIT:-}"
 requested_mode="${DEPLOY_MODE:-application}"
 [[ "$target_commit" =~ ^[0-9a-f]{40}$ ]] \
   || ops_die "DEPLOY_COMMIT 必须是完整的 40 位小写 Git commit"
-case "$requested_mode" in
-  application|content) ;;
-  *) ops_die "DEPLOY_MODE 只能是 application 或 content" ;;
-esac
+[ "$requested_mode" = "application" ] \
+  || ops_die "V2 阶段 10 后 DEPLOY_MODE 只能是 application"
 
 cache_cleanup_enabled="$(ops_compose_env DEPLOY_CACHE_CLEANUP_ENABLED)"
 cache_cleanup_enabled="${cache_cleanup_enabled:-true}"
@@ -74,45 +72,15 @@ case "$previous_slot" in
   *) ops_die "部署状态中的 slot 无效" ;;
 esac
 
-actual_mode="application"
-if [ -n "$previous_commit" ] && [ "$previous_commit" != "$target_commit" ]; then
-  mapfile -d '' changed_paths < <(
-    git diff --no-renames --name-only --diff-filter=ACDMRTUXB -z "$previous_commit" "$target_commit"
-  )
-  if [ "${#changed_paths[@]}" -gt 0 ]; then
-    actual_mode="content"
-    for changed_path in "${changed_paths[@]}"; do
-      case "$changed_path" in
-        content/*) ;;
-        *)
-          actual_mode="application"
-          break
-          ;;
-      esac
-    done
-  fi
-fi
-
-if [ "$requested_mode" = "content" ]; then
-  [ -n "$previous_commit" ] \
-    || ops_die "首次部署不得使用 content 模式"
-  [ -n "$previous_slot" ] \
-    || ops_die "旧版单容器尚未迁移到双槽位，不得使用 content 模式"
-  [ "$actual_mode" = "content" ] \
-    || ops_die "目标包含 content/ 之外的改动，拒绝跳过完整应用部署"
-fi
-
 target_image="${APP_IMAGE:?APP_IMAGE is required}:${APP_IMAGE_TAG:?APP_IMAGE_TAG is required}"
 [[ "$APP_IMAGE" =~ ^[A-Za-z0-9._/:@-]+$ ]] || ops_die "APP_IMAGE 格式不安全"
 [[ "$APP_IMAGE_TAG" =~ ^[A-Za-z0-9._-]+$ ]] || ops_die "APP_IMAGE_TAG 格式不安全"
 [ "$APP_IMAGE_TAG" = "$target_commit" ] \
   || ops_die "APP_IMAGE_TAG 必须与 DEPLOY_COMMIT 相同，确保镜像不可变且可追踪"
 
-if [ "$requested_mode" = "application" ]; then
-  : "${APP_OPS_IMAGE:?APP_OPS_IMAGE is required for application deployment}"
-  [[ "$APP_OPS_IMAGE" =~ ^[A-Za-z0-9._/:@-]+$ ]] \
-    || ops_die "APP_OPS_IMAGE 格式不安全"
-fi
+: "${APP_OPS_IMAGE:?APP_OPS_IMAGE is required for application deployment}"
+[[ "$APP_OPS_IMAGE" =~ ^[A-Za-z0-9._/:@-]+$ ]] \
+  || ops_die "APP_OPS_IMAGE 格式不安全"
 
 git switch --detach "$target_commit"
 
@@ -202,13 +170,9 @@ ops_info "拉取 ${candidate_service} 的目标应用镜像..."
 docker compose pull gateway "$candidate_service"
 docker compose up -d --wait postgres
 
-if [ "$requested_mode" = "application" ]; then
-  ops_info "应用部署：拉取运维镜像并执行仓库内已审核的数据库迁移..."
-  docker compose --profile tools pull migrate
-  docker compose --profile tools run --rm --no-deps migrate
-else
-  ops_info "纯 content/ 部署：跳过运维镜像和数据库迁移。"
-fi
+ops_info "应用部署：拉取运维镜像并执行仓库内已审核的数据库迁移..."
+docker compose --profile tools pull migrate
+docker compose --profile tools run --rm --no-deps migrate
 
 if [ -n "$previous_service" ]; then
   previous_container="$(docker compose ps -q "$previous_service")"

@@ -1,4 +1,7 @@
 import { randomUUID } from 'node:crypto'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import { eq, sql } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { closeDatabase, getDatabase } from '../server/db/client'
@@ -21,15 +24,42 @@ import { configureCmsTestDatabase } from './helpers/cms-test-database'
 const suite = configureCmsTestDatabase() ? describe : describe.skip
 
 suite('V2 阶段 9 成员数据库权威与迁移', () => {
+  let fixtureRoot = ''
+
   beforeAll(async () => {
     process.env.CMS_AUTH_SECRET = 'phase-9-test-secret-with-at-least-32-characters'
-    process.env.CMS_CONTENT_ROOT = `${process.cwd()}/content`
+    fixtureRoot = await mkdtemp(join(tmpdir(), 'vinci-v2-phase9-members-test-'))
+    const memberRoot = join(fixtureRoot, 'members', 'test')
+    await mkdir(memberRoot, { recursive: true })
+    for (let index = 1; index <= 32; index += 1) {
+      const key = `member${String(index).padStart(3, '0')}`
+      await writeFile(join(memberRoot, `${key}.md`), [
+        '---',
+        `id: ${key}`,
+        `name: 阶段九夹具成员 ${index}`,
+        'image: /images/logo.png',
+        `role: ${index % 2 ? '控制组' : '机械组'}`,
+        `type: ${index === 1 ? '团队负责人' : '队员'}`,
+        `time: ${2022 + (index % 5)}`,
+        `grade: ${2021 + (index % 5)}`,
+        'affiliation: Vinci',
+        'links:',
+        `  homepage: https://example.test/${key}`,
+        '---',
+        `阶段九隔离数据库成员正文 ${index}`,
+        ''
+      ].join('\n'))
+    }
+    process.env.CMS_CONTENT_ROOT = fixtureRoot
     await runMigrations()
   })
   beforeEach(async () => {
     await getDatabase().execute(sql`truncate table audit_logs, content_export_jobs, member_proposals, member_revisions, user_members, user_roles, sessions, members, users restart identity cascade`)
   })
-  afterAll(async () => closeDatabase())
+  afterAll(async () => {
+    await closeDatabase()
+    await rm(fixtureRoot, { recursive: true, force: true })
+  })
 
   it('dry-run 对账 32 份资料并可重入地保留 ID、建立 Revision 与 Outbox', async () => {
     const plan = await planCmsMemberMarkdownMigration()

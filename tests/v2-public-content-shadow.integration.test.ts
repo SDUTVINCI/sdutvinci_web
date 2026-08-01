@@ -27,10 +27,6 @@ import {
   getPublicContentCacheStats,
   invalidatePublicContentCache
 } from '../server/services/public-content-cache'
-import {
-  getPublicContentSourceConfig,
-  PublicContentConfigurationError
-} from '../server/utils/public-content-flags'
 import { compareWikiChapters, numberWikiChapters } from '../utils/wiki-chapters'
 import { configureCmsTestDatabase } from './helpers/cms-test-database'
 import { memberProfileFromMarkdown, profileRecord, serializeMemberProfile } from '../server/services/member-profile'
@@ -40,10 +36,6 @@ const databaseSuite = enabled ? describe : describe.skip
 const hash = (source: string) =>
   createHash('sha256').update(source).digest('hex')
 const sourceEnvironmentKeys = [
-  'CONTENT_SOURCE_NEWS',
-  'CONTENT_SOURCE_WIKI',
-  'CONTENT_SOURCE_MEMBERS',
-  'CONTENT_CANDIDATE_ENV',
   'NODE_ENV',
   'NUXT_PUBLIC_SITE_URL'
 ] as const
@@ -59,48 +51,32 @@ const restoreEnvironment = () => {
   }
 }
 
-describe('V2 阶段 4 内容来源开关', () => {
+describe('V2 阶段 10 PostgreSQL 唯一公开内容入口', () => {
   afterAll(restoreEnvironment)
 
-  it('默认保持 legacy_git，候选环境默认关闭', () => {
+  it('保留稳定公共路径算法且不再暴露运行时来源开关', async () => {
     for (const key of sourceEnvironmentKeys) delete process.env[key]
-    expect(getPublicContentSourceConfig()).toEqual({
-      environment: 'disabled',
-      sources: {
-        news: 'legacy_git',
-        wiki: 'legacy_git',
-        members: 'legacy_git'
-      }
-    })
     expect(getCmsArticlePublicPath(
       'news',
       '2024-07-06-接受赛委会采访.md'
     )).toBe('/news/2024-07-06')
+    await expect(readFile('server/api/v2/content/config.get.ts', 'utf8'))
+      .rejects.toMatchObject({ code: 'ENOENT' })
   })
 
-  it('数据库候选只允许显式 test/staging，错误配置 fail closed', () => {
-    process.env.CONTENT_SOURCE_NEWS = 'database'
-    process.env.CONTENT_CANDIDATE_ENV = 'disabled'
-    expect(() => getPublicContentSourceConfig())
-      .toThrow(PublicContentConfigurationError)
-
-    process.env.CONTENT_CANDIDATE_ENV = 'test'
-    process.env.NODE_ENV = 'production'
-    expect(() => getPublicContentSourceConfig())
-      .toThrow('只允许在 NODE_ENV=test')
-
-    process.env.CONTENT_CANDIDATE_ENV = 'staging'
-    process.env.CONTENT_SOURCE_NEWS = 'database'
-    process.env.CONTENT_SOURCE_WIKI = 'database_shadow'
-    process.env.CONTENT_SOURCE_MEMBERS = 'legacy_git'
-    expect(getPublicContentSourceConfig()).toMatchObject({
-      environment: 'staging',
-      sources: {
-        news: 'database',
-        wiki: 'database_shadow',
-        members: 'legacy_git'
-      }
-    })
+  it('公开 API、Sitemap 与 RSS 固定调用 PostgreSQL 服务', async () => {
+    const paths = [
+      'server/api/v2/content/news/index.get.ts',
+      'server/api/v2/content/wiki/index.get.ts',
+      'server/api/v2/content/members/index.get.ts',
+      'server/api/v2/content/search.get.ts',
+      'server/routes/sitemap.xml.get.ts',
+      'server/routes/rss.xml.get.ts'
+    ]
+    const sources = await Promise.all(paths.map(path => readFile(path, 'utf8')))
+    expect(sources.every(source => source.includes('public-content'))).toBe(true)
+    expect(sources.join('\n')).not.toContain('getPublicContentSource')
+    expect(sources.join('\n')).not.toContain('queryCollection')
   })
 })
 
@@ -348,8 +324,9 @@ databaseSuite('V2 阶段 4 正式内容查询、缓存与候选 Feed', () => {
     }
     expect(publishingService).not.toContain('invalidatePublicContentCache')
     expect(publishingService).not.toContain('/content-cache/invalidate')
-    expect(publicContentComposable).toContain('Promise.allSettled')
-    expect(publicContentComposable).toContain('renderer: \'nuxt_content\'')
-    expect(publicContentComposable).toContain('legacyResult.value')
+    expect(publicContentComposable).not.toContain('Promise.allSettled')
+    expect(publicContentComposable).not.toContain('nuxt_content')
+    expect(publicContentComposable).not.toContain('legacy')
+    expect(publicContentComposable).toContain('options.database()')
   })
 })

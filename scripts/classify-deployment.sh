@@ -18,23 +18,5 @@ git cat-file -e "${target_commit}^{commit}" 2>/dev/null || die "目标 commit �
 git merge-base --is-ancestor "$base_commit" "$target_commit" \
   || die "目标 commit 不是起始 commit 的后继"
 
-mapfile -d '' changed_paths < <(
-  git diff --no-renames --name-only --diff-filter=ACDMRTUXB -z "$base_commit" "$target_commit"
-)
-
-[ "${#changed_paths[@]}" -gt 0 ] || {
-  printf 'application\n'
-  exit 0
-}
-
-for path in "${changed_paths[@]}"; do
-  case "$path" in
-    content/*) ;;
-    *)
-      printf 'application\n'
-      exit 0
-      ;;
-  esac
-done
-
-printf 'content\n'
+# V2 阶段 10 后代码仓库不再承载正式内容；仓库中的每次变更都只能发布 application 镜像。
+printf 'application\n'

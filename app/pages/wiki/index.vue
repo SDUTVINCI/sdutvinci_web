@@ -8,10 +8,6 @@ interface WikiMetaItem {
 
 const { data: wikiMeta } = await usePublicContentQuery<WikiMetaItem[]>({
   key: 'wiki:index-stats',
-  collection: 'wiki',
-  legacy: () => queryCollection('wiki')
-    .select('path', 'date', 'docKey', 'isWikiDoc')
-    .all() as Promise<WikiMetaItem[]>,
   database: async () => (
     await $fetch<{ items: WikiMetaItem[] }>('/api/v2/content/wiki')
   ).items

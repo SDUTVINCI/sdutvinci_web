@@ -11,6 +11,11 @@ PostgreSQL 的正式 Article/Revision 仍是唯一正式内容权威。内容仓
 `content_import_*` initialize/disaster recovery CLI、确认令牌和 operations profile 完全
 分离。阶段 8 入口不能调用全量恢复，也不读取本地 clone/worktree 作为最终状态。
 
+V2 阶段 10 后，代码仓库已移除三类正式内容目录和 Nuxt Content。这里提到的 Base、Head、
+snapshot 和 Markdown 全部来自独立内容仓库/GitHub PR API；代码仓库、production build 和
+runtime 镜像不提供内容回退源。这个变化不改变导入权限、三方合并、Proposal、Revision、
+Outbox、评论/关闭确认或“绝不自动 Merge”的边界。
+
 ## 2. 权限和 GitHub API
 
 - `admin` 始终可以访问；也可把 Migration 创建的 `content_importer` 角色明确授予用户。
@@ -164,3 +169,12 @@ pointer。管理员必须在成员页再次明确接受，服务再次用 `membe
 冲突和敏感成员资料没有某一份材料时，页面显示对应原因，不把“没有安全合并结果”误写成
 空正文。文章段落合并和成员字段级合并共用该显示规则，但服务端合并、权限和脱敏逻辑
 没有变化。
+
+## 12. 阶段 10 回归保护
+
+外部内容导入页面继续从稳定根别名导入
+`shared/utils/content-import-diff.ts`；该 helper 是普通共享模块，不属于 Nuxt Content。
+production build 与 Nitro 必须能解析它。自动测试固定覆盖：白话安全说明、中文动作/状态、
+评论和关闭的独立授权说明、四方白话标题、文件卡片内联展开、`aria-expanded`/
+`aria-controls`、真实新增/删除/替换的旧新行号和上下文，以及删除、冲突、新文章和敏感成员
+材料的空状态。阶段 10 不允许通过删除旧断言规避这些行为。

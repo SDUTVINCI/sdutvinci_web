@@ -14,29 +14,6 @@ permissions:
   contents: read
 
 jobs:
-  classify:
-    runs-on: ubuntu-latest
-    outputs:
-      mode: ${{ steps.changes.outputs.mode }}
-    steps:
-      - name: Check out complete history
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Classify content-only and application changes
-        id: changes
-        env:
-          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
-        run: |
-          mode=application
-          if [ "$GITHUB_EVENT_NAME" != "workflow_dispatch" ] \
-            && [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]] \
-            && [[ ! "$BASE_SHA" =~ ^0+$ ]]; then
-            mode="$(./scripts/classify-deployment.sh "$BASE_SHA" "$GITHUB_SHA")"
-          fi
-          printf 'mode=%s\n' "$mode" | tee -a "$GITHUB_OUTPUT"
-
   verify:
     runs-on: ubuntu-latest
     services:
@@ -85,6 +62,9 @@ jobs:
       - name: Run CMS tests against the isolated test database
         run: npm run test:cms
 
+      - name: Run V2 phase 10 dependency and database-content checks
+        run: npm run test:v2:phase10
+
       - name: Run type checking
         run: npm run typecheck
 
@@ -92,7 +72,7 @@ jobs:
         run: npm run build
 
   build-runtime:
-    needs: [classify, verify]
+    needs: [verify]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -125,13 +105,12 @@ jobs:
           labels: |
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            cn.vinci.deployment.mode=${{ needs.classify.outputs.mode }}
+            cn.vinci.deployment.mode=application
           cache-from: type=gha,scope=runtime
           cache-to: type=gha,mode=max,scope=runtime
 
   build-operations:
-    if: github.event_name == 'push' || needs.classify.outputs.mode == 'application'
-    needs: [classify, verify]
+    needs: [verify]
     runs-on: ubuntu-latest
     permissions:
       contents: read

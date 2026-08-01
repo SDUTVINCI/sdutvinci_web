@@ -35,6 +35,7 @@ import {
   withdrawCmsDraftReview
 } from '../server/services/cms-reviews'
 import { configureCmsTestDatabase } from './helpers/cms-test-database'
+import { resetCmsV2FlagsForTests } from '../server/utils/cms-v2-flags'
 
 const integration = configureCmsTestDatabase() ? describe : describe.skip
 let contentRoot = ''
@@ -55,6 +56,8 @@ const acquireLease = async (draftId: string, userId: string, isAdmin = false) =>
 
 integration('CMS 阶段 4 审核、编辑锁与版本冲突', () => {
   beforeAll(async () => {
+    process.env.CONTENT_PUBLISH_MODE = 'legacy_git'
+    resetCmsV2FlagsForTests()
     process.env.CMS_AUTH_SECRET ??= 'test-only-secret-with-at-least-32-characters'
     contentRoot = await mkdtemp(join(tmpdir(), 'vinci-cms-workflow-'))
     process.env.CMS_CONTENT_ROOT = contentRoot
@@ -124,6 +127,8 @@ integration('CMS 阶段 4 审核、编辑锁与版本冲突', () => {
   })
 
   afterAll(async () => {
+    delete process.env.CONTENT_PUBLISH_MODE
+    resetCmsV2FlagsForTests()
     await closeDatabase()
     if (contentRoot.startsWith(tmpdir())) {
       await rm(contentRoot, { recursive: true, force: true })

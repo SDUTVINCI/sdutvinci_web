@@ -2,13 +2,21 @@
 
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
-import { readFile, readdir } from 'node:fs/promises'
+import { readFile, readdir, realpath } from 'node:fs/promises'
 import { relative, resolve, sep } from 'node:path'
 import { remark } from 'remark'
 import { parseDocument } from 'yaml'
 
 const repositoryRoot = resolve(import.meta.dirname, '..')
-const contentRoot = resolve(repositoryRoot, 'content')
+const configuredContentRoot = process.env.V2_CONTENT_SNAPSHOT_SOURCE?.trim()
+if (!configuredContentRoot) {
+  throw new Error('V2_CONTENT_SNAPSHOT_SOURCE 必须指向独立内容仓库快照根目录')
+}
+const contentRoot = await realpath(resolve(configuredContentRoot))
+const codeRoot = await realpath(repositoryRoot)
+if (contentRoot === codeRoot || contentRoot.startsWith(`${codeRoot}${sep}`)) {
+  throw new Error('内容盘点拒绝读取代码仓库内目录')
+}
 const collections = ['members', 'news', 'wiki']
 const frontmatterPattern = /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/
 
@@ -134,7 +142,7 @@ const collectContentInventory = async () => {
   )
   const symlinks = entries
     .filter(entry => entry.type === 'symlink')
-    .map(entry => posixPath(relative(repositoryRoot, entry.absolutePath)))
+    .map(entry => posixPath(relative(contentRoot, entry.absolutePath)))
     .sort()
 
   const counts = Object.fromEntries(collections.map(collection => [collection, 0]))
@@ -158,8 +166,8 @@ const collectContentInventory = async () => {
   let largestFile = { path: '', bytes: 0 }
 
   for (const entry of markdownEntries) {
-    const repositoryPath = posixPath(relative(repositoryRoot, entry.absolutePath))
-    const [, collection] = repositoryPath.split('/')
+    const repositoryPath = posixPath(relative(contentRoot, entry.absolutePath))
+    const [collection] = repositoryPath.split('/')
     if (!collections.includes(collection)) continue
 
     const source = await readFile(entry.absolutePath, 'utf8')
@@ -280,7 +288,7 @@ const collectContentInventory = async () => {
       wiki: { files: counts.wiki, bytes: bytes.wiki, paths: paths.wiki }
     },
     totals: {
-      markdownFiles: markdownEntries.length,
+      markdownFiles: Object.values(counts).reduce((total, value) => total + value, 0),
       bytes: Object.values(bytes).reduce((total, value) => total + value, 0),
       symlinks: symlinks.length,
       largestFile,

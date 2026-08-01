@@ -39,10 +39,8 @@ const candidateSlug = computed(() =>
     .join('/')
 )
 
-const { data: page, pending, renderer } = await usePublicContentQuery<WikiPage | null>({
+const { data: page, pending } = await usePublicContentQuery<WikiPage | null>({
   key: computed(() => `wiki-page-${cleanPath.value}`),
-  collection: 'wiki',
-  legacy: () => queryCollection('wiki').path(cleanPath.value).first() as Promise<WikiPage | null>,
   database: async () => (
     await $fetch<{ item: WikiPage }>(
       `/api/v2/content/wiki/${candidateSlug.value}`
@@ -63,22 +61,6 @@ const pageDocKey = computed(() => page.value?.docKey || '')
 
 const { data: allWikiItems } = await usePublicContentQuery<WikiPage[]>({
   key: 'wiki-navigation-items',
-  collection: 'wiki',
-  legacy: () => queryCollection('wiki')
-    .select(
-      'path',
-      'stem',
-      'title',
-      'date',
-      'chapterOrder',
-      'chapterDepth',
-      'docKey',
-      'docRoot',
-      'docTitle',
-      'isWikiDoc',
-      'isWikiIndex'
-    )
-    .all() as Promise<WikiPage[]>,
   database: async () => (
     await $fetch<{ items: WikiPage[] }>('/api/v2/content/wiki')
   ).items
@@ -740,8 +722,7 @@ function normalizePath(path: string) {
           </header>
 
           <div class="wiki-content-body">
-            <ContentRenderer v-if="renderer === 'nuxt_content'" :value="page" />
-            <VinciMarkdownRenderer v-else :markdown="String(page.body || '')" />
+            <VinciMarkdownRenderer :markdown="String(page.body || '')" />
           </div>
 
           <footer v-if="previousPage || nextPage" class="wiki-page-navigation">

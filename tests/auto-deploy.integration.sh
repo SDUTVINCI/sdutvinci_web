@@ -49,10 +49,10 @@ export FAKE_AUTO_DEPLOY_ENABLED=true
 [ ! -f "$checkout/.deploy/fake-deploy-log" ]
 
 git -C "$checkout" switch main >/dev/null
-mkdir -p "$checkout/content/wiki"
-printf '# Content test\n' > "$checkout/content/wiki/auto-deploy.md"
-git -C "$checkout" add content/wiki/auto-deploy.md
-git -C "$checkout" commit -m 'content test' >/dev/null
+mkdir -p "$checkout/docs"
+printf '# Documentation test\n' > "$checkout/docs/auto-deploy.md"
+git -C "$checkout" add docs/auto-deploy.md
+git -C "$checkout" commit -m 'documentation application test' >/dev/null
 git -C "$checkout" push origin main >/dev/null 2>&1
 content_commit="$(git -C "$checkout" rev-parse HEAD)"
 export FAKE_MISSING_REFERENCE="registry.invalid/vinci/runtime:${content_commit}"
@@ -69,7 +69,7 @@ unset FAKE_MISSING_REFERENCE
   ./scripts/auto-deploy.sh
 )
 grep -Fqx "commit=${content_commit}" "$checkout/.deploy/fake-deploy-log"
-grep -Fqx 'mode=content' "$checkout/.deploy/fake-deploy-log"
+grep -Fqx 'mode=application' "$checkout/.deploy/fake-deploy-log"
 
 git -C "$checkout" switch main >/dev/null
 mkdir -p "$checkout/app"

@@ -25,6 +25,7 @@
     "test:v2:phase7": "./node_modules/.bin/vitest run tests/v2-phase7-reconciliation-recovery.integration.test.ts && ./tests/v2-phase7-operations.integration.sh",
     "test:v2:phase8": "./node_modules/.bin/vitest run tests/v2-content-pr-import.integration.test.ts",
     "test:v2:phase9": "./node_modules/.bin/vitest run tests/v2-member-profile.test.ts tests/v2-member-authority.integration.test.ts tests/v2-content-pr-import.integration.test.ts tests/v2-content-export.integration.test.ts tests/v2-phase7-reconciliation-recovery.integration.test.ts",
+    "test:v2:phase10": "./node_modules/.bin/vitest run tests/v2-phase10-content-removal.test.ts tests/v2-public-content-shadow.integration.test.ts tests/v2-content-pr-import.integration.test.ts tests/v2-member-authority.integration.test.ts",
     "v2:phase0:audit": "node scripts/v2-phase0-audit.mjs --check",
     "v2:comark:audit": "tsx scripts/v2-comark-audit.ts",
     "v2:phase4:http-dom": "tsx scripts/v2-phase4-http-dom-compare.ts",
@@ -45,8 +46,6 @@
     "v2:revisions:compare": "tsx --env-file-if-exists=.env scripts/v2-compare-git-revisions.ts",
     "wiki:check": "node scripts/wiki-check.mjs",
     "typecheck": "nuxt typecheck",
-    "prebuild": "npm run wiki:check",
-    "pregenerate": "npm run wiki:check",
     "preview": "nuxt preview"
   },
   "dependencies": {
@@ -57,11 +56,8 @@
     "@comark/nuxt": "0.5.1",
     "@milkdown/crepe": "^7.21.3",
     "@milkdown/kit": "^7.21.3",
-    "@nuxt/content": "^3.15.2",
-    "@nuxtjs/mdc": "0.22.2",
     "@shikijs/themes": "4.3.1",
     "argon2": "^0.45.1",
-    "better-sqlite3": "^12.9.0",
     "codemirror": "6.0.2",
     "diff": "^8.0.4",
     "drizzle-orm": "^0.45.2",
@@ -72,6 +68,7 @@
     "pinyin-pro": "^3.28.1",
     "remark": "^15.0.1",
     "sharp": "^0.35.3",
+    "shiki": "^4.3.1",
     "vue": "^3.5.0",
     "yaml": "^2.9.0",
     "zod": "^4.4.3"

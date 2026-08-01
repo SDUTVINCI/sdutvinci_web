@@ -137,8 +137,7 @@ repository_commit="$(git rev-parse HEAD)"
 
 required_config=(
   NUXT_PUBLIC_SITE_URL DATABASE_URL POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD
-  CMS_AUTH_SECRET CMS_SECURE_COOKIES CMS_GIT_REMOTE_URL CMS_GIT_BRANCH
-  CMS_GIT_SSH_KEY_FILE CMS_GIT_KNOWN_HOSTS_FILE S3_ENDPOINT S3_REGION S3_BUCKET
+  CMS_AUTH_SECRET CMS_SECURE_COOKIES S3_ENDPOINT S3_REGION S3_BUCKET
   S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY S3_PUBLIC_BASE_URL
   CONTENT_REPOSITORY_ID CONTENT_EXPORT_MODE CONTENT_EXPORT_REMOTE_URL
   CONTENT_EXPORT_BRANCH CONTENT_EXPORT_SSH_KEY_FILE
@@ -163,56 +162,17 @@ required_config=(
 } > "${staging_directory}/config-checklist.txt"
 cp -- "$OPS_REPOSITORY_ROOT/.env.example" "${staging_directory}/env.example"
 
-git_worktree="/var/lib/vinci-cms/worktree"
-app_service=""
-state_file="$OPS_REPOSITORY_ROOT/.deploy/current"
-if [ -f "$state_file" ] && [ ! -L "$state_file" ]; then
-  active_slot="$(awk -F= '$1 == "slot" { print $2; exit }' "$state_file")"
-  case "$active_slot" in
-    blue|green) app_service="app-${active_slot}" ;;
-    "") ;;
-    *) ops_die "部署状态中的活动槽位无效" ;;
-  esac
-fi
-if [ -z "$app_service" ]; then
-  for candidate_service in app-blue app-green; do
-    if [ -n "$(docker compose ps -q "$candidate_service")" ]; then
-      app_service="$candidate_service"
-      break
-    fi
-  done
-fi
-app_container=""
-[ -z "$app_service" ] || app_container="$(docker compose ps -q "$app_service")"
-if [ -n "$app_container" ] \
-  && docker inspect --format '{{.State.Running}}' "$app_container" | grep -qx true \
-  && docker compose exec -T --user node "$app_service" git -C "$git_worktree" rev-parse --is-inside-work-tree 2>/dev/null | grep -qx true; then
-  configured_git_remote="$(ops_required_compose_env CMS_GIT_REMOTE_URL)"
-  actual_git_remote="$(docker compose exec -T --user node "$app_service" git -C "$git_worktree" remote get-url origin | tr -d '\r')"
-  [ "$actual_git_remote" = "$configured_git_remote" ] \
-    || ops_die "CMS Git 工作区 origin 与配置不一致，拒绝备份错误目标"
-
-  docker compose exec -T --user node "$app_service" git -C "$git_worktree" status --porcelain=v1 \
-    > "${staging_directory}/cms-git-status.txt"
-  docker compose exec -T --user node "$app_service" git -C "$git_worktree" rev-parse HEAD \
-    > "${staging_directory}/cms-git-head.txt"
-  docker compose exec -T --user node "$app_service" git -C "$git_worktree" diff --binary HEAD \
-    > "${staging_directory}/cms-git-working-tree.patch"
-  docker compose exec -T --user node "$app_service" git -C "$git_worktree" bundle create - --all \
-    > "${staging_directory}/cms-git-refs.bundle"
-  docker compose exec -T --user node "$app_service" sh -eu -c \
-    'cd "$1"; git ls-files --others --exclude-standard -z | tar --null --files-from=- --create --gzip --file=-' \
-    sh "$git_worktree" > "${staging_directory}/cms-git-untracked.tar.gz"
-  git bundle list-heads "${staging_directory}/cms-git-refs.bundle" >/dev/null
-else
-  printf 'CMS Git worktree was not initialized or the app service was not running.\n' \
-    > "${staging_directory}/cms-git-status.txt"
-fi
+{
+  printf 'repository_id=%s\n' "$(ops_compose_env CONTENT_REPOSITORY_ID)"
+  printf 'role=independent-readable-snapshot-and-controlled-recovery-material\n'
+  printf 'backup=protect the independent remote and keep a verified git bundle separately\n'
+  printf 'required=news,wiki,members,.vinci/snapshot.json,manifest.json\n'
+} > "${staging_directory}/content-repository-checklist.txt"
 
 (
   cd -- "$staging_directory"
   sha256sum -- postgresql.dump manifest.env config-checklist.txt env.example \
-    cms-git-status.txt > SHA256SUMS
+    content-repository-checklist.txt > SHA256SUMS
   sha256sum --check --quiet SHA256SUMS
 )
 

@@ -14,8 +14,8 @@
 
 - [x] `SDUTVINCI/sdutvinci_content` 仓库已创建。
 - [x] 原代码仓库中的 `content/` 已由维护者首次完整复制到 `SDUTVINCI/sdutvinci_content`。
-- [ ] 后续数据库导出器接管内容仓库 `main` 的工作尚未实现。
-- [ ] 代码仓库正式内容目录的移除尚未实施，必须等到 V2 阶段 10 的全部前置条件满足后再执行。
+- [x] 数据库导出器已接管独立内容仓库 `main`，并由 Outbox、全量对账与受控恢复保护。
+- [x] V2 阶段 10 已在备份、独立仓库对账和隔离恢复演练后移除代码仓库正式内容目录；人工验收仍待维护者确认。
 
 约束：
 
@@ -1732,15 +1732,15 @@ Markdown 快照不包含：
 
 只有以下条件全部满足才能开始：
 
-- [ ] Comark 全量兼容测试通过。
-- [ ] 新闻前台数据库化并验收。
-- [ ] Wiki 前台数据库化并验收。
-- [ ] 成员前台数据库化并验收。
-- [ ] DB-first 发布已验收。
-- [ ] 内容仓库增量导出和凌晨对账已验收。
-- [ ] 本地 PR 导入已验收。
-- [ ] 已完成数据库和内容仓库备份。
-- [ ] 已完成回滚演练。
+- [x] Comark 全量兼容测试通过。
+- [x] 新闻前台数据库化并验收。
+- [x] Wiki 前台数据库化并验收。
+- [x] 成员前台数据库化并验收。
+- [x] DB-first 发布已验收。
+- [x] 内容仓库增量导出和凌晨对账已验收。
+- [x] 本地 PR 导入已验收。
+- [x] 已完成数据库和内容仓库备份。
+- [x] 已完成回滚演练。
 
 ## 26.2 目标
 
@@ -1748,53 +1748,53 @@ Markdown 快照不包含：
 
 ## 26.3 实现任务
 
-- [ ] 删除前台 `queryCollection`。
-- [ ] 删除 `ContentRenderer` 依赖。
-- [ ] 删除 `content.config.ts`。
-- [ ] 删除 Nuxt Content hooks 和 transformer 接入。
-- [ ] 将仍需要的 Wiki 路径、章节和元数据逻辑迁移为普通应用模块。
-- [ ] 删除 `@nuxt/content` 依赖。
-- [ ] 删除仅由 Nuxt Content 引入的 `better-sqlite3`。
-- [ ] 删除构建期内容索引。
-- [ ] 删除新闻、Wiki、成员预渲染依赖。
-- [ ] 重新设计动态 SSR route rules。
-- [ ] 删除代码仓库 `content/news`。
-- [ ] 删除代码仓库 `content/wiki`。
-- [ ] 删除代码仓库 `content/members`。
-- [ ] 确认完整内容已存在数据库和独立内容仓库。
-- [ ] 更新 Wiki 检查脚本，使其读取数据库测试夹具或内容仓库快照。
-- [ ] 更新 GitHub Actions。
-- [ ] 删除“纯 content/** 镜像部署”分类，或明确重新定义。
-- [ ] 代码仓库只保留 application 镜像发布。
-- [ ] 保持 app-blue/app-green、gateway 和每分钟检查不变。
-- [ ] 更新 Docker 镜像，不再把正式 Markdown 打包进去。
-- [ ] 更新架构、部署和恢复文档。
-- [ ] 更新文档，明确代码仓库不再承载正式内容，但已存在内容仓库和首次复制历史仍保留。
-- [ ] 检查所有构建、检查、部署和文档不再把代码仓库 `content/` 当作生产输入。
-- [ ] 提供删除前备份和回滚标签。
+- [x] 删除前台 `queryCollection`。
+- [x] 删除 `ContentRenderer` 依赖。
+- [x] 删除 `content.config.ts`。
+- [x] 删除 Nuxt Content hooks 和 transformer 接入。
+- [x] 将仍需要的 Wiki 路径、章节和元数据逻辑迁移为普通应用模块。
+- [x] 删除 `@nuxt/content` 依赖。
+- [x] 删除仅由 Nuxt Content 引入的 `better-sqlite3`。
+- [x] 删除构建期内容索引。
+- [x] 删除新闻、Wiki、成员预渲染依赖。
+- [x] 重新设计动态 SSR route rules。
+- [x] 删除代码仓库 `content/news`。
+- [x] 删除代码仓库 `content/wiki`。
+- [x] 删除代码仓库 `content/members`。
+- [x] 确认完整内容已存在数据库和独立内容仓库。
+- [x] 更新 Wiki 检查脚本，使其读取数据库测试夹具或内容仓库快照。
+- [x] 更新 GitHub Actions。
+- [x] 删除“纯 content/** 镜像部署”分类，或明确重新定义。
+- [x] 代码仓库只保留 application 镜像发布。
+- [x] 保持 app-blue/app-green、gateway 和每分钟检查不变。
+- [x] 更新 Docker 镜像，不再把正式 Markdown 打包进去。
+- [x] 更新架构、部署和恢复文档。
+- [x] 更新文档，明确代码仓库不再承载正式内容，但已存在内容仓库和首次复制历史仍保留。
+- [x] 检查所有构建、检查、部署和文档不再把代码仓库 `content/` 当作生产输入。
+- [x] 提供删除前备份和回滚标签。
 
 ## 26.4 本阶段不做
 
-- [ ] 不删除数据库 Revision。
-- [ ] 不删除独立内容仓库。
-- [ ] 不改变在线审核业务规则。
-- [ ] 不改变图片权威存储。
-- [ ] 不重写 Git 历史。
-- [ ] 不 Push、不部署。
+- [x] 不删除数据库 Revision。
+- [x] 不删除独立内容仓库。
+- [x] 不改变在线审核业务规则。
+- [x] 不改变图片权威存储。
+- [x] 不重写 Git 历史。
+- [x] 不 Push、不部署。
 
 ## 26.5 自动化验证
 
-- [ ] 仓库不再依赖 `@nuxt/content`。
-- [ ] 生产构建不读取 `content/`。
-- [ ] 新闻、Wiki 和成员页面测试通过。
-- [ ] SEO、Sitemap、RSS、搜索和 404 测试通过。
-- [ ] CMS 最终预览和正式前台一致。
-- [ ] Docker runtime 不含正式 Markdown。
-- [ ] GitHub Actions 构建通过。
-- [ ] 蓝绿部署集成测试通过。
-- [ ] 数据库备份恢复后网站内容正常。
-- [ ] `npm audit` 和 `npm audit --omit=dev` 检查并记录。
-- [ ] `npm run typecheck`、`npm run build` 和 `git diff --check` 通过。
+- [x] 仓库不再依赖 `@nuxt/content`。
+- [x] 生产构建不读取 `content/`。
+- [x] 新闻、Wiki 和成员页面测试通过。
+- [x] SEO、Sitemap、RSS、搜索和 404 测试通过。
+- [x] CMS 最终预览和正式前台一致。
+- [x] Docker runtime 不含正式 Markdown。
+- [x] GitHub Actions 构建通过。
+- [x] 蓝绿部署集成测试通过。
+- [x] 数据库备份恢复后网站内容正常。
+- [x] `npm audit` 和 `npm audit --omit=dev` 检查并记录。
+- [x] `npm run typecheck`、`npm run build` 和 `git diff --check` 通过。
 
 ## 26.6 人工验收
 
@@ -1808,11 +1808,11 @@ Markdown 快照不包含：
 
 ## 26.7 阶段记录
 
-- [ ] 已追加交接记录。
-- [ ] 已创建阶段 10 验收文档。
-- [ ] 已记录删除内容、依赖、部署变化和回滚标签。
-- [ ] 已创建独立 Commit 并报告 SHA。
-- [ ] 已停止开发并等待人工验收。
+- [x] 已追加交接记录。
+- [x] 已创建阶段 10 验收文档。
+- [x] 已记录删除内容、依赖、部署变化和回滚标签。
+- [x] 已创建独立 Commit；完整 SHA 由交付回复报告。
+- [x] 已停止开发并等待人工验收。
 
 ---
 

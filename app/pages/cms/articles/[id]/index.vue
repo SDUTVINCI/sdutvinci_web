@@ -28,14 +28,6 @@ if (!article.value) {
   throw createError({ statusCode: 404, statusMessage: '文章不存在' })
 }
 
-const { data: rendered } = await useAsyncData(`cms:article:rendered:${id}`, async () => {
-  if (article.value!.exportStatus.state !== 'not_applicable') return null
-  const path = article.value!.publicPath
-  return article.value!.collection === 'news'
-    ? queryCollection('news').path(path).first()
-    : queryCollection('wiki').path(path).first()
-})
-
 useHead(() => ({ title: `${article.value?.title || '文章'} · Vinci 内容管理后台` }))
 
 const openDraft = async () => {
@@ -172,11 +164,7 @@ onMounted(async () => {
     <div class="cms-detail-grid">
       <article class="cms-panel cms-preview">
         <h2>渲染预览</h2>
-        <VinciMarkdownRenderer
-          v-if="article.exportStatus.state !== 'not_applicable' && !article.isDeleted"
-          :markdown="article.body"
-        />
-        <ContentRenderer v-else-if="rendered && !article.isDeleted" :value="rendered" />
+        <VinciMarkdownRenderer v-if="!article.isDeleted" :markdown="article.body" />
         <pre v-else class="cms-source">{{ article.body }}</pre>
       </article>
       <aside class="cms-panel cms-frontmatter">

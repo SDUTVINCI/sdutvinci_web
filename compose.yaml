@@ -28,20 +28,7 @@ x-app: &app
     CMS_LOGIN_IP_WINDOW_MINUTES: ${CMS_LOGIN_IP_WINDOW_MINUTES:-5}
     CMS_MEDIA_UPLOAD_LIMIT: ${CMS_MEDIA_UPLOAD_LIMIT:-20}
     CMS_MEDIA_UPLOAD_WINDOW_MINUTES: ${CMS_MEDIA_UPLOAD_WINDOW_MINUTES:-1}
-    CMS_CONTENT_ROOT: /app/content
-    CMS_GIT_WORKTREE: /var/lib/vinci-cms/worktree
-    # DB-first does not require Git credentials. The invalid default makes any
-    # accidental legacy call fail closed; use compose.git-first.yaml for rollback.
-    CMS_GIT_REMOTE_URL: ${CMS_GIT_REMOTE_URL:-ssh://git-disabled.invalid/no-access}
-    CMS_GIT_REMOTE: ${CMS_GIT_REMOTE:-origin}
-    CMS_GIT_BRANCH: ${CMS_GIT_BRANCH:-main}
-    CMS_GIT_AUTHOR_NAME: ${CMS_GIT_AUTHOR_NAME:-Vinci CMS}
-    CMS_GIT_AUTHOR_EMAIL: ${CMS_GIT_AUTHOR_EMAIL:-cms@localhost}
-    CONTENT_PUBLISH_MODE: ${CONTENT_PUBLISH_MODE:-database}
-    CONTENT_SOURCE_NEWS: ${CONTENT_SOURCE_NEWS:-database}
-    CONTENT_SOURCE_WIKI: ${CONTENT_SOURCE_WIKI:-database}
-    CONTENT_SOURCE_MEMBERS: ${CONTENT_SOURCE_MEMBERS:-database}
-    CONTENT_CANDIDATE_ENV: ${CONTENT_CANDIDATE_ENV:-production}
+    CONTENT_PUBLISH_MODE: database
     # Phase 8 imports selected PR diff items into drafts/proposals only.
     CONTENT_PR_IMPORT_MODE: ${CONTENT_PR_IMPORT_MODE:-disabled}
     CONTENT_PR_IMPORT_REPOSITORY_ID: ${CONTENT_PR_IMPORT_REPOSITORY_ID:-SDUTVINCI/sdutvinci_content}
@@ -75,8 +62,6 @@ x-app: &app
     timeout: 5s
     retries: 12
     start_period: 30s
-  volumes:
-    - cms_git_worktree:/var/lib/vinci-cms/worktree
   networks:
     - frontend
     - backend
@@ -184,8 +169,8 @@ services:
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
       DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
       DATABASE_SSL: ${DATABASE_SSL:-false}
-      CMS_CONTENT_ROOT: /app/content
-      CMS_GIT_WORKTREE: /var/lib/vinci-cms/worktree
+      CMS_CONTENT_ROOT: /var/empty/vinci-code-content-disabled
+      CMS_GIT_WORKTREE: /var/empty/vinci-legacy-git-disabled
       CONTENT_REPOSITORY_ID: ${CONTENT_REPOSITORY_ID:-SDUTVINCI/sdutvinci_content}
       CONTENT_EXPORT_MODE: ${CONTENT_EXPORT_MODE:-disabled}
       CONTENT_EXPORT_REMOTE_URL: ${CONTENT_EXPORT_REMOTE_URL:-git@github.com:SDUTVINCI/sdutvinci_content.git}
@@ -223,8 +208,8 @@ services:
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
       DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
       DATABASE_SSL: ${DATABASE_SSL:-false}
-      CMS_CONTENT_ROOT: /app/content
-      CMS_GIT_WORKTREE: /var/lib/vinci-cms/worktree
+      CMS_CONTENT_ROOT: /var/empty/vinci-code-content-disabled
+      CMS_GIT_WORKTREE: /var/empty/vinci-legacy-git-disabled
       CONTENT_REPOSITORY_ID: ${CONTENT_REPOSITORY_ID:-SDUTVINCI/sdutvinci_content}
       CONTENT_EXPORT_MODE: ${CONTENT_EXPORT_MODE:-disabled}
       CONTENT_EXPORT_REMOTE_URL: ${CONTENT_EXPORT_REMOTE_URL:-git@github.com:SDUTVINCI/sdutvinci_content.git}
@@ -258,8 +243,8 @@ services:
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
       DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
       DATABASE_SSL: ${DATABASE_SSL:-false}
-      CMS_CONTENT_ROOT: /app/content
-      CMS_GIT_WORKTREE: /var/lib/vinci-cms/worktree
+      CMS_CONTENT_ROOT: /var/empty/vinci-code-content-disabled
+      CMS_GIT_WORKTREE: /var/empty/vinci-legacy-git-disabled
       CONTENT_REPOSITORY_ID: ${CONTENT_REPOSITORY_ID:-SDUTVINCI/sdutvinci_content}
       CONTENT_EXPORT_MODE: disabled
       CONTENT_EXPORT_REMOTE_URL: ${CONTENT_EXPORT_REMOTE_URL:-git@github.com:SDUTVINCI/sdutvinci_content.git}
@@ -281,7 +266,6 @@ services:
 
 volumes:
   postgres_data:
-  cms_git_worktree:
   content_export_worktree:
   content_reconciliation_data:
   gateway_config:

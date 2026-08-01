@@ -1,9 +1,7 @@
 import { createError, getRouterParam } from 'h3'
 import { getPublicMemberFromDatabase } from '../../../../services/public-content'
-import { requirePublicDatabaseCandidate } from '../../../../utils/public-content-http'
 
 export default defineEventHandler(async (event) => {
-  requirePublicDatabaseCandidate('members')
   const slug = decodeURIComponent(String(getRouterParam(event, 'slug') || ''))
   const member = await getPublicMemberFromDatabase(slug)
   if (!member) {
