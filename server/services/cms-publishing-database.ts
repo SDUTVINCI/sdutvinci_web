@@ -1,10 +1,13 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { and, desc, eq, isNull } from 'drizzle-orm'
+import { dirname } from 'node:path'
+import { and, desc, eq, isNull, ne, or } from 'drizzle-orm'
 import type { CmsArticleCollection } from '../../shared/types/cms-articles'
 import type { CmsPublishResult } from '../../shared/types/cms-publishing'
 import { getDatabase } from '../db/client'
 import {
   articles,
+  articleDeletionEvents,
+  articleRedirects,
   articleRevisions,
   auditLogs,
   contentExportJobs,
@@ -16,6 +19,7 @@ import {
   userMembers
 } from '../db/schema'
 import { invalidatePublicContentCache } from './public-content-cache'
+import { getCmsArticlePublicPath } from './cms-articles'
 import {
   buildPublishedSource,
   CmsPublishConflictError,
@@ -27,7 +31,7 @@ import {
   upsertPublishedArticle
 } from './cms-publishing-legacy'
 import { appendCmsArticleRevision } from './cms-revisions'
-import { serializeContentRevision } from './content-export-serialization'
+import { contentExportPath, serializeContentRevision } from './content-export-serialization'
 
 const sha256 = (source: string) =>
   createHash('sha256').update(source).digest('hex')
@@ -108,18 +112,125 @@ export const publishCmsDraftDatabase = async (
       throw new CmsPublishConflictError()
     }
 
+    if (draft.proposedAction === 'delete') {
+      if (!existingArticle || !draft.baseRevisionId) throw new CmsPublishStateError()
+      const [revision] = await tx.select().from(articleRevisions).where(and(
+        eq(articleRevisions.id, existingArticle.currentRevisionId!),
+        eq(articleRevisions.articleId, existingArticle.id)
+      )).limit(1)
+      if (!revision) throw new CmsPublishConflictError()
+      const now = new Date()
+      const [deleted] = await tx.update(articles).set({
+        isPresent: 'false',
+        deletedAt: now,
+        deletedByUserId: operatorUserId,
+        updatedAt: now
+      }).where(and(
+        eq(articles.id, existingArticle.id),
+        eq(articles.currentRevisionId, revision.id),
+        isNull(articles.deletedAt)
+      )).returning({ id: articles.id })
+      if (!deleted) throw new CmsPublishConflictError()
+      const serialized = serializeContentRevision({
+        articleId: existingArticle.id,
+        collection: existingArticle.collection as CmsArticleCollection,
+        relativePath: existingArticle.relativePath,
+        revisionId: revision.id,
+        revisionNumber: revision.revisionNumber,
+        frontmatter: revision.frontmatter,
+        body: revision.body,
+        revisionCreatedAt: revision.createdAt
+      })
+      const exportJobId = randomUUID()
+      await tx.insert(contentExportJobs).values({
+        id: exportJobId,
+        targetType: 'article',
+        targetId: existingArticle.id,
+        revisionId: revision.id,
+        operation: 'delete',
+        status: 'pending',
+        idempotencyKey: `article:${existingArticle.id}:revision:${revision.id}:delete`,
+        targetPath: serialized.path,
+        previousPath: serialized.path,
+        expectedSha256: serialized.sha256,
+        nextAttemptAt: now,
+        createdAt: now,
+        updatedAt: now
+      })
+      const [published] = await tx.update(drafts).set({
+        status: 'published',
+        version: draft.version + 1,
+        updatedAt: now
+      }).where(and(
+        eq(drafts.id, draft.id), eq(drafts.status, 'approved'), eq(drafts.version, draft.version)
+      )).returning({ id: drafts.id })
+      if (!published) throw new CmsPublishStateError()
+      await tx.insert(articleDeletionEvents).values({
+        articleId: existingArticle.id,
+        actorUserId: operatorUserId,
+        operation: 'delete',
+        articlePath: `${existingArticle.collection}/${existingArticle.relativePath}`,
+        sourceRevisionId: revision.id,
+        resultRevisionId: revision.id,
+        exportJobId,
+        metadata: { authority: 'database', source: 'content_pr_import', draftId: draft.id }
+      })
+      await tx.insert(auditLogs).values({
+        actorUserId: operatorUserId,
+        action: 'article.delete_proposal.publish',
+        targetType: 'article',
+        targetId: existingArticle.id,
+        metadata: { draftId: draft.id, revisionId: revision.id, reviewerUserId: review.actorUserId, exportJobId }
+      })
+      return {
+        articleId: existingArticle.id,
+        collection: existingArticle.collection as CmsArticleCollection,
+        relativePath: existingArticle.relativePath,
+        revisionId: revision.id,
+        revisionNumber: revision.revisionNumber,
+        previousRevisionId: revision.id,
+        publishedAt: now.toISOString()
+      }
+    }
+
     const collection = draft.collection as CmsArticleCollection
+    const moving = Boolean(existingArticle && draft.proposedAction === 'move')
+    const importedNew = Boolean(
+      !existingArticle && draft.proposedArticleId && draft.proposedRelativePath
+    )
+    if (draft.proposedAction === 'move' && (!existingArticle || !draft.proposedRelativePath)) {
+      throw new CmsPublishStateError()
+    }
     const relativePath = normalizeRelativePath(
-      existingArticle?.relativePath
+      moving ? draft.proposedRelativePath!
+      : importedNew ? draft.proposedRelativePath!
+      : existingArticle?.relativePath
       || input.relativePath
       || suggestCmsArticlePath(collection, draft.title, draft.id)
     )
     if (
       existingArticle
       && input.relativePath
-      && relativePath !== existingArticle.relativePath
+      && relativePath !== (moving ? draft.proposedRelativePath : existingArticle.relativePath)
     ) {
       throw new CmsPublishPathError('现有文章不允许在发布时改名或移动')
+    }
+    if (importedNew && input.relativePath
+      && normalizeRelativePath(input.relativePath) !== relativePath) {
+      throw new CmsPublishPathError('PR 新文章必须保留 Dry Run 已审计的目标路径')
+    }
+    if (moving) {
+      if (dirname(relativePath) !== dirname(existingArticle!.relativePath)) {
+        throw new CmsPublishPathError('PR 移动提案不允许跨目录')
+      }
+      const targetPublicPath = getCmsArticlePublicPath(collection, relativePath)
+      const [collision] = await tx.select({ id: articles.id }).from(articles).where(or(
+        and(eq(articles.collection, collection), eq(articles.relativePath, relativePath), ne(articles.id, existingArticle!.id)),
+        and(eq(articles.publicPath, targetPublicPath), ne(articles.id, existingArticle!.id))
+      )!).limit(1)
+      const [redirectCollision] = await tx.select({ id: articleRedirects.id }).from(articleRedirects)
+        .where(eq(articleRedirects.fromPublicPath, targetPublicPath)).limit(1)
+      if (collision || redirectCollision) throw new CmsPublishPathError('移动目标路径或重定向已存在')
     }
 
     const now = new Date()
@@ -134,14 +245,22 @@ export const publishCmsDraftDatabase = async (
     })
     const contentHash = sha256(built.source)
     const articleId = await upsertPublishedArticle(tx, {
-      articleId: draft.articleId,
+      articleId: draft.articleId || draft.proposedArticleId,
       collection,
       relativePath,
       title: draft.title,
       frontmatter: built.frontmatter,
       body: draft.body,
-      contentHash
+      contentHash,
+      allowCreateWithArticleId: !draft.articleId && Boolean(draft.proposedArticleId)
     })
+    if (moving) {
+      await tx.insert(articleRedirects).values({
+        articleId,
+        fromPublicPath: existingArticle!.publicPath,
+        toPublicPath: getCmsArticlePublicPath(collection, relativePath)
+      })
+    }
 
     const operationId = randomUUID()
     const message = `cms: database publish ${collection}/${relativePath}`
@@ -197,11 +316,14 @@ export const publishCmsDraftDatabase = async (
       targetType: 'article',
       targetId: articleId,
       revisionId: revision.id,
-      operation: existingArticle ? 'update' : 'create',
+      operation: moving ? 'move' : existingArticle ? 'update' : 'create',
       status: 'pending',
       idempotencyKey:
-        `article:${articleId}:revision:${revision.id}:${existingArticle ? 'update' : 'create'}`,
+        `article:${articleId}:revision:${revision.id}:${moving ? 'move' : existingArticle ? 'update' : 'create'}`,
       targetPath: serialized.path,
+      previousPath: moving
+        ? contentExportPath(collection, existingArticle!.relativePath)
+        : null,
       expectedSha256: serialized.sha256,
       nextAttemptAt: now,
       createdAt: now,
@@ -252,6 +374,8 @@ export const publishCmsDraftDatabase = async (
         reviewerUserId: review.actorUserId,
         relativePath,
         previousRevisionId: existingArticle?.currentRevisionId || null,
+        previousRelativePath: moving ? existingArticle!.relativePath : null,
+        proposedAction: draft.proposedAction,
         revisionId: revision.id,
         exportJobId
       }

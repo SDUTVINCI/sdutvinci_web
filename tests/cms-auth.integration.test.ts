@@ -53,7 +53,7 @@ integration('CMS 身份认证与数据库', () => {
     const result = await getDatabase().execute(sql`
       select code from roles order by code
     `)
-    expect(result.rows.map(row => row.code)).toEqual(['admin', 'member'])
+    expect(result.rows.map(row => row.code)).toEqual(['admin', 'content_importer', 'member'])
   })
 
   it('只允许首次引导创建一个管理员，并使用 Argon2id 保存密码', async () => {

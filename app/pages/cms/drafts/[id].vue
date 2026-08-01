@@ -59,6 +59,11 @@ const status = ref<CmsDraftStatus>(initial.status)
 const version = ref(initial.version)
 const baseContentHash = ref(initial.baseContentHash)
 const baseRevisionId = ref(initial.baseRevisionId)
+const proposalLabel = computed(() => ({
+  edit: '内容修改草稿',
+  move: `移动/重命名提案 → ${initial.proposedRelativePath || '未指定路径'}`,
+  delete: '删除提案（发布前不会删除正式内容）'
+})[initial.proposedAction])
 const lastSavedAt = ref(initial.lastSavedAt)
 const comparison = ref(comparisonData.value?.comparison || null)
 const reviewEvents = ref(eventData.value?.events || [])
@@ -663,6 +668,7 @@ onBeforeUnmount(() => {
           <span :class="`cms-save-state cms-save-state-${saveState}`">{{ saveLabel }}</span>
           · 版本 {{ version }}
           · {{ baseRevisionId || baseContentHash ? '基于正式版本' : '尚未发布的新文章' }}
+          · {{ proposalLabel }}
         </p>
       </div>
       <div class="cms-editor-actions">

@@ -18,6 +18,7 @@ import { getWikiContentMeta } from '../../utils/wiki-content-meta'
 import { getDatabase } from '../db/client'
 import {
   articleRevisions,
+  articleRedirects,
   articles,
   members
 } from '../db/schema'
@@ -145,7 +146,7 @@ export const getPublicArticleFromDatabase = async (
   publicPath: string
 ): Promise<PublicArticle | null> => {
   const normalizedPath = `/${publicPath.trim().replace(/^\/+|\/+$/g, '')}`
-  const [row] = await getDatabase()
+  let [row] = await getDatabase()
     .select(articleSelection)
     .from(articles)
     .innerJoin(
@@ -157,7 +158,24 @@ export const getPublicArticleFromDatabase = async (
       eq(articles.publicPath, normalizedPath)
     ))
     .limit(1)
-  if (!row) return null
+  if (!row) {
+    const [redirect] = await getDatabase()
+      .select({ articleId: articleRedirects.articleId })
+      .from(articleRedirects)
+      .where(eq(articleRedirects.fromPublicPath, normalizedPath))
+      .limit(1)
+    if (!redirect) return null
+    ;[row] = await getDatabase()
+      .select(articleSelection)
+      .from(articles)
+      .innerJoin(articleRevisions, eq(articles.currentRevisionId, articleRevisions.id))
+      .where(and(
+        publishedArticleFilters(collection),
+        eq(articles.id, redirect.articleId)
+      ))
+      .limit(1)
+    if (!row) return null
+  }
 
   const candidate = row as PublishedArticleRow
   const key = createPublicRevisionCacheKey(

@@ -1,5 +1,6 @@
 import {
   type AnyPgColumn,
+  boolean,
   check,
   index,
   integer,
@@ -115,6 +116,9 @@ export const drafts = pgTable('drafts', {
   baseContentHash: varchar('base_content_hash', { length: 64 }),
   baseRevisionId: uuid('base_revision_id')
     .references((): AnyPgColumn => articleRevisions.id, { onDelete: 'restrict' }),
+  proposedAction: varchar('proposed_action', { length: 16 }).default('edit').notNull(),
+  proposedRelativePath: text('proposed_relative_path'),
+  proposedArticleId: uuid('proposed_article_id'),
   status: varchar('status', { length: 32 }).default('draft').notNull(),
   version: integer('version').default(1).notNull(),
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
@@ -129,6 +133,17 @@ export const drafts = pgTable('drafts', {
     sql`${table.status} in ('draft', 'pending_review', 'rejected', 'approved', 'published', 'withdrawn')`
   ),
   check('drafts_version_check', sql`${table.version} >= 1`),
+  check(
+    'drafts_proposed_action_check',
+    sql`${table.proposedAction} in ('edit', 'move', 'delete')`
+  ),
+  check(
+    'drafts_proposed_path_check',
+    sql`(${table.proposedAction} = 'move' and ${table.proposedRelativePath} is not null) or (${table.proposedAction} <> 'move')`
+  ),
+  uniqueIndex('drafts_proposed_article_id_unique')
+    .on(table.proposedArticleId)
+    .where(sql`${table.proposedArticleId} is not null`),
   uniqueIndex('drafts_article_owner_unique')
     .on(table.articleId, table.ownerUserId)
     .where(sql`${table.deletedAt} is null`),
@@ -506,6 +521,149 @@ export const contentImportItems = pgTable('content_import_items', {
   index('content_import_items_run_index').on(table.runId)
 ])
 
+// Normal Pull Request imports deliberately use separate tables from the phase 7
+// empty-database/disaster-recovery importer. This makes it impossible for a CMS
+// PR request to select a recovery mode or reuse its confirmation token.
+export const contentPrImportRuns = pgTable('content_pr_import_runs', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  repositoryId: varchar('repository_id', { length: 200 }).notNull(),
+  pullRequestNumber: integer('pull_request_number').notNull(),
+  baseCommitHash: varchar('base_commit_hash', { length: 64 }).notNull(),
+  headCommitHash: varchar('head_commit_hash', { length: 64 }).notNull(),
+  baseSnapshotSha256: varchar('base_snapshot_sha256', { length: 64 }).notNull(),
+  actorUserId: uuid('actor_user_id')
+    .references(() => users.id, { onDelete: 'set null' }),
+  prAuthorLabel: varchar('pr_author_label', { length: 128 }),
+  status: varchar('status', { length: 32 }).default('dry_run').notNull(),
+  itemCount: integer('item_count').default(0).notNull(),
+  importableCount: integer('importable_count').default(0).notNull(),
+  importedCount: integer('imported_count').default(0).notNull(),
+  conflictCount: integer('conflict_count').default(0).notNull(),
+  report: jsonb('report').$type<Record<string, unknown>>().default({}).notNull(),
+  errorCode: varchar('error_code', { length: 64 }),
+  errorSummary: text('error_summary'),
+  startedAt: timestamp('started_at', { withTimezone: true }).defaultNow().notNull(),
+  completedAt: timestamp('completed_at', { withTimezone: true })
+}, table => [
+  check('content_pr_import_runs_pr_check', sql`${table.pullRequestNumber} > 0`),
+  check(
+    'content_pr_import_runs_base_commit_check',
+    sql`${table.baseCommitHash} ~ '^[0-9a-f]{40}$'`
+  ),
+  check(
+    'content_pr_import_runs_head_commit_check',
+    sql`${table.headCommitHash} ~ '^[0-9a-f]{40}$'`
+  ),
+  check(
+    'content_pr_import_runs_snapshot_check',
+    sql`${table.baseSnapshotSha256} ~ '^[0-9a-f]{64}$'`
+  ),
+  check(
+    'content_pr_import_runs_status_check',
+    sql`${table.status} in ('dry_run', 'partially_imported', 'imported', 'failed')`
+  ),
+  check('content_pr_import_runs_item_count_check', sql`${table.itemCount} >= 0`),
+  check('content_pr_import_runs_importable_count_check', sql`${table.importableCount} >= 0`),
+  check('content_pr_import_runs_imported_count_check', sql`${table.importedCount} >= 0`),
+  check('content_pr_import_runs_conflict_count_check', sql`${table.conflictCount} >= 0`),
+  uniqueIndex('content_pr_import_runs_pr_head_unique')
+    .on(table.repositoryId, table.pullRequestNumber, table.headCommitHash),
+  index('content_pr_import_runs_started_index').on(table.startedAt),
+  index('content_pr_import_runs_actor_index').on(table.actorUserId, table.startedAt)
+])
+
+export const contentPrImportItems = pgTable('content_pr_import_items', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  runId: uuid('run_id')
+    .notNull()
+    .references(() => contentPrImportRuns.id, { onDelete: 'cascade' }),
+  ordinal: integer('ordinal').notNull(),
+  changeType: varchar('change_type', { length: 16 }).notNull(),
+  classification: varchar('classification', { length: 32 }).notNull(),
+  importable: boolean('importable').default(false).notNull(),
+  oldPath: text('old_path'),
+  newPath: text('new_path'),
+  articleId: uuid('article_id').references(() => articles.id, { onDelete: 'restrict' }),
+  baseRevisionId: uuid('base_revision_id')
+    .references(() => articleRevisions.id, { onDelete: 'restrict' }),
+  currentRevisionId: uuid('current_revision_id')
+    .references(() => articleRevisions.id, { onDelete: 'restrict' }),
+  proposedArticleId: uuid('proposed_article_id').defaultRandom(),
+  baseSource: text('base_source'),
+  currentSource: text('current_source'),
+  proposedSource: text('proposed_source'),
+  mergedSource: text('merged_source'),
+  baseSha256: varchar('base_sha256', { length: 64 }),
+  currentSha256: varchar('current_sha256', { length: 64 }),
+  proposedSha256: varchar('proposed_sha256', { length: 64 }),
+  mergedSha256: varchar('merged_sha256', { length: 64 }),
+  warningCodes: jsonb('warning_codes').$type<string[]>().default([]).notNull(),
+  conflictDetails: jsonb('conflict_details').$type<Record<string, unknown>>().default({}).notNull(),
+  status: varchar('status', { length: 16 }).default('pending').notNull(),
+  draftId: uuid('draft_id').references(() => drafts.id, { onDelete: 'set null' }),
+  importedAt: timestamp('imported_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
+}, table => [
+  check('content_pr_import_items_ordinal_check', sql`${table.ordinal} >= 0`),
+  check(
+    'content_pr_import_items_change_type_check',
+    sql`${table.changeType} in ('added', 'modified', 'renamed', 'removed', 'invalid')`
+  ),
+  check(
+    'content_pr_import_items_classification_check',
+    sql`${table.classification} in ('safe_change', 'auto_merge', 'content_conflict', 'new_article', 'move_or_rename', 'deletion_proposal', 'path_conflict', 'invalid_file', 'unknown_syntax', 'high_risk_syntax')`
+  ),
+  check(
+    'content_pr_import_items_status_check',
+    sql`${table.status} in ('pending', 'imported', 'skipped', 'blocked')`
+  ),
+  check(
+    'content_pr_import_items_proposed_id_check',
+    sql`(${table.classification} = 'new_article' and ${table.articleId} is null and ${table.proposedArticleId} is not null) or (${table.classification} <> 'new_article' and ${table.proposedArticleId} is null)`
+  ),
+  uniqueIndex('content_pr_import_items_run_ordinal_unique').on(table.runId, table.ordinal),
+  index('content_pr_import_items_run_index').on(table.runId, table.ordinal),
+  index('content_pr_import_items_article_index').on(table.articleId),
+  index('content_pr_import_items_draft_index').on(table.draftId)
+])
+
+export const contentPrExternalActions = pgTable('content_pr_external_actions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  runId: uuid('run_id')
+    .notNull()
+    .references(() => contentPrImportRuns.id, { onDelete: 'cascade' }),
+  actorUserId: uuid('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
+  action: varchar('action', { length: 16 }).notNull(),
+  status: varchar('status', { length: 16 }).notNull(),
+  externalReference: varchar('external_reference', { length: 128 }),
+  errorCode: varchar('error_code', { length: 64 }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  completedAt: timestamp('completed_at', { withTimezone: true })
+}, table => [
+  check(
+    'content_pr_external_actions_action_check',
+    sql`${table.action} in ('comment', 'close')`
+  ),
+  check(
+    'content_pr_external_actions_status_check',
+    sql`${table.status} in ('processing', 'succeeded', 'failed')`
+  ),
+  index('content_pr_external_actions_run_index').on(table.runId, table.createdAt)
+])
+
+export const articleRedirects = pgTable('article_redirects', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  articleId: uuid('article_id')
+    .notNull()
+    .references(() => articles.id, { onDelete: 'cascade' }),
+  fromPublicPath: text('from_public_path').notNull(),
+  toPublicPath: text('to_public_path').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
+}, table => [
+  uniqueIndex('article_redirects_from_path_unique').on(table.fromPublicPath),
+  index('article_redirects_article_index').on(table.articleId)
+])
+
 export const editLocks = pgTable('edit_locks', {
   id: uuid('id').defaultRandom().primaryKey(),
   targetType: varchar('target_type', { length: 32 }).notNull(),
@@ -604,5 +762,7 @@ export type ArticleDeletionEvent = typeof articleDeletionEvents.$inferSelect
 export type ContentExportJob = typeof contentExportJobs.$inferSelect
 export type ContentReconciliationRun = typeof contentReconciliationRuns.$inferSelect
 export type ContentImportRun = typeof contentImportRuns.$inferSelect
+export type ContentPrImportRun = typeof contentPrImportRuns.$inferSelect
+export type ContentPrImportItem = typeof contentPrImportItems.$inferSelect
 export type EditLock = typeof editLocks.$inferSelect
 export type AuditLog = typeof auditLogs.$inferSelect

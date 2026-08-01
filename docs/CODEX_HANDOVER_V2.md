@@ -1331,3 +1331,85 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
 - 阶段 7 实现 Commit 为 `45f4a5934d4dac9bfeb55ff406fed016d714b97b`；验收记录 Commit
   由最终回复报告。没有 Push、部署、真实 GitHub/内容仓库写操作、宿主机 timer 安装或
   阶段 8 实施。
+
+---
+
+## 2026-08-01：V2 阶段 8 实现和自动验证完成，等待人工验收
+
+### 基线和范围
+
+- 开始前 `main` 为 `dc3ed17a08dad34bec9f3be56dde24bda21c986c`，工作树干净，
+  `origin/main...HEAD` 为 behind 0 / ahead 7；用户列出的 7 个本地提交逐个核对并完整
+  保留，没有 reset、rebase、覆盖或改写。
+- 阶段 7 验收记录、架构、部署、需求和阶段 6/7 数据/导出/snapshot/recovery/CMS 安全
+  代码已完整阅读。内容仓库只读记录 HEAD 仍按交接基线
+  `7636bca74a1591f78f7268927cbfa8ab677b24bb`；本阶段没有访问真实远端写权限。
+- 只实现阶段 8 新闻/Wiki PR 导入；没有成员数据库权威、成员 PR 导入、Push、部署、
+  Force Push、Merge 或阶段 9 工作。代码仓库既有 `content/` Markdown 未修改。
+
+### 数据、服务和权限
+
+- expand-only `0016_flowery_war_machine.sql` 新增 `content_pr_import_runs/items`、
+  `content_pr_external_actions`、`article_redirects`、草稿 proposal 列和
+  `content_importer` 角色；旧草稿默认普通 edit，旧应用可忽略新对象。
+- CMS 新增 `/cms/content-imports` 与六个 API。管理员或明确授予的
+  `content_importer` 才能访问；服务端角色、同源、CSRF、官方仓库/PR/Base main/
+  open/Commit 校验均 fail closed。普通导入与阶段 7 recovery 表、CLI、profile 和确认
+  令牌没有调用关系，不能全量覆盖非空库。
+- GitHub client 只读取分页 PR Diff 和 Base/Head commit-bound contents；拒绝 symlink、
+  非 file、超大、二进制、非法编码/base64，并重试网络/429/5xx。评论和关闭是独立确认
+  动作，关闭额外要求 admin；代码中没有 Merge API。
+- Dry Run 验证 `.vinci/snapshot.json`、hash/bytes/path/UUID/Revision/vinciId，确定性生成
+  Current，逐文件持久化 Base/Current/Proposed/Merged 和哈希。十类结果覆盖安全、自动
+  合并、冲突、新增、移动/重命名、删除提案、路径冲突、非法、未知和高风险语法。
+- 三方合并把 edit 扩展到段落：不同段落自动合并，同段不同 edit 阻止。导入 item 和
+  Article 在事务内锁定并复核 Current Revision；发布仍使用现有 baseRevision 冲突门禁，
+  不会静默覆盖数据库新版本。
+- 只选择安全子集即可创建普通 draft/proposal；同 PR/Head run 唯一，item 重试返回同一
+  draft。新增文章由 DB item 预分配正式 UUID/目标路径，移动保持 vinciId 并在批准发布后
+  建 redirect，删除只在批准发布后生效。导入不批准、不发布、不写正式 Revision。
+
+### 安全、审计和文档
+
+- 受管路径只允许 NFC `news/**/*.md`/`wiki/**/*.md`；拒绝 traversal、绝对/反斜线/NUL、
+  `.git`、members/metadata、manifest 外、跨 collection/目录移动、重复路径/ID 和路径
+  占用。HTML、Vue/MDC、可执行标签/属性/URL和未知模板突出且不可导入。
+- run/item/外部 action 和 audit 覆盖 Dry Run、逐项/批次导入、评论、关闭和失败；CMS
+  artifact 使用敏感值替换。Token、Authorization、数据库 URL、私钥、远端 URL和绝对
+  路径不进入响应/审计摘要。
+- 新增 `docs/v2/PR_IMPORT.md` 与 `docs/v2/PHASE_V2_8_ACCEPTANCE.md`；架构、部署、需求、
+  Compose 和 env 示例已更新。人工清单仍全部未勾选，阶段 8 总进度也未勾选。
+
+### 自动验证和问题修复
+
+- 阶段 8 专项 10/10；完整 CMS 15 files 105/105；无数据库普通模式 4 files 17/17，
+  另 12 files 95 项按设计跳过。专项使用名称含 test 的独立 PostgreSQL、临时裸 Git 和
+  fake GitHub，覆盖合并/冲突/竞态/部分导入/幂等/提案后人工发布/redirect/恶意文件/
+  权限/分页/重试/失败/评论/关闭/脱敏，没有真实 GitHub 写入。
+- 浏览器夹具首次发现 Nitro 把直接 `process.env.NODE_ENV` 固化为 build-time production，
+  导致明确 test 运行时的 mock 被拒绝；当时 500 日志和零 run/draft 已核对。改为运行时
+  `Reflect.get` 守卫后重建，7 文件正确分类为 5 importable/2 blocked；smoke 数据随后清空。
+- typecheck、production build、0000→0016 fresh Migration、no-change generate、Compose、
+  全部 shell syntax、wiki、diff check 和 content 字节清单最终均通过。最终 CMS 重跑曾因
+  手工使用错误测试库账号在认证阶段退出；改用容器实际隔离账号后为 15 files 105/105，
+  没有把测试命令参数错误判作产品通过。
+
+### 人工验收环境和回滚
+
+- 当前保留三个带 `com.sdutvinci.scope=v2-phase8-manual-test` 标签的容器、回环
+  `55452/34162/34163`、本地裸 Git、PR #8 fixture 和 mock API。CMS 为
+  `http://127.0.0.1:34162/cms/login`，账号 `phase8admin`，测试密码见阶段 8 验收文档。
+  当前是 0 run、0 item、0 draft、9 初始 Revision、0 external action 的干净人工状态。
+- 一次性浏览器步骤、预期和异常证据见 `docs/v2/PHASE_V2_8_ACCEPTANCE.md` 第 5 节；不需要
+  真实 GitHub Token。评论/关闭只改本地 mock，关闭放在最后。
+- 若异常，保留容器/DB/Git fixture/log/action 后修复并重跑受影响专项、完整 CMS、
+  typecheck/build。人工完成后先 `npm run v2:phase8:manual -- inspect`，再 `stop` 逐标签和
+  marker 精确清理。
+- 应用回滚只用普通向前 `git revert <阶段8实现Commit>`；保留 `0016` 新表/列和 audit，
+  不 down migration。已发布提案使用既有 Revision restore/删除恢复，不删除 PR run 来
+  回滚正式内容。
+
+### Commit 和下一步
+
+- 阶段 8 独立本地 Commit 由最终回复报告完整 SHA。
+- 未 Push、未部署、未自动 Merge；现在停止开发，等待维护者明确人工验收，不进入阶段 9。

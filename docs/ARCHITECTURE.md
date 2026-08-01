@@ -328,9 +328,18 @@ description:
 
 正式文章删除不会改写或删除历史 Commit：删除成功后将文章文件从当前分支移除并记录 `article_deletion_events`；恢复读取删除前来源 Commit，写入新文件并创建新的 restore Commit。草稿删除只更新 PostgreSQL 的 `deleted_at`，恢复不会写 Markdown。
 
-### 阶段 8 以后
+### 阶段 8 已落地
 
-动态参数永远通过数据库 ID 查找；客户端不能提交任意绝对路径。
+- `POST /api/cms/content-imports/dry-run`
+- `GET /api/cms/content-imports/:id`
+- `POST /api/cms/content-imports/:id/import`
+- `GET /api/cms/content-imports/:id/items/:itemId`
+- `POST /api/cms/content-imports/:id/comment`
+- `POST /api/cms/content-imports/:id/close`（仅管理员）
+
+以上接口只接受配置内容仓库的 open PR，内容必须来自 PR Base/Head Commit 和分页 Diff。
+动态参数通过数据库 UUID 查找；客户端不能提交绝对路径。评论与关闭是独立、带 CSRF 和
+确认字符串的外部写操作，没有 Merge 接口。
 
 ## 9. 后台页面草案
 
@@ -342,6 +351,7 @@ description:
 | 文章只读详情 | `/cms/articles/:id` | member |
 | 新建/编辑 | `/cms/articles/new`、`/cms/articles/:id/edit` | member |
 | 待审核列表与详情 | `/cms/reviews`、`/cms/reviews/:id` | admin |
+| 外部内容导入 | `/cms/content-imports` | admin 或 content_importer |
 | 成员管理 | `/cms/members` | admin 写；member 只读 |
 | 账号安全与用户管理 | `/cms/users` | member 修改本人密码；admin 管理全部账号 |
 | 个人中心 | `/cms/profile` | member |
@@ -361,6 +371,9 @@ description:
 | 修改本人密码 | 否 | 是，仅本人且验证当前密码 | 是，仅本人且验证当前密码 |
 | 管理成员和用户 | 否 | 否 | 是 |
 | 删除/恢复正式文章 | 否 | 否 | 是，必须审计 |
+| PR Dry Run/导入安全项 | 否 | 仅明确授予 content_importer | 是 |
+| 评论 PR | 否 | 仅明确授予 content_importer | 是，必须再次确认 |
+| 关闭 PR | 否 | 否 | 是，必须再次确认 |
 
 管理员不是权限检查的客户端开关。每个 API 服务函数都必须显式声明最低角色和资源级条件。
 
@@ -701,3 +714,44 @@ Migration `0015_chubby_scorpion.sql` 只新增
 部署、权限、失败取证、回滚和操作教程见
 `docs/v2/BACKUP_AND_RECOVERY.md`；自动与浏览器验收见
 `docs/v2/PHASE_V2_7_ACCEPTANCE.md`。
+
+## 23. V2 阶段 8 已落地：PR 提案导入与三方比较
+
+阶段 8 的数据流保持单向发布权威，同时增加受控的提案回流：
+
+```text
+configured content repository PR
+  ├─ Base Commit ─ .vinci/snapshot.json + Base Markdown
+  ├─ Head Commit ─ Proposed Markdown
+  └─ paginated file Diff
+          │
+          ▼
+  CMS Dry Run ─ stable vinciId ─ database Current Revision
+          │
+          ├─ Base == Current → safe_change
+          ├─ different paragraphs → auto_merge
+          ├─ same paragraph → content_conflict (blocked)
+          ├─ new/move/delete → proposal-only actions
+          └─ path/file/syntax risk → blocked with evidence
+          │
+          ▼ selected safe items only
+  ordinary draft / move proposal / delete proposal
+          │
+          ▼ existing submit → independent review → explicit publish
+  new formal Revision + phase 6 export outbox
+```
+
+`content_pr_import_runs` 对 repository/PR/Head 唯一；`content_pr_import_items` 保存四方原文、
+哈希、Revision 指针、分类、冲突和 draft 结果；`content_pr_external_actions` 保存显式评论/
+关闭状态。`article_redirects` 让批准后的同目录重命名保留旧公共路径。草稿新增
+`proposed_action`、`proposed_relative_path` 和数据库预分配 `proposed_article_id`，旧草稿
+默认仍是普通 edit，蓝绿旧版本可继续运行。
+
+导入事务会锁定 item 和 Article，并在创建草稿前复核 Dry Run 的 Current Revision；
+发布事务沿用 baseRevision 乐观锁，再次防止数据库新 Revision 被覆盖。新增文章在导入时
+没有 Article 行，删除在导入时不改变 Article，移动在导入时不改路径。普通 PR 导入不
+引用阶段 7 initialize/disaster recovery 服务、表或确认令牌，不能全量覆盖非空库。
+
+完整分类、段落级合并算法、文件边界、权限、失败取证与回滚见
+`docs/v2/PR_IMPORT.md`；自动与浏览器验收见
+`docs/v2/PHASE_V2_8_ACCEPTANCE.md`。

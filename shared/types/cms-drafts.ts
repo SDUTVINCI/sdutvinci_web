@@ -35,6 +35,9 @@ export interface CmsDraft {
   }
   baseContentHash: string | null
   baseRevisionId: string | null
+  proposedAction: 'edit' | 'move' | 'delete'
+  proposedRelativePath: string | null
+  proposedArticleId: string | null
   status: CmsDraftStatus
   isDeleted: boolean
   deletedAt: string | null
@@ -55,6 +58,8 @@ export interface CmsDraftSummary {
   ownerAccount: string
   collection: CmsArticleCollection
   title: string
+  proposedAction: 'edit' | 'move' | 'delete'
+  proposedRelativePath: string | null
   status: CmsDraftStatus
   isDeleted: boolean
   deletedAt: string | null

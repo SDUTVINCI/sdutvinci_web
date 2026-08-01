@@ -173,6 +173,7 @@ export const upsertPublishedArticle = async (
     frontmatter: Record<string, unknown>
     body: string
     contentHash: string
+    allowCreateWithArticleId?: boolean
   }
 ) => {
   const values = {
@@ -196,6 +197,16 @@ export const upsertPublishedArticle = async (
       .set(values)
       .where(eq(articles.id, input.articleId))
       .returning({ id: articles.id })
+    if (!updated && input.allowCreateWithArticleId) {
+      const [created] = await tx.insert(articles).values({
+        id: input.articleId,
+        ...values
+      }).onConflictDoNothing({
+        target: [articles.collection, articles.relativePath]
+      }).returning({ id: articles.id })
+      if (!created) throw new CmsPublishPathError('新文章目标路径或预分配 ID 已存在')
+      return created.id
+    }
     if (!updated) throw new CmsPublishNotFoundError()
     return updated.id
   }

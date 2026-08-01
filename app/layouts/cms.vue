@@ -2,6 +2,8 @@
 const { session, logout } = useCmsSession()
 const route = useRoute()
 const isAdmin = computed(() => session.value?.user.roles.includes('admin') ?? false)
+const canImport = computed(() => isAdmin.value
+  || (session.value?.user.roles.includes('content_importer') ?? false))
 const loggingOut = ref(false)
 const displayName = computed(() =>
   session.value?.user.member?.name || session.value?.user.account || '当前用户'
@@ -15,6 +17,9 @@ const navItems = computed(() => [
   { to: '/cms/drafts', code: '03', label: '草稿', caption: 'DRAFTS', icon: 'drafts' as const },
   ...(isAdmin.value
     ? [{ to: '/cms/reviews', code: '04', label: '审核', caption: 'REVIEWS', icon: 'reviews' as const }]
+    : []),
+  ...(canImport.value
+    ? [{ to: '/cms/content-imports', code: 'IM', label: '外部内容导入', caption: 'PR IMPORT', icon: 'activity' as const }]
     : []),
   {
     to: '/cms/members',
@@ -44,6 +49,7 @@ const sectionTitle = computed(() => {
     articles: '内容',
     drafts: '草稿',
     reviews: '审核',
+    'content-imports': '外部内容导入',
     members: '成员',
     users: '账号',
     profile: '个人资料'

@@ -2438,3 +2438,84 @@ BACKUP_ROOT=/外部/绝对/备份根 ./scripts/backup-prune.sh --dry-run
 - 恢复故障：保留隔离数据库、Migration 输出、完整性 JSON 和健康响应；从新的空库重演。
 - 代码回滚：普通 `git revert`；保留 `0015` 新表，不执行 destructive down。
 - 内容仓库修正错误：先核对数据库与报告，再用普通 `git revert`；禁止 Force Push。
+
+## 19. V2 阶段 8 外部内容 PR 导入
+
+阶段 8 是 application 变化和 expand-only Migration，不启动阶段 9 的成员数据库权威或
+成员 PR 导入。上线前先完成数据库备份，并保持导入禁用：
+
+```bash
+CONTENT_PR_IMPORT_MODE=disabled
+CONTENT_PR_IMPORT_REPOSITORY_ID=SDUTVINCI/sdutvinci_content
+CONTENT_PR_IMPORT_API_URL=https://api.github.com
+CONTENT_PR_IMPORT_ROLE_CODES=content_importer
+CONTENT_PR_IMPORT_MAX_FILE_BYTES=1048576
+CONTENT_PR_IMPORT_MAX_FILES=200
+CONTENT_PR_IMPORT_RETRY_ATTEMPTS=3
+CONTENT_PR_IMPORT_TEST_MODE=false
+```
+
+`CONTENT_PR_IMPORT_GITHUB_TOKEN` 不提交到 Git，只从部署 secret 注入。只读 Dry Run 使用
+公开仓库时可不配置 Token；需要评论或关闭 PR 时才配置最小权限 Token。应用没有 Merge
+端点，Token 也不应授予 contents write 或 administration 权限。正式环境必须使用
+GitHub 官方 HTTPS API；`TEST_MODE` 只能在运行时 `NODE_ENV=test` 的隔离 mock 中启用。
+
+### 19.1 Migration 和蓝绿顺序
+
+Migration `0016_flowery_war_machine.sql` 只新增 `content_pr_import_runs/items`、
+`content_pr_external_actions`、`article_redirects`、草稿兼容列和 `content_importer` 角色。
+旧草稿会得到 `proposed_action=edit`，旧应用忽略新增对象，所以按普通 application 蓝绿
+顺序执行：
+
+1. 验证备份并保持旧活动槽位；
+2. `docker compose --profile tools run --rm migrate`；
+3. 只读核对四张新表、三个草稿列和角色；
+4. 启动候选槽位，运行健康、登录、旧 CMS 回归；
+5. 先以 `CONTENT_PR_IMPORT_MODE=disabled` 切换；
+6. 在测试仓库/fork 完成权限和 Dry Run 验收后，才单独启用入口。
+
+不要执行 down migration。阶段 7 recovery profile、确认令牌和 operations mount 不提供给
+application，阶段 8 也不增加数据库全量导入启动钩子。
+
+### 19.2 权限启用
+
+管理员在 CMS 账号管理中把 `content_importer` 只授予确需处理内容 PR 的用户。入口和 API
+都服务端复核角色；评论要求显式浏览器确认，关闭额外要求 admin。建议先用无写 Token 验证
+Dry Run，再换入最小写权限 Token 测试评论；关闭 PR 放在验收最后。任何测试都不得针对
+正式 PR。
+
+Compose 的 application 环境已透传上述配置，默认 `disabled`。修改环境后按正常蓝绿
+application 发布，不要在活动容器内临时改环境或复制 Token。
+
+### 19.3 本地隔离验收
+
+```bash
+npm run v2:phase8:manual -- start
+npm run v2:phase8:manual -- status
+npm run v2:phase8:manual -- inspect
+npm run v2:phase8:manual -- stop
+```
+
+脚本只使用带 `com.sdutvinci.scope=v2-phase8-manual-test` 标签的数据库、应用和 mock
+容器、回环端口、本地裸 Git 远端及 `/tmp` 归属标记。mock 验证分页读取、commit-bound
+content、评论和关闭，不向 GitHub 发请求。停止时逐个验证容器标签和 state marker 后精确
+清理；不会删除代码仓库 `content/`。
+
+### 19.4 监控、取证和回滚
+
+异常时先把 `CONTENT_PR_IMPORT_MODE` 设回 `disabled` 并正常发布配置；这只隐藏/拒绝新
+入口，不改变已创建草稿或正式内容。保留 run ID、PR/Base/Head、item 分类、外部动作
+错误码、对应 audit 和应用日志。不要记录 Token、Authorization、数据库 URL、私钥、绝对
+路径或带凭据远端 URL。
+
+- GitHub 读失败：保持 run/数据库不变，核对脱敏错误码、限流和分页，再对同 Head 重试。
+- Dry Run 后 Current 变化：该 item 会 blocked；从最新导出 Base 创建新 PR，不手工改表。
+- 部分导入：成功草稿保留，冲突项不导入；不需要回滚整批。
+- 评论/关闭失败：外部 action 记录 failed；它不回滚草稿，也不得改为 Merge 补偿。
+- 应用回滚：创建普通 `git revert <阶段8实现Commit>` 并走 application 发布；保留
+  `0016` 表/列和审计，不执行 destructive down。
+- 已发布提案：按现有 Revision restore、删除恢复和普通审核流程处理，不能通过删除 PR
+  run 回滚正式 Revision。
+
+完整算法、安全边界和失败取证见 `docs/v2/PR_IMPORT.md`；浏览器步骤和自动证据见
+`docs/v2/PHASE_V2_8_ACCEPTANCE.md`。
