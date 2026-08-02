@@ -1668,3 +1668,26 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
   Docker Compose v5 的 `ps --format json` 为逐行 JSON，而管理脚本的可选 `status` 展示按数组
   解析；产品、容器健康和 `verify` 不受影响。以新的独立验收准备修复 Commit 同时兼容数组和
   逐行格式，不 amend 实现 Commit；完整修复 SHA 由交付回复报告。
+
+---
+
+## 2026-08-02：V2 阶段 11 与 V2.0 最终验收通过并正式收尾
+
+- 维护者以当前登录用户执行唯一人工命令 `./scripts/v2-phase11-manual-acceptance.sh verify`。
+  动态 systemd Dry Run、status、doctor、备份与完整性校验通过；应用、PostgreSQL、gateway 和
+  S3 替身均为 healthy，只使用 test 名称、精确 label/marker、测试凭据与回环端口。logrotate
+  debug 提示和一次性 doctor 容器创建信息均为预期行为。
+- 维护者随后明确回复原文：“V2 阶段 11 验收通过，V2.0 最终验收通过”。据此勾选 27.5、
+  27.6 最后两项、阶段 11 总体项；阶段 0～11 总体进度现已全部勾选，V2.0 正式完成。
+- 阶段 11 实现 Commit 为 `d240ba4b126c919649572663bc2a7e0418a5884b`，Compose v5 验收状态
+  兼容修复 Commit 为 `e24d86ae35a816b879253e70f1d2800967da73fb`。本次另建独立本地最终
+  验收记录 Commit，完整 SHA 由交付回复报告；不 amend、不 reset/rebase/squash。
+- Codex 使用归属 marker 精确清理 `/tmp/vinci-phase11-manual-acceptance-test`、该 Compose
+  project 的 test 容器、PostgreSQL volume、网络、gateway volume 和两张阶段 11 验收镜像；
+  `127.0.0.1:48211/48212` 已释放。隔离测试数据库随 volume 删除且不可恢复，未删除任何生产
+  数据；阶段 10 删除前 annotated tag 与 Git 历史继续保留。
+- 收尾开始时只读复核发现本地 tracking ref `origin/main` 已指向
+  `e24d86ae35a816b879253e70f1d2800967da73fb`，与上一轮交付时记录的 `08a1c49...` 不同；本次
+  收尾没有 Fetch、Push、部署或调整该引用，也没有猜测其外部变化来源。
+- 本次未访问生产 PostgreSQL、S3/COS、内容仓库、真实 GitHub 写接口或生产服务器，未输出真实
+  密钥。最终验收记录提交后停止开发；任何生产 Push、部署或后续工作均须新的明确授权。
