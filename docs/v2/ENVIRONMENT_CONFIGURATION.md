@@ -338,7 +338,7 @@ CONTENT_EXPORT_KNOWN_HOSTS_FILE=/home/tungchiahui/.config/vinci-cms/content-expo
 | `CONTENT_PR_IMPORT_MODE` | 不使用 PR 导入时保持 `disabled`；完成权限验收后才用 `enabled` | enabled 只允许把选中的 PR diff 导入为草稿/提案，不会自动 Merge、批准或发布。 |
 | `CONTENT_PR_IMPORT_REPOSITORY_ID` | 固定 `SDUTVINCI/sdutvinci_content` | 正式环境只接受唯一内容仓库，不能让请求参数选择任意仓库。 |
 | `CONTENT_PR_IMPORT_API_URL` | 固定 `https://api.github.com` | 正式环境只允许 GitHub 官方 HTTPS API，禁止内嵌凭据或改成 HTTP。 |
-| `CONTENT_PR_IMPORT_GITHUB_TOKEN` | 首次部署且 mode 为 `disabled` 时必须留空；以后启用私有读取、评论或关闭 PR 时才填 Fine-grained PAT | 只授权目标内容仓库和实际使用的 API。不得复用 SSH Deploy Key、GHCR Token、个人 classic PAT 或代码仓库凭据。 |
+| `CONTENT_PR_IMPORT_GITHUB_TOKEN` | 首次保守部署可留空；也可先写入已验证的 Fine-grained PAT，同时继续保持 mode 为 `disabled` | 预配置便于以后只切换 mode，但 Token 会提前存入宿主机和容器配置，必须按未来实际能力做最小授权。不得复用 SSH Deploy Key、GHCR Token、个人 classic PAT 或代码仓库凭据。 |
 | `CONTENT_PR_IMPORT_ROLE_CODES` | 默认 `content_importer` | 允许操作导入功能的 CMS role code，多个值用英文逗号分隔并去空格。不要加入普通编辑角色以图省事。 |
 | `CONTENT_PR_IMPORT_MAX_FILE_BYTES` | 默认 `1048576`（1 MiB） | 单文件上限，范围 `1024–5000000` 字节；超限拒绝整个相关动作。 |
 | `CONTENT_PR_IMPORT_MAX_FILES` | 默认 `200` | 单 PR 文件数量上限，范围 `1–500`。 |
@@ -350,7 +350,7 @@ Token 不要通过 `docker compose config` 的完整输出排障，因为展开�
 
 ### 6.1 先按使用场景决定是否需要 Token
 
-首次部署建议保持整个 PR 导入功能关闭，此时**不创建、不填写 Token**：
+首次部署无论是否预配 Token，都必须先保持 PR 导入功能关闭。最保守方案是不创建、不填写 Token：
 
 ```dotenv
 CONTENT_PR_IMPORT_MODE=disabled
@@ -364,6 +364,19 @@ CONTENT_PR_IMPORT_TEST_MODE=false
 空值表示没有 GitHub API 凭据，不是占位符，也不会被第 11 节的占位值检查拒绝。此状态下 CMS 不显示
 可用的 PR 导入接口。`CONTENT_EXPORT_SSH_KEY_FILE` 对应的 Deploy Key 只用于 Git 协议导出/对账，
 GitHub REST API 不能使用它。
+
+如果维护者明确希望现在完成凭据准备、以后只切换 mode，也允许“Token 已配置，但功能仍关闭”。若未来
+要使用读取、评论和显式关闭全部能力，现在就按下表最后一行创建 Token，完成第 6.3 节只读验证，然后
+填写：
+
+```dotenv
+CONTENT_PR_IMPORT_MODE=disabled
+CONTENT_PR_IMPORT_GITHUB_TOKEN=<从密码管理器粘贴的真实Fine-grained-PAT>
+```
+
+`disabled` 会让 PR 导入接口 fail closed，不会因为 Token 已存在就自动读取、评论或关闭 GitHub PR。
+代价是敏感 Token 会从首次安装开始存在于受保护 `.env` 和应用容器环境中，并开始计算有效期；如果短期
+内根本不打算启用，留空仍更安全。
 
 以后确实要启用 PR 导入时，再根据目标能力选择一种权限组合：
 
@@ -434,10 +447,18 @@ test "$pulls_status" = 200    # 预期成功：验证 Pull requests read；不�
 unset contents_status pulls_status
 ```
 
-验证后使用不会把内容回显到共享终端的受控编辑器或密码管理流程，把刚才保存在密码管理器中的值写入：
+验证后使用不会把内容回显到共享终端的受控编辑器或密码管理流程，把刚才保存在密码管理器中的值写入。
+准备立即启用时使用：
 
 ```dotenv
 CONTENT_PR_IMPORT_MODE=enabled
+CONTENT_PR_IMPORT_GITHUB_TOKEN=<从密码管理器粘贴的真实Fine-grained-PAT>
+```
+
+像本次部署一样只预配置、暂不启用时使用：
+
+```dotenv
+CONTENT_PR_IMPORT_MODE=disabled
 CONTENT_PR_IMPORT_GITHUB_TOKEN=<从密码管理器粘贴的真实Fine-grained-PAT>
 ```
 
@@ -451,6 +472,32 @@ owner/仓库选择错误，也可能是 GitHub 对无权限私有资源的遮盖
 显式动作验证并检查审计记录。轮换时先创建新 Token、完成两个只读请求、更新 `.env` 并复验，再删除
 旧 Token。怀疑泄露时立即在 GitHub Fine-grained tokens 页面撤销并保持
 `CONTENT_PR_IMPORT_MODE=disabled`，直到新 Token 完成审批和验证。
+
+### 6.4 将来只切换 mode 并受控重载
+
+预配置方案下，将来启用前先重新执行第 6.3 节两个只读请求，确认 Token 未过期且组织审批仍有效；然后
+只把 `.env` 中这一行改为：
+
+```dotenv
+CONTENT_PR_IMPORT_MODE=enabled
+```
+
+`.env` 不是运行中容器的热加载配置，保存文件本身不会改变当前应用。必须用统一入口在当前不可变镜像
+上完成一次蓝绿重载，不能手工 `docker restart`：
+
+```bash
+chmod 600 .env # 再次确认包含 Token 的配置只允许 owner 读写
+current_deployment_sha="$(awk -F= '$1 == "commit" { print $2; exit }' .deploy/current)"
+[[ "$current_deployment_sha" =~ ^[0-9a-f]{40}$ ]] # 预期成功：只读取非敏感的当前部署 SHA
+./vinci update "$current_deployment_sha" # 同一 SHA 重新创建候选槽，读取新 env、健康检查后切换网关
+./vinci status # 预期仍是同一 SHA，但活动 slot 已切换且容器健康
+./vinci doctor # 预期以 0 退出；输出不得包含 Token
+unset current_deployment_sha
+```
+
+更新失败会保留原活动槽，不应改用 `docker compose up`、手工重启、关闭权限校验或把 Token 打到日志。
+如果决定再次停用，也把 mode 改回 `disabled` 并用同样的当前 SHA 蓝绿重载；只改 `.env` 不足以停用
+已运行容器中的功能。
 
 ## 7. S3 兼容对象存储 / 腾讯云 COS
 
