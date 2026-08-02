@@ -4,6 +4,15 @@ set -Eeuo pipefail
 
 repository_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 compose_fixture="$repository_root/tests/fixtures/v2-phase11-postgres.compose.yaml"
+for required_command in awk docker find getent git grep node sed systemd-analyze tar; do
+  command -v "$required_command" >/dev/null 2>&1 \
+    || { printf 'phase 11 test prerequisite missing: %s\n' "$required_command" >&2; exit 1; }
+done
+if grep -R -nE --include='*.sh' '(^|[^[:alnum:]_])r[g]([^[:alnum:]_]|$)' \
+  "$repository_root/tests"; then
+  printf 'phase 11 shell tests must not depend on optional ripgrep\n' >&2
+  exit 1
+fi
 suffix="$$"
 export PHASE11_TEST_PROJECT="vinci-phase11-doctor-test-${suffix}"
 export PHASE11_TEST_POSTGRES_PORT="$((46000 + suffix % 1000))"

@@ -95,7 +95,7 @@ grep -Fqx 'gid=22002' "$checkout/.deploy/install.env"
 grep -Fqx "home=${FAKE_TEST_HOME}" "$checkout/.deploy/install.env"
 test -f "$fake_state/vinci-cms-auto-deploy.timer.enabled"
 test -f "$fake_state/vinci-cms-health.timer.enabled"
-if rg -n '@VINCI_|User=vinci-deploy|Group=vinci-deploy|/home/vinci-deploy' \
+if grep -R -nE '@VINCI_|User=vinci-deploy|Group=vinci-deploy|/home/vinci-deploy' \
   "$fake_units" "$fake_logrotate"; then
   printf 'rendered current-user files retained a template or legacy identity\n' >&2
   exit 1
@@ -132,7 +132,7 @@ test -f "$fake_state/legacy-chown.executed"
 grep -Fq 'systemctl disable --now vinci-cms-auto-deploy.timer' "$FAKE_INSTALLER_LOG"
 grep -Fq "find $checkout -xdev -user phase11legacy -exec chown 22001:22002 -- {} +" \
   "$FAKE_INSTALLER_LOG"
-if rg -n 'userdel|rm -rf' "$FAKE_INSTALLER_LOG"; then
+if grep -nE 'userdel|rm -rf' "$FAKE_INSTALLER_LOG"; then
   printf 'legacy migration attempted to delete the user or environment\n' >&2
   exit 1
 fi

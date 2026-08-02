@@ -1719,3 +1719,13 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
 - 修正后远端兼容静态契约、YAML、260 文件归档、marker 清理、阶段 11 专项 12/12、历史
   Markdown/XSS 4/4、Wiki 226/226、完整测试 132/132、CMS 109/109、阶段 10 回归 33/33 和
   fresh migration 再次通过。新建独立本地修复 Commit，完整 SHA 由交付回复报告。
+- 远端 tag 独立性修复 Commit `3142955f4818de3e13abdf15fb2e15492485b9b8` 推送后的 run 已通过
+  阶段 11 前置 12/12、历史 Markdown/XSS 4/4 和 Wiki 226/226，随后在 operations shell 测试
+  因 GitHub Ubuntu runner 未安装可选 `rg` 而退出。核对发现两条位于 `if` 条件中的 `rg` 扫描
+  还会在命令缺失时悄悄跳过安全断言，故不能只修最后一条显式失败命令。
+- 阶段 11 会调用的 operations、systemd 和自动部署 shell 测试已全部改用 runner 自带的
+  `grep`，保持递归、扩展正则和固定字符串语义；总入口会先明确检查实际所需命令，并静态拒绝
+  `tests/*.sh` 再引入可选 ripgrep 依赖。修复后的精确 `npm run test:v2:phase11` 已完整通过，
+  包括 operations、真实 systemd/logrotate、当前用户迁移、自动部署、清理和阶段 7 回归。
+- 该修复不改变产品代码、数据库、API、依赖、权限或生产行为；继续不 Fetch、不 Push、不部署，
+  不访问生产资源。独立本地修复 Commit 完整 SHA 由交付回复报告。

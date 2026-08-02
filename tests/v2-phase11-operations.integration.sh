@@ -20,12 +20,12 @@ if "$repository_root/vinci" unknown-phase11-test-command \
   exit 1
 fi
 
-if rg -n 'User=vinci-deploy|Group=vinci-deploy|/home/vinci-deploy|/opt/vinci-cms|sudo -u vinci-deploy|sudo -iu vinci-deploy' \
+if grep -R -nE 'User=vinci-deploy|Group=vinci-deploy|/home/vinci-deploy|/opt/vinci-cms|sudo -u vinci-deploy|sudo -iu vinci-deploy' \
   "$repository_root/vinci" "$repository_root/scripts" "$repository_root/systemd"; then
   printf 'effective operations code retained a legacy deployment identity\n' >&2
   exit 1
 fi
-if rg -n 'force[ -]?push|push --force|git push -f' \
+if grep -R -nE 'force[ -]?push|push --force|git push -f' \
   "$repository_root/vinci" "$repository_root/scripts" "$repository_root/systemd"; then
   printf 'operations code contains a Force Push path\n' >&2
   exit 1
@@ -93,10 +93,10 @@ grep -Fq INSTANCE_PRUNE_UNOWNED "$test_root/symlink.log"
 rm "$instance_root/${project}-instance-20200101T000000Z"
 
 for token in 'RESTORE:' 'IMPORT:' 'MIGRATE:' 'INITIALIZE:' 'RECOVERABLE:'; do
-  rg -F "$token" "$repository_root/vinci" "$repository_root/scripts" >/dev/null
+  grep -R -F "$token" "$repository_root/vinci" "$repository_root/scripts" >/dev/null
 done
-rg -F '目标数据库不是空库' "$repository_root/scripts/restore.sh" >/dev/null
-rg -F 'CONTENT_RECOVERY_DATABASE_NOT_EMPTY' \
+grep -F '目标数据库不是空库' "$repository_root/scripts/restore.sh" >/dev/null
+grep -F 'CONTENT_RECOVERY_DATABASE_NOT_EMPTY' \
   "$repository_root/server/services/content-recovery.ts" >/dev/null
 
 current_home="$(getent passwd "$EUID" | awk -F: 'NR == 1 { print $6 }')"

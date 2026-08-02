@@ -31,7 +31,7 @@ if command -v logrotate >/dev/null 2>&1; then
   logrotate --debug --state "$test_root/logrotate-state-test" \
     "$rendered/vinci-cms.logrotate" >/dev/null
 fi
-if rg -n '@VINCI_' "$rendered"; then
+if grep -R -nF '@VINCI_' "$rendered"; then
   printf 'systemd test retained unresolved template placeholders\n' >&2
   exit 1
 fi
