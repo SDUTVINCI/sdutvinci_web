@@ -64,6 +64,15 @@ ops_require_external_absolute_path() {
   resolved="$(realpath -m -- "$requested")"
   [ "$resolved" != "/" ] || ops_die "${label} 不得是根目录"
 
+  local account_home=""
+  if command -v getent >/dev/null 2>&1; then
+    account_home="$(getent passwd "$EUID" 2>/dev/null | awk -F: 'NR == 1 { print $6 }')"
+  fi
+  if [ -n "$account_home" ] && [[ "$account_home" = /* ]]; then
+    account_home="$(realpath -m -- "$account_home")"
+    [ "$resolved" != "$account_home" ] || ops_die "${label} 不得直接使用当前账号 Home 根"
+  fi
+
   case "$resolved/" in
     "$OPS_REPOSITORY_ROOT/"*)
       ops_die "${label} 必须位于项目目录之外"

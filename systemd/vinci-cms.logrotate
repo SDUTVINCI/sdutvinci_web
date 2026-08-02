@@ -1,0 +1,11 @@
+"@VINCI_LOG_ROOT@/*.log" {
+    daily
+    rotate 30
+    maxsize 100M
+    missingok
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+    su @VINCI_USER@ @VINCI_GROUP@
+}

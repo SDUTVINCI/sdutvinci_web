@@ -1,5 +1,8 @@
 # 网站后台（CMS）需求文档
 
+> 历史基线：本文是 V1 需求依据，继续保留用于审计。V2.0 权威需求与现行架构分别见
+> `docs/v2/VINCI_CONTENT_ARCHITECTURE_V2_REQUIREMENTS.md` 和 `docs/ARCHITECTURE.md`。
+
 ## 一、项目目标
 
 我有一个 Nuxt Content 网站。

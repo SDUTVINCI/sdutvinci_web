@@ -49,9 +49,10 @@ jobs:
       - name: Validate operations files
         run: |
           cp .env.example .env
-          bash -n scripts/ops-common.sh scripts/classify-deployment.sh scripts/auto-deploy.sh scripts/install-auto-deploy.sh scripts/cleanup-deploy-cache.sh scripts/deploy.sh scripts/backup.sh scripts/restore.sh scripts/test-cms.sh tests/backup-restore.integration.sh tests/deploy-cache-cleanup.integration.sh
+          bash -n vinci scripts/ops-common.sh scripts/classify-deployment.sh scripts/auto-deploy.sh scripts/install-auto-deploy.sh scripts/cleanup-deploy-cache.sh scripts/deploy.sh scripts/backup.sh scripts/backup-verify.sh scripts/backup-prune.sh scripts/restore.sh scripts/instance-export.sh scripts/instance-import.sh scripts/instance-prune.sh scripts/v2-phase11-manual-acceptance.sh scripts/test-cms.sh tests/backup-restore.integration.sh tests/deploy-cache-cleanup.integration.sh tests/v2-phase11-markdown-security.integration.sh tests/v2-phase11-operations.integration.sh tests/v2-phase11-systemd.integration.sh tests/v2-phase11.integration.sh tests/v2-phase11-full.integration.sh
           sh -n docker/entrypoint.sh docker/gateway-entrypoint.sh
           docker compose config --quiet
+          docker compose -f compose.yaml -f tests/fixtures/v2-phase11-isolation.compose.yaml config --quiet
           ./tests/deploy-cache-cleanup.integration.sh
           ./tests/auto-deploy.integration.sh
           ./tests/install-auto-deploy.integration.sh
@@ -64,6 +65,9 @@ jobs:
 
       - name: Run V2 phase 10 dependency and database-content checks
         run: npm run test:v2:phase10
+
+      - name: Run V2 phase 11 unified operations and security checks
+        run: npm run test:v2:phase11
 
       - name: Run type checking
         run: npm run typecheck

@@ -20,6 +20,7 @@ export FAKE_OPERATIONS_REPOSITORY="registry.invalid/vinci/operations"
 export FAKE_CURRENT_COMMIT="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 export FAKE_CONTAINER_COMMIT="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 export FAKE_REMOVABLE_COMMIT="cccccccccccccccccccccccccccccccccccccccc"
+export FAKE_CLEANUP_COMMIT="1111111111111111111111111111111111111111"
 export FAKE_RETAINED_COMMIT_1="dddddddddddddddddddddddddddddddddddddddd"
 export FAKE_RETAINED_COMMIT_2="eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
 export FAKE_FAILED_COMMIT="ffffffffffffffffffffffffffffffffffffffff"
@@ -28,11 +29,15 @@ printf 'commit=%s\nslot=blue\n' "$FAKE_CURRENT_COMMIT" \
   > "$test_root/repository/.deploy/current"
 printf 'commit=%s\nmode=application\n' "$FAKE_FAILED_COMMIT" \
   > "$test_root/repository/.deploy/auto-deploy-failed"
+printf 'commit=%s\nverified_by=previous_healthy_deployment\n' "$FAKE_REMOVABLE_COMMIT" \
+  > "$test_root/repository/.deploy/rollback-verified"
 : > "$FAKE_DOCKER_LOG"
 
 dry_run_output="$("$test_root/repository/scripts/cleanup-deploy-cache.sh" --dry-run)"
 printf '%s\n' "$dry_run_output" | grep -F \
-  "将删除旧部署镜像：${FAKE_RUNTIME_REPOSITORY}:${FAKE_REMOVABLE_COMMIT}" >/dev/null
+  "保留部署状态引用的镜像：${FAKE_RUNTIME_REPOSITORY}:${FAKE_REMOVABLE_COMMIT}" >/dev/null
+printf '%s\n' "$dry_run_output" | grep -F \
+  "将删除旧部署镜像：${FAKE_RUNTIME_REPOSITORY}:${FAKE_CLEANUP_COMMIT}" >/dev/null
 printf '%s\n' "$dry_run_output" | grep -F \
   "保留容器仍在引用的镜像：${FAKE_RUNTIME_REPOSITORY}:${FAKE_CONTAINER_COMMIT}" >/dev/null
 printf '%s\n' "$dry_run_output" | grep -F \
@@ -45,11 +50,13 @@ fi
 : > "$FAKE_DOCKER_LOG"
 "$test_root/repository/scripts/cleanup-deploy-cache.sh" --apply >/dev/null
 
-grep -Fx \
-  "image rm -- ${FAKE_RUNTIME_REPOSITORY}:${FAKE_REMOVABLE_COMMIT}" \
+if grep -E "^image rm -- .+:${FAKE_REMOVABLE_COMMIT}$" "$FAKE_DOCKER_LOG" >/dev/null; then
+  printf 'verified rollback image was removed\n' >&2
+  exit 1
+fi
+grep -Fx "image rm -- ${FAKE_RUNTIME_REPOSITORY}:${FAKE_CLEANUP_COMMIT}" \
   "$FAKE_DOCKER_LOG" >/dev/null
-grep -Fx \
-  "image rm -- ${FAKE_OPERATIONS_REPOSITORY}:${FAKE_REMOVABLE_COMMIT}" \
+grep -Fx "image rm -- ${FAKE_OPERATIONS_REPOSITORY}:${FAKE_CLEANUP_COMMIT}" \
   "$FAKE_DOCKER_LOG" >/dev/null
 grep -Fx "image prune --force --filter until=48h" "$FAKE_DOCKER_LOG" >/dev/null
 grep -Fx "builder prune --force --filter until=48h" "$FAKE_DOCKER_LOG" >/dev/null

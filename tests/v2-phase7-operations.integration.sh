@@ -186,7 +186,7 @@ grep -Fqx 'OnCalendar=*-*-* 03:00:00 Asia/Shanghai' \
   "${repository_root}/systemd/vinci-cms-content-reconcile.timer"
 grep -Fqx 'OnCalendar=*-*-* 02:00:00 Asia/Shanghai' \
   "${repository_root}/systemd/vinci-cms-backup.timer"
-grep -Fqx 'ExecStart=/opt/vinci-cms/scripts/v2-maintenance-cleanup.sh' \
+grep -Fqx 'ExecStart=@VINCI_ROOT@/vinci maintenance --scheduled' \
   "${repository_root}/systemd/vinci-cms-maintenance-cleanup.service"
 grep -q 'CONTENT_RECOVERY_MODE: disabled' "${repository_root}/compose.yaml"
 grep -q 'BACKUP_RETRY_ATTEMPTS' "${repository_root}/scripts/backup.sh"

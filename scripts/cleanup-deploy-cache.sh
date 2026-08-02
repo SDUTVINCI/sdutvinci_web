@@ -105,6 +105,7 @@ read_protected_commit() {
 }
 
 read_protected_commit "$OPS_REPOSITORY_ROOT/.deploy/current" "部署状态文件"
+read_protected_commit "$OPS_REPOSITORY_ROOT/.deploy/rollback-verified" "已验证回滚状态文件"
 read_protected_commit "$OPS_REPOSITORY_ROOT/.deploy/auto-deploy-failed" "自动部署失败标记"
 
 declare -A container_image_ids=()

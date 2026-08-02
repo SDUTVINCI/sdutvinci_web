@@ -2,7 +2,7 @@
 
 ## 1. 当前权威边界
 
-本文记录 V2 阶段 10 后的现行架构。阶段 0～9 的迁移过程、旧 Git-first 路径和首次复制
+本文记录 V2 阶段 11 实现后的现行架构。阶段 0～10 的迁移过程、旧 Git-first 路径和首次复制
 历史只用于审计与回滚，不是生产操作说明；详见 `docs/v2/PHASE_V2_*_ACCEPTANCE.md`。
 
 - PostgreSQL 是新闻、Wiki、成员公开资料及其当前版本的线上唯一权威。
@@ -49,6 +49,12 @@ CodeMirror/Milkdown、S3 兼容对象存储和 Docker Compose。
   运行向前 migration，再走蓝绿发布。不存在“纯 `content/**` 镜像部署”。
 - CMS 发布只提交数据库事务并写 export Outbox；内容 Worker/凌晨对账更新独立内容仓库，
   不触发代码 Actions 或 runtime 镜像构建。
+- `./vinci` 是安装、更新、状态、doctor、备份/校验/清理、恢复和实例迁移的统一维护入口；
+  底层安全脚本保留给编排与高级排障。
+- 部署和 timer 默认使用执行首次安装的当前系统用户。用户名、UID、GID、Home 和 Shell 从 NSS
+  解析，只写本机安装清单；迁移到不同用户的新服务器时重新生成 unit。
+- 动态 systemd 覆盖自动部署、02:00 备份、03:00 对账、04:00 清理和每小时 doctor；日志按
+  日/30 份/100 MiB 轮转，迁移包与密钥分开传输并按 30 日策略清理。
 
 生产 schema 使用 expand/contract，migration 不自动 down。服务器只出站拉取 Git 和镜像；
 候选失败保留当前版本，禁止 reset、force push 或覆盖非空数据库。
@@ -91,7 +97,18 @@ API。页面的白话说明、中文状态和 Git diff 行级材料属于长期�
 
 具体命令、保留策略和故障取证见 `docs/v2/BACKUP_AND_RECOVERY.md`。
 
-## 7. 目录职责
+## 7. 最终运维拓扑
+
+```text
+当前安装用户 ./vinci
+  ├─ install/update ─→ 完整 SHA 镜像 ─→ migration ─→ blue/green ─→ gateway
+  ├─ backup/restore ─→ custom dump + SHA ─→ 仅空库 ─→ migration/health
+  ├─ export/import-instance ─→ 无密钥迁移包 ─→ 新服务器重新生成 unit
+  ├─ doctor ─→ PostgreSQL + 内容任务 + S3/COS + 容器/槽位/timer
+  └─ timers：每分钟更新；02:00 备份；03:00 对账；04:00 清理；每小时健康
+```
+
+## 8. 目录职责
 
 ```text
 app/                         前台与 CMS Vue 页面

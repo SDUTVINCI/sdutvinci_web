@@ -1,0 +1,596 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+VINCI_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+# shellcheck source=scripts/ops-common.sh
+source "$VINCI_ROOT/scripts/ops-common.sh"
+
+vinci_usage() {
+  cat <<'EOF'
+Vinci V2.0 统一运维入口
+
+用法：
+  ./vinci install [--dry-run|--systemd-only] [--initialize=empty]
+  ./vinci install --initialize=snapshot --snapshot=/绝对路径 [--confirm=INITIALIZE:...]
+  ./vinci update [<40位commit>|--automatic]
+  ./vinci status
+  ./vinci doctor [--scheduled] [--legacy-user=<用户> --legacy-root=<目录>]
+  ./vinci backup [--verify|--scheduled]
+  ./vinci backup-prune --dry-run|--apply
+  ./vinci restore <备份目录> --confirm=RESTORE:<项目>:<数据库>:<备份名>
+  ./vinci export-instance [--backup=<已验证备份目录>]
+  ./vinci import-instance <迁移包目录> --confirm=IMPORT:<包名>:<项目>:<数据库>
+  ./vinci reconcile [--scheduled]
+  ./vinci maintenance [--dry-run|--apply|--scheduled]
+  ./vinci migrate-legacy-user --legacy-user=<用户> --legacy-root=<目录> --dry-run
+  ./vinci migrate-legacy-user --legacy-user=<用户> --legacy-root=<目录> \
+    --verified-backup=<目录> --confirm=MIGRATE:<旧用户>:<当前用户>:<目录>
+
+所有破坏性入口均 fail closed；普通应用启动不会导入 Markdown，恢复和导入始终拒绝
+非空数据库。--scheduled 仅供动态生成的 systemd unit 调用。
+EOF
+}
+
+vinci_die_usage() {
+  vinci_usage >&2
+  ops_die "$*"
+}
+
+vinci_current_identity() {
+  local requested=""
+  if [ "${VINCI_INSTALL_TEST_MODE:-false}" = "true" ] \
+    && [ -n "${VINCI_TEST_RUN_USER:-}" ]; then
+    requested="$VINCI_TEST_RUN_USER"
+  elif [ "$EUID" -eq 0 ]; then
+    requested="${SUDO_USER:-}"
+    [ -n "$requested" ] && [ "$requested" != "root" ] \
+      || ops_die "不要直接以 root 安装；请用普通维护者账号执行 ./vinci，脚本仅在写 systemd 时调用 sudo"
+  else
+    requested="$(id -un)"
+  fi
+
+  [[ "$requested" =~ ^[a-z_][a-z0-9_-]*[$]?$ ]] \
+    || ops_die "当前运行用户名格式不安全"
+  local passwd_record
+  passwd_record="$(getent passwd "$requested" || true)"
+  [ -n "$passwd_record" ] || ops_die "无法从 NSS 解析当前运行用户：$requested"
+  IFS=: read -r VINCI_RUN_USER _ VINCI_RUN_UID VINCI_RUN_GID _ VINCI_RUN_HOME VINCI_RUN_SHELL \
+    <<< "$passwd_record"
+  [[ "$VINCI_RUN_UID" =~ ^[0-9]+$ ]] && [[ "$VINCI_RUN_GID" =~ ^[0-9]+$ ]] \
+    || ops_die "当前用户 UID/GID 无效"
+  [ -n "$VINCI_RUN_HOME" ] && [[ "$VINCI_RUN_HOME" = /* ]] && [ "$VINCI_RUN_HOME" != "/" ] \
+    || ops_die "当前用户 Home 必须是非根绝对路径"
+  [ -n "$VINCI_RUN_SHELL" ] && [[ "$VINCI_RUN_SHELL" = /* ]] \
+    || ops_die "当前用户默认 Shell 无效"
+  VINCI_RUN_GROUP="$(getent group "$VINCI_RUN_GID" | awk -F: 'NR == 1 { print $1 }')"
+  [ -n "$VINCI_RUN_GROUP" ] || ops_die "无法解析当前用户主组：GID $VINCI_RUN_GID"
+  export VINCI_RUN_USER VINCI_RUN_UID VINCI_RUN_GID VINCI_RUN_HOME VINCI_RUN_SHELL VINCI_RUN_GROUP
+}
+
+vinci_assert_repository() {
+  [ -d "$VINCI_ROOT/.git" ] && [ ! -L "$VINCI_ROOT/.git" ] \
+    || ops_die "统一入口必须从真实 Git working tree 执行"
+  [ -f "$VINCI_ROOT/.env" ] && [ ! -L "$VINCI_ROOT/.env" ] \
+    || ops_die "缺少普通文件 .env；先从 .env.example 创建并保存在外部密码库"
+  [ "$(stat -c '%a' "$VINCI_ROOT/.env")" = "600" ] \
+    || ops_die ".env 权限必须是 0600"
+  local root_owner
+  root_owner="$(stat -c '%u' "$VINCI_ROOT")"
+  [ "$root_owner" = "$VINCI_RUN_UID" ] \
+    || ops_die "仓库属主 UID ${root_owner} 与当前安装用户 UID ${VINCI_RUN_UID} 不一致"
+}
+
+vinci_as_run_user() {
+  if [ "$EUID" -eq "$VINCI_RUN_UID" ]; then
+    "$@"
+  else
+    runuser -u "$VINCI_RUN_USER" -- "$@"
+  fi
+}
+
+vinci_privileged() {
+  if [ "${VINCI_INSTALL_TEST_MODE:-false}" = "true" ] || [ "$EUID" -eq 0 ]; then
+    "$@"
+  else
+    sudo -- "$@"
+  fi
+}
+
+vinci_escape_sed() {
+  printf '%s' "$1" | sed -e 's/[\\&|]/\\&/g'
+}
+
+vinci_render_units() {
+  local destination="$1"
+  local log_root="$2"
+  mkdir -p -- "$destination"
+  local user group root logs source name
+  user="$(vinci_escape_sed "$VINCI_RUN_USER")"
+  group="$(vinci_escape_sed "$VINCI_RUN_GROUP")"
+  root="$(vinci_escape_sed "$VINCI_ROOT")"
+  logs="$(vinci_escape_sed "$log_root")"
+  for source in "$VINCI_ROOT"/systemd/vinci-cms-*; do
+    [ -f "$source" ] || ops_die "缺少 systemd 模板"
+    name="$(basename -- "$source")"
+    sed \
+      -e "s|@VINCI_USER@|$user|g" \
+      -e "s|@VINCI_GROUP@|$group|g" \
+      -e "s|@VINCI_ROOT@|$root|g" \
+      -e "s|@VINCI_LOG_ROOT@|$logs|g" \
+      "$source" > "$destination/$name"
+    chmod 0644 "$destination/$name"
+  done
+  source="$VINCI_ROOT/systemd/vinci-cms.logrotate"
+  [ -f "$source" ] || ops_die "缺少 logrotate 模板"
+  sed -e "s|@VINCI_LOG_ROOT@|$logs|g" \
+    -e "s|@VINCI_USER@|$user|g" -e "s|@VINCI_GROUP@|$group|g" "$source" \
+    > "$destination/vinci-cms.logrotate"
+  chmod 0644 "$destination/vinci-cms.logrotate"
+}
+
+vinci_write_install_manifest() {
+  mkdir -p -- "$VINCI_ROOT/.deploy"
+  local temporary="$VINCI_ROOT/.deploy/install.env.tmp.$$"
+  umask 077
+  {
+    printf 'format=vinci-install-v2\n'
+    printf 'user=%s\nuid=%s\ngid=%s\ngroup=%s\n' \
+      "$VINCI_RUN_USER" "$VINCI_RUN_UID" "$VINCI_RUN_GID" "$VINCI_RUN_GROUP"
+    printf 'home=%s\nshell=%s\nroot=%s\ninstalled_at=%s\n' \
+      "$VINCI_RUN_HOME" "$VINCI_RUN_SHELL" "$VINCI_ROOT" "$(date -u +%FT%TZ)"
+  } > "$temporary"
+  mv -- "$temporary" "$VINCI_ROOT/.deploy/install.env"
+}
+
+vinci_prepare_host_paths() {
+  local label requested resolved mode
+  while IFS='|' read -r label requested mode; do
+    resolved="$(ops_require_external_absolute_path "$label" "$requested")"
+    [ "$resolved" != "$VINCI_RUN_HOME" ] || ops_die "${label} 不得直接使用 Home 根"
+    vinci_privileged install -d -o "$VINCI_RUN_UID" -g "$VINCI_RUN_GID" -m "$mode" "$resolved"
+  done <<EOF
+BACKUP_ROOT|$(ops_config_value BACKUP_ROOT /var/backups/vinci-cms)|0700
+INSTANCE_EXPORT_ROOT|$(ops_config_value INSTANCE_EXPORT_ROOT /var/backups/vinci-cms-instances)|0700
+VINCI_LOG_ROOT|$(ops_config_value VINCI_LOG_ROOT "$VINCI_RUN_HOME/.local/state/vinci-cms/logs")|0750
+EOF
+}
+
+vinci_install_systemd() {
+  local dry_run="$1"
+  local unit_directory="${VINCI_SYSTEMD_UNIT_DIR:-/etc/systemd/system}"
+  local log_root
+  log_root="$(ops_config_value VINCI_LOG_ROOT "$VINCI_RUN_HOME/.local/state/vinci-cms/logs")"
+  [[ "$log_root" = /* ]] && [ "$log_root" != "/" ] || ops_die "VINCI_LOG_ROOT 必须是非根绝对路径"
+  local rendered
+  rendered="$(mktemp -d /tmp/vinci-phase11-systemd-render-test.XXXXXX)"
+  vinci_render_units "$rendered" "$log_root"
+  systemd-analyze verify "$rendered"/*.service "$rendered"/*.timer
+  if command -v logrotate >/dev/null 2>&1; then
+    logrotate --debug --state "$rendered/logrotate-state.test" \
+      "$rendered/vinci-cms.logrotate" >/dev/null
+  fi
+  if [ "$dry_run" = "true" ]; then
+    ops_info "systemd Dry Run 通过：将为 ${VINCI_RUN_USER} 安装 $(find "$rendered" -type f | wc -l) 个 unit/timer"
+    rm -rf -- "$rendered"
+    return 0
+  fi
+  vinci_privileged install -d -o "$VINCI_RUN_UID" -g "$VINCI_RUN_GID" -m 0750 "$log_root"
+  vinci_privileged install -d -o root -g root -m 0755 "$unit_directory"
+  local unit
+  for unit in "$rendered"/*.service "$rendered"/*.timer; do
+    vinci_privileged install -o root -g root -m 0644 "$unit" "$unit_directory/$(basename -- "$unit")"
+  done
+  local logrotate_directory="${VINCI_LOGROTATE_DIR:-/etc/logrotate.d}"
+  vinci_privileged install -d -o root -g root -m 0755 "$logrotate_directory"
+  vinci_privileged install -o root -g root -m 0644 \
+    "$rendered/vinci-cms.logrotate" "$logrotate_directory/vinci-cms"
+  vinci_privileged systemctl daemon-reload
+  for unit in vinci-cms-auto-deploy.timer vinci-cms-backup.timer \
+    vinci-cms-content-reconcile.timer vinci-cms-maintenance-cleanup.timer \
+    vinci-cms-health.timer; do
+    vinci_privileged systemctl enable --now "$unit"
+  done
+  rm -rf -- "$rendered"
+  ops_info "已为 ${VINCI_RUN_USER} 重新生成并启用 Vinci systemd timers。"
+}
+
+vinci_preflight() {
+  vinci_current_identity
+  vinci_assert_repository
+  for command in awk curl df docker getent git logrotate node realpath sed stat systemd-analyze; do
+    ops_require_command "$command"
+  done
+  if [ "${VINCI_INSTALL_TEST_MODE:-false}" != "true" ] && [ "$EUID" -ne 0 ]; then
+    ops_require_command sudo
+  fi
+  vinci_as_run_user docker info >/dev/null \
+    || ops_die "当前用户不能访问 Docker socket；不要自动加组。Docker 组近似 root 权限，请由维护者审查后配置并重新登录"
+  vinci_as_run_user git -C "$VINCI_ROOT" rev-parse --is-inside-work-tree | grep -Fxq true \
+    || ops_die "当前用户不能读取部署 Git working tree"
+  [ -z "$(vinci_as_run_user git -C "$VINCI_ROOT" status --porcelain=v1 --untracked-files=no)" ] \
+    || ops_die "部署仓库存在已跟踪改动，安装/更新不会覆盖"
+  docker compose config --quiet
+}
+
+vinci_install() {
+  local dry_run=false systemd_only=false initialize=empty snapshot="" confirmation=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --dry-run) dry_run=true ;;
+      --systemd-only) systemd_only=true ;;
+      --initialize=empty) initialize=empty ;;
+      --initialize=snapshot) initialize=snapshot ;;
+      --snapshot=*) snapshot="${1#*=}" ;;
+      --confirm=*) confirmation="${1#*=}" ;;
+      -h|--help) vinci_usage; return 0 ;;
+      *) vinci_die_usage "install 未知参数：$1" ;;
+    esac
+    shift
+  done
+  vinci_preflight
+  vinci_install_systemd true
+  if [ "$dry_run" = "true" ]; then
+    ops_info "安装 Dry Run 通过：user=${VINCI_RUN_USER} uid=${VINCI_RUN_UID} gid=${VINCI_RUN_GID} home=${VINCI_RUN_HOME} shell=${VINCI_RUN_SHELL}"
+    return 0
+  fi
+  mkdir -p -- "$VINCI_ROOT/.deploy"
+  chmod 0700 "$VINCI_ROOT/.deploy"
+  vinci_write_install_manifest
+  if [ "$systemd_only" = "true" ]; then
+    vinci_prepare_host_paths
+    vinci_install_systemd false
+    return 0
+  fi
+
+  vinci_prepare_host_paths
+  cd -- "$VINCI_ROOT"
+  docker compose up -d --wait postgres
+  docker compose --profile tools run --rm migrate
+  if [ "$initialize" = "snapshot" ]; then
+    [ -n "$snapshot" ] || ops_die "--initialize=snapshot 必须提供 --snapshot=/绝对路径"
+    snapshot="$(ops_require_external_absolute_path 内容快照 "$snapshot")"
+    [ -d "$snapshot" ] && [ ! -L "$snapshot" ] || ops_die "内容快照目录不安全"
+    export CONTENT_RECOVERY_SOURCE_ROOT="$snapshot"
+    if [ -z "$confirmation" ]; then
+      docker compose --profile content-recovery run --rm content-recovery \
+        npm run v2:content:recover -- --source=/recovery-source \
+        "--actor=${VINCI_RUN_USER}" --mode=initialize
+      ops_die "快照 Dry Run 已完成；核对报告后用同一命令追加 --confirm=精确令牌 才会写入"
+    fi
+    docker compose --profile content-recovery run --rm content-recovery \
+      npm run v2:content:recover -- --source=/recovery-source \
+      "--actor=${VINCI_RUN_USER}" --mode=initialize --apply "--confirm=${confirmation}"
+  fi
+
+  if [ ! -f "$VINCI_ROOT/.deploy/current" ]; then
+    local commit runtime_image operations_image
+    commit="$(git rev-parse HEAD)"
+    runtime_image="$(ops_required_compose_env APP_IMAGE)"
+    operations_image="$(ops_required_compose_env APP_OPS_IMAGE)"
+    DEPLOY_COMMIT="$commit" DEPLOY_MODE=application APP_IMAGE="$runtime_image" \
+      APP_OPS_IMAGE="$operations_image" APP_IMAGE_TAG="$commit" \
+      "$VINCI_ROOT/scripts/deploy.sh"
+  fi
+  vinci_install_systemd false
+  "$VINCI_ROOT/vinci" doctor
+  ops_info "首次安装完成。普通启动未执行任何 Markdown 反向导入。"
+}
+
+vinci_update() {
+  local target="${1:-}"
+  [ "$#" -le 1 ] || vinci_die_usage "update 参数过多"
+  if [ "$target" = "--help" ] || [ "$target" = "-h" ]; then
+    vinci_usage
+    return 0
+  fi
+  if [ "$target" = "--automatic" ]; then
+    exec "$VINCI_ROOT/scripts/auto-deploy.sh"
+  fi
+  vinci_current_identity
+  vinci_assert_repository
+  if [ -z "$target" ]; then
+    local branch
+    branch="$(ops_config_value CMS_GIT_BRANCH main)"
+    git fetch --prune origin "$branch"
+    target="$(git rev-parse --verify "origin/${branch}^{commit}")"
+  fi
+  [[ "$target" =~ ^[0-9a-f]{40}$ ]] || ops_die "update 目标必须是完整 40 位小写 commit"
+  DEPLOY_COMMIT="$target" DEPLOY_MODE=application \
+    APP_IMAGE="$(ops_required_compose_env APP_IMAGE)" \
+    APP_OPS_IMAGE="$(ops_required_compose_env APP_OPS_IMAGE)" \
+    APP_IMAGE_TAG="$target" exec "$VINCI_ROOT/scripts/deploy.sh"
+}
+
+vinci_status() {
+  if [ "$#" -eq 1 ] && { [ "$1" = "--help" ] || [ "$1" = "-h" ]; }; then
+    vinci_usage
+    return 0
+  fi
+  [ "$#" -eq 0 ] || vinci_die_usage "status 不接受参数"
+  vinci_current_identity
+  ops_info "Vinci 用户：${VINCI_RUN_USER} uid=${VINCI_RUN_UID} gid=${VINCI_RUN_GID} home=${VINCI_RUN_HOME}"
+  if [ -f "$VINCI_ROOT/.deploy/current" ] && [ ! -L "$VINCI_ROOT/.deploy/current" ]; then
+    sed -n -e '/^commit=/p' -e '/^image=/p' -e '/^slot=/p' -e '/^mode=/p' "$VINCI_ROOT/.deploy/current"
+  else
+    ops_info "部署状态：尚无 .deploy/current"
+  fi
+  (cd -- "$VINCI_ROOT" && docker compose ps) || true
+  local operations_test_mode=false
+  if [ "${VINCI_OPERATIONS_TEST_MODE:-false}" = "true" ]; then
+    local test_project test_database
+    test_project="$(ops_project_name)"
+    test_database="$(ops_required_compose_env POSTGRES_DB)"
+    [[ "$test_project" == *test* ]] && [[ "$test_database" == *test* ]] \
+      || ops_die "VINCI_OPERATIONS_TEST_MODE 只允许名称含 test 的隔离项目和数据库"
+    operations_test_mode=true
+  fi
+  if command -v systemctl >/dev/null 2>&1 && [ "$operations_test_mode" != "true" ]; then
+    systemctl list-timers --no-pager 'vinci-cms-*' || true
+  fi
+  local backup_root state
+  backup_root="$(ops_config_value BACKUP_ROOT /var/backups/vinci-cms)"
+  state="$backup_root/.vinci-state/latest-success.json"
+  if [ -f "$state" ] && [ ! -L "$state" ]; then
+    ops_info "最近成功备份：$(node -e 'const f=require("fs");const v=JSON.parse(f.readFileSync(process.argv[1],"utf8"));console.log(`${v.completedAt||"unknown"} ${v.path||"unknown"}`)' "$state")"
+  else
+    ops_info "最近成功备份：无状态记录"
+  fi
+}
+
+vinci_doctor() {
+  local scheduled=false legacy_user="" legacy_root=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --scheduled) scheduled=true ;;
+      --legacy-user=*) legacy_user="${1#*=}" ;;
+      --legacy-root=*) legacy_root="${1#*=}" ;;
+      --dry-run) ;;
+      -h|--help) vinci_usage; return 0 ;;
+      *) vinci_die_usage "doctor 未知参数：$1" ;;
+    esac
+    shift
+  done
+  vinci_current_identity
+  vinci_assert_repository
+  ops_require_command curl
+  ops_require_command df
+  local failures=0
+  doctor_check() { if "$@"; then ops_info "[OK] $*"; else ops_info "[FAIL] $*"; failures=$((failures + 1)); fi; }
+  doctor_repository_clean() {
+    [ -z "$(git -C "$VINCI_ROOT" status --porcelain=v1 --untracked-files=no)" ]
+  }
+  doctor_check test -r "$VINCI_ROOT/.env"
+  doctor_check test "$(stat -c '%a' "$VINCI_ROOT/.env")" = 600
+  doctor_check docker info
+  doctor_check doctor_repository_clean
+  doctor_check docker compose config --quiet
+  doctor_check docker compose ps --status running postgres
+  doctor_check curl --fail --silent --show-error "http://127.0.0.1:$(ops_config_value APP_PORT 3000)/api/health" -o /dev/null
+  local backup_root critical_free available_free
+  backup_root="$(ops_config_value BACKUP_ROOT /var/backups/vinci-cms)"
+  critical_free="$(ops_config_value BACKUP_CRITICAL_FREE_BYTES 536870912)"
+  [[ "$critical_free" =~ ^[1-9][0-9]*$ ]] || ops_die "BACKUP_CRITICAL_FREE_BYTES 必须是正整数"
+  if [ -d "$backup_root" ] && [ ! -L "$backup_root" ]; then
+    available_free="$(df -PB1 -- "$backup_root" | awk 'NR == 2 { print $4 }')"
+    if [[ "$available_free" =~ ^[0-9]+$ ]] && [ "$available_free" -ge "$critical_free" ]; then
+      ops_info "[OK] 备份文件系统可用空间高于 critical 阈值"
+    else
+      ops_info "[FAIL] 备份文件系统可用空间低于 critical 阈值"
+      failures=$((failures + 1))
+    fi
+  else
+    ops_info "[FAIL] 备份根目录缺失或不是安全目录"
+    failures=$((failures + 1))
+  fi
+  if [ -f "$VINCI_ROOT/.deploy/current" ]; then
+    local slot
+    slot="$(awk -F= '$1 == "slot" { print $2; exit }' "$VINCI_ROOT/.deploy/current")"
+    case "$slot" in blue|green) ops_info "[OK] 活动槽位 ${slot}" ;; *) ops_info "[FAIL] 活动槽位状态无效"; failures=$((failures + 1)) ;; esac
+  else
+    ops_info "[FAIL] 缺少部署状态"; failures=$((failures + 1))
+  fi
+  local operations_test_mode=false
+  if [ "${VINCI_OPERATIONS_TEST_MODE:-false}" = "true" ]; then
+    local test_project test_database
+    test_project="$(ops_project_name)"
+    test_database="$(ops_required_compose_env POSTGRES_DB)"
+    [[ "$test_project" == *test* ]] && [[ "$test_database" == *test* ]] \
+      || ops_die "VINCI_OPERATIONS_TEST_MODE 只允许名称含 test 的隔离项目和数据库"
+    operations_test_mode=true
+  fi
+  if command -v systemctl >/dev/null 2>&1 && [ "$operations_test_mode" != "true" ]; then
+    local timer
+    for timer in auto-deploy backup content-reconcile maintenance-cleanup health; do
+      doctor_check systemctl is-enabled --quiet "vinci-cms-${timer}.timer"
+    done
+  fi
+  if [ -n "$legacy_user" ]; then
+    getent passwd "$legacy_user" >/dev/null || ops_die "旧用户不存在：$legacy_user"
+    [ -n "$legacy_root" ] || ops_die "盘点旧用户时必须显式提供 --legacy-root=<旧代码绝对目录>"
+    legacy_root="$(realpath -m -- "$legacy_root")"
+    [ "$legacy_root" != "/" ] && [ -d "$legacy_root" ] && [ ! -L "$legacy_root" ] \
+      || ops_die "旧环境根目录不安全"
+    ops_info "旧环境只读盘点：user=${legacy_user} root=${legacy_root}"
+    find "$legacy_root" -xdev -user "$legacy_user" -printf '%u:%g %m %p\n' | LC_ALL=C sort
+  fi
+  if [ "$scheduled" = "true" ] || [ "$failures" -eq 0 ]; then
+    if ! (cd -- "$VINCI_ROOT" && docker compose --profile tools run --rm --no-deps operations-doctor); then
+      failures=$((failures + 1))
+    fi
+  fi
+  [ "$failures" -eq 0 ] || ops_die "doctor 发现 ${failures} 项异常"
+  ops_info "doctor 通过：数据库、内容任务、S3/COS、磁盘、容器、gateway、槽位与 timer 正常。"
+}
+
+vinci_latest_backup() {
+  local backup_root state basename
+  backup_root="$(ops_config_value BACKUP_ROOT /var/backups/vinci-cms)"
+  state="$backup_root/.vinci-state/latest-success.json"
+  [ -f "$state" ] && [ ! -L "$state" ] || ops_die "缺少最近成功备份状态"
+  basename="$(node -e 'const f=require("fs");const v=JSON.parse(f.readFileSync(process.argv[1],"utf8"));if(v.status!=="succeeded"||!v.path)process.exit(2);process.stdout.write(v.path)' "$state")"
+  printf '%s/%s' "$backup_root" "$basename"
+}
+
+vinci_backup() {
+  local verify=false scheduled=false
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --verify) verify=true ;;
+      --scheduled) scheduled=true; verify=true ;;
+      -h|--help) vinci_usage; return 0 ;;
+      *) vinci_die_usage "backup 未知参数：$1" ;;
+    esac
+    shift
+  done
+  "$VINCI_ROOT/scripts/backup.sh"
+  if [ "$verify" = "true" ]; then
+    "$VINCI_ROOT/scripts/backup-verify.sh" "$(vinci_latest_backup)"
+  fi
+  if [ "$scheduled" = "true" ]; then
+    "$VINCI_ROOT/scripts/backup-prune.sh" --dry-run >/dev/null
+    "$VINCI_ROOT/scripts/backup-prune.sh"
+  fi
+}
+
+vinci_backup_prune() {
+  if [ "$#" -eq 1 ] && { [ "$1" = "--help" ] || [ "$1" = "-h" ]; }; then
+    vinci_usage
+    return 0
+  fi
+  [ "$#" -eq 1 ] || vinci_die_usage "backup-prune 必须显式指定 --dry-run 或 --apply"
+  case "$1" in
+    --dry-run) exec "$VINCI_ROOT/scripts/backup-prune.sh" --dry-run ;;
+    --apply) exec "$VINCI_ROOT/scripts/backup-prune.sh" ;;
+    *) vinci_die_usage "backup-prune 只接受 --dry-run 或 --apply" ;;
+  esac
+}
+
+vinci_restore() {
+  local backup="${1:-}" confirmation="${2:-}"
+  if [ "$#" -eq 1 ] && { [ "$1" = "--help" ] || [ "$1" = "-h" ]; }; then
+    vinci_usage
+    return 0
+  fi
+  [ "$#" -eq 2 ] && [[ "$confirmation" = --confirm=* ]] \
+    || vinci_die_usage "restore 需要备份目录和精确 --confirm"
+  backup="$(ops_require_external_absolute_path 备份目录 "$backup")"
+  local project database expected
+  project="$(ops_project_name)"; database="$(ops_required_compose_env POSTGRES_DB)"
+  expected="RESTORE:${project}:${database}:$(basename -- "$backup")"
+  [ "${confirmation#*=}" = "$expected" ] || ops_die "restore 确认令牌不匹配；期望 ${expected}"
+  RESTORE_CONFIRM="${project}:${database}" "$VINCI_ROOT/scripts/restore.sh" "$backup"
+  (cd -- "$VINCI_ROOT" && docker compose --profile tools run --rm migrate)
+  (cd -- "$VINCI_ROOT" && docker compose up -d --wait app-blue gateway)
+  curl --fail --silent --show-error "http://127.0.0.1:$(ops_config_value APP_PORT 3000)/api/health" >/dev/null
+  ops_info "恢复、向前 Migration 和本机健康检查通过。"
+}
+
+vinci_reconcile() {
+  if [ "$#" -eq 1 ] && { [ "$1" = "--help" ] || [ "$1" = "-h" ]; }; then
+    vinci_usage
+    return 0
+  fi
+  [ "$#" -eq 0 ] || { [ "$#" -eq 1 ] && [ "$1" = "--scheduled" ]; } \
+    || vinci_die_usage "reconcile 只接受 --scheduled"
+  cd -- "$VINCI_ROOT"
+  docker compose -f compose.yaml -f compose.content-export.yaml \
+    --profile content-reconcile run --rm content-reconcile
+}
+
+vinci_maintenance() {
+  if [ "$#" -eq 1 ] && { [ "$1" = "--help" ] || [ "$1" = "-h" ]; }; then
+    vinci_usage
+    return 0
+  fi
+  local mode=--dry-run
+  [ "${1:-}" = "--scheduled" ] && mode=--apply
+  [ "${1:-}" = "--apply" ] && mode=--apply
+  [ "${1:-}" = "--dry-run" ] || [ "${1:-}" = "--scheduled" ] || [ "${1:-}" = "--apply" ] || [ "$#" -eq 0 ] \
+    || vinci_die_usage "maintenance 参数无效"
+  if [ "$mode" = "--dry-run" ]; then
+    "$VINCI_ROOT/scripts/backup-prune.sh" --dry-run
+    (cd -- "$VINCI_ROOT" && docker compose --profile content-reconcile run --rm --no-deps \
+      content-reconcile node scripts/v2-maintenance-cleanup.mjs \
+      /var/lib/vinci-cms/content-reconciliation --dry-run)
+    "$VINCI_ROOT/scripts/instance-prune.sh" --dry-run
+    "$VINCI_ROOT/scripts/cleanup-deploy-cache.sh" --dry-run --skip-if-locked
+  else
+    "$VINCI_ROOT/scripts/backup-prune.sh"
+    (cd -- "$VINCI_ROOT" && docker compose --profile content-reconcile run --rm --no-deps \
+      content-reconcile node scripts/v2-maintenance-cleanup.mjs \
+      /var/lib/vinci-cms/content-reconciliation --apply)
+    "$VINCI_ROOT/scripts/instance-prune.sh" --apply
+    "$VINCI_ROOT/scripts/cleanup-deploy-cache.sh" --apply --skip-if-locked
+  fi
+}
+
+vinci_migrate_legacy() {
+  local legacy_user="" legacy_root="" verified="" confirmation="" dry_run=false
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --legacy-user=*) legacy_user="${1#*=}" ;;
+      --legacy-root=*) legacy_root="${1#*=}" ;;
+      --verified-backup=*) verified="${1#*=}" ;;
+      --confirm=*) confirmation="${1#*=}" ;;
+      --dry-run) dry_run=true ;;
+      -h|--help) vinci_usage; return 0 ;;
+      *) vinci_die_usage "migrate-legacy-user 未知参数：$1" ;;
+    esac
+    shift
+  done
+  [ -n "$legacy_user" ] && [ -n "$legacy_root" ] || vinci_die_usage "必须提供旧用户和旧环境根"
+  vinci_current_identity
+  getent passwd "$legacy_user" >/dev/null || ops_die "旧用户不存在：$legacy_user"
+  legacy_root="$(realpath -m -- "$legacy_root")"
+  [ "$legacy_root" != "/" ] && [ -d "$legacy_root" ] && [ ! -L "$legacy_root" ] && [ -d "$legacy_root/.git" ] \
+    || ops_die "旧环境根必须是非符号链接 Git working tree"
+  if find "$legacy_root" -xdev ! -type d ! -type f -print -quit | grep -q .; then
+    ops_die "旧环境包含符号链接或特殊文件；必须逐项审查并移除后再迁移"
+  fi
+  ops_info "迁移盘点：${legacy_user} → ${VINCI_RUN_USER}；root=${legacy_root}"
+  find "$legacy_root" -xdev -user "$legacy_user" -printf '%u:%g %m %p\n' | LC_ALL=C sort
+  if [ "$dry_run" = "true" ]; then
+    ops_info "Dry Run 完成：未停 timer、未改属主、未替换 unit、未删除旧用户。"
+    return 0
+  fi
+  verified="$(ops_require_external_absolute_path 已验证备份 "$verified")"
+  ops_assert_owned_directory 已验证备份 "$verified"
+  [ -f "$verified/.vinci-backup-owner" ] && [ ! -L "$verified/.vinci-backup-owner" ] \
+    && [ -f "$verified/.vinci-verified" ] && [ ! -L "$verified/.vinci-verified" ] \
+    || ops_die "迁移前必须提供完成隔离恢复演练的 .vinci-verified 备份"
+  local expected="MIGRATE:${legacy_user}:${VINCI_RUN_USER}:${legacy_root}"
+  [ "$confirmation" = "$expected" ] || ops_die "迁移确认令牌不匹配；期望 ${expected}"
+  [ ! -d "$legacy_root/.deploy/operation.lock" ] || ops_die "旧环境仍有运维锁，拒绝迁移"
+  [ "$legacy_root" = "$VINCI_ROOT" ] \
+    || ops_die "正式迁移必须从目标旧仓库自身执行 ./vinci；本次未停 timer、未改属主"
+  local timer
+  for timer in auto-deploy backup content-reconcile maintenance-cleanup health; do
+    vinci_privileged systemctl disable --now "vinci-cms-${timer}.timer" >/dev/null 2>&1 || true
+  done
+  vinci_privileged find "$legacy_root" -xdev -user "$legacy_user" \
+    -exec chown "$VINCI_RUN_UID:$VINCI_RUN_GID" -- {} +
+  vinci_assert_repository
+  vinci_write_install_manifest
+  vinci_install_systemd false
+  ops_info "旧 unit 已禁用并由当前用户 unit 替换。请观察完整 timer 周期后再按教程人工删除旧用户；脚本不会自动 userdel。"
+}
+
+command="${1:-help}"
+[ "$#" -eq 0 ] || shift
+case "$command" in
+  help|-h|--help) vinci_usage ;;
+  install) vinci_install "$@" ;;
+  update) vinci_update "$@" ;;
+  status) vinci_status "$@" ;;
+  doctor) vinci_doctor "$@" ;;
+  backup) vinci_backup "$@" ;;
+  backup-prune) vinci_backup_prune "$@" ;;
+  restore) vinci_restore "$@" ;;
+  export-instance) exec "$VINCI_ROOT/scripts/instance-export.sh" "$@" ;;
+  import-instance) exec "$VINCI_ROOT/scripts/instance-import.sh" "$@" ;;
+  migrate-legacy-user) vinci_migrate_legacy "$@" ;;
+  reconcile) vinci_reconcile "$@" ;;
+  maintenance) vinci_maintenance "$@" ;;
+  *) vinci_die_usage "未知子命令：$command" ;;
+esac

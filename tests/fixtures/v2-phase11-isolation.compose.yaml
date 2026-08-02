@@ -1,0 +1,36 @@
+services:
+  postgres:
+    labels: &phase11-test-labels
+      cn.vinci.test: "true"
+      cn.vinci.test.scope: phase11-backup-restore
+  app-blue:
+    pull_policy: never
+    labels: *phase11-test-labels
+  app-green:
+    pull_policy: never
+    labels: *phase11-test-labels
+  gateway:
+    pull_policy: never
+    labels: *phase11-test-labels
+  migrate:
+    pull_policy: never
+    labels: *phase11-test-labels
+  operations-doctor:
+    pull_policy: never
+    labels: *phase11-test-labels
+
+volumes:
+  postgres_data:
+    labels: *phase11-test-labels
+  content_export_worktree:
+    labels: *phase11-test-labels
+  content_reconciliation_data:
+    labels: *phase11-test-labels
+  gateway_config:
+    labels: *phase11-test-labels
+
+networks:
+  frontend:
+    labels: *phase11-test-labels
+  backend:
+    labels: *phase11-test-labels

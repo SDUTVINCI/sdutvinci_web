@@ -1,0 +1,18 @@
+[Unit]
+Description=Vinci CMS database, content, storage and runtime health verification
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=@VINCI_USER@
+Group=@VINCI_GROUP@
+WorkingDirectory=@VINCI_ROOT@
+ExecStart=@VINCI_ROOT@/vinci doctor --scheduled
+TimeoutStartSec=20min
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+StandardOutput=append:@VINCI_LOG_ROOT@/health.log
+StandardError=append:@VINCI_LOG_ROOT@/health.log

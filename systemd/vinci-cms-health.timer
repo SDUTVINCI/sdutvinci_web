@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Vinci CMS operational health verification hourly
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=1h
+AccuracySec=2min
+RandomizedDelaySec=5min
+Unit=vinci-cms-health.service
+
+[Install]
+WantedBy=timers.target

@@ -1,5 +1,8 @@
 # V2 阶段 0：现状复审、基线冻结与详细设计
 
+> 历史基线：本文记录阶段 0 当时的盘点与设计，不是 V2.0 现行运维指令。当前入口见
+> `docs/DEPLOYMENT.md` 和 `docs/v2/OPERATIONS.md`；历史记录中的固定用户不得照抄到新环境。
+
 > 状态：设计冻结，尚未实施 V2 运行时变更。
 > 最高优先级依据：`docs/v2/VINCI_CONTENT_ARCHITECTURE_V2_REQUIREMENTS.md`。
 > 本文只描述已核实的 V1 现状和后续阶段目标，不把目标写成现状。

@@ -43,23 +43,36 @@ unset \
   TEST_DATABASE_URL
 
 repository_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
-test_root="$(mktemp -d /tmp/vinci-phase9-backup-restore.XXXXXX)"
+test_root="$(mktemp -d /tmp/vinci-phase9-backup-restore-test.XXXXXX)"
 source_directory="${test_root}/source-project"
 target_directory="${test_root}/target-project"
+migration_directory="${test_root}/migration-project-test"
 backup_root="${test_root}/test-backups"
 suffix="$$"
-source_project="vinci-phase9-backup-source-${suffix}"
-target_project="vinci-phase9-restore-target-${suffix}"
+source_project="vinci-phase9-backup-source-test-${suffix}"
+target_project="vinci-phase9-restore-target-test-${suffix}"
+migration_project="vinci-phase11-migration-target-test-${suffix}"
 source_database="vinci_phase9_backup_source_test"
 target_database="vinci_phase9_restore_target_test"
+migration_database="vinci_phase11_migration_target_test"
 test_user="vinci_phase9_test"
 test_password="phase9-test-only-password"
 runtime_image="vinci-phase9-runtime-test"
 operations_image="vinci-phase9-operations-test"
 image_tag="phase9-${suffix}"
 target_port="$((43000 + suffix % 1000))"
+source_port="$((42000 + suffix % 1000))"
+migration_port="$((44000 + suffix % 1000))"
+s3_test_port="$((45000 + suffix % 1000))"
+deploy_image_tags=()
 
 cleanup() {
+  if [ -d "$migration_directory" ]; then
+    (
+      cd -- "$migration_directory"
+      docker compose down --volumes --remove-orphans >/dev/null 2>&1 || true
+    )
+  fi
   if [ -d "$target_directory" ]; then
     (
       cd -- "$target_directory"
@@ -76,6 +89,12 @@ cleanup() {
     "${runtime_image}:${image_tag}" \
     "${operations_image}:${image_tag}" \
     >/dev/null 2>&1 || true
+  local deploy_tag
+  for deploy_tag in "${deploy_image_tags[@]}"; do
+    docker image rm \
+      "${runtime_image}:${deploy_tag}" "${operations_image}:${deploy_tag}" \
+      >/dev/null 2>&1 || true
+  done
   rm -rf -- "$test_root"
 }
 trap cleanup EXIT
@@ -87,7 +106,7 @@ for command in docker git realpath sha256sum tar curl; do
   }
 done
 
-mkdir -p -- "$source_directory" "$target_directory" "$backup_root"
+mkdir -p -- "$source_directory" "$target_directory" "$migration_directory" "$backup_root"
 (
   cd -- "$repository_root"
   git ls-files --cached --others --exclude-standard -z \
@@ -148,15 +167,28 @@ write_environment() {
     printf 'S3_ACCESS_KEY_ID=phase9-test\n'
     printf 'S3_SECRET_ACCESS_KEY=phase9-test\n'
     printf 'S3_PUBLIC_BASE_URL=https://media.invalid\n'
+    printf 'COMPOSE_FILE=compose.yaml:tests/fixtures/v2-phase11-isolation.compose.yaml\n'
   } > "${directory}/.env"
   chmod 0600 "${directory}/.env"
 }
 
 initialize_snapshot "$source_directory"
 initialize_snapshot "$target_directory"
-write_environment "$source_directory" "$source_project" "$source_database" 43991
+cp -a -- "$source_directory/." "$migration_directory/"
+write_environment "$source_directory" "$source_project" "$source_database" "$source_port"
 write_environment "$target_directory" "$target_project" "$target_database" \
   "$target_port"
+write_environment "$migration_directory" "$migration_project" \
+  "$migration_database" "$migration_port"
+{
+  printf 'S3_ENDPOINT=http://s3-test:45519\n'
+  printf 'S3_PUBLIC_BASE_URL=http://s3-test:45519/phase11-test-bucket\n'
+  printf 'S3_FORCE_PATH_STYLE=true\n'
+  printf 'S3_TEST_PORT=%s\n' "$s3_test_port"
+  printf 'COMPOSE_FILE=compose.yaml:tests/fixtures/v2-phase11-isolation.compose.yaml:tests/fixtures/v2-phase11-s3.compose.yaml\n'
+  printf 'INSTANCE_EXPORT_ROOT=%s/test-instance-packages\n' "$test_root"
+  printf 'DEPLOY_CACHE_CLEANUP_ENABLED=false\n'
+} >> "$migration_directory/.env"
 phase1_revision_source=$'---\ntitle: Phase 1 backup\n---\nphase1 backup body\n'
 phase1_revision_hash="$(
   printf '%s' "$phase1_revision_source" | sha256sum | cut -d ' ' -f1
@@ -388,6 +420,105 @@ test "$(
   docker volume inspect "$source_volume" "$target_volume" >/dev/null
 )
 
+instance_root="${test_root}/test-instance-packages"
+(
+  cd -- "$source_directory"
+  INSTANCE_EXPORT_ROOT="$instance_root" \
+    ./vinci export-instance "--backup=${backup_directory}"
+)
+instance_package="$(find "$instance_root" -mindepth 1 -maxdepth 1 -type d -name '*test*-instance-*' -print -quit)"
+[ -n "$instance_package" ] || {
+  printf '未生成名称含 test 的阶段 11 迁移包\n' >&2
+  exit 1
+}
+test -f "$instance_package/instance-manifest.env"
+test -f "$instance_package/code-repository.bundle"
+test -f "$instance_package/database-backup/postgresql.dump"
+if find "$instance_package" -type f \( -name '.env' -o -name '*private*' -o -name '*token*' \) -print -quit | grep -q .; then
+  printf '迁移包错误包含明文配置或私钥/Token 文件\n' >&2
+  exit 1
+fi
+
+(
+  cd -- "$migration_directory"
+  docker compose config --quiet
+  docker compose up --detach --wait postgres s3-test
+  s3_container="$(docker compose ps -q s3-test)"
+  s3_mapping="$(docker inspect --format \
+    '{{(index (index .NetworkSettings.Ports "45519/tcp") 0).HostIp}}:{{(index (index .NetworkSettings.Ports "45519/tcp") 0).HostPort}}' \
+    "$s3_container")"
+  [ "$s3_mapping" = "127.0.0.1:${s3_test_port}" ] \
+    || { printf 'S3 test service is not on its exact loopback port: %s\n' "$s3_mapping" >&2; exit 1; }
+  docker compose exec -T s3-test node -e \
+    "fetch('http://127.0.0.1:45519/phase11-test-bucket',{method:'HEAD'}).then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+  import_confirm="IMPORT:$(basename -- "$instance_package"):${migration_project}:${migration_database}"
+  VINCI_INSTANCE_TEST_MODE=true \
+    ./vinci import-instance "$instance_package" "--confirm=${import_confirm}"
+  curl --fail --silent --show-error \
+    "http://127.0.0.1:${migration_port}/api/health" >/dev/null
+  marker_count="$(
+    docker compose exec -T postgres psql --username "$test_user" \
+      --dbname "$migration_database" --tuples-only --no-align \
+      --command "select count(*) from audit_logs where action = 'phase9.restore.marker'"
+  )"
+  marker_count="${marker_count//$'\r'/}"
+  marker_count="${marker_count//$'\n'/}"
+  test "$marker_count" = 1
+)
+
+deploy_origin="$test_root/phase11-deploy-origin-test.git"
+git init --quiet --bare "$deploy_origin"
+git -C "$source_directory" remote add origin "$deploy_origin"
+deploy_commit_one="$(git -C "$source_directory" rev-parse HEAD)"
+printf 'phase11-bluegreen-test-two\n' > "$source_directory/phase11-deploy-test-marker.txt"
+git -C "$source_directory" add phase11-deploy-test-marker.txt
+git -C "$source_directory" commit --quiet --message 'phase 11 blue green test second commit'
+deploy_commit_two="$(git -C "$source_directory" rev-parse HEAD)"
+sed -i '/^  app-green:/i\    healthcheck:\n      test: ["CMD", "false"]\n      interval: 1s\n      timeout: 1s\n      retries: 1\n      start_period: 0s' \
+  "$source_directory/tests/fixtures/v2-phase11-isolation.compose.yaml"
+git -C "$source_directory" add tests/fixtures/v2-phase11-isolation.compose.yaml
+git -C "$source_directory" commit --quiet --message 'phase 11 blue green test failing candidate'
+deploy_commit_three="$(git -C "$source_directory" rev-parse HEAD)"
+git -C "$source_directory" push --quiet origin main
+for deploy_tag in "$deploy_commit_one" "$deploy_commit_two" "$deploy_commit_three"; do
+  docker image tag "${runtime_image}:${image_tag}" "${runtime_image}:${deploy_tag}"
+  docker image tag "${operations_image}:${image_tag}" "${operations_image}:${deploy_tag}"
+  deploy_image_tags+=("$deploy_tag")
+done
+{
+  printf 'DEPLOY_GIT_REMOTE_URL=%s\n' "$deploy_origin"
+  printf 'DEPLOY_CACHE_CLEANUP_ENABLED=false\n'
+  printf 'CMS_GIT_BRANCH=main\n'
+} >> "$source_directory/.env"
+
+(
+  cd -- "$source_directory"
+  for deploy_commit in "$deploy_commit_one" "$deploy_commit_two"; do
+    DEPLOY_COMMIT="$deploy_commit" DEPLOY_MODE=application \
+      APP_IMAGE="$runtime_image" APP_OPS_IMAGE="$operations_image" \
+      APP_IMAGE_TAG="$deploy_commit" ./scripts/deploy.sh
+  done
+  grep -Fqx "commit=${deploy_commit_two}" .deploy/current
+  grep -Fqx 'slot=green' .deploy/current
+  grep -Fqx "commit=${deploy_commit_one}" .deploy/rollback-verified
+  curl --fail --silent --show-error \
+    "http://127.0.0.1:${source_port}/api/health" >/dev/null
+  if DEPLOY_COMMIT="$deploy_commit_three" DEPLOY_MODE=application \
+    APP_IMAGE="$runtime_image" APP_OPS_IMAGE="$operations_image" \
+    APP_IMAGE_TAG="$deploy_commit_three" ./scripts/deploy.sh \
+    > "$test_root/phase11-bluegreen-failure-test.log" 2>&1; then
+    printf 'failing blue candidate unexpectedly deployed\n' >&2
+    exit 1
+  fi
+  grep -Fqx "commit=${deploy_commit_two}" .deploy/current
+  grep -Fqx 'slot=green' .deploy/current
+  test "$(git rev-parse HEAD)" = "$deploy_commit_two"
+  curl --fail --silent --show-error \
+    "http://127.0.0.1:${source_port}/api/health" >/dev/null
+)
+
 printf '%s\n' \
   'backup-restore integration test passed: checksum, empty-target restore,' \
-  'forward migration, restored marker, app health, non-empty refusal, isolated volumes'
+  'forward migration, restored marker, app health, non-empty refusal, isolated volumes,' \
+  'phase 11 export/import package, separate secrets, migration health/storage doctor,' \
+  'actual local-image blue/green update, verified rollback marker and failed-candidate rollback'

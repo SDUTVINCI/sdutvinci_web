@@ -1625,3 +1625,42 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
   回环端口释放；回滚 tag 保留。
 - 本次只新增本地验收记录 Commit，不 amend、不 Push、不部署、不真实外部写入、不进入阶段 11。
   完整 SHA 由最终回复报告；现在停止开发。
+
+---
+
+## 2026-08-02：V2 阶段 11 实现与自动验证完成，等待最终人工验收
+
+- 从阶段 10 验收记录 Commit `845ea6a96b9764c58b047722559e05e53616a320` 的干净 `main`
+  开始；本地 `origin/main` 仍为 `08a1c4908c8890dad5284e9682304e1ac0c7550e`。本轮没有 fetch、
+  Push、部署、reset、rebase、amend、squash 或历史改写，也没有进入其他新阶段。
+- 新增唯一宿主运维入口 `./vinci`，覆盖当前用户 install/update/status/doctor、备份/校验/分层
+  清理、空库恢复、实例导入导出、旧用户迁移、对账和维护。身份从 NSS 动态读取用户名、UID、
+  GID、Home、Shell；root 直接运行、Home 根/仓库根/`/`、symlink、特殊文件、错误属主和非空恢复
+  均 fail closed。旧用户迁移要求已验证备份和精确确认，不会自动 `userdel`。
+- 生效 service/timer、logrotate、路径、脚本和现行文档已去除固定 `vinci-deploy` 身份；兼容安装
+  脚本只转发新入口。unit 由 root 管配置、以当前用户运行，可在不同用户名、UID/GID/Home 的新机
+  重新生成。新增每小时只读 health timer，并保留备份、自动部署、03:00 对账和维护调度。
+- 备份和恢复继续复用既有 checksum、marker、空库门禁、`pg_restore`、向前 Migration 与健康检查。
+  无密钥迁移包记录数据库备份、代码 bundle/Commit、镜像、slot、配置和内容/S3 清单；真实
+  `.env`、Token、私钥和 S3 对象不进入包。分层保留为可配置的日/周/月，失败备份不触发删除，
+  latest-success、verified、locked、活动镜像和 `.deploy/rollback-verified` 镜像均受保护。
+- 新增只读 operations doctor，检查数据库 Revision 指针、内容导出、对账、PR 导入、S3/COS
+  Bucket 与媒体对象、公开 URL、磁盘、Compose、gateway、活动槽和 timer；缺失对象仅输出 key
+  哈希。未新增 HTTP API、npm 依赖或数据库 Migration，仍为 28 张表、0000～0017。
+- 更新部署短流程、最终架构、备份恢复、PR 导入和完整运维教程；十份教程均包含前置条件、命令、
+  预期/验证、失败处理、回滚和安全注意事项。V1/阶段 0 文档只新增历史基线提示，未删除或篡改。
+  Wiki 拼音继续由 `utils/wiki-content-meta.ts` 和 `utils/wiki-chapters.ts` 承担；没有重新引入
+  Nuxt Content 或正式 `content/`。
+- 隔离自动验证全部通过：阶段 11 专项 12/12、Markdown/XSS 4/4、删除前 Wiki 226/226；fresh
+  migration 后完整测试 132/132、CMS 109/109、阶段 10 回归 33/33；备份/空库恢复、非空拒绝、
+  新旧服务器导入导出、S3 替身、真实本地镜像 blue→green、故障候选回滚、systemd/logrotate、
+  不同 UID/GID/Home、分层保留、清理和自动部署均通过。typecheck、production build、Compose
+  test 配置、全部 Shell 语法、`git diff --check` 通过；两类 npm audit 均为 0 vulnerability。
+- 所有动态资源名称含 `test`，带精确 marker/label，数据库与凭据为 test 值，端口仅回环；本地
+  bare remote 普通 Push 只服务于蓝绿测试。没有连接生产 PostgreSQL、生产 S3/COS、生产 Git、
+  真实 GitHub 写接口或生产服务器，也没有保存/输出明文真实密钥。详细证据、已知限制、生产前
+  清单和回滚方法见 `docs/v2/PHASE_V2_11_ACCEPTANCE.md`。
+- 阶段 11 实现使用新的独立本地 Commit；完整 SHA 由交付回复报告。Codex 提交后在固定 test
+  根准备隔离人工环境，维护者只需执行验收文档中的一个只读验证入口。27.5、最终人工项和
+  V2.0 总体完成项保持未勾选；现在停止开发并等待完整确认语：
+  “V2 阶段 11 验收通过，V2.0 最终验收通过”。

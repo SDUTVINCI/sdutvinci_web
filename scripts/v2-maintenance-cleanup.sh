@@ -8,6 +8,7 @@ source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/ops-common.sh"
 ops_require_command docker
 ops_require_command node
 ops_require_command realpath
+ops_acquire_lock
 
 reconciliation_root_requested="$(
   ops_config_value CONTENT_RECONCILIATION_ROOT \

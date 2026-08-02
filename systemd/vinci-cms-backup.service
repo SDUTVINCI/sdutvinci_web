@@ -4,8 +4,14 @@ After=docker.service
 
 [Service]
 Type=oneshot
-WorkingDirectory=/opt/vinci-cms
-ExecStart=/opt/vinci-cms/scripts/backup.sh
-ExecStartPost=/opt/vinci-cms/scripts/backup-prune.sh
+User=@VINCI_USER@
+Group=@VINCI_GROUP@
+WorkingDirectory=@VINCI_ROOT@
+ExecStart=@VINCI_ROOT@/vinci backup --scheduled
 TimeoutStartSec=60min
 UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+StandardOutput=append:@VINCI_LOG_ROOT@/backup.log
+StandardError=append:@VINCI_LOG_ROOT@/backup.log

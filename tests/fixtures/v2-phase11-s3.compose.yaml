@@ -1,0 +1,38 @@
+services:
+  s3-test:
+    image: "${APP_OPS_IMAGE}:${APP_IMAGE_TAG}"
+    command:
+      - node
+      - -e
+      - >-
+        require('http').createServer((request,response)=>{
+        response.statusCode=200;response.setHeader('Content-Length','0');response.end()
+        }).listen(45519,'0.0.0.0')
+    ports:
+      - "127.0.0.1:${S3_TEST_PORT:?S3_TEST_PORT is required}:45519"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          fetch('http://127.0.0.1:45519/phase11-test-bucket',{method:'HEAD'})
+          .then(response=>{if(!response.ok)process.exit(1)})
+          .catch(()=>process.exit(1))
+      interval: 1s
+      timeout: 2s
+      retries: 30
+    networks: [backend, s3-test-loopback]
+    labels:
+      cn.vinci.test: "true"
+      cn.vinci.test.scope: phase11-instance-import
+
+networks:
+  backend:
+    labels:
+      cn.vinci.test: "true"
+      cn.vinci.test.scope: phase11-instance-import
+  s3-test-loopback:
+    labels:
+      cn.vinci.test: "true"
+      cn.vinci.test.scope: phase11-instance-import

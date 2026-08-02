@@ -178,3 +178,9 @@ production build 与 Nitro 必须能解析它。自动测试固定覆盖：白�
 评论和关闭的独立授权说明、四方白话标题、文件卡片内联展开、`aria-expanded`/
 `aria-controls`、真实新增/删除/替换的旧新行号和上下文，以及删除、冲突、新文章和敏感成员
 材料的空状态。阶段 10 不允许通过删除旧断言规避这些行为。
+
+## 13. 阶段 11 运维诊断
+
+`./vinci doctor` 只读汇总 pending/failed 内容导出任务、最近凌晨对账和待处理 PR 导入，不
+读取 PR 外目录、不执行评论/关闭/Merge，也不改变 run/item/draft/proposal。错误继续遮盖敏感
+信息；排障只使用 run/item ID、分类、计数和固定错误码。

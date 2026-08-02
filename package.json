@@ -26,6 +26,7 @@
     "test:v2:phase8": "./node_modules/.bin/vitest run tests/v2-content-pr-import.integration.test.ts",
     "test:v2:phase9": "./node_modules/.bin/vitest run tests/v2-member-profile.test.ts tests/v2-member-authority.integration.test.ts tests/v2-content-pr-import.integration.test.ts tests/v2-content-export.integration.test.ts tests/v2-phase7-reconciliation-recovery.integration.test.ts",
     "test:v2:phase10": "./node_modules/.bin/vitest run tests/v2-phase10-content-removal.test.ts tests/v2-public-content-shadow.integration.test.ts tests/v2-content-pr-import.integration.test.ts tests/v2-member-authority.integration.test.ts",
+    "test:v2:phase11": "./tests/v2-phase11.integration.sh",
     "v2:phase0:audit": "node scripts/v2-phase0-audit.mjs --check",
     "v2:comark:audit": "tsx scripts/v2-comark-audit.ts",
     "v2:phase4:http-dom": "tsx scripts/v2-phase4-http-dom-compare.ts",

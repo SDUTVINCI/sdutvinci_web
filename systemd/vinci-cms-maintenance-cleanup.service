@@ -4,7 +4,14 @@ After=vinci-cms-backup.service vinci-cms-content-reconcile.service
 
 [Service]
 Type=oneshot
-WorkingDirectory=/opt/vinci-cms
-ExecStart=/opt/vinci-cms/scripts/v2-maintenance-cleanup.sh
+User=@VINCI_USER@
+Group=@VINCI_GROUP@
+WorkingDirectory=@VINCI_ROOT@
+ExecStart=@VINCI_ROOT@/vinci maintenance --scheduled
 TimeoutStartSec=30min
 UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+StandardOutput=append:@VINCI_LOG_ROOT@/maintenance-cleanup.log
+StandardError=append:@VINCI_LOG_ROOT@/maintenance-cleanup.log

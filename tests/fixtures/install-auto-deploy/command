@@ -1,53 +1,66 @@
 #!/usr/bin/env bash
 
-set -eu
-
+set -Eeuo pipefail
 command_name="$(basename -- "$0")"
 arguments=("$@")
-
-log_command() {
-  {
-    printf '%s' "$command_name"
-    printf ' %s' "$@"
-    printf '\n'
-  } >> "$FAKE_INSTALLER_LOG"
-}
+printf '%s %s\n' "$command_name" "$*" >> "$FAKE_INSTALLER_LOG"
 
 case "$command_name" in
-  id)
-    [ "${1:-}" = "-u" ] || exit 64
-    printf '0\n'
-    ;;
   getent)
-    [ "${1:-}" = "passwd" ] || exit 64
-    printf '%s:x:1001:1001::/home/%s:/bin/bash\n' "$2" "$2"
-    ;;
-  runuser)
-    [ "${1:-}" = "-u" ] || exit 64
-    shift 2
-    [ "${1:-}" = "--" ] || exit 64
-    shift
-    exec "$@"
+    case "${1:-}" in
+      passwd)
+        printf '%s:x:%s:%s::%s:/bin/bash\n' \
+          "$2" "$FAKE_TEST_UID" "$FAKE_TEST_GID" "$FAKE_TEST_HOME"
+        ;;
+      group)
+        printf '%s:x:%s:\n' "$FAKE_TEST_GROUP" "$FAKE_TEST_GID"
+        ;;
+      *) exit 64 ;;
+    esac
     ;;
   docker)
-    if [ "${1:-}" = "compose" ] \
-      && [ "${2:-}" = "config" ] \
-      && [ "${3:-}" = "--environment" ]; then
-      printf 'AUTO_DEPLOY_ENABLED=%s\n' \
-        "${FAKE_AUTO_DEPLOY_ENABLED:-true}"
-      printf 'DEPLOY_GIT_REMOTE_URL=https://github.com/example/vinci.git\n'
-      exit 0
-    fi
-    if [ "${1:-}" = "info" ]; then
+    if [ "${1:-}" = info ]; then exit 0; fi
+    if [ "${1:-}" = compose ] && [ "${2:-}" = config ]; then
+      if [ "${3:-}" = --environment ]; then
+        sed -n '/^[A-Za-z_][A-Za-z0-9_]*=/p' .env
+      fi
       exit 0
     fi
     exit 64
     ;;
+  find)
+    if printf '%s\n' "$*" | grep -Fq ' ! -type d ! -type f '; then
+      exit 0
+    fi
+    if printf '%s\n' "$*" | grep -Fq ' -user '; then
+      if printf '%s\n' "$*" | grep -Fq ' -exec chown '; then
+        touch "$FAKE_INSTALLER_STATE/legacy-chown.executed"
+      else
+        printf 'phase11legacy:phase11testgroup 700 %s/.deploy\n' "${1:-unknown}"
+      fi
+      exit 0
+    fi
+    exec /usr/bin/find "$@"
+    ;;
+  runuser)
+    [ "${1:-}" = -u ] && [ "${3:-}" = -- ] || exit 64
+    shift 3
+    exec "$@"
+    ;;
+  stat)
+    if [ "${1:-}" = -c ] && [ "${2:-}" = '%u' ] \
+      && [ "${3:-}" = "$FAKE_REPOSITORY_ROOT" ]; then
+      printf '%s\n' "$FAKE_TEST_UID"
+      exit 0
+    fi
+    exec /usr/bin/stat "$@"
+    ;;
+  systemd-analyze|logrotate)
+    exit 0
+    ;;
   install)
-    log_command "$@"
-    if [ "${1:-}" = "-d" ]; then
-      destination="${arguments[$# - 1]}"
-      mkdir -p -- "$destination"
+    if [ "${1:-}" = -d ]; then
+      mkdir -p -- "${arguments[$# - 1]}"
       exit 0
     fi
     source_file="${arguments[$# - 2]}"
@@ -55,44 +68,16 @@ case "$command_name" in
     cp -- "$source_file" "$destination"
     chmod 0644 "$destination"
     ;;
-  systemd-analyze)
-    log_command "$@"
-    [ "${1:-}" = "verify" ]
-    ;;
   systemctl)
-    log_command "$@"
     case "${1:-}" in
-      daemon-reload|reset-failed)
-        ;;
-      start)
-        [ "${FAKE_INSTALLER_START_FAIL:-false}" != "true" ]
-        ;;
+      daemon-reload) ;;
       enable)
-        touch "$FAKE_INSTALLER_STATE/timer-enabled"
+        timer="${arguments[$# - 1]}"
+        touch "$FAKE_INSTALLER_STATE/${timer}.enabled"
         ;;
-      disable)
-        rm -f -- "$FAKE_INSTALLER_STATE/timer-enabled"
-        ;;
-      is-enabled|is-active)
-        if [ "${2:-}" = "--quiet" ]; then
-          test -f "$FAKE_INSTALLER_STATE/timer-enabled"
-        else
-          printf 'active\n'
-        fi
-        ;;
-      status|list-timers)
-        printf 'fake systemd status\n'
-        ;;
-      *)
-        exit 64
-        ;;
+      disable) ;;
+      *) exit 64 ;;
     esac
     ;;
-  journalctl)
-    log_command "$@"
-    printf 'fake service journal\n'
-    ;;
-  *)
-    exit 64
-    ;;
+  *) exit 64 ;;
 esac

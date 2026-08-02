@@ -2,8 +2,8 @@
 
 ## 1. 适用范围和权威边界
 
-本手册覆盖 V2 阶段 7 已实现的 PostgreSQL 备份、配置清单、凌晨全量对账、分层保留、
-空数据库 Markdown 初始化和灾难恢复。它不包含阶段 8 的普通 PR 导入。
+本手册覆盖 V2 阶段 11 统一入口下的 PostgreSQL 备份、配置清单、凌晨全量对账、分层保留、
+实例迁移、空数据库 Markdown 初始化和灾难恢复。PR 导入边界另见 `PR_IMPORT.md`。
 
 - PostgreSQL 是新闻、Wiki 和成员线上正式内容的唯一权威。
 - 正常换服务器必须恢复完整 PostgreSQL custom-format dump。
@@ -19,16 +19,17 @@
 
 ## 2. 定时任务
 
-仓库提供定义，但阶段 7 实现和自动测试没有安装或修改宿主机 systemd：
+`./vinci install` 按当前安装用户动态生成并安装下列 systemd；不同用户/Home 的新服务器必须
+重新生成，不得复制旧 unit：
 
 | Timer | 时区和时间 | 入口 | 失败影响 |
 | --- | --- | --- | --- |
-| `vinci-cms-backup.timer` | `02:00 Asia/Shanghai` | `scripts/backup.sh` | 记录告警，不删除旧备份 |
-| `vinci-cms-content-reconcile.timer` | `03:00 Asia/Shanghai` | `content-reconcile` profile | 不反向修改数据库 |
-| `vinci-cms-maintenance-cleanup.timer` | `04:00 Asia/Shanghai` | 安全清理脚本 | 不阻塞网站、发布或下一轮对账 |
+| `vinci-cms-backup.timer` | `02:00 Asia/Shanghai` | `./vinci backup --scheduled` | 记录告警，不删除旧备份 |
+| `vinci-cms-content-reconcile.timer` | `03:00 Asia/Shanghai` | `./vinci reconcile --scheduled` | 不反向修改数据库 |
+| `vinci-cms-maintenance-cleanup.timer` | `04:00 Asia/Shanghai` | `./vinci maintenance --scheduled` | 不阻塞网站、发布或下一轮对账 |
 
-使用前先在测试服务器审查渲染后的 unit、`WorkingDirectory`、执行用户、目录属主和
-凭据挂载。阶段 11 才会把这些底层定义纳入统一安装入口；本阶段不要自行复制到生产。
+使用前以 `./vinci install --dry-run` 审查渲染后的 unit、`WorkingDirectory`、执行用户、
+目录属主和凭据挂载。另有每小时 `vinci-cms-health.timer` 执行综合 doctor。
 
 只读检查定时表达式：
 
@@ -94,7 +95,7 @@ fail closed。不要用 reset、Force Push 或直接 SQL 把失败记录改成�
 ### 4.1 创建
 
 ```bash
-BACKUP_ROOT=/绝对/外部/备份根 ./scripts/backup.sh
+./vinci backup --verify
 ```
 
 脚本会：
@@ -190,9 +191,9 @@ BACKUP_ROOT=/绝对/外部/备份根 ./scripts/backup-prune.sh --dry-run
 1. 停止目标环境写入，确认是隔离或新服务器；
 2. 启动一个全新空 PostgreSQL；
 3. 核对 Compose project、数据库名、备份路径和 checksum；
-4. 设置 `RESTORE_CONFIRM='<Compose项目>:<目标数据库>'`；
-5. 运行 `scripts/restore.sh`；
-6. 运行所有向前 Migration；
+4. 执行 `./vinci restore /绝对/备份 --confirm='RESTORE:<项目>:<数据库>:<备份名>'`；
+5. 由统一入口复用 `scripts/restore.sh` 完成空库保护和 `pg_restore`；
+6. 由统一入口运行所有向前 Migration；
 7. 启动候选应用并完成完整性、登录、前台和 `/api/health` 检查；
 8. 完成隔离演练后才标记 `.vinci-verified`；
 9. 切换流量前保留旧服务器回滚窗口。
@@ -334,3 +335,14 @@ V2_CONTENT_SNAPSHOT_SOURCE=/绝对/独立内容仓库快照 npm run test:v2:phas
 
 检查器拒绝代码仓库内目录和符号链接。production build 不设置这些变量，也不运行内容
 snapshot 检查。
+
+## 10. 阶段 11 实例迁移与迁移包清理
+
+`./vinci export-instance` 生成包含数据库备份、代码 bundle/Commit、活动镜像/槽位、内容仓库与
+S3/COS 无密钥清单的 `vinci-instance-v1` 目录。真实 `.env`、Token、私钥不进入包。
+`./vinci import-instance` 全量校验 SHA/bundle，拒绝非空库，再执行恢复、向前 Migration、蓝绿
+健康、内容任务和对象存在性检查。
+
+迁移包默认位于仓库外 `INSTANCE_EXPORT_ROOT`，保留 30 日；`.vinci-locked` 包不自动删除。
+`./vinci maintenance --dry-run|--apply` 同时处理迁移包、备份、对账报告/临时目录和未引用镜像
+缓存；未知路径、marker、属主、symlink 或特殊文件使整轮 fail closed。

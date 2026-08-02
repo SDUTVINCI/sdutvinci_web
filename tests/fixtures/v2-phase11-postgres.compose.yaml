@@ -1,0 +1,33 @@
+name: "${PHASE11_TEST_PROJECT:?PHASE11_TEST_PROJECT is required}"
+
+services:
+  postgres-test:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_DB: vinci_phase11_doctor_test
+      POSTGRES_USER: vinci_phase11_test
+      POSTGRES_PASSWORD: phase11-test-only-password
+    ports:
+      - "127.0.0.1:${PHASE11_TEST_POSTGRES_PORT:?PHASE11_TEST_POSTGRES_PORT is required}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vinci_phase11_test -d vinci_phase11_doctor_test"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+    labels:
+      cn.vinci.test: "true"
+      cn.vinci.test.scope: phase11-operations-doctor
+    volumes:
+      - phase11_postgres_test_data:/var/lib/postgresql/data
+
+volumes:
+  phase11_postgres_test_data:
+    labels:
+      cn.vinci.test: "true"
+      cn.vinci.test.scope: phase11-operations-doctor
+
+networks:
+  default:
+    labels:
+      cn.vinci.test: "true"
+      cn.vinci.test.scope: phase11-operations-doctor

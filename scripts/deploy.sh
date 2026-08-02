@@ -53,10 +53,12 @@ git merge-base --is-ancestor "$target_commit" "origin/${branch}" \
 state_file="$OPS_REPOSITORY_ROOT/.deploy/current"
 previous_commit=""
 previous_slot=""
+previous_image=""
 if [ -f "$state_file" ]; then
   [ ! -L "$state_file" ] || ops_die "部署状态文件不得是符号链接"
   previous_commit="$(awk -F= '$1 == "commit" { print $2; exit }' "$state_file")"
   previous_slot="$(awk -F= '$1 == "slot" { print $2; exit }' "$state_file")"
+  previous_image="$(awk -F= '$1 == "image" { print $2; exit }' "$state_file")"
 fi
 
 if [ -n "$previous_commit" ]; then
@@ -210,6 +212,20 @@ gateway_switched=true
 
 docker compose exec -T gateway \
   wget --quiet --spider http://127.0.0.1:8080/api/health
+
+if [ -n "$previous_commit" ]; then
+  rollback_file="$OPS_REPOSITORY_ROOT/.deploy/rollback-verified"
+  rollback_temporary="$(mktemp "$OPS_REPOSITORY_ROOT/.deploy/rollback-verified.XXXXXX")"
+  umask 077
+  {
+    printf 'commit=%s\n' "$previous_commit"
+    printf 'image=%s\n' "$previous_image"
+    printf 'slot=%s\n' "$previous_slot"
+    printf 'verified_by=previous_healthy_deployment\n'
+    printf 'replaced_at=%s\n' "$(date -u +%FT%TZ)"
+  } > "$rollback_temporary"
+  mv -- "$rollback_temporary" "$rollback_file"
+fi
 
 state_temporary="$(mktemp "$OPS_REPOSITORY_ROOT/.deploy/current.XXXXXX")"
 umask 077

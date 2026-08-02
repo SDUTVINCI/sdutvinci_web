@@ -8,6 +8,7 @@ set -Eeuo pipefail
 : "${FAKE_CURRENT_COMMIT:?FAKE_CURRENT_COMMIT is required}"
 : "${FAKE_CONTAINER_COMMIT:?FAKE_CONTAINER_COMMIT is required}"
 : "${FAKE_REMOVABLE_COMMIT:?FAKE_REMOVABLE_COMMIT is required}"
+: "${FAKE_CLEANUP_COMMIT:?FAKE_CLEANUP_COMMIT is required}"
 : "${FAKE_RETAINED_COMMIT_1:?FAKE_RETAINED_COMMIT_1 is required}"
 : "${FAKE_RETAINED_COMMIT_2:?FAKE_RETAINED_COMMIT_2 is required}"
 : "${FAKE_FAILED_COMMIT:?FAKE_FAILED_COMMIT is required}"
@@ -39,6 +40,7 @@ if [ "${1:-}" = "image" ] && [ "${2:-}" = "ls" ]; then
   for repository in "$FAKE_RUNTIME_REPOSITORY" "$FAKE_OPERATIONS_REPOSITORY"; do
     printf '%s\t%s\n' "$repository" "$FAKE_CURRENT_COMMIT"
     printf '%s\t%s\n' "$repository" "$FAKE_REMOVABLE_COMMIT"
+    printf '%s\t%s\n' "$repository" "$FAKE_CLEANUP_COMMIT"
     printf '%s\t%s\n' "$repository" "$FAKE_RETAINED_COMMIT_1"
     printf '%s\t%s\n' "$repository" "$FAKE_RETAINED_COMMIT_2"
   done
@@ -59,6 +61,7 @@ if [ "${1:-}" = "image" ] && [ "${2:-}" = "inspect" ]; then
     "$FAKE_RETAINED_COMMIT_2") created="2026-07-05T00:00:00Z" ;;
     "$FAKE_RETAINED_COMMIT_1") created="2026-07-04T00:00:00Z" ;;
     "$FAKE_REMOVABLE_COMMIT") created="2026-07-03T00:00:00Z" ;;
+    "$FAKE_CLEANUP_COMMIT") created="2026-07-01T12:00:00Z" ;;
     "$FAKE_CONTAINER_COMMIT") created="2026-07-02T00:00:00Z" ;;
     "$FAKE_FAILED_COMMIT") created="2026-07-02T00:00:00Z" ;;
     "$FAKE_CURRENT_COMMIT") created="2026-07-01T00:00:00Z" ;;

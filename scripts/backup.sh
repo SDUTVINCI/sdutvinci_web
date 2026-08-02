@@ -5,7 +5,7 @@ set -Eeuo pipefail
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/ops-common.sh"
 
 [ "$EUID" -ne 0 ] \
-  || ops_die "不要使用 sudo 直接运行备份；请先执行 sudo -iu vinci-deploy，再运行 /opt/vinci-cms/scripts/backup.sh"
+  || ops_die "不要使用 sudo/root 直接运行备份；请以执行 ./vinci install 的当前维护用户运行 ./vinci backup"
 
 ops_require_command docker
 ops_require_command git
