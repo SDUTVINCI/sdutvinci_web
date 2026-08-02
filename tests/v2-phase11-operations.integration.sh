@@ -6,6 +6,19 @@ test_root="$(mktemp -d /tmp/vinci-phase11-operations-test.XXXXXX)"
 trap 'rm -rf -- "$test_root"' EXIT
 printf 'vinci-phase11-operations-test\n' > "$test_root/.vinci-phase11-test-owner"
 
+fallback_bin="$test_root/phase11-standard-sbin-test/logrotate"
+mkdir -p "$(dirname -- "$fallback_bin")"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$fallback_bin"
+chmod 0755 "$fallback_bin"
+resolved_fallback="$(
+  PATH=/usr/bin:/bin
+  # shellcheck source=scripts/ops-common.sh
+  source "$repository_root/scripts/ops-common.sh"
+  ops_resolve_command phase11-logrotate-not-in-path "$fallback_bin"
+)"
+[ "$resolved_fallback" = "$fallback_bin" ] \
+  || { printf 'operations command resolver ignored an absolute executable fallback\n' >&2; exit 1; }
+
 help_output="$($repository_root/vinci --help)"
 for command in install update status doctor backup backup-prune restore \
   export-instance import-instance migrate-legacy-user reconcile maintenance; do

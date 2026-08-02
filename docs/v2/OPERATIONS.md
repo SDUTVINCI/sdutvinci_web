@@ -81,7 +81,15 @@ systemd-analyze --version # 预期输出 systemd 版本；Debian 13 通常已随
 
 若 `apt-get` 报找不到包，先检查 Debian `trixie` 主仓库是否启用；若安装后 `command -v logrotate`
 仍无输出，运行 `dpkg -L logrotate | grep '/logrotate$'` 核对安装路径，并确认当前 PATH 包含
-`/usr/sbin`，不要自行复制二进制或在仓库里伪造同名命令。
+`/usr/sbin`，不要自行复制二进制或建立同名软链接。统一入口会在 PATH 找不到命令时受控检查标准
+`/usr/sbin/logrotate` 和 `/sbin/logrotate`；旧版本入口可用下面的一次性 PATH 运行，不必修改 shell
+启动文件：
+
+```bash
+/usr/sbin/logrotate --version # 预期正常显示版本，证明包已安装，只是当前终端 PATH 不完整
+PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH" \
+  ./vinci install --dry-run # PATH 只作用于这一次 Dry Run；不修改 ~/.bashrc、systemd 或 1Panel
+```
 
 #### Debian 13 安装系统级 Node.js 24
 

@@ -158,6 +158,9 @@ EOF
 
 vinci_install_systemd() {
   local dry_run="$1"
+  local logrotate_bin
+  logrotate_bin="$(ops_resolve_command logrotate /usr/sbin/logrotate /sbin/logrotate)" \
+    || ops_die "缺少必需命令：logrotate（已安装时请检查 /usr/sbin/logrotate）"
   local unit_directory="${VINCI_SYSTEMD_UNIT_DIR:-/etc/systemd/system}"
   local log_root
   log_root="$(ops_config_value VINCI_LOG_ROOT "$VINCI_RUN_HOME/.local/state/vinci-cms/logs")"
@@ -166,10 +169,8 @@ vinci_install_systemd() {
   rendered="$(mktemp -d /tmp/vinci-phase11-systemd-render-test.XXXXXX)"
   vinci_render_units "$rendered" "$log_root"
   systemd-analyze verify "$rendered"/*.service "$rendered"/*.timer
-  if command -v logrotate >/dev/null 2>&1; then
-    logrotate --debug --state "$rendered/logrotate-state.test" \
-      "$rendered/vinci-cms.logrotate" >/dev/null
-  fi
+  "$logrotate_bin" --debug --state "$rendered/logrotate-state.test" \
+    "$rendered/vinci-cms.logrotate" >/dev/null
   if [ "$dry_run" = "true" ]; then
     ops_info "systemd Dry Run 通过：将为 ${VINCI_RUN_USER} 安装 $(find "$rendered" -type f | wc -l) 个 unit/timer"
     rm -rf -- "$rendered"
@@ -198,9 +199,11 @@ vinci_install_systemd() {
 vinci_preflight() {
   vinci_current_identity
   vinci_assert_repository
-  for command in awk curl df docker getent git logrotate node realpath sed stat systemd-analyze; do
+  for command in awk curl df docker getent git node realpath sed stat systemd-analyze; do
     ops_require_command "$command"
   done
+  ops_resolve_command logrotate /usr/sbin/logrotate /sbin/logrotate >/dev/null \
+    || ops_die "缺少必需命令：logrotate（Debian 请安装 logrotate 包）"
   if [ "${VINCI_INSTALL_TEST_MODE:-false}" != "true" ] && [ "$EUID" -ne 0 ]; then
     ops_require_command sudo
   fi

@@ -17,6 +17,24 @@ ops_require_command() {
   command -v "$1" >/dev/null 2>&1 || ops_die "缺少必需命令：$1"
 }
 
+ops_resolve_command() {
+  local command_name="$1"
+  shift
+  local resolved candidate
+  resolved="$(command -v "$command_name" 2>/dev/null || true)"
+  if [ -n "$resolved" ]; then
+    printf '%s' "$resolved"
+    return 0
+  fi
+  for candidate in "$@"; do
+    if [[ "$candidate" = /* ]] && [ -f "$candidate" ] && [ -x "$candidate" ]; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
 ops_compose_env() {
   local key="$1"
   local line
