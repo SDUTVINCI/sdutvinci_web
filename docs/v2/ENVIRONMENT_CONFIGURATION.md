@@ -17,14 +17,13 @@ clone 根目录按本文填写 `.env`。不要把本文示例中的 `replace-*`�
   Home 根。
 
 ```bash
-chmod 600 .env                 # 仅当前 owner 可读写
-stat -c '%a %U:%G %n' .env     # 预期：600 <当前用户>:<当前组> .env
-docker compose config --quiet  # 只验证 Compose；不要去掉 --quiet，以免把配置展开到终端
-./vinci install --dry-run      # 验证权限、Docker、路径、动态 unit 和 logrotate，不写数据库
+chmod 600 .env             # 开始填写前就限制为仅当前 owner 可读写
+stat -c '%a %U:%G %n' .env # 预期：600 <当前用户>:<当前组> .env
 ```
 
-`docker compose config --quiet` 只证明语法和必填变量存在，不证明 S3、Git、数据库密码或镜像真的
-可用。正式安装后还必须执行 `./vinci doctor`。
+此处只是开始逐项填写，**不要提前运行** `docker compose config` 或 `./vinci install --dry-run`。
+必须依次完成第 2～10 节、移除所有模板占位值，再到第 11 节执行一次整体验证。全局 Dry Run 即使
+通过，也只证明配置形状和宿主机预检通过，不证明 S3、Git、数据库密码或镜像凭据真实可用。
 
 从 `.env.example` 复制后可以先按三类处理：
 
@@ -325,16 +324,9 @@ CONTENT_EXPORT_KNOWN_HOSTS_FILE=/home/tungchiahui/.config/vinci-cms/content-expo
 
 不同用户名必须替换为该机 `realpath` 的实际输出。`.env` 不执行 shell 展开，所以不能填写 `$HOME`、
 `${HOME}` 或 `~`；这两个值是**宿主机 bind mount 源路径**，也不是容器内的 `/run/secrets/...`。
-不要将私钥内容写进 `.env`。保存 `.env` 后执行：
+不要将私钥内容写进 `.env`。本节到此只完成 Deploy Key、known_hosts、只读连通性和两个路径值；
+**不要在这里执行整套安装 Dry Run，更不要正式安装**。继续填写第 6～10 节，最后统一执行第 11 节。
 
-```bash
-chmod 600 .env # 保护数据库、S3/COS 和 GitHub 等全部配置
-docker compose -f compose.yaml -f compose.content-export.yaml \
-  --profile content-export config --quiet # 预期无输出且退出码为 0：验证 Compose 展开和变量完整性
-./vinci install --dry-run                  # 预期仅报告安装计划，不启动、不迁移、不 Push
-```
-
-正式安装后再执行 `./vinci doctor`；预期 Git 凭据检查通过且日志只显示路径/脱敏状态，不显示私钥。
 轮换时先用**新文件名**生成新密钥、添加并验证新 Deploy Key，再改 `.env` 和重启相应服务，确认 doctor
 通过后才从 GitHub 删除旧 Deploy Key；绝不原地覆盖正在使用的私钥。若怀疑私钥泄露，应先在 GitHub
 立即删除对应 Deploy Key 并暂停内容 Worker/对账，再签发新密钥，不能等待例行维护窗口。
@@ -434,14 +426,26 @@ AUTO_DEPLOY_ENABLED=true
 
 ## 11. 首次部署前的最终核对
 
-以下是检查“配置形状”的安全流程，不输出具体值：
+只有完成第 2～10 节，并逐项确认 `.env` 中不再存在模板路径、示例密码或待替换值后，才执行本节。
+以下检查不会打印 `.env` 的具体值：
 
 ```bash
-test -f .env && test ! -L .env       # 必须是现有普通路径且不是 symlink
-test "$(stat -c '%a' .env)" = 600   # 必须严格为 0600
-docker compose config --quiet        # 必填项和 Compose 语法通过
-./vinci install --dry-run            # 当前用户、Docker、路径、unit、logrotate 预检通过
+test -f .env && test ! -L .env     # 必须是现有普通路径且不是 symlink
+test "$(stat -c '%a' .env)" = 600 # 必须严格为 0600
+if grep -Eq 'replace-|/absolute/path|<[^>]+>' .env; then
+  printf '错误：.env 仍包含模板占位值；请继续逐项填写，不要安装。\n' >&2
+  false
+fi # 预期无输出；只返回是否命中，不打印可能含秘密的整行
+docker compose config --quiet # 预期无输出：验证基础 Compose 的必填项和语法
+docker compose -f compose.yaml -f compose.content-export.yaml \
+  --profile content-export config --quiet # 预期无输出：验证内容导出 overlay 和宿主机文件路径
+PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH" \
+  ./vinci install --dry-run # 最后才执行整体验证；不启动、不迁移、不安装 timer、不 Push
 ```
+
+若旧版本入口报告 `logrotate: command not found`，先运行 `/usr/sbin/logrotate --version`；能显示版本
+说明只是当前 SSH 终端 PATH 不完整，上面的单次 PATH 已兼容，不要修改 `.bashrc` 或建立同名软链接。
+新版统一入口也会受控检查 `/usr/sbin/logrotate`。
 
 随后人工确认：
 
