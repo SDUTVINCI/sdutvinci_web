@@ -43,7 +43,7 @@
 
 ### 前置条件
 
-准备 Docker Engine/Compose、Git、Node.js 24、curl/coreutils、systemd/systemd-analyze、logrotate
+准备 Docker Engine/Compose、Git、Node.js 24、OpenSSL、curl/coreutils、systemd/systemd-analyze、logrotate
 和 sudo。Actions 已为目标 40 位 SHA 发布 runtime/operations 镜像。应用代码仓库允许只读 clone；
 真实密钥另存密码库，不通过聊天、命令参数、Git 或工单传递。
 

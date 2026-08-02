@@ -77,14 +77,94 @@ APP_PORT=3000
 | --- | --- | --- |
 | `POSTGRES_DB` | 建议保留 `vinci_cms` | 数据库名。备份、恢复和实例导入会精确校验它；只用字母、数字、下划线、短横线，且以字母或下划线开头。 |
 | `POSTGRES_USER` | 建议保留 `vinci_cms` 或使用本实例专用账号 | PostgreSQL owner/连接账号，命名限制同上。不要复用其他应用账号。 |
-| `POSTGRES_PASSWORD` | 密码管理器生成的长随机密码，建议至少 32 个 URL-safe 字符 | 同一个值还要编码进 `DATABASE_URL`。不要使用示例值，不要复用 CMS/S3/Git 密钥。已初始化 volume 后只改这里不会自动修改数据库内密码。 |
-| `DATABASE_URL` | 默认 Compose 形态为 `postgresql://<用户>:<URL编码后的密码>@postgres:5432/<数据库>` | host 固定用 Compose service 名 `postgres`，不是 `127.0.0.1`。用户、密码、库名必须与上面三项一致。密码中的特殊字符必须 percent-encode。 |
-| `TEST_DATABASE_URL` | 只有运行集成测试时才填隔离测试库 | 绝不能指向生产库。数据库名必须有独立的 `test` 段，例如 `vinci_cms_test`，并使用回环测试端口和测试凭据。生产服务不读取它。 |
+| `POSTGRES_PASSWORD` | 密码管理器生成的长随机原始密码，推荐 `openssl rand -hex 32` 的 64 位十六进制结果 | 它与 `DATABASE_URL` 密码段代表同一个密码；URL 中出现的是原始值的 percent-encoded 形式。不要复用 CMS/S3/Git 密钥。已初始化 volume 后只改这里不会自动修改数据库内密码。 |
+| `DATABASE_URL` | 默认 Compose 形态为 `postgresql://<用户>:<同一密码的URL编码结果>@postgres:5432/<数据库>` | host 固定用 Compose service 名 `postgres`，不是 `127.0.0.1`。用户、密码、库名必须与上面三项一致。推荐十六进制密码无需额外编码。 |
+| `TEST_DATABASE_URL` | 生产服务器不运行集成测试时建议留空；需要测试时填独立测试库 | 绝不能指向生产库。数据库名必须包含独立的 `test` 段，例如 `vinci_cms_test`，并使用回环测试端口、独立账号和测试凭据。生产服务不读取它。 |
 | `DATABASE_POOL_MAX` | 4 核/8 GiB 单实例先保留 `10` | 每个应用进程的最大连接池。必须为正整数；盲目增大会耗尽 PostgreSQL 连接。蓝绿切换期间两个 app 可能短暂并存。 |
 | `DATABASE_SSL` | 本仓库内置 Compose PostgreSQL 填 `false` | 只有改用受信任 CA 的外部 PostgreSQL 时才填 `true`；当前实现启用严格证书验证，不能关闭证书校验。 |
 
-如果密码是 `a/b@c`，`POSTGRES_PASSWORD` 保存原值，而 `DATABASE_URL` 的密码部分必须使用 URL
-编码后的形式。不要用在线 URL 编码网站处理真实密码；在密码管理器或离线可信工具中完成。
+### 3.1 推荐的随机密码生成方式
+
+在服务器本机执行：
+
+```bash
+openssl rand -hex 32 # 生成 32 随机字节，输出 64 个十六进制字符；只用于 PostgreSQL
+openssl rand -hex 32 # 必须重新运行一次，生成另一个独立值用于 CMS_AUTH_SECRET
+```
+
+第一条输出只包含 `0-9a-f`，具有 256 bit 随机量且可直接用于 URL。不要把输出发到聊天、工单或
+Git；复制到密码管理器和 `.env` 后清理终端可见内容。假设生成结果用占位符 `<同一64位十六进制值>`
+表示，数据库四项应保持这种关系：
+
+```dotenv
+POSTGRES_DB=vinci_cms
+POSTGRES_USER=vinci_cms
+POSTGRES_PASSWORD=<同一64位十六进制值>
+DATABASE_URL=postgresql://vinci_cms:<同一64位十六进制值>@postgres:5432/vinci_cms
+```
+
+这里两处必须是同一串字符。由于十六进制字符不需要 percent-encoding，最适合人工首次部署。
+第二次 `openssl rand -hex 32` 的输出填 `CMS_AUTH_SECRET`，绝不能复用数据库密码。
+
+### 3.2 密码 URL 编码表
+
+如果没有采用十六进制方案，而是使用密码管理器生成的含特殊字符密码，则
+`POSTGRES_PASSWORD` 填原始值，`DATABASE_URL` 只对密码段编码，不能把整个 URL 编码。例如原始
+密码 `a/b@c` 在 URL 的密码段写成 `a%2Fb%40c`。
+
+| 原字符 | URL 编码 | 原字符 | URL 编码 |
+| --- | --- | --- | --- |
+| 空格 | `%20` | `%` | `%25` |
+| `!` | `%21` | `#` | `%23` |
+| `$` | `%24` | `&` | `%26` |
+| `'` | `%27` | `(` | `%28` |
+| `)` | `%29` | `*` | `%2A` |
+| `+` | `%2B` | `,` | `%2C` |
+| `/` | `%2F` | `:` | `%3A` |
+| `;` | `%3B` | `=` | `%3D` |
+| `?` | `%3F` | `@` | `%40` |
+| `[` | `%5B` | 反斜杠（backslash） | `%5C` |
+| `]` | `%5D` | `"` | `%22` |
+| `<` | `%3C` | `>` | `%3E` |
+| `^` | `%5E` | 反引号（backtick） | `%60` |
+| `{` | `%7B` | 竖线（pipe） | `%7C` |
+| `}` | `%7D` |  |  |
+
+编码中的十六进制字母大小写均可，但建议统一大写。特别注意：Base64 随机值常见的 `+`、`/`、`=`
+分别要写成 `%2B`、`%2F`、`%3D`；`%` 自身必须写成 `%25`。不要用在线编码网站处理真实密码。
+确需编码时可在服务器本机隐藏输入并使用已经安装的 Node：
+
+```bash
+read -r -s -p 'Raw database password: ' raw_db_password; printf '\n' # 输入原始密码，不回显
+RAW_DB_PASSWORD="$raw_db_password" node -e \
+  'process.stdout.write(encodeURIComponent(process.env.RAW_DB_PASSWORD).replace(/[!\x27()*]/g, character => `%${character.charCodeAt(0).toString(16).toUpperCase()}`))'
+  # 上一行按严格 RFC 3986 输出编码结果，只供填写 DATABASE_URL 的密码段
+printf '\n'
+unset raw_db_password
+```
+
+编码结果仍然是数据库秘密，不得保存到日志或发送给他人。`.env` 对 `$`、引号等字符还有 Compose
+解析规则，因此生产首次部署仍强烈推荐十六进制方案，避免同时处理 URL 编码和 `.env` 转义。
+
+### 3.3 `TEST_DATABASE_URL` 怎么填
+
+生产运行、`./vinci install`、备份和定时任务都不读取 `TEST_DATABASE_URL`。如果这台生产服务器
+不承担集成测试，最安全且最清晰的写法是：
+
+```dotenv
+TEST_DATABASE_URL=
+```
+
+如果以后在隔离环境运行测试，可以使用简单但独立的测试凭据，例如：
+
+```dotenv
+TEST_DATABASE_URL=postgresql://vinci_test:vinci-test-only-password@127.0.0.1:55432/vinci_cms_test
+```
+
+这个示例只有在 `127.0.0.1:55432` 上确实运行匹配的隔离测试 PostgreSQL 时才可用；它不会自动
+创建数据库。测试数据库名必须匹配 `(^|[-_])test($|[-_])`，因此 `vinci_cms_test` 合法；测试
+辅助代码还会拒绝与 `DATABASE_URL` 相同的 host、port 和数据库组合。简单测试密码不代表可以
+暴露端口：测试服务仍须只绑定回环、使用名称含 test 的容器/volume/数据库和独立测试账号。
 
 数据库 volume 初始化后若要换密码，必须先在 PostgreSQL 内安全轮换，再同步更新
 `POSTGRES_PASSWORD` 和 `DATABASE_URL`；不能只编辑 `.env`。

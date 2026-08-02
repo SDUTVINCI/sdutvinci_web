@@ -10,7 +10,7 @@
 
 所有命令都在代码仓库根目录、以执行首次安装的当前普通用户运行。脚本仅在安装 root-owned
 systemd/logrotate 文件时调用 `sudo`，不会自动把用户加入 Docker 组。首次安装前准备 Docker
-Engine/Compose、Git、Node.js 24、curl/coreutils、systemd-analyze、logrotate 和 sudo。
+Engine/Compose、Git、Node.js 24、OpenSSL、curl/coreutils、systemd-analyze、logrotate 和 sudo。
 
 先验证宿主机 Node，而不是只看 nvm 是否曾在另一个终端安装：
 
