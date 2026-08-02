@@ -71,8 +71,8 @@ jobs:
           test ! -e "$snapshot_root"
           install -d -m 0700 "$snapshot_root"
           printf 'vinci-phase11-cms-snapshot-test\n' > "$snapshot_root/.vinci-test-owner"
-          git cat-file -e 'v2-phase10-pre-removal-20260802-08a1c49^{tag}'
-          git archive v2-phase10-pre-removal-20260802-08a1c49 \
+          git cat-file -e '08a1c4908c8890dad5284e9682304e1ac0c7550e^{commit}'
+          git archive 08a1c4908c8890dad5284e9682304e1ac0c7550e \
             content/news content/wiki content/members \
             | tar --extract --file=- --directory "$snapshot_root"
           test "$(find "$V2_CONTENT_SNAPSHOT_SOURCE" -type f -name '*.md' | wc -l)" -eq 260

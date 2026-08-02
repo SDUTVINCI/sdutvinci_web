@@ -78,11 +78,11 @@ expand/contract Migration、app-blue/app-green 和 gateway graceful reload。
 | `npm run build` | production build 通过；runtime 镜像验证不含正式 Markdown。 |
 | `npm run db:generate` | 28 张表，无 schema changes。 |
 | `npm audit` / `npm audit --omit=dev` | 均为 `found 0 vulnerabilities`。 |
-| `npm run wiki:check`（删除前 annotated tag 的测试快照） | 226 个 Wiki 文件通过；拼音 URL/order/链接正常。 |
+| `npm run wiki:check`（删除前 tag 所指固定 Commit 的测试快照） | 226 个 Wiki 文件通过；拼音 URL/order/链接正常。 |
 | `docker compose config --quiet` 与三份 test override | 通过；S3 替身精确发布到回环 test 端口。 |
 | `systemd-analyze verify` / `logrotate --debug` | 当前真实用户渲染结果通过，无未解析占位或固定身份。 |
 | 全部 shell `bash -n`、`git diff --check`、固定身份/Force Push/生产目标静态审计 | 通过。 |
-| 验收后 GitHub Actions 快照修复 | 完整历史/tag 可用；runner test 根提取并校验 260 个 Markdown；CMS 109/109、完整测试 132/132、阶段 10 为 33/33、阶段 11 为 12/12+4/4+Wiki 226，typecheck/build/diff 通过；失败路径也按 marker 清理。 |
+| 验收后 GitHub Actions 快照修复 | 完整历史和删除前固定 Commit 可用，不依赖远端 tag；runner test 根提取并校验 260 个 Markdown；CMS 109/109、完整测试 132/132、阶段 10 为 33/33、阶段 11 为 12/12+4/4+Wiki 226，typecheck/build/diff 通过；失败路径也按 marker 清理。 |
 
 测试没有连接生产 PostgreSQL、生产 S3/COS、生产 Git、真实 GitHub 写接口或生产服务器。本地
 bare remote 的普通 Push 只用于蓝绿测试，测试结束按精确 marker/label 清理。
@@ -157,7 +157,8 @@ test project、数据库 volume、网络、验收镜像和固定 `/tmp` 根，�
 - 实现 Commit：`d240ba4b126c919649572663bc2a7e0418a5884b`。
 - 验收准备修复 Commit：`e24d86ae35a816b879253e70f1d2800967da73fb`。
 - 最终验收记录 Commit：`ae263ea732e167aac88a80dc27c9e197de3c4b0a`。
-- 验收后 CI 快照修复 Commit：本次独立本地 Commit，完整 SHA 由交付回复报告。
+- 验收后 CI 快照初始修复 Commit：`b73a4a94de47b117ed6afd75776d048452e1c50b`。
+- CI 远端 tag 独立性修复 Commit：本次独立本地 Commit，完整 SHA 由交付回复报告。
 - 维护者确认原文：`V2 阶段 11 验收通过，V2.0 最终验收通过`。
 
 ## 17. 全阶段 Commit、交接与下一步
@@ -175,7 +176,7 @@ test project、数据库 volume、网络、验收镜像和固定 `/tmp` 根，�
 | 8 | `0f5b161`，修复 `ee738be`、`84f66b7` | `a087ba8` |
 | 9 | `94dd1b6`，验收修复 `ef523b1`、`78cc261`、`b37b509` | `4eec170` |
 | 10 | `88c059fcf4d686d543212117c46da9e1f83a0d88` | `845ea6a96b9764c58b047722559e05e53616a320` |
-| 11 | `d240ba4b126c919649572663bc2a7e0418a5884b`，验收准备修复 `e24d86ae35a816b879253e70f1d2800967da73fb` | 最终验收 `ae263ea732e167aac88a80dc27c9e197de3c4b0a`；验收后 CI 快照修复完整 SHA 见交付回复 |
+| 11 | `d240ba4b126c919649572663bc2a7e0418a5884b`，验收准备修复 `e24d86ae35a816b879253e70f1d2800967da73fb` | 最终验收 `ae263ea732e167aac88a80dc27c9e197de3c4b0a`；CI 初始修复 `b73a4a94de47b117ed6afd75776d048452e1c50b`；远端 tag 独立性修复完整 SHA 见交付回复 |
 
 最终交接已追加到 `docs/CODEX_HANDOVER_V2.md`。V2.0 已正式通过最终验收；不进入新阶段，
 本次验收记录提交后停止开发。任何生产 Push 或部署仍需另行明确授权。

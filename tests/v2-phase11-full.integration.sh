@@ -4,7 +4,7 @@ set -Eeuo pipefail
 
 repository_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 compose_fixture="$repository_root/tests/fixtures/v2-phase11-postgres.compose.yaml"
-snapshot_tag="v2-phase10-pre-removal-20260802-08a1c49"
+snapshot_commit="08a1c4908c8890dad5284e9682304e1ac0c7550e"
 test_root="$(mktemp -d /tmp/vinci-phase11-full-suite-test.XXXXXX)"
 suffix="$$"
 export PHASE11_TEST_PROJECT="vinci-phase11-full-suite-test-${suffix}"
@@ -21,8 +21,8 @@ cleanup() {
 trap cleanup EXIT
 printf 'vinci-phase11-full-suite-test\n' > "$test_root/.vinci-phase11-full-test-owner"
 
-git -C "$repository_root" cat-file -e "${snapshot_tag}^{tag}" 2>/dev/null
-git -C "$repository_root" archive "$snapshot_tag" content/news content/wiki content/members \
+git -C "$repository_root" cat-file -e "${snapshot_commit}^{commit}" 2>/dev/null
+git -C "$repository_root" archive "$snapshot_commit" content/news content/wiki content/members \
   | tar --extract --file=- --directory "$test_root"
 
 docker compose -f "$compose_fixture" config --quiet

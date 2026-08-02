@@ -3,13 +3,13 @@
 set -Eeuo pipefail
 
 repository_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
-snapshot_tag="v2-phase10-pre-removal-20260802-08a1c49"
+snapshot_commit="08a1c4908c8890dad5284e9682304e1ac0c7550e"
 test_root="$(mktemp -d /tmp/vinci-phase11-markdown-security-test.XXXXXX)"
 trap 'rm -rf -- "$test_root"' EXIT
 
-git -C "$repository_root" cat-file -e "${snapshot_tag}^{tag}" 2>/dev/null \
-  || { printf '缺少阶段 10 删除前 annotated tag：%s\n' "$snapshot_tag" >&2; exit 1; }
-git -C "$repository_root" archive "$snapshot_tag" content/news content/wiki \
+git -C "$repository_root" cat-file -e "${snapshot_commit}^{commit}" 2>/dev/null \
+  || { printf '缺少阶段 10 删除前固定 Commit：%s\n' "$snapshot_commit" >&2; exit 1; }
+git -C "$repository_root" archive "$snapshot_commit" content/news content/wiki \
   | tar --extract --file=- --directory "$test_root"
 
 file_count="$(find "$test_root/content/news" "$test_root/content/wiki" -type f -name '*.md' | wc -l)"

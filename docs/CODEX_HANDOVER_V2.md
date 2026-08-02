@@ -1702,11 +1702,20 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
   运行时回归。现有 shallow checkout 还会令稍后的阶段 11 删除前 tag 检查失败，只是被前一错误
   提前遮蔽。
 - 经维护者明确同意，verify job 的 checkout 改为完整只读历史；runner 在名称含 `test`、0700、
-  带 owner marker 的临时目录中从删除前 annotated tag 精确提取 news/wiki/members，并要求恰好
-  260 个 Markdown。快照路径只注入 CMS 测试步骤，不进入 production build、镜像或运行配置。
-- 新增阶段 11 静态回归，固定 full-history、tag、test 路径、环境变量、260 文件门禁和
+  带 owner marker 的临时目录中从删除前完整 Commit `08a1c4908c8890dad5284e9682304e1ac0c7550e`
+  精确提取 news/wiki/members，并要求恰好 260 个 Markdown。快照路径只注入 CMS 测试步骤，不
+  进入 production build、镜像或运行配置；本地 annotated tag 继续保留，但 CI 不依赖未推送 tag。
+- 新增阶段 11 静态回归，固定 full-history、删除前 Commit、test 路径、环境变量、260 文件门禁和
   `if: always()` marker 清理。修复后完整测试 132/132、CMS 109/109、阶段 10 为 33/33、阶段 11
   为 12/12 + Markdown/XSS 4/4 + Wiki 226/226；fresh migration、typecheck、production build、
   Shell/工作流契约和 diff 检查均通过。完整本地独立修复 Commit SHA 由交付回复报告。
 - 本修复不改变 V2.0 已通过结论、数据库、API、依赖或生产行为；不 Fetch、不 Push、不部署，
   不访问生产数据库/S3/GitHub 写接口，不进入新阶段。
+- 初始 CI 修复 Commit `b73a4a94de47b117ed6afd75776d048452e1c50b` 推送后的下一次 run
+  暴露远端并不存在本地 annotated tag；`fetch-depth: 0` 只能取得远端对象，不能取得未推送 tag。
+  GitHub 只读核对确认 tag 目标完整 Commit `08a1c4908c8890dad5284e9682304e1ac0c7550e`
+  存在于远端主线历史。workflow、full suite 和 Markdown/XSS 套件因此统一改用该 40 位 SHA；
+  本地 tag 不删除、不推送，也不再是 CI 前置条件。
+- 修正后远端兼容静态契约、YAML、260 文件归档、marker 清理、阶段 11 专项 12/12、历史
+  Markdown/XSS 4/4、Wiki 226/226、完整测试 132/132、CMS 109/109、阶段 10 回归 33/33 和
+  fresh migration 再次通过。新建独立本地修复 Commit，完整 SHA 由交付回复报告。

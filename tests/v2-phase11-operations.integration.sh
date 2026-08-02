@@ -40,7 +40,7 @@ grep -Fq 'maxsize 100M' "$repository_root/systemd/vinci-cms.logrotate"
 grep -Fq 'fetch-depth: 0' "$repository_root/.github/workflows/deploy.yml"
 grep -Fq 'vinci-phase11-cms-snapshot-test/content' \
   "$repository_root/.github/workflows/deploy.yml"
-grep -Fq "git cat-file -e 'v2-phase10-pre-removal-20260802-08a1c49^{tag}'" \
+grep -Fq "git cat-file -e '08a1c4908c8890dad5284e9682304e1ac0c7550e^{commit}'" \
   "$repository_root/.github/workflows/deploy.yml"
 grep -Fq 'V2_CONTENT_SNAPSHOT_SOURCE:' "$repository_root/.github/workflows/deploy.yml"
 grep -Fq -- '-eq 260' "$repository_root/.github/workflows/deploy.yml"
