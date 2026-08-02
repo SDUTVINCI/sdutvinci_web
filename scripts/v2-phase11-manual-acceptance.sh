@@ -128,7 +128,7 @@ status_environment() {
     printf 'preparing：%s\n' "$project"
   fi
   compose ps --format json \
-    | node -e 'let value="";process.stdin.on("data",c=>value+=c);process.stdin.on("end",()=>{for(const row of JSON.parse(value||"[]"))console.log(`${row.Service}: ${row.State} ${row.Health||""}`.trim())})'
+    | node -e 'let value="";process.stdin.on("data",c=>value+=c);process.stdin.on("end",()=>{const input=value.trim();const rows=!input?[]:input.startsWith("[")?JSON.parse(input):input.split(/\n+/).map(line=>JSON.parse(line));for(const row of rows)console.log(`${row.Service}: ${row.State} ${row.Health||""}`.trim())})'
 }
 
 case "${1:-}" in
