@@ -105,6 +105,8 @@ PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH" \
 Shell 和目标完整 SHA，完成 PostgreSQL Migration、候选槽位健康检查、gateway 切换，并报告 timer
 安装成功。它不会导入 V1 数据，也不会改动 1Panel 反向代理。出现任何失败时不要立刻重跑、不要
 `docker compose down -v`、不要删 volume；保存脱敏输出并按详细运维手册第 1 节判断停在哪一步。
+operations 容器中的 `.env not found. Continuing without it.` 是预期提示：真实 `.env` 不复制进
+镜像，Compose 只向每个服务注入其必需变量；不要因此把 `.env` 挂入容器。
 
 只有正式安装以 0 退出后，才依次执行安装后验收：
 
@@ -117,6 +119,9 @@ curl --fail --silent --show-error \
 ./vinci backup --verify # 创建首份 custom dump、manifest、SHA256SUMS 并校验
 ./vinci status          # 最近成功备份现在应显示刚创建的备份状态
 ```
+
+首份 `backup --verify` 只完成 dump、manifest 和哈希完整性验证，不等于已做隔离恢复演练；可作为
+日常备份起点，灾难恢复验收仍按备份恢复手册在独立空库执行。
 
 如果 1Panel 的 18080 入口已经存在，再从浏览器或可信客户端访问原地址核对页面；不要为了验证 V2
 而删除或重建反向代理。`doctor` 失败时以失败项为准排障，不能关闭 CSRF、限流、路径/owner、S3、
@@ -132,6 +137,10 @@ curl --fail --silent --show-error \
 ./vinci maintenance --dry-run # 只列备份/报告/临时包/镜像的候选清理项
 ./vinci maintenance --apply   # 执行受保护清理；必须先核对同环境 Dry Run
 ```
+
+服务器代码由 `./vinci update` 管理：命令内部 Fetch 配置的 `origin/main`、验证目标 SHA 属于该分支，
+再切到 detached 完整 SHA 并蓝绿部署。维护者不要预先或事后执行 `git pull`、`git checkout main`、
+`git reset` 或把生产工作树改回普通分支；`.env` 和数据库 volume 不由 Git 切换覆盖。
 
 更新只走 app-blue/app-green；备份只在成功后推进 latest-success；清理保护最新成功/最近可恢复/锁定
 备份、活动镜像和 `.deploy/rollback-verified` 指向的上一健康镜像。

@@ -285,6 +285,8 @@ curl --fail --silent --show-error http://127.0.0.1:3000/api/health # 本机验�
 SHA/slot；`doctor` 以 0 退出且没有 issue；loopback `/api/health` 为 2xx。安装 timer 不代表自动
 部署一定开启：只有 `.env` 中显式启用自动部署后，每分钟任务才会发布新 SHA。预检期间
 `logrotate --debug` 的“debug mode does nothing”提示是只读校验的正常警告，不代表安装失败。
+Migration/admin/doctor 的 operations 容器可能打印 `.env not found. Continuing without it.`；真实
+`.env` 按设计不复制或挂载进镜像，Compose 只注入该服务声明的必要变量，因此该提示本身不是失败。
 
 ### 失败处理、回滚与安全
 
@@ -517,8 +519,10 @@ expand/contract。
 ./scripts/cleanup-deploy-cache.sh --dry-run # 只列可清理镜像/缓存及保护原因，不实际删除
 ```
 
-人工发布推荐总是传完整 SHA。`./vinci update` 不带 SHA 时会读取远端 `origin/main` 的最新 SHA，
-因此会发生网络 Fetch；`--automatic` 只供已安装的 auto-deploy timer 调用，不作为人工发布参数。
+人工发布推荐总是传完整 SHA。无论是否显式传 SHA，部署脚本都会 Fetch 配置的 `origin/main`，验证
+目标 Commit 属于该分支后切换到 detached 完整 SHA；省略 SHA 时统一入口会先读取远端最新 SHA。
+所以服务器不执行 `git pull`、`git checkout main` 或 `git reset`，也不手工维护普通分支。
+`--automatic` 只供已安装的 auto-deploy timer 调用，不作为人工发布参数。
 
 ### 预期与验证
 
