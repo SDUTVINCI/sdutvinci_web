@@ -2,7 +2,8 @@
 
 本文是阶段 11 的详细教程。所有地址、凭据和端口均为占位示例。不得把生产密码、Token、
 私钥、数据库 URL 或带凭据远端写入命令历史、日志、Git 或工单。日常短流程见
-[`docs/DEPLOYMENT.md`](../DEPLOYMENT.md)。
+[`docs/DEPLOYMENT.md`](../DEPLOYMENT.md)；`.env.example` 的全部 86 个参数见
+[`ENVIRONMENT_CONFIGURATION.md`](ENVIRONMENT_CONFIGURATION.md)。
 
 ## 0. 通用安全约定
 
@@ -74,7 +75,8 @@ stat -c '%a %U:%G %n' .env        # 预期类似：600 tungchiahui:tungchiahui .
 然后用受信任的本机编辑器填写 `.env`。至少逐项确认数据库、应用密钥、回环端口、镜像名和
 `APP_IMAGE_TAG`；后者必须是 CI 已成功发布 runtime/operations 镜像的完整 40 位 SHA。S3/COS、
 内容仓库和自动部署按实际需求配置，不要把配置值复制到终端输出。编辑完成后再次执行
-`chmod 600 .env`。
+`chmod 600 .env`。逐项填写方式、允许范围和错误影响见
+[`ENVIRONMENT_CONFIGURATION.md`](ENVIRONMENT_CONFIGURATION.md)，不能用示例占位值通过生产验收。
 
 首次部署最容易填错的字段如下；完整字段及安全默认值仍以 `.env.example` 为准：
 

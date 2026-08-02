@@ -2,8 +2,9 @@
 
 本文是普通维护者的现行入口。详细前置条件、逐步预期、失败处理、回滚和安全说明见
 [`docs/v2/OPERATIONS.md`](v2/OPERATIONS.md)；备份/灾难恢复细节见
-[`docs/v2/BACKUP_AND_RECOVERY.md`](v2/BACKUP_AND_RECOVERY.md)。阶段 10 及更早文档只作审计，
-不要执行其中已经退役的 Nuxt Content、代码仓库 Markdown 或固定部署用户流程。
+[`docs/v2/BACKUP_AND_RECOVERY.md`](v2/BACKUP_AND_RECOVERY.md)；`.env.example` 全部字段的填写方法见
+[`docs/v2/ENVIRONMENT_CONFIGURATION.md`](v2/ENVIRONMENT_CONFIGURATION.md)。阶段 10 及更早文档
+只作审计，不要执行其中已经退役的 Nuxt Content、代码仓库 Markdown 或固定部署用户流程。
 
 ## 1. 日常短流程
 

@@ -1,0 +1,272 @@
+# Vinci V2.0 `.env` 逐项配置手册
+
+本文覆盖当前 [`.env.example`](../../.env.example) 的全部生产配置项。先阅读
+[`OPERATIONS.md`](OPERATIONS.md) 的首次部署流程，再按本文填写 `.env`。不要把本文示例中的
+`replace-*`、尖括号或假域名原样用于生产。
+
+## 1. 填写规则与安全验证
+
+- `.env` 每行使用 `KEY=value`，不要写 `export KEY=...`。变量名不能改，布尔值只写小写
+  `true` 或 `false`。
+- 注释单独写在上一行。不要在密码或 URL 行末追加 `# 注释`，也不要依赖 shell 的 `$()`、反引号
+  或变量展开；Compose 不会把它们当作安全的密码生成器。
+- 先在密码管理器中生成随机值，再通过受控编辑器写入。不要在聊天、工单、Git、shell 参数或
+  截图中传递 `POSTGRES_PASSWORD`、`DATABASE_URL`、`CMS_AUTH_SECRET`、S3 key 或 GitHub Token。
+- `.env` 必须是当前安装用户所有的普通文件，权限 `0600`，不能是 symlink。
+- 路径必须使用绝对路径；备份、实例包和日志目录必须位于代码仓库之外，不能是 `/` 或用户
+  Home 根。
+
+```bash
+chmod 600 .env                 # 仅当前 owner 可读写
+stat -c '%a %U:%G %n' .env     # 预期：600 <当前用户>:<当前组> .env
+docker compose config --quiet  # 只验证 Compose；不要去掉 --quiet，以免把配置展开到终端
+./vinci install --dry-run      # 验证权限、Docker、路径、动态 unit 和 logrotate，不写数据库
+```
+
+`docker compose config --quiet` 只证明语法和必填变量存在，不证明 S3、Git、数据库密码或镜像真的
+可用。正式安装后还必须执行 `./vinci doctor`。
+
+从 `.env.example` 复制后可以先按三类处理：
+
+- 必须替换：`APP_IMAGE_TAG`、`NUXT_PUBLIC_SITE_URL`、数据库密码与 URL、`CMS_AUTH_SECRET`、全部
+  S3/COS 连接项、内容仓库 SSH 文件路径。
+- 生产固定或建议原样保留：`APP_BIND_ADDRESS=127.0.0.1`、`APP_PORT=3000`、
+  `NODE_ENV=production`、`CONTENT_PUBLISH_MODE=database`、两个内容仓库 ID、
+  `CONTENT_EXPORT_BRANCH=main`、`CONTENT_RECOVERY_MODE=disabled`、
+  `CONTENT_PR_IMPORT_TEST_MODE=false`。
+- 首次保持安全关闭：`AUTO_DEPLOY_ENABLED=false`、`CONTENT_EXPORT_MODE=disabled`、
+  `CONTENT_PR_IMPORT_MODE=disabled`。这些功能各自完成前置验收后再单独开启。
+
+其余限流、批量、重试和保留参数可以先保留模板默认值，观察实际容量和日志后再调整；不要在
+首次部署时一次性“优化”所有数值。
+
+## 2. Docker、镜像、监听地址与站点 URL
+
+| 参数 | 生产环境怎么填 | 约束、默认值和影响 |
+| --- | --- | --- |
+| `COMPOSE_PROJECT_NAME` | 本机唯一且长期不变的名称，单实例建议保留 `vinci-cms` | 决定容器、network、volume 和确认令牌名称。部署后修改会创建另一套资源，看起来像“数据消失”。建议只用小写字母、数字、`-`、`_`。 |
+| `APP_IMAGE` | runtime 镜像仓库，例如 `ghcr.io/sdutvinci/sdutvinci_web` | 只填仓库，不带 `:tag`；必须与 Actions 实际发布目标一致。 |
+| `APP_OPS_IMAGE` | operations 镜像仓库，例如 `ghcr.io/sdutvinci/sdutvinci_web-ops` | 用于 Migration、管理员创建、doctor、导出和恢复；必须与 runtime 来自同一 Commit。 |
+| `APP_IMAGE_TAG` | 首次安装所用、CI 已发布的完整 40 位小写 Commit SHA | 不填 `latest`。`./vinci install/update` 部署时会显式传入目标 SHA，活动版本以 `.deploy/current` 为准；此字段仍是 Compose 工具的默认镜像 tag。 |
+| `APP_BIND_ADDRESS` | 保持 `127.0.0.1` | gateway 只监听服务器回环，避免绕过 1Panel/TLS 直接暴露。不要为了外部访问改成 `0.0.0.0`。 |
+| `APP_PORT` | 当前服务器保持 `3000` | 这是宿主机 gateway 端口；1Panel 的 `18080 → 127.0.0.1:3000` 反代无需修改。端口必须空闲。 |
+| `NODE_ENV` | 固定 `production` | 不要在生产改成 `test`；多个测试保护开关依赖它拒绝生产误用。Compose 运行时也会固定 production。 |
+| `NUXT_PUBLIC_SITE_URL` | 浏览器最终访问站点的完整外部 origin，例如 `https://www.example.com` | 包含协议和非默认端口，不带后台路径。它参与绝对链接和 CMS 同源/CSRF 判断；必须与反向代理对外地址一致。生产应使用 HTTPS。 |
+
+对于当前 1Panel 场景，应用侧保持：
+
+```dotenv
+APP_BIND_ADDRESS=127.0.0.1
+APP_PORT=3000
+```
+
+1Panel 可以继续监听 `18080` 并转发到 `127.0.0.1:3000`。`NUXT_PUBLIC_SITE_URL` 填用户浏览器看到的
+地址，而不是一律填 `http://127.0.0.1:3000`。
+
+| 浏览器实际入口 | `NUXT_PUBLIC_SITE_URL` | `CMS_SECURE_COOKIES` |
+| --- | --- | --- |
+| 1Panel 提供 HTTPS 域名 | 例如 `https://vinci.example.com` | `true`（生产推荐） |
+| 仅在可信内网临时使用 `http://10.0.0.4:18080` | 精确填 `http://10.0.0.4:18080` | 临时 `false`，否则浏览器不会通过 HTTP 发送 Secure Cookie |
+
+内网 HTTP 只适合部署调试，不是公网生产方案。给 1Panel 外部入口配置 HTTPS 不需要改变后端
+`127.0.0.1:3000`，也不需要删除现有 18080 反向代理。
+
+## 3. PostgreSQL
+
+| 参数 | 生产环境怎么填 | 约束、默认值和影响 |
+| --- | --- | --- |
+| `POSTGRES_DB` | 建议保留 `vinci_cms` | 数据库名。备份、恢复和实例导入会精确校验它；只用字母、数字、下划线、短横线，且以字母或下划线开头。 |
+| `POSTGRES_USER` | 建议保留 `vinci_cms` 或使用本实例专用账号 | PostgreSQL owner/连接账号，命名限制同上。不要复用其他应用账号。 |
+| `POSTGRES_PASSWORD` | 密码管理器生成的长随机密码，建议至少 32 个 URL-safe 字符 | 同一个值还要编码进 `DATABASE_URL`。不要使用示例值，不要复用 CMS/S3/Git 密钥。已初始化 volume 后只改这里不会自动修改数据库内密码。 |
+| `DATABASE_URL` | 默认 Compose 形态为 `postgresql://<用户>:<URL编码后的密码>@postgres:5432/<数据库>` | host 固定用 Compose service 名 `postgres`，不是 `127.0.0.1`。用户、密码、库名必须与上面三项一致。密码中的特殊字符必须 percent-encode。 |
+| `TEST_DATABASE_URL` | 只有运行集成测试时才填隔离测试库 | 绝不能指向生产库。数据库名必须有独立的 `test` 段，例如 `vinci_cms_test`，并使用回环测试端口和测试凭据。生产服务不读取它。 |
+| `DATABASE_POOL_MAX` | 4 核/8 GiB 单实例先保留 `10` | 每个应用进程的最大连接池。必须为正整数；盲目增大会耗尽 PostgreSQL 连接。蓝绿切换期间两个 app 可能短暂并存。 |
+| `DATABASE_SSL` | 本仓库内置 Compose PostgreSQL 填 `false` | 只有改用受信任 CA 的外部 PostgreSQL 时才填 `true`；当前实现启用严格证书验证，不能关闭证书校验。 |
+
+如果密码是 `a/b@c`，`POSTGRES_PASSWORD` 保存原值，而 `DATABASE_URL` 的密码部分必须使用 URL
+编码后的形式。不要用在线 URL 编码网站处理真实密码；在密码管理器或离线可信工具中完成。
+
+数据库 volume 初始化后若要换密码，必须先在 PostgreSQL 内安全轮换，再同步更新
+`POSTGRES_PASSWORD` 和 `DATABASE_URL`；不能只编辑 `.env`。
+
+## 4. CMS 会话、登录限流和上传限流
+
+| 参数 | 生产环境怎么填 | 允许范围与作用 |
+| --- | --- | --- |
+| `CMS_AUTH_SECRET` | 密码管理器生成的独立随机秘密，至少 32 个字符，建议 64 个十六进制字符或等强度值 | 用于会话/安全 HMAC。轮换会使现有登录会话和相关令牌失效；不要与任何其他密码复用。 |
+| `CMS_SESSION_COOKIE` | 单站点保留 `vinci_cms_session` | Cookie 名不能为空。同一域名部署多个隔离实例时必须使用不同名称，避免相互覆盖。 |
+| `CMS_SESSION_TTL_HOURS` | 默认 `168`（7 天） | 正整数，最大 `2160`（90 天）。缩短会增加重新登录频率，延长会增加失窃会话暴露窗口。 |
+| `CMS_SECURE_COOKIES` | 有 HTTPS 的生产环境固定 `true` | 为 `true` 时浏览器只通过 HTTPS 发送登录 Cookie。纯 HTTP 的隔离调试才可临时用 `false`；公网生产不能因此关闭 HTTPS 保护。 |
+| `CMS_LOGIN_FAILURE_LIMIT` | 默认 `5` | 同一账号在窗口内允许的失败次数，范围 `2–20`；达到后锁定账号桶。 |
+| `CMS_LOGIN_FAILURE_WINDOW_MINUTES` | 默认 `15` | 统计账号登录失败的窗口，范围 `1–1440` 分钟。 |
+| `CMS_LOGIN_LOCKOUT_MINUTES` | 默认 `15` | 账号达到失败阈值后的锁定时间，范围 `1–1440` 分钟。不要通过调大失败上限来处理误锁。 |
+| `CMS_LOGIN_IP_ATTEMPT_LIMIT` | 默认 `30` | 单一来源 IP 在窗口内的登录尝试上限，范围 `5–1000`。反向代理必须正确传递可信客户端 IP。 |
+| `CMS_LOGIN_IP_WINDOW_MINUTES` | 默认 `5` | IP 登录尝试统计窗口，范围 `1–1440` 分钟。 |
+| `CMS_MEDIA_UPLOAD_LIMIT` | 默认 `20` | 单个已登录用户在窗口内的上传次数，范围 `1–1000`。 |
+| `CMS_MEDIA_UPLOAD_WINDOW_MINUTES` | 默认 `1` | 媒体上传限流窗口，范围 `1–1440` 分钟。 |
+
+`NUXT_PUBLIC_SITE_URL`、1Panel 转发的 Host/Proto 与 `CMS_SECURE_COOKIES` 必须一致。若 HTTPS 站点
+出现登录后立即掉线，先检查代理是否正确传递协议以及浏览器访问地址，不要直接关闭 Secure
+Cookie、CSRF 或同源校验。
+
+## 5. 内容权威、独立内容仓库与异步导出
+
+| 参数 | 生产环境怎么填 | 允许值、启用条件和作用 |
+| --- | --- | --- |
+| `CONTENT_PUBLISH_MODE` | 固定 `database` | V2 正式内容权威是 PostgreSQL。`legacy_git`、`revision_shadow` 只允许隔离测试；不要重新引入代码仓库 `content/`。 |
+| `CONTENT_REPOSITORY_ID` | 固定 `SDUTVINCI/sdutvinci_content` | 代码会拒绝其他正式仓库。格式是 `owner/repository`，不含协议或 `.git`。 |
+| `CONTENT_EXPORT_MODE` | 首次先用 `disabled`；接管 Dry Run 用 `dry_run`；明确确认后才用 `enabled` | `disabled` 禁止增量 Worker；`dry_run` 只允许接管报告；`enabled` 允许正式 Commit/Push。不能跳过接管验收直接启用。 |
+| `CONTENT_EXPORT_REMOTE_URL` | 正式使用 `git@github.com:SDUTVINCI/sdutvinci_content.git` | 正式环境只接受唯一官方仓库的 HTTPS/SSH 形式；enabled 时必须是仓库级 SSH remote，且 URL 不能内嵌用户名密码或 Token。 |
+| `CONTENT_EXPORT_REMOTE` | 保留 `origin` | 本地 remote 名，仅允许字母、数字、点、下划线和短横线。不是 URL。 |
+| `CONTENT_EXPORT_BRANCH` | 固定 `main` | 正式代码只接受 main；不填功能分支。导出只做普通 fast-forward Push，绝不 Force Push。 |
+| `CONTENT_EXPORT_WORKSPACE` | 保留 `/var/lib/vinci-cms/content-export` | 必须与应用代码、旧 content 和其他 Git worktree 隔离。标准 Compose 使用专用 named volume 映射到该容器路径。 |
+| `CONTENT_EXPORT_AUTHOR_NAME` | 机器人可识别名称，例如 `Vinci Content Exporter` | 写入自动内容 Commit 的 author/committer，不是 GitHub 登录凭据。不能为空。 |
+| `CONTENT_EXPORT_AUTHOR_EMAIL` | 机器人邮箱，例如 `content-export@localhost` 或组织 noreply 地址 | 必须是合法邮箱格式；不要填维护者私人敏感邮箱。 |
+| `CONTENT_EXPORT_SSH_KEY_FILE` | 宿主机上独立 deploy key 私钥的绝对路径 | 必须是普通非 symlink 文件、权限 `0600`，仅授权目标内容仓库，正式对账/导出需要写权限。不要使用个人通用 SSH 私钥。 |
+| `CONTENT_EXPORT_KNOWN_HOSTS_FILE` | 独立 known_hosts 文件的绝对路径 | 必须是普通非 symlink 文件；先通过可信渠道核对 GitHub host key，不能只信任 `ssh-keyscan` 输出。 |
+| `CONTENT_EXPORT_BATCH_SIZE` | 默认 `50` | Worker 每轮领取任务数，范围 `1–200`。大批量会增加单轮事务和 Git Commit 体积。 |
+| `CONTENT_EXPORT_POLL_SECONDS` | 默认 `60` | Worker 空闲轮询间隔，范围 `1–3600` 秒。越小对 DB 查询越频繁。 |
+| `CONTENT_EXPORT_LEASE_SECONDS` | 默认 `300` | Worker job 租约，范围 `30–3600` 秒。应覆盖正常单批导出时间；过短会造成过期接管。 |
+| `CONTENT_EXPORT_MAX_ATTEMPTS` | 默认 `5` | 单 job 最大尝试次数，范围 `1–20`；到达上限转人工处理。 |
+| `CONTENT_EXPORT_RETRY_BASE_SECONDS` | 默认 `60` | 指数退避初始秒数，范围 `1–3600`。 |
+| `CONTENT_EXPORT_RETRY_MAX_SECONDS` | 默认 `3600` | 指数退避上限，范围 `1–86400` 秒，且不得小于 base。 |
+| `CONTENT_RECONCILIATION_ROOT` | 保留 `/var/lib/vinci-cms/content-reconciliation` | 对账 snapshot/report/tmp 根。必须与导出 workspace 隔离；标准 Compose 使用专用 named volume，宿主机高级脚本使用此安全绝对路径。 |
+| `CONTENT_RECOVERY_MODE` | 正式 `.env` 固定 `disabled` | 普通 app、Worker 和对账不能启用恢复；`./vinci install --initialize=snapshot` 会在隔离 recovery profile 内受控启用。 |
+
+即使 `CONTENT_EXPORT_MODE=disabled`，03:00 全量对账仍需要读取并在有差异时修正独立内容仓库，
+因此生产安装必须为 `CONTENT_EXPORT_SSH_KEY_FILE` 和 `CONTENT_EXPORT_KNOWN_HOSTS_FILE` 配置真实、
+最小权限文件。`disabled` 只表示增量 Outbox Worker 尚未接管，不表示对账不需要 Git 凭据。
+
+凭据文件的宿主机示例布局可以是：
+
+```text
+/srv/vinci-secrets/content-export-key
+/srv/vinci-secrets/content-export-known-hosts
+```
+
+目录使用 `0700`，两个文件使用 `0600`。不要把它们放进代码仓库或 `.env` 所在目录，也不要将
+私钥内容写进 `.env`；这里只填写文件路径。
+
+## 6. GitHub Pull Request 内容导入
+
+| 参数 | 生产环境怎么填 | 允许范围与作用 |
+| --- | --- | --- |
+| `CONTENT_PR_IMPORT_MODE` | 不使用 PR 导入时保持 `disabled`；完成权限验收后才用 `enabled` | enabled 只允许把选中的 PR diff 导入为草稿/提案，不会自动 Merge、批准或发布。 |
+| `CONTENT_PR_IMPORT_REPOSITORY_ID` | 固定 `SDUTVINCI/sdutvinci_content` | 正式环境只接受唯一内容仓库，不能让请求参数选择任意仓库。 |
+| `CONTENT_PR_IMPORT_API_URL` | 固定 `https://api.github.com` | 正式环境只允许 GitHub 官方 HTTPS API，禁止内嵌凭据或改成 HTTP。 |
+| `CONTENT_PR_IMPORT_GITHUB_TOKEN` | 不启用时留空；需要私有读取、评论或关闭 PR 时填独立细粒度 Token | 只授予目标内容仓库所需最小权限。只读 Dry Run 与写评论/关闭最好使用职责分离的凭据；不得复用 deploy key。 |
+| `CONTENT_PR_IMPORT_ROLE_CODES` | 默认 `content_importer` | 允许操作导入功能的 CMS role code，多个值用英文逗号分隔并去空格。不要加入普通编辑角色以图省事。 |
+| `CONTENT_PR_IMPORT_MAX_FILE_BYTES` | 默认 `1048576`（1 MiB） | 单文件上限，范围 `1024–5000000` 字节；超限拒绝整个相关动作。 |
+| `CONTENT_PR_IMPORT_MAX_FILES` | 默认 `200` | 单 PR 文件数量上限，范围 `1–500`。 |
+| `CONTENT_PR_IMPORT_RETRY_ATTEMPTS` | 默认 `3` | GitHub 网络、429 和 5xx 重试次数，范围 `1–5`；不是业务操作无限重试。 |
+| `CONTENT_PR_IMPORT_TEST_MODE` | 生产固定 `false` | `true` 只允许 `NODE_ENV=test`，用于回环 mock GitHub；生产启动会拒绝。 |
+
+Token 不要通过 `docker compose config` 的完整输出排障，因为展开后的环境可能包含它。使用
+`./vinci doctor` 的脱敏结果和 GitHub 审计日志定位权限问题。
+
+## 7. S3 兼容对象存储 / 腾讯云 COS
+
+这些字段是生产必填项。即使暂时不上传图片，`./vinci doctor` 也会执行 HeadBucket，并核对数据库
+中已有对象；不能填假地址绕过。Bucket 应开启版本控制、防误删，并使用仅限目标 prefix 的独立
+凭据。
+
+| 参数 | 生产环境怎么填 | 允许范围与作用 |
+| --- | --- | --- |
+| `S3_ENDPOINT` | 供应商给出的 S3 API endpoint，例如 `https://s3-api.example.com` | 必须是有效 URL。它用于 SDK API 请求，不是图片公网 CDN 地址。COS 应按所选 region 使用官方 S3 兼容 endpoint。 |
+| `S3_REGION` | Bucket 实际 region，例如供应商控制台显示的 region code | 必须与 Bucket 和签名区域一致，不能填中文地域名称。 |
+| `S3_BUCKET` | 专用于本实例的 Bucket 名 | 只填名称，不带 `s3://`、endpoint、路径或 prefix。 |
+| `S3_ACCESS_KEY_ID` | 专用最小权限访问 ID | 至少允许目标 Bucket/prefix 的上传、读取和 doctor 所需 HeadBucket/HeadObject；不要使用账号主密钥。 |
+| `S3_SECRET_ACCESS_KEY` | 与上面 ID 配对的 secret | 只存密码库和 `.env`，轮换时两项一起更新并复验，不打印到日志。 |
+| `S3_PUBLIC_BASE_URL` | 浏览器访问图片的 HTTPS 基址，例如 `https://img.example.com` | 不含 object key；程序会自动追加 `/<encoded-key>` 并去掉末尾 `/`。已有数据库 URL 必须与该基址一致。 |
+| `S3_FORCE_PATH_STYLE` | AWS/COS 通常按供应商要求填 `false`；MinIO 等可能要求 `true` | `false` 使用 virtual-hosted 风格，`true` 使用 path-style。填错通常表现为签名、DNS 或 Bucket 404。 |
+| `S3_KEY_PREFIX` | 默认 `images`，多实例可用如 `vinci-prod/images` | 不能以 `/` 开头/结尾；每段只允许字母、数字、`_`、`-`，禁止空段、`.`、`..`。上线后修改不会迁移旧对象。 |
+| `S3_DOCTOR_MAX_OBJECTS` | 默认 `10000`，应不小于数据库媒体记录总数 | 范围 `1–100000`。doctor 超过该数量会 fail closed，避免一次无界 HeadObject；扩容前评估执行时间和 API 成本。 |
+| `CMS_IMAGE_MAX_BYTES` | 默认 `10485760`（10 MiB） | 原始上传大小上限，范围 `1024–52428800` 字节。反向代理请求体上限还必须大于它。 |
+| `CMS_IMAGE_MAX_WIDTH` | 默认 `2560` | WebP 输出最大宽度，范围 `320–8192` 像素；图片按比例缩小，不盲目放大。 |
+| `CMS_IMAGE_MAX_HEIGHT` | 默认 `2560` | WebP 输出最大高度，范围 `320–8192` 像素。 |
+| `CMS_IMAGE_WEBP_QUALITY` | 默认 `82` | WebP 质量，范围 `1–100`；越高文件通常越大，不建议直接设 100。 |
+
+`S3_ENDPOINT` 与 `S3_PUBLIC_BASE_URL` 通常不是同一个地址：前者给服务器签名读写，后者给浏览器
+公开读取。不要把带 secret 的签名 URL 填为 public base。
+
+## 8. Git 部署、自动更新和部署缓存
+
+| 参数 | 生产环境怎么填 | 允许范围与作用 |
+| --- | --- | --- |
+| `DEPLOY_GIT_REMOTE_URL` | `git remote get-url origin` 的精确结果，例如 `https://github.com/SDUTVINCI/sdutvinci_web.git` | 自动/人工部署都会比较字符串；不一致即拒绝。URL 不能内嵌 Token 或密码，服务器 remote 只读。 |
+| `AUTO_DEPLOY_ENABLED` | 首次固定 `false`；人工部署与回滚验收后才改 `true` | timer 始终安装，但 false 时只记录“未启用”并退出。true 后每分钟检查 origin/main，只部署当前线上 Commit 的快进后继和已存在的两种不可变镜像。 |
+| `DEPLOY_CACHE_CLEANUP_ENABLED` | 建议保留 `true` | 每次部署前清理可重建 build cache 和未引用旧 SHA 镜像；只接受 `true`/`false`，不会清 volume/数据库。磁盘排障时也不要改成 system prune。 |
+| `DEPLOY_CACHE_KEEP_IMAGES` | 默认 `3` | 每个 runtime/operations 仓库至少保留的最近 SHA 数，范围 `1–100`；活动、失败和已验证回滚版本额外保护。 |
+| `DEPLOY_CACHE_RETENTION_HOURS` | 默认 `168`（7 天） | 旧镜像/可重建缓存的年龄门槛，范围 `1–8760` 小时；保留数量与引用保护仍优先。 |
+
+启用自动部署时只编辑这一行并复验，不需要重装 timer：
+
+```dotenv
+AUTO_DEPLOY_ENABLED=true
+```
+
+然后执行 `chmod 600 .env`、`./vinci doctor`，等待下一轮 timer。不要手工执行
+`./vinci update --automatic`；人工发布使用 `./vinci update <完整40位SHA>`。
+
+## 9. PostgreSQL 备份、磁盘门禁与分层保留
+
+| 参数 | 生产环境怎么填 | 允许范围与作用 |
+| --- | --- | --- |
+| `BACKUP_ROOT` | 例如 `/var/backups/vinci-cms` | 必须是仓库外的安全绝对目录，owner 为安装用户、权限 `0700`。安装器会用 sudo 创建；不要指向 Home 根、symlink、共享未知目录或 Docker volume 根。 |
+| `BACKUP_RETRY_ATTEMPTS` | 默认 `3` | `pg_dump` 单次任务的总尝试次数，整数且至少 `1`。全部失败时不推进 latest-success，也不清旧备份。 |
+| `BACKUP_RETRY_DELAY_SECONDS` | 默认 `2` | 尝试间等待秒数，非负整数。它不是无限后台重试。 |
+| `BACKUP_MIN_FREE_BYTES` | 默认 `1073741824`（1 GiB） | 低于此值记录 `BACKUP_DISK_LOW`，但只要仍高于 critical 可继续尝试备份。必须大于等于 critical。 |
+| `BACKUP_CRITICAL_FREE_BYTES` | 默认 `536870912`（512 MiB） | 低于此值立即拒绝新备份并记录 critical 告警；doctor 也会失败。不要为“先跑起来”把它设成 0。 |
+| `BACKUP_RETENTION_DAILY_DAYS` | 默认 `7` | 上海时区按日保留窗口，整数 `1–3660`。每个日 bucket 保留代表备份。 |
+| `BACKUP_RETENTION_WEEKLY_WEEKS` | 默认 `4` | 按周保留窗口，整数 `1–3660`。 |
+| `BACKUP_RETENTION_MONTHLY_MONTHS` | 默认 `12` | 按月保留窗口，整数 `1–3660`。 |
+
+三层保留不是简单的“最多 N 份”。最新备份、latest-success、最新完成隔离可恢复验证的备份以及
+全部 `.vinci-locked` 备份始终保护。增大保留期前先估算磁盘，缩短前先执行
+`./vinci backup-prune --dry-run`。
+
+## 10. 内容对账材料、实例迁移包和日志保留
+
+| 参数 | 生产环境怎么填 | 允许范围与作用 |
+| --- | --- | --- |
+| `CONTENT_SNAPSHOT_RETENTION_DAYS` | 默认 `30` | 对账生成的灾备内容 snapshot 保留天数，正整数。它不能替代 PostgreSQL 完整备份。 |
+| `RECONCILIATION_REPORT_RETENTION_DAYS` | 默认 `90` | 对账 JSON 报告保留天数，正整数；报告用于审计差异/hash。 |
+| `RECONCILIATION_TEMP_RETENTION_DAYS` | 默认 `1` | 已标记的对账临时 snapshot 保留天数，正整数。未知文件、错误 owner、symlink 会让清理 fail closed。 |
+| `INSTANCE_EXPORT_ROOT` | 例如 `/var/backups/vinci-cms-instances` | V2→V2 实例迁移包根，仓库外安全绝对目录、owner 为安装用户、权限 `0700`。不要与 `BACKUP_ROOT` 使用同一目录。 |
+| `INSTANCE_RETENTION_DAYS` | 默认 `30` | 未锁定实例迁移包的保留天数，整数 `1–3660`；带 `.vinci-locked` 的包继续保护。 |
+| `VINCI_LOG_ROOT` | 例如 `/var/log/vinci-cms` | 动态 systemd service 的日志根，安装器创建为当前用户所有、权限 `0750`。logrotate 按日、30 份或 100 MiB 轮转。不得写入任何秘密。 |
+
+`CONTENT_RECONCILIATION_ROOT` 的保留参数作用于对账材料；`INSTANCE_EXPORT_ROOT` 作用于整机迁移
+包；`BACKUP_ROOT` 作用于 PostgreSQL dump。三者不能混用，也不要靠手工 `rm -rf` 代替
+`./vinci maintenance --dry-run/--apply`。
+
+## 11. 首次部署前的最终核对
+
+以下是检查“配置形状”的安全流程，不输出具体值：
+
+```bash
+test -f .env && test ! -L .env       # 必须是现有普通路径且不是 symlink
+test "$(stat -c '%a' .env)" = 600   # 必须严格为 0600
+docker compose config --quiet        # 必填项和 Compose 语法通过
+./vinci install --dry-run            # 当前用户、Docker、路径、unit、logrotate 预检通过
+```
+
+随后人工确认：
+
+- `APP_BIND_ADDRESS=127.0.0.1`、`APP_PORT=3000`，1Panel 仍负责 18080 入口；
+- `NUXT_PUBLIC_SITE_URL` 是浏览器真实 origin，HTTPS 时 `CMS_SECURE_COOKIES=true`；
+- 数据库四项相互一致，`TEST_DATABASE_URL` 与生产完全隔离；
+- 两个镜像仓库和 40 位 SHA 已由 CI 发布；
+- S3/COS 是真实专用 Bucket/prefix，版本控制已开启；
+- 内容仓库 key/known_hosts 是独立普通文件且权限正确；
+- 自动部署首次保持关闭，备份/实例/日志目录均在仓库外。
+
+完成空库安装后运行：
+
+```bash
+./vinci status # 核对当前 SHA、slot、Compose、timer 和最近成功备份
+./vinci doctor # 实际连接 PostgreSQL、S3/COS 并检查内容任务、gateway、磁盘和 timer
+```
+
+任何检查失败都应修正对应配置后重试；不要关闭 CSRF、限流、Secure Cookie、路径/owner 校验，
+也不要用假 S3、生产测试库或宽权限凭据让 doctor 暂时变绿。
