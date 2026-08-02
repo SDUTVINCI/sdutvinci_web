@@ -83,6 +83,16 @@ sed -i "s/^APP_IMAGE_TAG=.*/APP_IMAGE_TAG=$fixture_commit/" "$checkout/.env"
   ./vinci install --dry-run
 )
 test ! -e "$checkout/.deploy/install.env"
+if (
+  cd "$checkout"
+  ./vinci install
+) > "$test_root/explicit-initialize.log" 2>&1; then
+  printf 'installer accepted a formal install without an explicit initialization mode\n' >&2
+  exit 1
+fi
+grep -Fq '正式安装必须显式选择 --initialize=empty 或 --initialize=snapshot' \
+  "$test_root/explicit-initialize.log"
+test ! -e "$checkout/.deploy/install.env"
 
 export VINCI_TEST_RUN_USER=phase11beta
 export FAKE_TEST_UID=22001

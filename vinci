@@ -11,7 +11,8 @@ vinci_usage() {
 Vinci V2.0 统一运维入口
 
 用法：
-  ./vinci install [--dry-run|--systemd-only] [--initialize=empty]
+  ./vinci install --dry-run|--systemd-only
+  ./vinci install --initialize=empty
   ./vinci install --initialize=snapshot --snapshot=/绝对路径 [--confirm=INITIALIZE:...]
   ./vinci update [<40位commit>|--automatic]
   ./vinci status
@@ -229,7 +230,7 @@ vinci_preflight() {
 }
 
 vinci_install() {
-  local dry_run=false systemd_only=false initialize=empty snapshot="" confirmation=""
+  local dry_run=false systemd_only=false initialize="" snapshot="" confirmation=""
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --dry-run) dry_run=true ;;
@@ -248,6 +249,10 @@ vinci_install() {
   if [ "$dry_run" = "true" ]; then
     ops_info "安装 Dry Run 通过：user=${VINCI_RUN_USER} uid=${VINCI_RUN_UID} gid=${VINCI_RUN_GID} home=${VINCI_RUN_HOME} shell=${VINCI_RUN_SHELL}"
     return 0
+  fi
+  if [ "$systemd_only" != "true" ]; then
+    [ -n "$initialize" ] \
+      || ops_die "正式安装必须显式选择 --initialize=empty 或 --initialize=snapshot；不会默认创建空内容库"
   fi
   mkdir -p -- "$VINCI_ROOT/.deploy"
   chmod 0700 "$VINCI_ROOT/.deploy"

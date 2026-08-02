@@ -33,15 +33,14 @@
 | 参数 | 填什么 | 作用和写入影响 |
 | --- | --- | --- |
 | `install --dry-run` | 不带值 | 只做环境、权限、Compose、动态 systemd unit 和 logrotate 预检；不部署、不迁移数据库、不安装 timer。 |
-| `--initialize=empty` | 固定值 `empty` | 对全新空业务库执行 Migration，不导入历史内容，然后部署应用并安装 timer。首次空站点使用此模式。 |
-| `--initialize=snapshot` | 固定值 `snapshot` | 在完整 PostgreSQL 备份不可用时，从独立内容仓库快照恢复公开内容；必须同时提供 `--snapshot=/绝对路径`。不能恢复用户、草稿、完整历史、审核或审计。 |
+| `--initialize=snapshot` | 固定值 `snapshot` | 首次部署需要保留独立内容仓库的正式内容时执行；必须同时提供 `--snapshot=/绝对路径`。不能恢复用户、草稿、完整历史、审核或审计。 |
+| `--initialize=empty` | 固定值 `empty` | 只对真正没有历史公开内容的新站点执行 Migration；不会读取或导入内容仓库。 |
 | `--snapshot=/绝对路径` | 独立内容快照根目录 | 目录须在代码仓库之外、非 symlink，并包含受控 `news/`、`wiki/`、`members/`、snapshot metadata 和 manifest。它不是旧 V1 工程里的 `content/`。 |
 | `--confirm='精确令牌'` | 按对应命令说明构造或原样复制 | 允许执行恢复、导入或迁移等受保护写操作；snapshot/灾备令牌来自 Dry Run，restore/import/migrate 令牌由目标字段精确组成。 |
 | `--systemd-only` | 不带值 | 只为当前用户重新生成并安装运维 unit/timer；用于已完成数据准备的新机迁移流程或用户名/Home 变化，不能替代正常首次部署。 |
 
-`install` 省略 `--initialize` 时目前默认 `empty`，但教程和人工操作必须显式写
-`--initialize=empty`，避免维护者误以为它会自动识别或导入历史数据。`empty` 与 `snapshot` 二选一，
-一次首次安装不能先后执行两种模式。
+正式 `install` 必须显式选择 `empty` 或 `snapshot`；省略参数会 fail closed，不再默认创建空内容库。
+两种模式一次首次安装只能选择一种，不能先执行 `empty` 再尝试 `snapshot`。
 
 ## 1. 全新服务器首次部署
 
@@ -236,41 +235,71 @@ stat -c '%a %U:%G %n' .env        # 预期类似：600 tungchiahui:tungchiahui .
 [`环境配置手册第 11 节`](ENVIRONMENT_CONFIGURATION.md#11-首次部署前的最终核对) 的权限、占位值、
 Compose 和统一 Dry Run 检查。该检查通过只代表“允许进入正式安装”，不会创建容器、volume、部署
 状态、备份目录或 timer。普通维护者随后返回
-[`DEPLOYMENT.md` 第 2 节](../DEPLOYMENT.md#2-全新空库正式部署) 做资源占用复核并正式安装；不要在
+[`DEPLOYMENT.md` 第 2 节](../DEPLOYMENT.md#2-首次正式部署先选择内容基线) 做资源占用复核并正式安装；不要在
 安装前运行 `status`/`doctor` 后把预期的空状态和连接失败当成部署故障。
 
 ### 第四步：只选择一种初始化模式
 
-新站点或明确放弃 V1 业务数据时选择空库模式：
+“V1 数据库不要了”只表示不保留旧用户、草稿、审核等数据库记录，并不表示可以丢弃已经迁移到
+`SDUTVINCI/sdutvinci_content` 的正式新闻、Wiki 和成员内容。只要这些公开内容要保留，就先在应用
+仓库外取得一份干净的 main 快照：
 
 ```bash
-./vinci install --dry-run              # 只读预检；确认用户、路径、端口、Compose 和 unit 渲染
-./vinci install --initialize=empty     # 写入空库 Migration、部署首个槽位，并安装/启用五组 timer
+snapshot_parent="$HOME/.local/share/vinci-cms" # 私有、仓库外的父目录
+snapshot_root="$snapshot_parent/initial-content-snapshot"
+credential_root="$HOME/.config/vinci-cms/content-export" # 第 5.1～5.3 节配置并核验的专用凭据目录
+install -d -m 0700 "$snapshot_parent"
+test ! -e "$snapshot_root" # 必须成功；存在时先核对来源，不能覆盖或混合旧工作区
+GIT_SSH_COMMAND="ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${credential_root}/known-hosts -i ${credential_root}/deploy-key" \
+  git clone --branch main --single-branch \
+  git@github.com:SDUTVINCI/sdutvinci_content.git "$snapshot_root"
+  # 预期 clone main 成功；此命令没有 Commit、Push 或 GitHub 写接口
+test -z "$(git -C "$snapshot_root" status --porcelain)" # 工作区必须干净
+test "$(git -C "$snapshot_root" remote get-url origin)" = \
+  'git@github.com:SDUTVINCI/sdutvinci_content.git' # 必须来自唯一正式内容仓库
+test -f "$snapshot_root/.vinci/snapshot.json"     # 稳定 vinciId、路径和 tombstone 快照
+test -f "$snapshot_root/manifest.json"            # 逐文件大小和 SHA-256 清单
+git -C "$snapshot_root" rev-parse HEAD            # 记录导入来源的完整内容 Commit
+unset credential_root snapshot_parent
 ```
 
-这里的 `empty` 是固定枚举值，不是数据库名。它表示“不导入任何历史内容”；命令仍会创建 V2
-schema 并启动应用。不要先运行 `empty` 再尝试 `snapshot`，因为快照恢复会拒绝非空数据库。
-
-只有完整 PostgreSQL 备份不可用、目标业务库为空，且确实需要从独立内容仓库恢复公开内容时，
-才改用快照模式：
+如果 clone、来源、工作区或 metadata 任一检查失败，停止并修复 Deploy Key、known_hosts、网络或仓库
+本身；不要编辑 manifest/Markdown、改 remote、关闭哈希校验或退回代码仓库中的历史 `content/`。
+先完成通用只读预检，再运行快照专用 Dry Run：
 
 ```bash
-./vinci install --dry-run # 通用只读预检；成功后才进行下面的快照专用 Dry Run
-./vinci install --initialize=snapshot --snapshot=/srv/vinci-content-snapshot # 校验并输出恢复计划/令牌
-./vinci install --initialize=snapshot --snapshot=/srv/vinci-content-snapshot \
-  --confirm='INITIALIZE:把上一条命令输出的完整令牌原样粘贴到这里' # 确认后才执行写入
+./vinci install --dry-run # 只读确认用户、路径、端口、Compose 和 unit；不启动 PostgreSQL
+./vinci install --initialize=snapshot --snapshot="$snapshot_root"
+  # 预期校验全部受控文件，输出 itemCount、snapshot/manifest 哈希及 INITIALIZE:... 后受控非零停止
+./vinci install --initialize=snapshot --snapshot="$snapshot_root" \
+  --confirm='INITIALIZE:把上一条命令输出的完整令牌原样粘贴到这里'
+  # 预期在一个事务中导入内容/当前 Revision，随后部署应用并安装五组 timer
+unset snapshot_root
 ```
 
-第三条命令执行事务恢复、Migration、部署和 timer 安装；令牌不匹配或数据库非空会拒绝执行。
-第二条未带 `--confirm`，完成快照 Dry Run 后以受控非零状态停止是预期行为，不表示校验失败；
-`--confirm` 必须与它输出的值完全一致。快照模式只恢复公开内容及其当前 Revision，不能替代
-完整实例迁移。
+未带 `--confirm` 的命令会先启动隔离 PostgreSQL、执行向前 Migration 和只读恢复检查，因此结束时
+容器可能仍在，但业务表仍未导入内容；其非零退出是阻止未经确认写入的闸门。核对报告中的文件数、
+哈希和来源后再执行第二条。数据库非空、令牌变化、文件漂移、额外文件、symlink 或哈希不符都会
+拒绝写入；绝不能通过删除校验记录或放宽空库判断绕过。
+
+仅当独立内容仓库确实没有任何需要保留的正式内容，或已经明确批准从空内容开始，才使用：
+
+```bash
+./vinci install --dry-run          # 仍先执行相同只读预检
+./vinci install --initialize=empty # 明确创建不含任何历史公开内容的 V2 schema
+```
+
+`empty` 是固定枚举值，不是数据库名。它不会自动查看 GitHub；因此只有维护者先完成上述决策后才
+能使用。快照模式只恢复公开内容及其当前 Revision，不能替代完整实例迁移。
 
 ### 第五步：创建首个管理员并验收
 
 ```bash
 ./vinci status                         # 只读显示当前 SHA、镜像、活动槽、Compose、timer 和最近备份
 ./vinci doctor                         # 只读检查配置权限、DB、内容/S3、磁盘、容器、gateway 和 timer
+docker compose exec -T postgres sh -c \
+  'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "select count(*) from articles where current_revision_id is not null"'
+  # snapshot 模式应等于导入报告的文章数且大于 0；只有 empty 模式才应为 0
 ./vinci admin                          # 仅首次创建管理员时交互执行；自动使用活动 SHA 的 operations 镜像
 curl --fail --silent --show-error http://127.0.0.1:3000/api/health # 本机验证回环健康，预期退出码 0
 ```
@@ -328,8 +357,10 @@ Dry Run 只列旧用户拥有的精确路径。正式流程停旧 timer，按 `f
 
 这里的“旧环境迁移”只迁移操作系统账号、路径属主和动态 unit，不把 V1 数据模型升级为 V2。
 如果 V1 数据库没有保留价值，先停用 V1 自动拉取和 timer、保留一份可识别的只读备份，再按第 1
-节在全新空 V2 数据库执行 `--initialize=empty`；不要在 V1 容器上直接拉取 V2 main。若要保留 V1
-业务数据，应使用专门的数据迁移/验收流程，不能用 `migrate-legacy-user` 代替。
+节建立全新空 V2 数据库；若独立内容仓库中已有要保留的正式内容，必须执行
+`--initialize=snapshot`，不能因为放弃 V1 PostgreSQL 就改用 `empty`。不要在 V1 容器上直接拉取
+V2 main。若要保留 V1 业务数据，应使用专门的数据迁移/验收流程，不能用
+`migrate-legacy-user` 代替。
 
 ## 3. GitHub Actions、镜像与内容仓库凭据
 
@@ -485,6 +516,11 @@ sudo journalctl -u vinci-cms-maintenance-cleanup.service -n 50 --no-pager # 查�
 `maintenance --scheduled`，等价于受保护的 apply：它先要求备份保留门禁成立，并跳过活动镜像、
 锁定迁移包和被回滚 marker 引用的版本。
 
+03:00 对账以 PostgreSQL 为权威，但不是首次导入机制。数据库文章/成员合计为 0、独立内容仓库却
+存在受控文件时，对账会记录报告并以 `CONTENT_RECONCILIATION_EMPTY_DATABASE_GUARD` 失败；它不会
+删除工作区文件、创建 Commit 或 Push。先按第 1 节 snapshot 初始化数据库，验证文章数非零后再
+恢复 timer，不能用一次手工 reconcile 代替首次导入。
+
 auto-deploy timer 也会安装并处于 waiting，但 `.env` 默认 `AUTO_DEPLOY_ENABLED=false`。完成首次人工
 部署和回滚验证后，才用受信任编辑器将它改为 `true`，重新执行 `chmod 600 .env` 和
 `./vinci doctor`；之后等待下一次 timer，或用带完整 SHA 的 `./vinci update <40位SHA>` 做受控
@@ -493,6 +529,10 @@ auto-deploy timer 也会安装并处于 waiting，但 `.env` 默认 `AUTO_DEPLOY
 ### 暂停、恢复与失败处理
 
 ```bash
+sudo systemctl stop vinci-cms-content-reconcile.timer # 仅暂停当前运行周期；enabled 配置仍保留
+systemctl is-enabled vinci-cms-content-reconcile.timer # 预期 enabled
+systemctl is-active vinci-cms-content-reconcile.timer  # 预期 inactive；重启主机会按 enabled 再启动
+sudo systemctl start vinci-cms-content-reconcile.timer # 基线恢复后重新进入 waiting，不改长期启用状态
 sudo systemctl disable --now vinci-cms-maintenance-cleanup.timer # 临时停止自动清理，不删除历史数据
 sudo systemctl enable --now vinci-cms-maintenance-cleanup.timer  # 排障完成后恢复自动清理
 ./vinci maintenance --dry-run # 恢复前人工确认候选项、保护项和磁盘门禁

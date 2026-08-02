@@ -258,6 +258,28 @@ suite('V2 阶段 7 全量对账、空库初始化和灾难恢复', () => {
       .rejects.toThrow()
   })
 
+  it('空数据库面对非空内容仓库时 fail closed，不删除文件、不 Commit 或 Push', async () => {
+    const item = await seedArticle('official-content.md')
+    await seedRepository([item])
+    await truncate()
+    const before = await git(['--git-dir', remote, 'rev-parse', 'main'])
+
+    await expect(runContentReconciliation('schedule'))
+      .rejects.toThrow('CONTENT_RECONCILIATION_EMPTY_DATABASE_GUARD')
+
+    expect(await git(['--git-dir', remote, 'rev-parse', 'main'])).toBe(before)
+    expect(await git([
+      '--git-dir',
+      remote,
+      'show',
+      `main:${item.serialized.path}`
+    ])).toContain('数据库权威正文')
+    expect(await getLatestContentReconciliation()).toMatchObject({
+      status: 'failed',
+      errorCode: 'CONTENT_RECONCILIATION_EMPTY_DATABASE_GUARD'
+    })
+  })
+
   it('与增量 Worker 使用同一个 advisory lock，忙碌时不写仓库', async () => {
     const item = await seedArticle()
     await seedRepository([item])

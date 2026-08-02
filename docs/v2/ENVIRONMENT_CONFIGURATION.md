@@ -5,7 +5,7 @@
 clone 根目录按本文填写 `.env`。不要把本文示例中的 `replace-*`、尖括号或假域名原样用于生产。
 
 本文的职责到“配置填写和只读预检通过”为止，**不执行正式安装，也不把 `status`/`doctor` 当作
-安装前检查**。第 11 节通过后，统一回到 [`DEPLOYMENT.md`](../DEPLOYMENT.md#2-全新空库正式部署)
+安装前检查**。第 11 节通过后，统一回到 [`DEPLOYMENT.md`](../DEPLOYMENT.md#2-首次正式部署先选择内容基线)
 第 2 节执行唯一的正式部署顺序；命令原理、失败处理和高级排障再查 `OPERATIONS.md`。
 
 ## 1. 填写规则与安全验证
@@ -336,6 +336,105 @@ CONTENT_EXPORT_KNOWN_HOSTS_FILE=/home/tungchiahui/.config/vinci-cms/content-expo
 通过后才从 GitHub 删除旧 Deploy Key；绝不原地覆盖正在使用的私钥。若怀疑私钥泄露，应先在 GitHub
 立即删除对应 Deploy Key 并暂停内容 Worker/对账，再签发新密钥，不能等待例行维护窗口。
 
+### 5.4 首次导入后接管内容仓库并启用异步导出
+
+本节只能在 `DEPLOYMENT.md` 第 2.1 节 snapshot 初始化成功、数据库文章数大于 0、`./vinci doctor`
+通过之后执行。snapshot 解决“GitHub 现有内容首次进入数据库”；接管和 Worker 解决“以后数据库发布
+继续同步到 GitHub”。不能反过来用 03:00 对账或 Worker 代替首次导入。
+
+先把非敏感 mode 改为只读报告状态，并用当前活动部署 SHA 的 operations 镜像生成接管报告：
+
+```bash
+test "$(grep -c '^CONTENT_EXPORT_MODE=' .env)" = 1 # 必须恰好一行，防止修改歧义
+sed -i 's/^CONTENT_EXPORT_MODE=.*/CONTENT_EXPORT_MODE=dry_run/' .env
+chmod 600 .env
+active_sha="$(awk -F= '$1 == "commit" { print $2; exit }' .deploy/current)"
+[[ "$active_sha" =~ ^[0-9a-f]{40}$ ]] # 必须是当前活动完整 SHA
+report_root="$HOME/.local/state/vinci-cms/content-export"
+install -d -m 0700 "$report_root"
+takeover_report="$(mktemp "$report_root/takeover-dry-run.XXXXXX.json")"
+chmod 600 "$takeover_report"
+APP_IMAGE_TAG="$active_sha" docker compose \
+  -f compose.yaml -f compose.content-export.yaml --profile content-export \
+  run --rm content-export-worker \
+  npm run v2:content:takeover --silent >"$takeover_report"
+node -e '
+  const report = require(process.argv[1])
+  if (!report.clean || report.conflicts.length) process.exit(1)
+  console.log(`PASS：接管 Dry Run clean；actions=${report.actions.length}`)
+' "$takeover_report"
+```
+
+预期只打印 `PASS`，且命令没有 Commit/Push。报告是当前用户私有的审计文件，不含 Git/S3/数据库
+密钥；仍不要把全文贴到公开工单。`clean=false`、存在 conflict、来源 HEAD 改变或条目数量不符合
+snapshot 导入报告时停止，保持 `dry_run`，先审计差异，禁止 reset/Force Push。
+
+确认报告后，从报告中在内存提取绑定 SHA/动作集的确认令牌，切为 enabled 并执行一次接管：
+
+```bash
+takeover_token="$(node -e '
+  const report = require(process.argv[1])
+  if (!report.clean || !report.requiredConfirmation) process.exit(1)
+  process.stdout.write(report.requiredConfirmation)
+' "$takeover_report")" # 令牌不是密钥，但仍不打印，避免误复制旧报告令牌
+test "$(grep -c '^CONTENT_EXPORT_MODE=' .env)" = 1
+sed -i 's/^CONTENT_EXPORT_MODE=.*/CONTENT_EXPORT_MODE=enabled/' .env
+chmod 600 .env
+docker compose -f compose.yaml -f compose.content-export.yaml \
+  --profile content-export config --quiet # 预期无输出：SSH bind、环境和 Compose 均有效
+APP_IMAGE_TAG="$active_sha" docker compose \
+  -f compose.yaml -f compose.content-export.yaml --profile content-export \
+  run --rm content-export-worker npm run v2:content:takeover --silent -- \
+  --apply --confirm="$takeover_token" # 只允许普通 fast-forward Push，令牌/HEAD 漂移即拒绝
+unset takeover_token
+```
+
+接管成功后才启动常驻 Worker，并恢复 03:00 对账 timer：
+
+```bash
+APP_IMAGE_TAG="$active_sha" docker compose \
+  -f compose.yaml -f compose.content-export.yaml --profile content-export \
+  up -d content-export-worker # 启动 Outbox Worker；数据库仍是发布权威
+APP_IMAGE_TAG="$active_sha" docker compose \
+  -f compose.yaml -f compose.content-export.yaml --profile content-export \
+  ps content-export-worker # 预期为 Up；不应反复重启
+sudo systemctl start vinci-cms-content-reconcile.timer # 进入 active (waiting)，保留原 enabled 配置
+systemctl is-active vinci-cms-content-reconcile.timer # 预期 active
+./vinci doctor # 预期通过内容仓库、数据库、S3、容器、gateway 和 timer 检查
+unset active_sha report_root takeover_report
+```
+
+接管或 Worker 失败时，先把 `CONTENT_EXPORT_MODE` 改回 `disabled`、`chmod 600 .env`，再执行下面的
+精确 stop；这不会回滚数据库发布，也不会删除 Outbox：
+
+```bash
+docker compose -f compose.yaml -f compose.content-export.yaml \
+  --profile content-export stop content-export-worker
+sudo systemctl stop vinci-cms-content-reconcile.timer # 修复内容基线前只暂停当前运行周期
+```
+
+保存脱敏的 run ID、远端 HEAD 和私有报告路径后排障。不得清空 job、手改 succeeded、删除内容文件、
+reset 或 Force Push。修复后重新从 `dry_run` 生成新报告和新令牌，不能复用旧确认。
+
+### 5.5 哪些开关最终应该开启
+
+“生产可用”不等于把所有 `disabled`/`false` 改成开启。正常完成首次内容导入和接管后的建议状态是：
+
+| 开关 | 正常长期状态 | 原因 |
+| --- | --- | --- |
+| `CONTENT_PUBLISH_MODE` | `database` | PostgreSQL 始终是发布权威。 |
+| `CONTENT_EXPORT_MODE` | `enabled` | 完成第 5.4 节接管后，允许 Outbox Worker 和全量对账同步独立内容仓库。 |
+| `CONTENT_RECOVERY_MODE` | `disabled` | 永久保持关闭；只有受控 snapshot/灾备 profile 临时注入 enabled，普通应用不能开启恢复。 |
+| `CONTENT_EXPORT_TEST_MODE` | `false` | 生产永远不能使用测试绕过。 |
+| `CONTENT_PR_IMPORT_MODE` | 按需 `enabled` | 已完成第 6 节 Token、角色和测试 PR 验收且确实需要 PR→草稿工作流时开启；否则保持关闭。 |
+| `CONTENT_PR_IMPORT_TEST_MODE` | `false` | 生产永远不能指向回环 mock GitHub。 |
+| `AUTO_DEPLOY_ENABLED` | 按运维选择 | 完成首次发布、备份和回滚验收后可开启；不影响内容导入、导出或 03:00 对账。 |
+| backup/reconcile/cleanup/health timer | `enabled` 且通常 `active (waiting)` | 它们由 systemd 管理，不是 `.env` 布尔开关。短时排障可 stop，修复后 start。 |
+
+因此，当前最重要的先后关系是：snapshot 首次导入 → 验证数据库文章数 → 内容接管 →
+`CONTENT_EXPORT_MODE=enabled` 并启动 Worker → 恢复 03:00 timer。PR 导入和自动部署是独立可选能力，
+不能阻塞这条内容基线流程；recovery/test 开关则不应在生产中开启。
+
 ## 6. GitHub Pull Request 内容导入
 
 | 参数 | 生产环境怎么填 | 允许范围与作用 |
@@ -633,5 +732,6 @@ PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH" \
 全部检查通过时，只能得出“`.env` 与宿主机已具备正式安装条件”，此时仍不会有应用容器、数据库
 volume、部署状态、备份目录或 timer。因此不要在这里运行 `./vinci status`/`./vinci doctor` 并把
 它们的安装前失败当成故障，也不要自行拼接安装命令。下一步只按
-[`DEPLOYMENT.md` 第 2 节](../DEPLOYMENT.md#2-全新空库正式部署) 执行资源占用复核、
-`./vinci install --initialize=empty` 和安装后验收。
+[`DEPLOYMENT.md` 第 2 节](../DEPLOYMENT.md#2-首次正式部署先选择内容基线) 执行资源占用复核，先判断
+是否保留独立内容仓库；保留时执行 `--initialize=snapshot`，只有真正的空内容新站点才执行
+`--initialize=empty`，随后再做安装后验收。

@@ -288,6 +288,18 @@ export const runContentReconciliation = async (
     const report = await buildReport(baseCommit, snapshot)
     const reportPath = await persistReport(runId, report)
 
+    // A newly initialized database is not evidence that every managed file in a
+    // non-empty content repository should be deleted.  The initial repository
+    // snapshot must be imported explicitly before reconciliation may establish
+    // database authority.  Keep the persisted report for diagnosis, but fail
+    // before altering managed files or creating/pushing a commit.
+    if (
+      report.databaseFileCount === 0
+      && report.repositoryManagedFileCount > 0
+    ) {
+      throw new Error('CONTENT_RECONCILIATION_EMPTY_DATABASE_GUARD')
+    }
+
     let commitHash = baseCommit
     if (report.counts.total > 0) {
       for (const difference of report.differences) {

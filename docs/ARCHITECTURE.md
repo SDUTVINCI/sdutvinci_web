@@ -60,6 +60,9 @@ CodeMirror/Milkdown、S3 兼容对象存储和 Docker Compose。
   解析，只写本机安装清单；迁移到不同用户的新服务器时重新生成 unit。
 - 动态 systemd 覆盖自动部署、02:00 备份、03:00 对账、04:00 清理和每小时 doctor；日志按
   日/30 份/100 MiB 轮转，迁移包与密钥分开传输并按 30 日策略清理。
+- 首次 V2 空库若要保留独立内容仓库的正式内容，必须通过显式 snapshot、逐文件哈希和精确令牌
+  建立数据库基线；放弃 V1 PostgreSQL 不等于放弃已经迁出的公开内容。`empty` 只用于真正的空内容
+  新站点，正式安装省略初始化模式会 fail closed。
 
 生产 schema 使用 expand/contract，migration 不自动 down。服务器只出站拉取 Git 和镜像；
 候选失败保留当前版本，禁止 reset、force push 或覆盖非空数据库。
@@ -74,7 +77,8 @@ CodeMirror/Milkdown、S3 兼容对象存储和 Docker Compose。
 5. 异步 Worker 确定性序列化，向独立内容仓库创建普通快进 Commit；失败不回滚数据库正式
    发布，保留可重试 Outbox 和脱敏错误。
 6. 每日全量对账从数据库投影完整快照，修正独立内容仓库受管路径；数据库永不被仓库普通
-   修改反向覆盖。
+   修改反向覆盖。数据库内容为 0 而仓库非空时触发空库保护，在任何文件删除、Commit 或 Push
+   之前失败，要求先完成显式首次 snapshot 导入。
 
 文章 PR 导入固定比较 Base snapshot、数据库 Current Revision 与 PR Proposed。安全修改只建
 草稿；成员修改只建 Proposal；移动/删除需后续审核；评论与关闭 PR 需明确授权且没有 Merge
@@ -95,7 +99,8 @@ API。页面的白话说明、中文状态和 Git diff 行级材料属于长期�
 - 正常恢复以 PostgreSQL custom-format dump 为准，校验 SHA 和 dump 清单后恢复到空库，
   再运行向前 migration、pointer/hash 完整性与 HTTP 检查。
 - 独立内容仓库的 `news/`、`wiki/`、`members/`、`.vinci/snapshot.json` 和 `manifest.json`
-  必须共同备份。只有完整数据库备份不可用时，才使用 operations 的受控内容恢复入口。
+  必须共同备份。它可用于从 V1 内容仓库建立首次 V2 数据库基线；已运行 V2 的灾难恢复仍应优先
+  使用完整 PostgreSQL 备份，只有完整备份不可用时才退回受控内容恢复入口。
 - 内容快照能恢复公开内容和当前 Revision，不能恢复用户、会话、全部历史 Revision、完整
   审核/审计；因此不能代替数据库备份。
 - S3/COS 二进制、真实 `.env`、SSH 私钥和 Token 由各自备份机制保护。
