@@ -53,13 +53,53 @@
 id                         # 确认当前普通用户、UID/GID 和 docker 组；不要用 root 长期运行应用
 docker info                # 必须同时显示 Client 和 Server；permission denied 表示当前会话未取得权限
 docker compose version     # 确认 Compose v2 可用
-node --version             # 预期为 v24.x
 git --version              # 确认 Git 可用；下一步才开始 clone
+command -v node            # 必须输出稳定的系统路径；command not found 时按下面步骤安装
+node --version             # 预期为 v24.x；其他大版本不满足当前主机运维基线
 ```
 
 如果管理员刚把用户加入 Docker 组，VS Code Remote SSH 中已经打开的终端不会自动取得新组；重新
 连接 Remote SSH，或只在当前终端执行 `newgrp docker` 后再次运行 `id` 和 `docker info`。不要用
 `chmod 666 /var/run/docker.sock` 绕过权限。
+
+#### Debian 13 安装系统级 Node.js 24
+
+如果 `command -v node` 或 `node --version` 失败，不能只在 VS Code 终端临时执行 `nvm use`。nvm
+通常由交互 shell 的初始化文件加载，而 Vinci 的 systemd service 不读取 `.bashrc`；04:00 清理、
+实例包保留等宿主机脚本通过 `/usr/bin/env node` 启动，必须在非交互 PATH 中找到 Node 24。
+
+下面使用 NodeSource 24.x apt 仓库。网络安装脚本先下载到当前用户的私有目录，审阅后才以 sudo
+运行；不要直接使用未经查看的 `curl | sudo bash`：
+
+```bash
+sudo apt-get update # 刷新 Debian 软件索引
+sudo apt-get install -y ca-certificates curl gnupg less # 安装 HTTPS 仓库、签名和审阅工具
+install -d -m 0700 "$HOME/.cache/vinci-bootstrap" # 创建仅当前用户可读的临时审阅目录
+curl --fail --silent --show-error --location \
+  https://deb.nodesource.com/setup_24.x \
+  --output "$HOME/.cache/vinci-bootstrap/nodesource-setup-24.x.sh" # 下载 NodeSource 24.x 配置脚本
+less "$HOME/.cache/vinci-bootstrap/nodesource-setup-24.x.sh" # 人工确认来源、24.x 和 apt 改动后退出
+sudo bash "$HOME/.cache/vinci-bootstrap/nodesource-setup-24.x.sh" # 配置签名 key 和 nodistro apt 源
+sudo apt-get install -y nodejs # 安装系统级 Node.js；该包同时提供 npm，不另装 Debian npm 包
+```
+
+安装后同时验证当前终端和接近 systemd 的干净环境：
+
+```bash
+command -v node # 预期为 /usr/bin/node 或 /usr/local/bin/node，不应位于 ~/.nvm
+node --version  # 预期以 v24. 开头
+npm --version   # 预期输出版本号
+current_user="$(id -un)" # 保存当前普通用户名，不是 root
+sudo -u "$current_user" env -i \
+  PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+  node --version # 预期仍以 v24. 开头，证明非交互 service 可找到 Node
+```
+
+若 apt 安装后不是 v24，执行 `apt-cache policy nodejs` 核对 candidate 是否来自
+`deb.nodesource.com/node_24.x` 的 `nodistro` suite；不要继续安装。若组织禁止第三方 apt 源，应由
+管理员把 Node 官方已校验的 v24 二进制安装到 systemd 默认 PATH，而不是只装到某个用户的 nvm。
+官方来源与校验入口见 [Node.js v24 下载页](https://nodejs.org/en/download/) 和
+[NodeSource Debian 安装说明](https://github.com/nodesource/distributions/blob/master/DEV_README.md)。
 
 ### 第二步：全新 clone V2 应用代码
 

@@ -12,6 +12,16 @@
 systemd/logrotate 文件时调用 `sudo`，不会自动把用户加入 Docker 组。首次安装前准备 Docker
 Engine/Compose、Git、Node.js 24、curl/coreutils、systemd-analyze、logrotate 和 sudo。
 
+先验证宿主机 Node，而不是只看 nvm 是否曾在另一个终端安装：
+
+```bash
+command -v node # 必须输出 /usr/bin/node 或 /usr/local/bin/node 等非交互可见路径
+node --version  # 必须以 v24. 开头；command not found 时不要继续 clone/install
+```
+
+Debian 13 的系统级 NodeSource 24.x 安装、安装脚本审阅、非交互 PATH 验证和失败处理见完整运维
+手册第 1 节。仅在 `.bashrc` 中加载的 nvm Node 不满足 systemd 运维任务要求。
+
 全新服务器先创建当前用户自己的完整 main clone；如果目标目录已存在，停止核对，不能覆盖或与
 V1 目录混用：
 
