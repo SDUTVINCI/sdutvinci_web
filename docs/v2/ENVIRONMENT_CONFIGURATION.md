@@ -342,6 +342,11 @@ CONTENT_EXPORT_KNOWN_HOSTS_FILE=/home/tungchiahui/.config/vinci-cms/content-expo
 通过之后执行。snapshot 解决“GitHub 现有内容首次进入数据库”；接管和 Worker 解决“以后数据库发布
 继续同步到 GitHub”。不能反过来用 03:00 对账或 Worker 代替首次导入。
 
+`content_export_worktree` 是 Compose 管理的持久 named volume。首次 Apply 时挂载点已经存在但应当
+完全为空；程序只会在确认它是普通非 symlink 空目录后 clone 正式内容仓库并写入精确归属标记。
+维护者不需要、也不应手工进入 volume 执行 `git clone`、复制 `.git`、创建标记或修改 owner。非空且
+不是受控独立 clone 的工作区会继续 fail closed，必须停止并按失败处理保留现场，不能直接清卷重试。
+
 先把非敏感 mode 改为只读报告状态，并用当前活动部署 SHA 的 operations 镜像生成接管报告：
 
 ```bash

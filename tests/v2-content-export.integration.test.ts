@@ -244,6 +244,8 @@ suite('V2 阶段 6 独立内容仓库与异步增量导出', () => {
     const initialCommit = await seedRepository(items)
     configureEnvironment('dry_run')
     const report = await runContentTakeoverDryRun()
+    // Docker mounts a new named volume as an existing empty directory.
+    await mkdir(workspace, { recursive: true })
     configureEnvironment('enabled')
     const result = await applyContentTakeover(contentTakeoverConfirmation(report))
     return { initialCommit, report, result }
@@ -404,6 +406,12 @@ suite('V2 阶段 6 独立内容仓库与异步增量导出', () => {
     expect(exported).toContain(`vinciId: ${items[0]!.articleId}`)
     expect(exported.endsWith('\n')).toBe(true)
     expect(paths.some(path => path.startsWith('.github/workflows/'))).toBe(false)
+    expect(await readFile(
+      join(workspace, '.git', 'vinci-content-export-owner'),
+      'utf8'
+    )).toBe(
+      'vinci-content-export-workspace-v1\nSDUTVINCI/sdutvinci_content\n'
+    )
     const snapshot = JSON.parse(await remoteFile('.vinci/snapshot.json'))
     const manifest = JSON.parse(await remoteFile('manifest.json'))
     expect(snapshot.files).toHaveLength(2)
@@ -423,6 +431,25 @@ suite('V2 阶段 6 独立内容仓库与异步增量导出', () => {
     )
     expect(repeat.commitHash).toBe(head)
     expect(await remoteHead()).toBe(head)
+  })
+
+  it('拒绝把非空未知目录当作首次内容导出工作区', async () => {
+    const item = await seedArticle('news', 'unowned.md', 'Unowned', 'before\n')
+    const initialCommit = await seedRepository([item])
+    configureEnvironment('dry_run')
+    const report = await runContentTakeoverDryRun()
+    await mkdir(workspace, { recursive: true })
+    await writeFile(join(workspace, 'unknown.txt'), 'do not adopt\n')
+    configureEnvironment('enabled')
+
+    await expect(applyContentTakeover(
+      contentTakeoverConfirmation(report)
+    )).rejects.toThrow('内容导出工作区不是独立 Git clone')
+    expect(await remoteHead()).toBe(initialCommit)
+    expect(await readFile(join(workspace, 'unknown.txt'), 'utf8')).toBe(
+      'do not adopt\n'
+    )
+    expect(await getDatabase().select().from(contentExportRuns)).toEqual([])
   })
 
   it('首次接管与 Worker 共用 advisory lock，忙碌时 fail closed', async () => {

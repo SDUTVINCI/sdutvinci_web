@@ -5,6 +5,7 @@ import {
   lstat,
   mkdir,
   mkdtemp,
+  readdir,
   readFile,
   realpath,
   rename,
@@ -162,7 +163,7 @@ const assertWorkspaceMarker = async (workspace: string) => {
 export const ensureContentExportWorkspace = async () => {
   const config = getContentExportConfig()
   const workspace = config.CONTENT_EXPORT_WORKSPACE
-  if (!await exists(workspace)) {
+  const initializeWorkspace = async () => {
     await mkdir(dirname(workspace), { recursive: true })
     await runGitRaw([
       'clone',
@@ -175,6 +176,24 @@ export const ensureContentExportWorkspace = async () => {
       workspace
     ], dirname(workspace))
     await writeWorkspaceMarker(workspace)
+  }
+  if (!await exists(workspace)) {
+    await initializeWorkspace()
+  } else {
+    await assertDirectoryNotSymlink(workspace)
+    const gitDirectory = join(workspace, '.git')
+    if (!await exists(gitDirectory)) {
+      const entries = await readdir(workspace)
+      if (entries.length > 0) {
+        throw new ContentExportRepositoryError(
+          'CONTENT_EXPORT_WORKSPACE_NOT_GIT',
+          '内容导出工作区不是独立 Git clone'
+        )
+      }
+      // Docker creates the named-volume mountpoint before the process starts.
+      // Adopt it only while it is provably empty; unknown contents remain fail closed.
+      await initializeWorkspace()
+    }
   }
   await assertDirectoryNotSymlink(workspace)
   const gitDirectory = join(workspace, '.git')
