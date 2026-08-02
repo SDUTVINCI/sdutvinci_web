@@ -1601,3 +1601,27 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
   `docs/v2/PHASE_V2_10_ACCEPTANCE.md`。维护者尚未明确回复“V2 阶段 10 验收通过”，所以人工
   项、阶段总体完成项仍不勾选；本实现使用新的本地 Commit，完整 SHA 由最终回复报告，随后
   停止开发并等待人工验收。
+
+---
+
+## 2026-08-02：V2 阶段 10 人工验收通过并正式收尾
+
+- 维护者执行压缩只读命令并完成浏览器检查，随后明确回复“V2 阶段 10 验收通过”。实现
+  Commit 为 `88c059fcf4d686d543212117c46da9e1f83a0d88`；需求文档 26.6 和阶段 10 总体进度已
+  据该明确结论勾选，阶段 11 仍未开始。
+- 只读验收确认代码仓库无三类正式内容和 Nuxt Content 依赖，新闻/Wiki/成员、Feed、Sitemap、
+  404 正常；runtime 镜像无 `/app/content`、Markdown、Git、SSH；删除前 annotated tag 指向
+  `08a1c4908c8890dad5284e9682304e1ac0c7550e`，固定 content tree 为
+  `c621880ed3e8d5f39335555c83ecedef834ffbe5`，包含 260 个文件。
+- 维护者询问 `wiki-pinyin-path.ts` 删除原因。核对确认它只是依赖 `@nuxt/content` 的 29 行
+  transformer 外壳；实际拼音路径、文档根和章节元数据仍由 `utils/wiki-content-meta.ts`、
+  `utils/wiki-chapters.ts` 负责，`pinyin-pro` 仍为直接依赖，现有拼音 Wiki URL 返回 200。
+- 验收准备中发现 34175 与隔离 PostgreSQL 已优雅停止，重启后恢复健康。34175 当时连接的是
+  名称含 `test` 的内容 snapshot 恢复库，按设计没有用户，所以旧阶段 9 账号不能登录；创建
+  隔离 `phase10admin` 后实际登录 API 成功。没有把账号写入产品或生产数据库。
+- `/tmp` 下删除前 tar/bundle/SHA 恢复包在验收时已被系统临时目录清理；其原始 hash 和通过
+  结果仍记录在阶段 10 验收文档，Git annotated tag 和完整仓库历史仍可恢复 260 文件。最终
+  6 个带精确阶段 9/10 label 的容器和 1 个 runtime 检查镜像已删除，测试数据库不可恢复，
+  回环端口释放；回滚 tag 保留。
+- 本次只新增本地验收记录 Commit，不 amend、不 Push、不部署、不真实外部写入、不进入阶段 11。
+  完整 SHA 由最终回复报告；现在停止开发。
