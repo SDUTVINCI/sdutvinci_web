@@ -1,8 +1,8 @@
 # Vinci V2.0 `.env` 逐项配置手册
 
-本文覆盖当前 [`.env.example`](../../.env.example) 的全部生产配置项。先阅读
-[`OPERATIONS.md`](OPERATIONS.md) 的首次部署流程，再按本文填写 `.env`。不要把本文示例中的
-`replace-*`、尖括号或假域名原样用于生产。
+本文覆盖当前 [`.env.example`](../../.env.example) 的全部生产配置项。先按
+[`OPERATIONS.md`](OPERATIONS.md) 第 1 节完成 V2 应用仓库的全新 clone 和镜像 SHA 核对，再在
+clone 根目录按本文填写 `.env`。不要把本文示例中的 `replace-*`、尖括号或假域名原样用于生产。
 
 ## 1. 填写规则与安全验证
 

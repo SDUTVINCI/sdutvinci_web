@@ -44,7 +44,7 @@
 ### 前置条件
 
 准备 Docker Engine/Compose、Git、Node.js 24、curl/coreutils、systemd/systemd-analyze、logrotate
-和 sudo。Actions 已为目标 40 位 SHA 发布 runtime/operations 镜像。当前用户拥有代码 clone；
+和 sudo。Actions 已为目标 40 位 SHA 发布 runtime/operations 镜像。应用代码仓库允许只读 clone；
 真实密钥另存密码库，不通过聊天、命令参数、Git 或工单传递。
 
 ### 第一步：确认运行身份和依赖
@@ -54,14 +54,49 @@ id                         # 确认当前普通用户、UID/GID 和 docker 组�
 docker info                # 必须同时显示 Client 和 Server；permission denied 表示当前会话未取得权限
 docker compose version     # 确认 Compose v2 可用
 node --version             # 预期为 v24.x
-git status --short         # 首次安装前不应有未说明的跟踪文件改动
+git --version              # 确认 Git 可用；下一步才开始 clone
 ```
 
 如果管理员刚把用户加入 Docker 组，VS Code Remote SSH 中已经打开的终端不会自动取得新组；重新
 连接 Remote SSH，或只在当前终端执行 `newgrp docker` 后再次运行 `id` 和 `docker info`。不要用
 `chmod 666 /var/run/docker.sock` 绕过权限。
 
-### 第二步：创建并保护 `.env`
+### 第二步：全新 clone V2 应用代码
+
+下面把仓库放在当前用户 Home 下的 `services/`。可以改用其他当前用户拥有的目录，但不要覆盖旧 V1
+目录，也不要使用 root 拥有的 clone。
+
+```bash
+install -d -m 0750 "$HOME/services" # 创建当前用户自己的服务目录；不需要 sudo
+cd "$HOME/services"                  # 后续 clone 位于该目录下
+test ! -e sdutvinci_web              # 必须成功；若目录已存在，先停下核对，禁止直接覆盖或混用 V1
+git clone --branch main --single-branch \
+  https://github.com/SDUTVINCI/sdutvinci_web.git # 完整克隆 main 历史，不使用 --depth=1
+cd sdutvinci_web                      # 从这里开始，所有 ./vinci 命令都在仓库根执行
+git status --short --branch           # 预期只有：## main...origin/main，不应有文件改动
+git remote get-url origin             # 预期与稍后 DEPLOY_GIT_REMOTE_URL 完全一致
+git rev-parse HEAD                    # 记录准备部署的完整 40 位 Commit SHA
+```
+
+不要在这里执行 `git clone` 时携带 Token，也不要把凭据写进 remote URL。`--single-branch` 只限制为
+main，但仍保留 main 的完整历史；不能用浅克隆，因为自动部署的祖先关系检查、回滚和审计需要历史。
+这一步克隆的是 V2 应用仓库，独立内容仓库由受控 workspace 管理，不能克隆进本仓库的 `content/`。
+
+代码 Commit 必须已有两种同 SHA 镜像。GHCR 需要认证时先交互执行 `docker login ghcr.io`，不要把
+Token 放在命令行；随后验证：
+
+```bash
+deployment_sha="$(git rev-parse HEAD)" # 仅保存非敏感的当前完整 Commit SHA
+docker manifest inspect "ghcr.io/sdutvinci/sdutvinci_web:${deployment_sha}" >/dev/null
+  # 上一行预期退出码 0：runtime 镜像存在
+docker manifest inspect "ghcr.io/sdutvinci/sdutvinci_web-ops:${deployment_sha}" >/dev/null
+  # 上一行预期退出码 0：operations 镜像存在
+```
+
+任一 inspect 失败时先确认 Actions 是否成功、GHCR 登录是否有 pull 权限以及 SHA 是否一致；不要改用
+`latest`，也不要在服务器临时构建未经 CI 验收的生产镜像。
+
+### 第三步：创建并保护 `.env`
 
 仅在全新 clone 且 `.env` 不存在时执行复制；如果文件已经存在，不要用示例覆盖它。
 
@@ -94,7 +129,7 @@ stat -c '%a %U:%G %n' .env        # 预期类似：600 tungchiahui:tungchiahui .
 | `AUTO_DEPLOY_ENABLED` | 首次保持 `false` | 首次人工部署和回滚验收完成后才按第 7 节启用。 |
 | `BACKUP_ROOT` / `INSTANCE_EXPORT_ROOT` / `VINCI_LOG_ROOT` | 仓库外的绝对目录 | 不得是 `/`、Home 根或 symlink；安装器会用当前用户创建安全权限。 |
 
-### 第三步：只选择一种初始化模式
+### 第四步：只选择一种初始化模式
 
 新站点或明确放弃 V1 业务数据时选择空库模式：
 
@@ -121,7 +156,7 @@ schema 并启动应用。不要先运行 `empty` 再尝试 `snapshot`，因为�
 `--confirm` 必须与它输出的值完全一致。快照模式只恢复公开内容及其当前 Revision，不能替代
 完整实例迁移。
 
-### 第四步：创建首个管理员并验收
+### 第五步：创建首个管理员并验收
 
 ```bash
 ./vinci status                         # 只读显示当前 SHA、镜像、活动槽、Compose、timer 和最近备份

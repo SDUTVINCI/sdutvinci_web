@@ -12,8 +12,28 @@
 systemd/logrotate 文件时调用 `sudo`，不会自动把用户加入 Docker 组。首次安装前准备 Docker
 Engine/Compose、Git、Node.js 24、curl/coreutils、systemd-analyze、logrotate 和 sudo。
 
+全新服务器先创建当前用户自己的完整 main clone；如果目标目录已存在，停止核对，不能覆盖或与
+V1 目录混用：
+
 ```bash
+install -d -m 0750 "$HOME/services" # 创建当前用户拥有的服务父目录
+cd "$HOME/services"                  # 进入 clone 父目录
+test ! -e sdutvinci_web              # 预期成功；已存在时禁止继续覆盖
+git clone --branch main --single-branch \
+  https://github.com/SDUTVINCI/sdutvinci_web.git # 克隆 main 完整历史，不使用浅克隆
+cd sdutvinci_web                      # 后续命令全部在仓库根执行
+git status --short --branch           # 预期：main 跟踪 origin/main，工作区无改动
+git remote get-url origin             # 必须与 .env 的 DEPLOY_GIT_REMOTE_URL 完全一致
+git rev-parse HEAD                    # 记录镜像所对应的完整 40 位 SHA
+```
+
+先确认该 SHA 的 runtime/operations 镜像均已由 CI 发布，再创建 `.env`。完整镜像验证、失败处理和
+为什么不能 `--depth=1`，见详细运维手册第 1 节。
+
+```bash
+cp -- .env.example .env                 # 仅全新 clone 使用；现有 .env 禁止覆盖
 chmod 600 .env                          # 仅 owner 可读写；doctor 会拒绝权限过宽的配置
+# 此处暂停：按 .env 逐项手册替换全部生产必填值，不能带着 replace-* 示例继续
 ./vinci install --dry-run               # 只读预检，不部署、不迁移数据库、不安装 timer
 ./vinci install --initialize=empty      # 全新空库：Migration、首个蓝绿槽位、五组 timer
 ./vinci update <40位SHA>                # 部署 CI 已发布镜像的指定完整 Commit SHA
