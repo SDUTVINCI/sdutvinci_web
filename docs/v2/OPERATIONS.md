@@ -54,6 +54,9 @@ id                         # 确认当前普通用户、UID/GID 和 docker 组�
 docker info                # 必须同时显示 Client 和 Server；permission denied 表示当前会话未取得权限
 docker compose version     # 确认 Compose v2 可用
 git --version              # 确认 Git 可用；下一步才开始 clone
+command -v logrotate       # 预期输出 /usr/sbin/logrotate；无输出时先按下节安装宿主机基础依赖
+logrotate --version        # 预期输出版本和默认状态文件路径；Vinci 用它验证及轮转运维日志
+systemd-analyze --version  # 预期输出 systemd 版本；安装器用它校验动态生成的 unit/timer
 command -v node            # 必须输出稳定的系统路径；command not found 时按下面步骤安装
 node --version             # 预期为 v24.x；其他大版本不满足当前主机运维基线
 ```
@@ -61,6 +64,24 @@ node --version             # 预期为 v24.x；其他大版本不满足当前主
 如果管理员刚把用户加入 Docker 组，VS Code Remote SSH 中已经打开的终端不会自动取得新组；重新
 连接 Remote SSH，或只在当前终端执行 `newgrp docker` 后再次运行 `id` 和 `docker info`。不要用
 `chmod 666 /var/run/docker.sock` 绕过权限。
+
+#### Debian 13 安装宿主机基础依赖
+
+全新 Debian 即使已有 Docker，也不一定预装 `logrotate`。先安装 Vinci 预检和 SSH 内容仓库流程所需
+的系统包；该命令不会执行系统整体升级，也不会修改 1Panel 反向代理：
+
+```bash
+sudo apt-get update # 刷新 Debian 软件索引；不会因此安装 86 个待升级包
+sudo apt-get install -y \
+  ca-certificates curl git gnupg less logrotate openssh-client openssl # 安装下载、Git/SSH、密钥和日志轮转工具
+command -v logrotate      # 预期输出 /usr/sbin/logrotate
+logrotate --version       # 预期输出版本信息并以 0 退出
+systemd-analyze --version # 预期输出 systemd 版本；Debian 13 通常已随系统安装
+```
+
+若 `apt-get` 报找不到包，先检查 Debian `trixie` 主仓库是否启用；若安装后 `command -v logrotate`
+仍无输出，运行 `dpkg -L logrotate | grep '/logrotate$'` 核对安装路径，并确认当前 PATH 包含
+`/usr/sbin`，不要自行复制二进制或在仓库里伪造同名命令。
 
 #### Debian 13 安装系统级 Node.js 24
 
@@ -72,8 +93,6 @@ node --version             # 预期为 v24.x；其他大版本不满足当前主
 运行；不要直接使用未经查看的 `curl | sudo bash`：
 
 ```bash
-sudo apt-get update # 刷新 Debian 软件索引
-sudo apt-get install -y ca-certificates curl gnupg less # 安装 HTTPS 仓库、签名和审阅工具
 install -d -m 0700 "$HOME/.cache/vinci-bootstrap" # 创建仅当前用户可读的临时审阅目录
 curl --fail --silent --show-error --location \
   https://deb.nodesource.com/setup_24.x \
