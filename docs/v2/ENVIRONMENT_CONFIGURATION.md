@@ -338,7 +338,7 @@ CONTENT_EXPORT_KNOWN_HOSTS_FILE=/home/tungchiahui/.config/vinci-cms/content-expo
 | `CONTENT_PR_IMPORT_MODE` | 不使用 PR 导入时保持 `disabled`；完成权限验收后才用 `enabled` | enabled 只允许把选中的 PR diff 导入为草稿/提案，不会自动 Merge、批准或发布。 |
 | `CONTENT_PR_IMPORT_REPOSITORY_ID` | 固定 `SDUTVINCI/sdutvinci_content` | 正式环境只接受唯一内容仓库，不能让请求参数选择任意仓库。 |
 | `CONTENT_PR_IMPORT_API_URL` | 固定 `https://api.github.com` | 正式环境只允许 GitHub 官方 HTTPS API，禁止内嵌凭据或改成 HTTP。 |
-| `CONTENT_PR_IMPORT_GITHUB_TOKEN` | 不启用时留空；需要私有读取、评论或关闭 PR 时填独立细粒度 Token | 只授予目标内容仓库所需最小权限。只读 Dry Run 与写评论/关闭最好使用职责分离的凭据；不得复用 deploy key。 |
+| `CONTENT_PR_IMPORT_GITHUB_TOKEN` | 首次部署且 mode 为 `disabled` 时必须留空；以后启用私有读取、评论或关闭 PR 时才填 Fine-grained PAT | 只授权目标内容仓库和实际使用的 API。不得复用 SSH Deploy Key、GHCR Token、个人 classic PAT 或代码仓库凭据。 |
 | `CONTENT_PR_IMPORT_ROLE_CODES` | 默认 `content_importer` | 允许操作导入功能的 CMS role code，多个值用英文逗号分隔并去空格。不要加入普通编辑角色以图省事。 |
 | `CONTENT_PR_IMPORT_MAX_FILE_BYTES` | 默认 `1048576`（1 MiB） | 单文件上限，范围 `1024–5000000` 字节；超限拒绝整个相关动作。 |
 | `CONTENT_PR_IMPORT_MAX_FILES` | 默认 `200` | 单 PR 文件数量上限，范围 `1–500`。 |
@@ -347,6 +347,110 @@ CONTENT_EXPORT_KNOWN_HOSTS_FILE=/home/tungchiahui/.config/vinci-cms/content-expo
 
 Token 不要通过 `docker compose config` 的完整输出排障，因为展开后的环境可能包含它。使用
 `./vinci doctor` 的脱敏结果和 GitHub 审计日志定位权限问题。
+
+### 6.1 先按使用场景决定是否需要 Token
+
+首次部署建议保持整个 PR 导入功能关闭，此时**不创建、不填写 Token**：
+
+```dotenv
+CONTENT_PR_IMPORT_MODE=disabled
+CONTENT_PR_IMPORT_REPOSITORY_ID=SDUTVINCI/sdutvinci_content
+CONTENT_PR_IMPORT_API_URL=https://api.github.com
+CONTENT_PR_IMPORT_GITHUB_TOKEN=
+CONTENT_PR_IMPORT_ROLE_CODES=content_importer
+CONTENT_PR_IMPORT_TEST_MODE=false
+```
+
+空值表示没有 GitHub API 凭据，不是占位符，也不会被第 11 节的占位值检查拒绝。此状态下 CMS 不显示
+可用的 PR 导入接口。`CONTENT_EXPORT_SSH_KEY_FILE` 对应的 Deploy Key 只用于 Git 协议导出/对账，
+GitHub REST API 不能使用它。
+
+以后确实要启用 PR 导入时，再根据目标能力选择一种权限组合：
+
+| 启用后的能力 | Token | Fine-grained repository permissions |
+| --- | --- | --- |
+| 公共内容仓库，只做未认证只读导入 | 可留空 | 无；受 GitHub 未认证 API 限流影响，不能评论或关闭 |
+| 私有仓库，只读 PR 和文件 | 必需 | `Contents: Read-only`、`Pull requests: Read-only` |
+| 读取并允许评论，但不允许关闭 PR | 必需 | `Contents: Read-only`、`Pull requests: Read-only`、`Issues: Read and write` |
+| 读取、评论并允许显式关闭 PR | 必需 | `Contents: Read-only`、`Pull requests: Read and write`；`Issues` 保持 No access |
+
+代码读取 `/pulls`、`/pulls/{number}/files` 和 `/contents/{path}`；评论使用 issue comment API，关闭使用
+`PATCH /pulls/{number}`。GitHub 官方说明读取仓库文件需要 Contents read，列出 PR 文件需要 Pull
+requests read；创建 PR 普通评论可使用 Issues write 或 Pull requests write，而关闭 PR 需要 Pull
+requests write。Vinci 没有调用 Merge API，不能为了省事授予 `Contents: Read and write`、
+`Administration` 或组织级权限。
+
+### 6.2 创建仅限内容仓库的 Fine-grained PAT
+
+只有决定启用上表某个需要 Token 的场景时才执行：
+
+1. 登录将长期拥有目标内容仓库权限的 GitHub 账号，打开头像 → **Settings** →
+   **Developer settings** → **Personal access tokens** → **Fine-grained tokens** →
+   **Generate new token**。不要选择 Tokens (classic)。
+2. Token name 填可审计名称，例如 `vinci-pr-import-debian-20260802`；Description 写明服务器、用途和
+   轮换负责人，不填写 IP 密码或其他秘密。
+3. Expiration 建议先选 `90 days` 或组织允许的更短期限，并在维护日历登记到期前轮换。Token 到期
+   不影响 Deploy Key 导出，但会让启用的 PR API 操作失败。
+4. Resource owner 选择 `SDUTVINCI`；Repository access 选择 **Only select repositories**，且只选
+   `sdutvinci_content`。不能选 All repositories，也不能把 `sdutvinci_web` 加进去。
+5. Repository permissions 严格按第 6.1 节对应行选择；Account permissions 和 Organization
+   permissions 全部保持 **No access**。GitHub 自动显示的 Metadata read 无需额外扩大。
+6. 点击 **Generate token**。若组织要求审批，Token 在组织 Owner 批准前可能只能读取公共资源；等待
+   `SDUTVINCI` Owner 在 Personal access token 请求中审批，不能改用 classic PAT 绕过策略。
+7. Token 只显示一次，直接保存进密码管理器。不要粘贴到聊天、截图、shell history、GitHub issue、
+   Deploy Key 页面或 Docker 登录。
+
+GitHub Fine-grained PAT 可以限定单个资源所有者、精确仓库和精确权限；它仍绑定创建者账号，账号失去
+仓库访问权限时 Token 也会失效。创建和组织审批规则见
+[GitHub Personal Access Token 官方教程](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens)
+与 [组织 PAT 策略](https://docs.github.com/en/organizations/managing-programmatic-access-to-your-organization/setting-a-personal-access-token-policy-for-your-organization)。
+
+### 6.3 不泄露 Token 的只读权限验证与 `.env` 写入
+
+以下流程只适用于已经决定启用且创建了 Token 的情况。它不评论、不关闭、不 Merge，也不把 Token
+写入命令参数、临时文件或输出；关闭 shell xtrace 后隐藏输入：
+
+```bash
+set +x # 防止当前 shell 若曾启用调试时回显后续敏感展开
+read -r -s -p 'Content PR import fine-grained token: ' content_pr_token
+printf '\n'
+github_api_status() {
+  local api_url="$1"
+  {
+    printf 'header = "Authorization: Bearer %s"\n' "$content_pr_token"
+    printf 'header = "Accept: application/vnd.github+json"\n'
+    printf 'header = "X-GitHub-Api-Version: 2022-11-28"\n'
+  } | curl --config - --silent --show-error --output /dev/null \
+    --write-out '%{http_code}' "$api_url"
+}
+contents_status="$(github_api_status \
+  'https://api.github.com/repos/SDUTVINCI/sdutvinci_content/contents/.vinci/snapshot.json?ref=main')"
+pulls_status="$(github_api_status \
+  'https://api.github.com/repos/SDUTVINCI/sdutvinci_content/pulls?state=all&per_page=1')"
+unset -f github_api_status
+unset content_pr_token
+test "$contents_status" = 200 # 预期成功：验证 Contents read；不打印响应正文
+test "$pulls_status" = 200    # 预期成功：验证 Pull requests read；不需要仓库当前存在 PR
+unset contents_status pulls_status
+```
+
+验证后使用不会把内容回显到共享终端的受控编辑器或密码管理流程，把刚才保存在密码管理器中的值写入：
+
+```dotenv
+CONTENT_PR_IMPORT_MODE=enabled
+CONTENT_PR_IMPORT_GITHUB_TOKEN=<从密码管理器粘贴的真实Fine-grained-PAT>
+```
+
+随后立即执行 `chmod 600 .env`，但仍要继续完成第 7～10 节，不能在第 6 节提前正式安装。不要用
+`source .env`、`grep TOKEN .env`、`docker compose config` 的完整输出或 `curl -v` 验证。如果只读请求
+返回 `401`，Token 值无效或已过期；`403` 常见于权限、组织策略或审批未完成；`404` 可能是 Resource
+owner/仓库选择错误，也可能是 GitHub 对无权限私有资源的遮盖响应。修正 GitHub 授权后重新执行只读
+验证，不要临时扩大到 All repositories。
+
+评论/关闭权限不要用测试评论或随便关闭真实 PR 来验证；安装和角色验收后，在专门测试 PR 上通过 CMS
+显式动作验证并检查审计记录。轮换时先创建新 Token、完成两个只读请求、更新 `.env` 并复验，再删除
+旧 Token。怀疑泄露时立即在 GitHub Fine-grained tokens 页面撤销并保持
+`CONTENT_PR_IMPORT_MODE=disabled`，直到新 Token 完成审批和验证。
 
 ## 7. S3 兼容对象存储 / 腾讯云 COS
 
