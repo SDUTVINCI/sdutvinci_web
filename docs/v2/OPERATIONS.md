@@ -5,6 +5,10 @@
 [`docs/DEPLOYMENT.md`](../DEPLOYMENT.md)；`.env.example` 的全部 86 个参数见
 [`ENVIRONMENT_CONFIGURATION.md`](ENVIRONMENT_CONFIGURATION.md)。
 
+文档职责不会互相替代：`DEPLOYMENT.md` 是普通维护者的唯一命令顺序；环境配置手册只负责填写
+`.env` 和安装前只读预检；本文按相同顺序展开原因、预期、失败处理、回滚与高级排障。走短流程时
+应在环境配置第 11 节通过后回到 `DEPLOYMENT.md` 第 2 节，不要从本文不同章节自行拼接安装命令。
+
 ## 0. 通用安全约定
 
 - 以执行首次安装的当前普通用户运行；用户名、UID、GID、Home、Shell 来自 NSS。
@@ -227,6 +231,13 @@ stat -c '%a %U:%G %n' .env        # 预期类似：600 tungchiahui:tungchiahui .
 | `DEPLOY_GIT_REMOTE_URL` | 与 `git remote get-url origin` 完全一致 | 不能是带 Token/密码的 URL。 |
 | `AUTO_DEPLOY_ENABLED` | 首次保持 `false` | 首次人工部署和回滚验收完成后才按第 7 节启用。 |
 | `BACKUP_ROOT` / `INSTANCE_EXPORT_ROOT` / `VINCI_LOG_ROOT` | 仓库外的绝对目录 | 不得是 `/`、Home 根或 symlink；安装器会用当前用户创建安全权限。 |
+
+完成字段填写后，必须执行
+[`环境配置手册第 11 节`](ENVIRONMENT_CONFIGURATION.md#11-首次部署前的最终核对) 的权限、占位值、
+Compose 和统一 Dry Run 检查。该检查通过只代表“允许进入正式安装”，不会创建容器、volume、部署
+状态、备份目录或 timer。普通维护者随后返回
+[`DEPLOYMENT.md` 第 2 节](../DEPLOYMENT.md#2-全新空库正式部署) 做资源占用复核并正式安装；不要在
+安装前运行 `status`/`doctor` 后把预期的空状态和连接失败当成部署故障。
 
 ### 第四步：只选择一种初始化模式
 

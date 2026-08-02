@@ -4,6 +4,10 @@
 [`OPERATIONS.md`](OPERATIONS.md) 第 1 节完成 V2 应用仓库的全新 clone 和镜像 SHA 核对，再在
 clone 根目录按本文填写 `.env`。不要把本文示例中的 `replace-*`、尖括号或假域名原样用于生产。
 
+本文的职责到“配置填写和只读预检通过”为止，**不执行正式安装，也不把 `status`/`doctor` 当作
+安装前检查**。第 11 节通过后，统一回到 [`DEPLOYMENT.md`](../DEPLOYMENT.md#2-全新空库正式部署)
+第 2 节执行唯一的正式部署顺序；命令原理、失败处理和高级排障再查 `OPERATIONS.md`。
+
 ## 1. 填写规则与安全验证
 
 - `.env` 每行使用 `KEY=value`，不要写 `export KEY=...`。变量名不能改，布尔值只写小写
@@ -623,12 +627,11 @@ PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH" \
 - 内容仓库 key/known_hosts 是独立普通文件且权限正确；
 - 自动部署首次保持关闭，备份/实例/日志目录均在仓库外。
 
-完成空库安装后运行：
-
-```bash
-./vinci status # 核对当前 SHA、slot、Compose、timer 和最近成功备份
-./vinci doctor # 实际连接 PostgreSQL、S3/COS 并检查内容任务、gateway、磁盘和 timer
-```
-
 任何检查失败都应修正对应配置后重试；不要关闭 CSRF、限流、Secure Cookie、路径/owner 校验，
 也不要用假 S3、生产测试库或宽权限凭据让 doctor 暂时变绿。
+
+全部检查通过时，只能得出“`.env` 与宿主机已具备正式安装条件”，此时仍不会有应用容器、数据库
+volume、部署状态、备份目录或 timer。因此不要在这里运行 `./vinci status`/`./vinci doctor` 并把
+它们的安装前失败当成故障，也不要自行拼接安装命令。下一步只按
+[`DEPLOYMENT.md` 第 2 节](../DEPLOYMENT.md#2-全新空库正式部署) 执行资源占用复核、
+`./vinci install --initialize=empty` 和安装后验收。
