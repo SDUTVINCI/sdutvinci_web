@@ -38,7 +38,9 @@ git rev-parse HEAD                    # 记录镜像所对应的完整 40 位 SH
 ```
 
 先确认该 SHA 的 runtime/operations 镜像均已由 CI 发布，再创建 `.env`。完整镜像验证、失败处理和
-为什么不能 `--depth=1`，见详细运维手册第 1 节。
+为什么不能 `--depth=1`，见详细运维手册第 1 节。若 inspect 返回 `unauthorized`，先用仅含
+`read:packages` 的 Personal access token (classic) 以当前安装用户登录 GHCR；不要使用 sudo、
+fine-grained PAT 或把 Token 写入命令历史。登录与 SSO/PAT 排障命令也在详细手册第 1 节。
 
 ```bash
 cp -- .env.example .env                 # 仅全新 clone 使用；现有 .env 禁止覆盖

@@ -122,8 +122,36 @@ git rev-parse HEAD                    # 记录准备部署的完整 40 位 Commi
 main，但仍保留 main 的完整历史；不能用浅克隆，因为自动部署的祖先关系检查、回滚和审计需要历史。
 这一步克隆的是 V2 应用仓库，独立内容仓库由受控 workspace 管理，不能克隆进本仓库的 `content/`。
 
-代码 Commit 必须已有两种同 SHA 镜像。GHCR 需要认证时先交互执行 `docker login ghcr.io`，不要把
-Token 放在命令行；随后验证：
+代码 Commit 必须已有两种同 SHA 镜像。若匿名 inspect 返回 `unauthorized`，说明还停在 GHCR
+鉴权阶段，不能据此判断 tag 是否存在。到 GitHub 的 Developer settings 创建 Personal access
+token (classic)，只选择 `read:packages`，设置合理到期时间；若组织要求 SSO，再为该 Token 授权
+目标组织。GitHub Packages 当前不接受 fine-grained PAT 作为这里的替代品，账号本身也必须对
+Package 有读取权限。官方说明见
+[GitHub Container registry 鉴权](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)。
+
+不要把 Token 写在命令行、`.env`、脚本或截图中。以下命令用隐藏输入暂存在当前 shell，传给
+Docker 后立即 unset；必须以安装用户运行，不能 `sudo docker login`：
+
+```bash
+github_username='tungchiahui' # 填有目标 Package 读取权限的 GitHub 用户名
+read -r -s -p 'GHCR read-only token: ' ghcr_read_token; printf '\n' # 粘贴 PAT classic，不回显
+if printf '%s' "$ghcr_read_token" | \
+  docker login ghcr.io --username "$github_username" --password-stdin; then # 预期：Login Succeeded
+  ghcr_login_ok=true
+else
+  ghcr_login_ok=false
+fi
+unset ghcr_read_token
+test "$ghcr_login_ok" = true # 必须成功；失败时停止，不继续 inspect/install
+unset ghcr_login_ok
+test ! -d "$HOME/.docker" || chmod 700 "$HOME/.docker"
+test ! -f "$HOME/.docker/config.json" || chmod 600 "$HOME/.docker/config.json"
+  # 没有 credential helper 时 Docker 配置含可还原认证材料，必须只允许当前用户读取
+```
+
+该 PAT 只需要 `read:packages`，不要授予 `write:packages`、`delete:packages` 或仓库写权限。Docker
+登录状态必须属于执行 `./vinci install` 的同一普通用户，这样人工部署和 systemd 自动部署才能
+读取同一份凭据。随后验证：
 
 ```bash
 deployment_sha="$(git rev-parse HEAD)" # 仅保存非敏感的当前完整 Commit SHA
@@ -134,7 +162,11 @@ docker manifest inspect "ghcr.io/sdutvinci/sdutvinci_web-ops:${deployment_sha}" 
 ```
 
 任一 inspect 失败时先确认 Actions 是否成功、GHCR 登录是否有 pull 权限以及 SHA 是否一致；不要改用
-`latest`，也不要在服务器临时构建未经 CI 验收的生产镜像。
+`latest`，也不要在服务器临时构建未经 CI 验收的生产镜像。错误含义：
+
+- `unauthorized` 或 `denied`：仍是 Token scope、组织 SSO、Package 权限、用户名或登录用户错误；
+- `manifest unknown`：鉴权已通过，但该仓库没有这个 SHA tag，检查对应 Actions 是否全部成功；
+- 两条命令都以 0 退出：runtime/operations 同 SHA 镜像齐全，可以继续创建 `.env`。
 
 ### 第三步：创建并保护 `.env`
 
@@ -270,7 +302,7 @@ Dry Run 只列旧用户拥有的精确路径。正式流程停旧 timer，按 `f
 
 ```bash
 git remote get-url origin                    # 只读确认代码 remote，没有用户名、Token 或嵌入式密码
-docker login ghcr.io                         # 交互输入最小权限凭据；不要把 Token 写在命令行
+# GHCR 登录使用第 1 节的隐藏输入和 --password-stdin，Token 只授予 read:packages
 ssh-keyscan -t ed25519 github.com > /受限路径/content-known-hosts # 采集候选 key，仍须可信核对
 chmod 600 /受限路径/content-key /受限路径/content-known-hosts # 两个文件仅 owner 可读写
 ./vinci doctor                               # 验证配置可用且输出已遮盖敏感值
