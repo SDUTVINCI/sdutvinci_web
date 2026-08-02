@@ -36,6 +36,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
@@ -60,8 +62,39 @@ jobs:
       - name: Prepare Nuxt generated types
         run: npx nuxt prepare
 
+      - name: Prepare isolated historical content snapshot
+        env:
+          V2_CONTENT_SNAPSHOT_SOURCE: ${{ runner.temp }}/vinci-phase11-cms-snapshot-test/content
+        run: |
+          snapshot_root="$(dirname -- "$V2_CONTENT_SNAPSHOT_SOURCE")"
+          test "$snapshot_root" = "${RUNNER_TEMP}/vinci-phase11-cms-snapshot-test"
+          test ! -e "$snapshot_root"
+          install -d -m 0700 "$snapshot_root"
+          printf 'vinci-phase11-cms-snapshot-test\n' > "$snapshot_root/.vinci-test-owner"
+          git cat-file -e 'v2-phase10-pre-removal-20260802-08a1c49^{tag}'
+          git archive v2-phase10-pre-removal-20260802-08a1c49 \
+            content/news content/wiki content/members \
+            | tar --extract --file=- --directory "$snapshot_root"
+          test "$(find "$V2_CONTENT_SNAPSHOT_SOURCE" -type f -name '*.md' | wc -l)" -eq 260
+
       - name: Run CMS tests against the isolated test database
+        env:
+          V2_CONTENT_SNAPSHOT_SOURCE: ${{ runner.temp }}/vinci-phase11-cms-snapshot-test/content
         run: npm run test:cms
+
+      - name: Clean isolated historical content snapshot
+        if: always()
+        env:
+          V2_CONTENT_SNAPSHOT_SOURCE: ${{ runner.temp }}/vinci-phase11-cms-snapshot-test/content
+        run: |
+          snapshot_root="$(dirname -- "$V2_CONTENT_SNAPSHOT_SOURCE")"
+          test "$snapshot_root" = "${RUNNER_TEMP}/vinci-phase11-cms-snapshot-test"
+          if [ ! -e "$snapshot_root" ]; then exit 0; fi
+          test -d "$snapshot_root" && test ! -L "$snapshot_root"
+          test -f "$snapshot_root/.vinci-test-owner"
+          test "$(cat "$snapshot_root/.vinci-test-owner")" = 'vinci-phase11-cms-snapshot-test'
+          find "$snapshot_root" -xdev -depth -mindepth 1 -delete
+          rmdir -- "$snapshot_root"
 
       - name: Run V2 phase 10 dependency and database-content checks
         run: npm run test:v2:phase10

@@ -1691,3 +1691,22 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
   收尾没有 Fetch、Push、部署或调整该引用，也没有猜测其外部变化来源。
 - 本次未访问生产 PostgreSQL、S3/COS、内容仓库、真实 GitHub 写接口或生产服务器，未输出真实
   密钥。最终验收记录提交后停止开发；任何生产 Push、部署或后续工作均须新的明确授权。
+
+---
+
+## 2026-08-02：V2 最终验收后 GitHub Actions 历史快照修复
+
+- 最终验收记录 Commit 为 `ae263ea732e167aac88a80dc27c9e197de3c4b0a`。随后 GitHub Actions
+  在 `npm run test:cms` 的 109 项中通过 107 项，两个历史全量用例因 runner 未设置
+  `V2_CONTENT_SNAPSHOT_SOURCE` 在前置断言处失败；不是数据库、权限、Markdown 处理或产品
+  运行时回归。现有 shallow checkout 还会令稍后的阶段 11 删除前 tag 检查失败，只是被前一错误
+  提前遮蔽。
+- 经维护者明确同意，verify job 的 checkout 改为完整只读历史；runner 在名称含 `test`、0700、
+  带 owner marker 的临时目录中从删除前 annotated tag 精确提取 news/wiki/members，并要求恰好
+  260 个 Markdown。快照路径只注入 CMS 测试步骤，不进入 production build、镜像或运行配置。
+- 新增阶段 11 静态回归，固定 full-history、tag、test 路径、环境变量、260 文件门禁和
+  `if: always()` marker 清理。修复后完整测试 132/132、CMS 109/109、阶段 10 为 33/33、阶段 11
+  为 12/12 + Markdown/XSS 4/4 + Wiki 226/226；fresh migration、typecheck、production build、
+  Shell/工作流契约和 diff 检查均通过。完整本地独立修复 Commit SHA 由交付回复报告。
+- 本修复不改变 V2.0 已通过结论、数据库、API、依赖或生产行为；不 Fetch、不 Push、不部署，
+  不访问生产数据库/S3/GitHub 写接口，不进入新阶段。

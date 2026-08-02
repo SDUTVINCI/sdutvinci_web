@@ -37,6 +37,16 @@ grep -Fq 'ExecStart=@VINCI_ROOT@/vinci doctor --scheduled' \
   "$repository_root/systemd/vinci-cms-health.service"
 grep -Fq 'rotate 30' "$repository_root/systemd/vinci-cms.logrotate"
 grep -Fq 'maxsize 100M' "$repository_root/systemd/vinci-cms.logrotate"
+grep -Fq 'fetch-depth: 0' "$repository_root/.github/workflows/deploy.yml"
+grep -Fq 'vinci-phase11-cms-snapshot-test/content' \
+  "$repository_root/.github/workflows/deploy.yml"
+grep -Fq "git cat-file -e 'v2-phase10-pre-removal-20260802-08a1c49^{tag}'" \
+  "$repository_root/.github/workflows/deploy.yml"
+grep -Fq 'V2_CONTENT_SNAPSHOT_SOURCE:' "$repository_root/.github/workflows/deploy.yml"
+grep -Fq -- '-eq 260' "$repository_root/.github/workflows/deploy.yml"
+grep -Fq 'if: always()' "$repository_root/.github/workflows/deploy.yml"
+grep -Fq 'find "$snapshot_root" -xdev -depth -mindepth 1 -delete' \
+  "$repository_root/.github/workflows/deploy.yml"
 
 instance_root="$test_root/phase11-instance-packages-test"
 project=vinci-phase11-prune-test
