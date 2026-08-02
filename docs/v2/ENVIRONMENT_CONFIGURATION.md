@@ -420,8 +420,13 @@ GitHub Fine-grained PAT 可以限定单个资源所有者、精确仓库和精�
 
 ### 6.3 不泄露 Token 的只读权限验证与 `.env` 写入
 
-以下流程只适用于已经决定启用且创建了 Token 的情况。它不评论、不关闭、不 Merge，也不把 Token
-写入命令参数、临时文件或输出；关闭 shell xtrace 后隐藏输入：
+以下流程适用于已经决定预配置或启用并创建了 Token 的情况。GitHub 页面显示权限正确并不等于 Token
+已经可用：它还可能复制不完整、尚未通过组织审批、选错 Resource owner/仓库或已经失效。下面分别
+读取固定内容文件和 PR 列表，以验证 `Contents: Read` 与 `Pull requests: Read`。它不评论、不关闭、
+不 Merge，因此不会验证写权限；写权限留到安装后在专门测试 PR 上显式验收。
+
+Token 不会写入命令参数、临时文件或输出，只在当前 shell 的隐藏输入变量中短暂存在，两个请求完成后
+立即 `unset`。关闭 shell xtrace 后执行：
 
 ```bash
 set +x # 防止当前 shell 若曾启用调试时回显后续敏感展开
@@ -442,10 +447,19 @@ pulls_status="$(github_api_status \
   'https://api.github.com/repos/SDUTVINCI/sdutvinci_content/pulls?state=all&per_page=1')"
 unset -f github_api_status
 unset content_pr_token
-test "$contents_status" = 200 # 预期成功：验证 Contents read；不打印响应正文
-test "$pulls_status" = 200    # 预期成功：验证 Pull requests read；不需要仓库当前存在 PR
+if [ "$contents_status" = 200 ] && [ "$pulls_status" = 200 ]; then
+  printf 'PASS：Contents read 与 Pull requests read 均可用。\n' # 只输出结论，不输出 Token 或响应正文
+else
+  printf 'FAIL：Contents HTTP %s；Pull requests HTTP %s。\n' \
+    "$contents_status" "$pulls_status" >&2 # 状态码不是秘密，用于区分 401/403/404
+  false
+fi
 unset contents_status pulls_status
 ```
+
+预期只看到一行 `PASS`。`read -s` 粘贴 Token 时终端不会显示字符，这是正常保护，不是键盘失效。
+验证结束后 shell 已经忘记 Token；应从密码管理器把同一个值写入 `.env`，不要试图从 history 或上述
+变量恢复。
 
 验证后使用不会把内容回显到共享终端的受控编辑器或密码管理流程，把刚才保存在密码管理器中的值写入。
 准备立即启用时使用：
