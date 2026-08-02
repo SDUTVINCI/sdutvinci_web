@@ -16,6 +16,7 @@ Vinci V2.0 统一运维入口
   ./vinci update [<40位commit>|--automatic]
   ./vinci status
   ./vinci doctor [--scheduled] [--legacy-user=<用户> --legacy-root=<目录>]
+  ./vinci admin
   ./vinci backup [--verify|--scheduled]
   ./vinci backup-prune --dry-run|--apply
   ./vinci restore <备份目录> --confirm=RESTORE:<项目>:<数据库>:<备份名>
@@ -213,6 +214,17 @@ vinci_preflight() {
     || ops_die "当前用户不能读取部署 Git working tree"
   [ -z "$(vinci_as_run_user git -C "$VINCI_ROOT" status --porcelain=v1 --untracked-files=no)" ] \
     || ops_die "部署仓库存在已跟踪改动，安装/更新不会覆盖"
+  if [ -e "$VINCI_ROOT/.deploy/current" ]; then
+    ops_export_active_image_tag
+  else
+    local configured_image_tag repository_commit
+    configured_image_tag="$(ops_required_compose_env APP_IMAGE_TAG)"
+    repository_commit="$(vinci_as_run_user git -C "$VINCI_ROOT" rev-parse HEAD)"
+    [[ "$configured_image_tag" =~ ^[0-9a-f]{40}$ ]] \
+      || ops_die "APP_IMAGE_TAG 必须是已发布镜像的完整 40 位小写 Commit SHA；拒绝 local/latest 和本机生产构建"
+    [ "$configured_image_tag" = "$repository_commit" ] \
+      || ops_die "APP_IMAGE_TAG 必须与当前准备安装的 Git HEAD 完全一致"
+  fi
   docker compose config --quiet
 }
 
@@ -356,6 +368,7 @@ vinci_doctor() {
   done
   vinci_current_identity
   vinci_assert_repository
+  ops_export_active_image_tag
   ops_require_command curl
   ops_require_command df
   local failures=0
@@ -426,6 +439,19 @@ vinci_doctor() {
   ops_info "doctor 通过：数据库、内容任务、S3/COS、磁盘、容器、gateway、槽位与 timer 正常。"
 }
 
+vinci_admin() {
+  if [ "$#" -eq 1 ] && { [ "$1" = "--help" ] || [ "$1" = "-h" ]; }; then
+    vinci_usage
+    return 0
+  fi
+  [ "$#" -eq 0 ] || vinci_die_usage "admin 不接受参数"
+  vinci_current_identity
+  vinci_assert_repository
+  ops_export_active_image_tag
+  cd -- "$VINCI_ROOT"
+  docker compose --profile tools run --rm admin
+}
+
 vinci_latest_backup() {
   local backup_root state basename
   backup_root="$(ops_config_value BACKUP_ROOT /var/backups/vinci-cms)"
@@ -477,6 +503,7 @@ vinci_restore() {
   fi
   [ "$#" -eq 2 ] && [[ "$confirmation" = --confirm=* ]] \
     || vinci_die_usage "restore 需要备份目录和精确 --confirm"
+  ops_export_active_image_tag
   backup="$(ops_require_external_absolute_path 备份目录 "$backup")"
   local project database expected
   project="$(ops_project_name)"; database="$(ops_required_compose_env POSTGRES_DB)"
@@ -496,6 +523,7 @@ vinci_reconcile() {
   fi
   [ "$#" -eq 0 ] || { [ "$#" -eq 1 ] && [ "$1" = "--scheduled" ]; } \
     || vinci_die_usage "reconcile 只接受 --scheduled"
+  ops_export_active_image_tag
   cd -- "$VINCI_ROOT"
   docker compose -f compose.yaml -f compose.content-export.yaml \
     --profile content-reconcile run --rm content-reconcile
@@ -511,6 +539,7 @@ vinci_maintenance() {
   [ "${1:-}" = "--apply" ] && mode=--apply
   [ "${1:-}" = "--dry-run" ] || [ "${1:-}" = "--scheduled" ] || [ "${1:-}" = "--apply" ] || [ "$#" -eq 0 ] \
     || vinci_die_usage "maintenance 参数无效"
+  ops_export_active_image_tag
   if [ "$mode" = "--dry-run" ]; then
     "$VINCI_ROOT/scripts/backup-prune.sh" --dry-run
     (cd -- "$VINCI_ROOT" && docker compose --profile content-reconcile run --rm --no-deps \
@@ -587,6 +616,7 @@ case "$command" in
   update) vinci_update "$@" ;;
   status) vinci_status "$@" ;;
   doctor) vinci_doctor "$@" ;;
+  admin) vinci_admin "$@" ;;
   backup) vinci_backup "$@" ;;
   backup-prune) vinci_backup_prune "$@" ;;
   restore) vinci_restore "$@" ;;

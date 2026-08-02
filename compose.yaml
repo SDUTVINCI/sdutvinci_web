@@ -180,6 +180,7 @@ services:
     command: ["npm", "exec", "--", "tsx", "scripts/v2-operations-doctor.ts"]
     networks:
       - backend
+      - egress
 
   content-export-worker:
     image: ${APP_OPS_IMAGE:-sdutvinci-web-ops}:${APP_IMAGE_TAG:-local}
@@ -219,6 +220,7 @@ services:
       - content_export_worktree:/var/lib/vinci-cms/content-export
     networks:
       - backend
+      - egress
 
   content-reconcile:
     image: ${APP_OPS_IMAGE:-sdutvinci-web-ops}:${APP_IMAGE_TAG:-local}
@@ -255,6 +257,7 @@ services:
       - content_reconciliation_data:/var/lib/vinci-cms/content-reconciliation
     networks:
       - backend
+      - egress
 
   content-recovery:
     image: ${APP_OPS_IMAGE:-sdutvinci-web-ops}:${APP_IMAGE_TAG:-local}
@@ -299,5 +302,8 @@ volumes:
 
 networks:
   frontend:
+  # Privileged operations that must reach COS/GitHub use a dedicated outbound
+  # network instead of weakening the database-only internal backend network.
+  egress:
   backend:
     internal: true

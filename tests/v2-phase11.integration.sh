@@ -24,6 +24,9 @@ cleanup() {
 }
 trap cleanup EXIT
 
+docker compose --env-file "$repository_root/.env.example" --profile '*' \
+  -f "$repository_root/compose.yaml" config --format json \
+  | node "$repository_root/tests/v2-phase11-compose-network.test.mjs"
 docker compose -f "$compose_fixture" config --quiet
 docker compose -f "$compose_fixture" up --detach --wait postgres-test
 

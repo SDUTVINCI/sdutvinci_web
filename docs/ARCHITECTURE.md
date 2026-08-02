@@ -43,14 +43,19 @@ CodeMirror/Milkdown、S3 兼容对象存储和 Docker Compose。
   必需的运维容器中存在。
 - Compose 持久化 `postgres_data` 与 `gateway_config`。内容导出使用独立、受标记保护的
   workspace，不挂入前台应用。
+- PostgreSQL、migration、管理员和本地恢复只连接 `internal: true` 的 `backend` 网络；doctor、
+  内容导出 Worker 和对账同时连接专用非入站 `egress` 网络访问 COS/GitHub。不能为解决出站访问
+  而取消数据库 backend 的 internal 隔离，也不把高权限运维容器接入前台网络。
 - `app-blue`、`app-green` 和常驻 `gateway` 保持不变。候选槽位健康后，gateway graceful
   reload 切换；每分钟主动检查机制保持不变。
 - 代码仓库的每个可部署变更都分类为 `application`，构建 runtime 和 operations 镜像，先
   运行向前 migration，再走蓝绿发布。不存在“纯 `content/**` 镜像部署”。
 - CMS 发布只提交数据库事务并写 export Outbox；内容 Worker/凌晨对账更新独立内容仓库，
   不触发代码 Actions 或 runtime 镜像构建。
-- `./vinci` 是安装、更新、状态、doctor、备份/校验/清理、恢复和实例迁移的统一维护入口；
+- `./vinci` 是安装、更新、状态、doctor、管理员创建、备份/校验/清理、恢复和实例迁移的统一维护入口；
   底层安全脚本保留给编排与高级排障。
+- 首次安装拒绝 `local`/`latest` 镜像标签并要求完整 SHA 与 Git HEAD 一致；安装后的运维容器从
+  `.deploy/current` 选择活动 SHA，避免蓝绿更新后继续运行旧 operations 镜像。
 - 部署和 timer 默认使用执行首次安装的当前系统用户。用户名、UID、GID、Home 和 Shell 从 NSS
   解析，只写本机安装清单；迁移到不同用户的新服务器时重新生成 unit。
 - 动态 systemd 覆盖自动部署、02:00 备份、03:00 对账、04:00 清理和每小时 doctor；日志按

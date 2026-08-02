@@ -50,7 +50,7 @@ stat -c '%a %U:%G %n' .env # 预期：600 <当前用户>:<当前组> .env
 | `COMPOSE_PROJECT_NAME` | 本机唯一且长期不变的名称，单实例建议保留 `vinci-cms` | 决定容器、network、volume 和确认令牌名称。部署后修改会创建另一套资源，看起来像“数据消失”。建议只用小写字母、数字、`-`、`_`。 |
 | `APP_IMAGE` | runtime 镜像仓库，例如 `ghcr.io/sdutvinci/sdutvinci_web` | 只填仓库，不带 `:tag`；必须与 Actions 实际发布目标一致。 |
 | `APP_OPS_IMAGE` | operations 镜像仓库，例如 `ghcr.io/sdutvinci/sdutvinci_web-ops` | 用于 Migration、管理员创建、doctor、导出和恢复；必须与 runtime 来自同一 Commit。 |
-| `APP_IMAGE_TAG` | 首次安装所用、CI 已发布的完整 40 位小写 Commit SHA | 不填 `latest`。`./vinci install/update` 部署时会显式传入目标 SHA，活动版本以 `.deploy/current` 为准；此字段仍是 Compose 工具的默认镜像 tag。 |
+| `APP_IMAGE_TAG` | 首次安装所用、CI 已发布的完整 40 位小写 Commit SHA | 必须与首次安装时的 `git rev-parse HEAD` 完全一致；`local`、`latest`、短 SHA 和任意标签都会被拒绝，生产服务器不会回退为本机构建。安装后 `./vinci` 从 `.deploy/current` 为 doctor/admin/恢复/对账/清理选择活动 operations 镜像。 |
 | `APP_BIND_ADDRESS` | 保持 `127.0.0.1` | gateway 只监听服务器回环，避免绕过 1Panel/TLS 直接暴露。不要为了外部访问改成 `0.0.0.0`。 |
 | `APP_PORT` | 当前服务器保持 `3000` | 这是宿主机 gateway 端口；1Panel 的 `18080 → 127.0.0.1:3000` 反代无需修改。端口必须空闲。 |
 | `NODE_ENV` | 固定 `production` | 不要在生产改成 `test`；多个测试保护开关依赖它拒绝生产误用。Compose 运行时也会固定 production。 |

@@ -28,10 +28,12 @@ git -C "$checkout" config user.email 'phase11-install@test.invalid'
 git -C "$checkout" remote add origin https://github.invalid/vinci/test.git
 git -C "$checkout" add vinci scripts systemd
 git -C "$checkout" commit -m 'phase 11 current-user installer test fixture' >/dev/null
+fixture_commit="$(git -C "$checkout" rev-parse HEAD)"
 printf '%s\n' \
   'COMPOSE_PROJECT_NAME=vinci-phase11-install-test' \
   'APP_IMAGE=registry.invalid/vinci/runtime-test' \
   'APP_OPS_IMAGE=registry.invalid/vinci/operations-test' \
+  "APP_IMAGE_TAG=$fixture_commit" \
   'POSTGRES_DB=vinci_phase11_install_test' \
   'POSTGRES_USER=vinci_phase11_test' \
   'POSTGRES_PASSWORD=phase11-test-password' \
@@ -65,6 +67,17 @@ export FAKE_TEST_UID=21001
 export FAKE_TEST_GID=21002
 export FAKE_TEST_HOME="$test_root/home-alpha-test"
 mkdir -p "$FAKE_TEST_HOME"
+
+sed -i 's/^APP_IMAGE_TAG=.*/APP_IMAGE_TAG=local/' "$checkout/.env"
+if (
+  cd "$checkout"
+  ./vinci install --dry-run
+) > "$test_root/local-image-tag.log" 2>&1; then
+  printf 'installer accepted APP_IMAGE_TAG=local for a production-style install\n' >&2
+  exit 1
+fi
+grep -Fq '拒绝 local/latest 和本机生产构建' "$test_root/local-image-tag.log"
+sed -i "s/^APP_IMAGE_TAG=.*/APP_IMAGE_TAG=$fixture_commit/" "$checkout/.env"
 (
   cd "$checkout"
   ./vinci install --dry-run
@@ -76,6 +89,11 @@ export FAKE_TEST_UID=22001
 export FAKE_TEST_GID=22002
 export FAKE_TEST_HOME="$test_root/nonstandard-beta-home-test"
 mkdir -p "$FAKE_TEST_HOME"
+mkdir -p "$checkout/.deploy"
+printf 'commit=%s\nimage=registry.invalid/vinci/runtime-test:%s\nslot=blue\nmode=application\n' \
+  "$fixture_commit" "$fixture_commit" > "$checkout/.deploy/current"
+sed -i 's/^APP_IMAGE_TAG=.*/APP_IMAGE_TAG=0000000000000000000000000000000000000000/' \
+  "$checkout/.env"
 (
   cd "$checkout"
   ./vinci install --systemd-only

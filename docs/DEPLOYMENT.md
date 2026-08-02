@@ -113,7 +113,7 @@ Shell 和目标完整 SHA，完成 PostgreSQL Migration、候选槽位健康检�
 ./vinci doctor # 应实际通过 DB、HTTP、内容/S3、磁盘、容器、gateway、活动槽位和 timer 检查
 curl --fail --silent --show-error \
   http://127.0.0.1:3000/api/health >/dev/null # 回环健康应为 2xx；不修改 1Panel 的 18080 配置
-docker compose --profile tools run --rm admin # 仅首次交互创建管理员；密码不会作为命令参数
+./vinci admin # 仅首次交互创建管理员；统一选择活动 SHA 的 operations 镜像
 ./vinci backup --verify # 创建首份 custom dump、manifest、SHA256SUMS 并校验
 ./vinci status          # 最近成功备份现在应显示刚创建的备份状态
 ```

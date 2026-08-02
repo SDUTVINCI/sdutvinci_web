@@ -222,7 +222,7 @@ stat -c '%a %U:%G %n' .env        # 预期类似：600 tungchiahui:tungchiahui .
 | --- | --- | --- |
 | `COMPOSE_PROJECT_NAME` | 本机唯一、稳定的项目名，如 `vinci-cms` | 改名会形成另一组容器/volume；部署后不要随意改。 |
 | `APP_IMAGE` / `APP_OPS_IMAGE` | Actions 实际发布的两个 GHCR 仓库 | runtime 与 operations 必须属于同一代码版本。 |
-| `APP_IMAGE_TAG` | 已发布镜像的完整 40 位 SHA | 不使用 `latest` 作为生产发布目标。 |
+| `APP_IMAGE_TAG` | 已发布镜像的完整 40 位 SHA | 首次安装必须与当前 Git HEAD 完全一致；`local`/`latest` 会被拒绝。安装后统一入口从 `.deploy/current` 选择活动 operations 镜像，避免更新后误用旧 tag。 |
 | `APP_BIND_ADDRESS` / `APP_PORT` | 通常为 `127.0.0.1` / `3000` | 只监听回环；现有 1Panel 可继续从 18080 反代到 3000。 |
 | `NUXT_PUBLIC_SITE_URL` | 用户访问的最终 HTTPS 地址 | 填公网 URL，不填容器内地址。 |
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | 本实例独立数据库名、账号和随机密码 | `DATABASE_URL` 中的特殊字符必须 URL encode；两处密码含义必须一致。 |
@@ -271,7 +271,7 @@ schema 并启动应用。不要先运行 `empty` 再尝试 `snapshot`，因为�
 ```bash
 ./vinci status                         # 只读显示当前 SHA、镜像、活动槽、Compose、timer 和最近备份
 ./vinci doctor                         # 只读检查配置权限、DB、内容/S3、磁盘、容器、gateway 和 timer
-docker compose --profile tools run --rm admin # 仅首次创建管理员时交互执行；密码只在提示中输入
+./vinci admin                          # 仅首次创建管理员时交互执行；自动使用活动 SHA 的 operations 镜像
 curl --fail --silent --show-error http://127.0.0.1:3000/api/health # 本机验证回环健康，预期退出码 0
 ```
 

@@ -54,6 +54,32 @@ ops_required_compose_env() {
   printf '%s' "$value"
 }
 
+ops_active_image_tag() {
+  local state_file="$OPS_REPOSITORY_ROOT/.deploy/current"
+  local image_tag=""
+
+  if [ -e "$state_file" ]; then
+    [ -f "$state_file" ] && [ ! -L "$state_file" ] \
+      || ops_die "部署状态不是安全普通文件，拒绝选择运维镜像"
+    image_tag="$(awk -F= '$1 == "commit" { print $2; exit }' "$state_file")"
+    [[ "$image_tag" =~ ^[0-9a-f]{40}$ ]] \
+      || ops_die "部署状态中的 commit 无效，拒绝选择运维镜像"
+    git -C "$OPS_REPOSITORY_ROOT" cat-file -e "${image_tag}^{commit}" 2>/dev/null \
+      || ops_die "部署状态中的 commit 不存在于当前 Git 历史"
+  else
+    image_tag="$(ops_required_compose_env APP_IMAGE_TAG)"
+    [[ "$image_tag" =~ ^[0-9a-f]{40}$ ]] \
+      || ops_die "APP_IMAGE_TAG 必须是已发布镜像的完整 40 位小写 Commit SHA"
+  fi
+
+  printf '%s' "$image_tag"
+}
+
+ops_export_active_image_tag() {
+  APP_IMAGE_TAG="$(ops_active_image_tag)"
+  export APP_IMAGE_TAG
+}
+
 ops_compose_service_is_running() {
   local service_name="$1"
   local container_ids

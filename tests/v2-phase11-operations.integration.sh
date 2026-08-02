@@ -47,9 +47,30 @@ resolved_fallback="$(
 [ "$resolved_fallback" = "$fallback_bin" ] \
   || { printf 'operations command resolver ignored an absolute executable fallback\n' >&2; exit 1; }
 
+active_checkout="$test_root/active-image-tag-test-checkout"
+mkdir -p "$active_checkout/scripts" "$active_checkout/.deploy"
+cp "$repository_root/scripts/ops-common.sh" "$active_checkout/scripts/ops-common.sh"
+git -C "$active_checkout" init --initial-branch=main >/dev/null
+git -C "$active_checkout" add scripts/ops-common.sh
+git -C "$active_checkout" \
+  -c user.name='Phase 11 Active Image Test' \
+  -c user.email='phase11-active-image@test.invalid' \
+  commit -m 'active image test fixture' >/dev/null
+active_commit="$(git -C "$active_checkout" rev-parse HEAD)"
+printf 'commit=%s\nimage=registry.invalid/runtime-test:%s\nslot=blue\nmode=application\n' \
+  "$active_commit" "$active_commit" > "$active_checkout/.deploy/current"
+(
+  # shellcheck source=scripts/ops-common.sh
+  source "$active_checkout/scripts/ops-common.sh"
+  APP_IMAGE_TAG=0000000000000000000000000000000000000000
+  export APP_IMAGE_TAG
+  ops_export_active_image_tag
+  [ "$APP_IMAGE_TAG" = "$active_commit" ]
+) || { printf 'operations did not select the active deployment image tag\n' >&2; exit 1; }
+
 help_output="$($repository_root/vinci --help)"
 for command in install update status doctor backup backup-prune restore \
-  export-instance import-instance migrate-legacy-user reconcile maintenance; do
+  admin export-instance import-instance migrate-legacy-user reconcile maintenance; do
   printf '%s\n' "$help_output" | grep -F "$command" >/dev/null
   "$repository_root/vinci" "$command" --help > "$test_root/help-${command}.log"
   grep -Fq 'Vinci V2.0 统一运维入口' "$test_root/help-${command}.log" \
