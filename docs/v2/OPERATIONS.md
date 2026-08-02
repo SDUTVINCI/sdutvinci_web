@@ -35,7 +35,7 @@
 | `install --dry-run` | 不带值 | 只做环境、权限、Compose、动态 systemd unit 和 logrotate 预检；不部署、不迁移数据库、不安装 timer。 |
 | `--initialize=snapshot` | 固定值 `snapshot` | 首次部署需要保留独立内容仓库的正式内容时执行；必须同时提供 `--snapshot=/绝对路径`。不能恢复用户、草稿、完整历史、审核或审计。 |
 | `--initialize=empty` | 固定值 `empty` | 只对真正没有历史公开内容的新站点执行 Migration；不会读取或导入内容仓库。 |
-| `--snapshot=/绝对路径` | 独立内容快照根目录 | 目录须在代码仓库之外、非 symlink，并包含受控 `news/`、`wiki/`、`members/`、snapshot metadata 和 manifest。它不是旧 V1 工程里的 `content/`。 |
+| `--snapshot=/绝对路径` | 独立内容快照根目录 | 目录须在代码仓库之外、非 symlink，并包含受控 `news/`、`wiki/`、`members/`、snapshot metadata 和 manifest。不能把应用代码仓库或任意 Markdown 目录冒充快照。 |
 | `--confirm='精确令牌'` | 按对应命令说明构造或原样复制 | 允许执行恢复、导入或迁移等受保护写操作；snapshot/灾备令牌来自 Dry Run，restore/import/migrate 令牌由目标字段精确组成。 |
 | `--systemd-only` | 不带值 | 只为当前用户重新生成并安装运维 unit/timer；用于已完成数据准备的新机迁移流程或用户名/Home 变化，不能替代正常首次部署。 |
 
@@ -133,13 +133,13 @@ sudo -u "$current_user" env -i \
 
 ### 第二步：全新 clone V2 应用代码
 
-下面把仓库放在当前用户 Home 下的 `services/`。可以改用其他当前用户拥有的目录，但不要覆盖旧 V1
-目录，也不要使用 root 拥有的 clone。
+下面把仓库放在当前用户 Home 下的 `services/`。可以改用其他当前用户拥有的目录，但不要覆盖任何
+既有部署目录，也不要使用 root 拥有的 clone。
 
 ```bash
 install -d -m 0750 "$HOME/services" # 创建当前用户自己的服务目录；不需要 sudo
 cd "$HOME/services"                  # 后续 clone 位于该目录下
-test ! -e sdutvinci_web              # 必须成功；若目录已存在，先停下核对，禁止直接覆盖或混用 V1
+test ! -e sdutvinci_web              # 必须成功；若目录已存在，先停下核对，禁止直接覆盖或混用既有部署
 git clone --branch main --single-branch \
   https://github.com/SDUTVINCI/sdutvinci_web.git # 完整克隆 main 历史，不使用 --depth=1
 cd sdutvinci_web                      # 从这里开始，所有 ./vinci 命令都在仓库根执行
@@ -240,9 +240,8 @@ Compose 和统一 Dry Run 检查。该检查通过只代表“允许进入正式
 
 ### 第四步：只选择一种初始化模式
 
-“V1 数据库不要了”只表示不保留旧用户、草稿、审核等数据库记录，并不表示可以丢弃已经迁移到
-`SDUTVINCI/sdutvinci_content` 的正式新闻、Wiki 和成员内容。只要这些公开内容要保留，就先在应用
-仓库外取得一份干净的 main 快照：
+目标 PostgreSQL 是空库，并不表示可以丢弃 `SDUTVINCI/sdutvinci_content` 中真实存在的正式新闻、
+Wiki 和成员 Markdown。只要这些公开内容要保留，就先在应用仓库外取得一份干净的 main 快照：
 
 ```bash
 snapshot_parent="$HOME/.local/share/vinci-cms" # 私有、仓库外的父目录
@@ -355,12 +354,9 @@ Dry Run 只列旧用户拥有的精确路径。正式流程停旧 timer，按 `f
 `/opt` 或备份父目录。验收前可停新 timer、恢复已备份的旧 unit，但新旧不能并行。脚本永不
 `userdel`；只有无进程/unit/key/ACL/文件/锁且恢复点有效时才由管理员人工删除旧账号。
 
-这里的“旧环境迁移”只迁移操作系统账号、路径属主和动态 unit，不把 V1 数据模型升级为 V2。
-如果 V1 数据库没有保留价值，先停用 V1 自动拉取和 timer、保留一份可识别的只读备份，再按第 1
-节建立全新空 V2 数据库；若独立内容仓库中已有要保留的正式内容，必须执行
-`--initialize=snapshot`，不能因为放弃 V1 PostgreSQL 就改用 `empty`。不要在 V1 容器上直接拉取
-V2 main。若要保留 V1 业务数据，应使用专门的数据迁移/验收流程，不能用
-`migrate-legacy-user` 代替。
+这里的“旧环境迁移”只迁移操作系统账号、路径属主和动态 unit，不迁移或转换业务数据。新服务器
+若使用空 V2 数据库，而独立内容仓库中已有要保留的正式 Markdown，仍必须执行
+`--initialize=snapshot`；`migrate-legacy-user` 不能代替内容快照导入、数据库恢复或实例迁移。
 
 ## 3. GitHub Actions、镜像与内容仓库凭据
 
@@ -454,7 +450,7 @@ DNS TTL 和旧服务器保留窗口已安排。
 `<包名>` 填迁移包目录 basename；`<项目>` 和 `<数据库>` 填新机 `.env` 中的
 `COMPOSE_PROJECT_NAME` 与 `POSTGRES_DB`。`import-instance` 没有无确认预览模式；缺少或错误令牌
 只报期望值并停止。执行前人工核对包内 manifest 和 SHA256SUMS。`export-instance/import-instance`
-适用于 V2 到 V2 的完整迁移，不是 V1 数据库升级工具。
+适用于完整 V2 实例迁移，不是任意旧 schema 的原地升级工具。
 
 ### 预期与验证
 

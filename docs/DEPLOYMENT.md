@@ -34,7 +34,7 @@ Debian 13 的系统级 NodeSource 24.x 安装、安装脚本审阅、非交互 P
 手册第 1 节。仅在 `.bashrc` 中加载的 nvm Node 不满足 systemd 运维任务要求。
 
 全新服务器先创建当前用户自己的完整 main clone；如果目标目录已存在，停止核对，不能覆盖或与
-V1 目录混用：
+任何既有部署目录混用：
 
 ```bash
 install -d -m 0750 "$HOME/services" # 创建当前用户拥有的服务父目录
@@ -70,12 +70,12 @@ chmod 600 .env                          # 仅 owner 可读写；doctor 会拒绝
 `.env` 权限为 `0600`；`AUTO_DEPLOY_ENABLED=false`；现有 1Panel 的
 `18080 → 127.0.0.1:3000` 反向代理保持不变。
 
-先分别回答两个问题，不能把它们混成“是否保留 V1 数据”：
+先分别回答两个问题，不能把它们混成一个“是否从零开始”的判断：
 
-- V1 PostgreSQL 中的用户、草稿、审核等业务数据是否保留；
-- `SDUTVINCI/sdutvinci_content` 中的正式新闻、Wiki 和成员内容是否保留。
+- 目标 V2 PostgreSQL 是否是可以初始化的空库；
+- `SDUTVINCI/sdutvinci_content` 中的正式新闻、Wiki 和成员 Markdown 是否保留。
 
-即使第一个答案是“不保留”，只要第二个答案是“保留”，也必须选择 `snapshot`。`empty` 只适用于
+只要内容仓库中的正式 Markdown 要保留，就必须选择 `snapshot`。`empty` 只适用于
 内容仓库本来就是空的，或者已经明确批准放弃其中全部正式内容的新站点。正式安装不再默认选择
 `empty`，省略 `--initialize` 会直接拒绝。
 

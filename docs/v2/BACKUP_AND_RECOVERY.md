@@ -339,7 +339,7 @@ snapshot 检查。
 ## 10. 阶段 11 实例迁移与迁移包清理
 
 `./vinci export-instance` 生成包含数据库备份、代码 bundle/Commit、活动镜像/槽位、内容仓库与
-S3/COS 无密钥清单的 `vinci-instance-v1` 目录。真实 `.env`、Token、私钥不进入包。
+S3/COS 无密钥清单和受控格式 marker 的实例包目录。真实 `.env`、Token、私钥不进入包。
 `./vinci import-instance` 全量校验 SHA/bundle，拒绝非空库，再执行恢复、向前 Migration、蓝绿
 健康、内容任务和对象存在性检查。
 
