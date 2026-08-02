@@ -217,15 +217,127 @@ Cookie、CSRF 或同源校验。
 因此生产安装必须为 `CONTENT_EXPORT_SSH_KEY_FILE` 和 `CONTENT_EXPORT_KNOWN_HOSTS_FILE` 配置真实、
 最小权限文件。`disabled` 只表示增量 Outbox Worker 尚未接管，不表示对账不需要 Git 凭据。
 
-凭据文件的宿主机示例布局可以是：
+### 5.1 创建内容仓库专用 SSH Deploy Key
 
-```text
-/srv/vinci-secrets/content-export-key
-/srv/vinci-secrets/content-export-known-hosts
+#### 前置条件
+
+- 宿主机已安装 OpenSSH client，`ssh-keygen`、`ssh-keyscan` 和 `ssh` 命令可用。
+- 下列命令以将来运行 `./vinci` 和 systemd 的同一普通用户执行，不使用 `sudo ssh-keygen`。
+- 维护者对 `SDUTVINCI/sdutvinci_content` 有仓库管理员权限；密钥只添加到这个**内容仓库**，不添加
+  到 `sdutvinci_web` 代码仓库，也不复用个人的 `~/.ssh/id_*`。
+- 自动导出和 03:00 对账都可能普通 Push，因此 Deploy Key 必须在 GitHub 勾选写权限。
+- 无口令私钥是为了让无人值守的 systemd/Compose 任务能够启动；风险通过“一仓库一密钥”、目录
+  `0700`、私钥 `0600` 和及时吊销控制。不要把该私钥复制到第二台服务器。
+
+先在宿主机创建仅当前用户可访问的凭据目录和一对独立 Ed25519 密钥：
+
+```bash
+credential_root="$HOME/.config/vinci-cms/content-export" # 宿主机固定目录；不要放在代码仓库或 /tmp
+install -d -m 0700 "$credential_root"                    # 创建目录；只有当前用户可进入和读取
+test ! -e "$credential_root/deploy-key"                  # 预期无输出且退出码为 0，防止覆盖既有私钥
+test ! -e "$credential_root/deploy-key.pub"              # 预期无输出且退出码为 0，防止覆盖既有公钥
+umask 077                                                  # 后续新文件默认只允许当前用户访问
+ssh-keygen -t ed25519 -N '' \
+  -C 'vinci-content-export@debian' \
+  -f "$credential_root/deploy-key"                        # 生成无人值守专用密钥；不要改成个人私钥路径
+chmod 600 "$credential_root/deploy-key"                  # 私钥只允许 owner 读写
+chmod 644 "$credential_root/deploy-key.pub"              # 公钥不是秘密，可供复制和审计
 ```
 
-目录使用 `0700`，两个文件使用 `0600`。不要把它们放进代码仓库或 `.env` 所在目录，也不要将
-私钥内容写进 `.env`；这里只填写文件路径。
+`ssh-keygen` 预期报告私钥、公钥路径和指纹，不应提示覆盖文件。任何 `test` 失败都表示路径已经存在：
+先确认它的来源和 GitHub 授权，绝不能直接覆盖。输出公钥并在 GitHub 页面登记：
+
+```bash
+sed -n '1p' "$credential_root/deploy-key.pub" # 只显示单行公钥；绝不能显示或发送 deploy-key 私钥
+```
+
+1. 打开 GitHub 的 `SDUTVINCI/sdutvinci_content` → **Settings** → **Deploy keys** →
+   **Add deploy key**。
+2. Title 填可追踪且唯一的服务器名，例如 `vinci-content-export-debian-20260802`。
+3. Key 粘贴上一步的整行 `.pub` 公钥。
+4. **必须勾选 Allow write access**，然后添加。Deploy Key 默认只读；不勾选时能 clone，但自动导出
+   和对账 Push 会失败。
+
+[GitHub Deploy Key](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/managing-deploy-keys)
+一把只能附加到一个仓库；如果提示 key already in use，不要复用，应为这台服务器重新生成一对。如果
+组织策略隐藏或禁止 Deploy keys，停止配置并由组织管理员放行目标仓库，不能改用个人通用密钥绕过。
+
+### 5.2 创建并核验独立 known_hosts
+
+`ssh-keyscan` 只负责采集候选 host key，本身不会证明对端真是 GitHub。必须将候选 Ed25519 指纹与
+[GitHub 官方 SSH key fingerprints](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints)
+通过当前可信 HTTPS 页面逐字核对：
+
+```bash
+known_hosts_candidate="$credential_root/known-hosts.candidate" # 候选文件，尚未获得信任
+test ! -e "$known_hosts_candidate"                             # 预期无输出且退出码为 0，防止覆盖审计线索
+test ! -e "$credential_root/known-hosts"                       # 首次配置应不存在正式文件
+umask 077                                                       # 确保重定向创建的文件不是全局可读
+ssh-keyscan -t ed25519 github.com > "$known_hosts_candidate"   # 仅采集候选，不因命令成功就直接信任
+ssh-keygen -lf "$known_hosts_candidate"                        # 计算候选 key 的 SHA-256 指纹
+```
+
+截至本文更新时，预期指纹为
+`SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU`（ED25519）。必须以执行当天 GitHub
+官方页面显示的当前值为准；不一致时停止，不要移动候选文件、不要关闭
+`StrictHostKeyChecking`，应先检查 DNS、代理、网络劫持或 GitHub 官方轮换公告。核对完全一致后：
+
+```bash
+mv -- "$known_hosts_candidate" "$credential_root/known-hosts" # 只有人工核验后才提升为受信文件
+chmod 600 "$credential_root/known-hosts"                       # 仅运行服务的当前用户可修改
+test ! -L "$credential_root/deploy-key"                        # 预期成功：私钥不得是 symlink
+test ! -L "$credential_root/known-hosts"                       # 预期成功：known_hosts 不得是 symlink
+stat -c '%a %U:%G %n' \
+  "$credential_root" \
+  "$credential_root/deploy-key" \
+  "$credential_root/known-hosts"                              # 预期权限依次为 700、600、600，owner 为当前用户
+```
+
+### 5.3 验证内容仓库访问并填写 `.env`
+
+用刚生成的两个文件显式连接目标内容仓库；这条命令只读取 main 引用，不 clone、不 Commit、不 Push：
+
+```bash
+GIT_SSH_COMMAND="ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${credential_root}/known-hosts -i ${credential_root}/deploy-key" \
+  git ls-remote --exit-code \
+  git@github.com:SDUTVINCI/sdutvinci_content.git \
+  refs/heads/main # 预期输出 40 位 SHA、Tab 和 refs/heads/main，退出码为 0
+```
+
+成功只证明密钥能读取目标仓库；写权限由 GitHub Deploy Key 页面中的 **Allow write access** 控制，
+不要为了“测试写入”创建垃圾 Commit 或 Push。若出现 `Permission denied (publickey)`，依次检查公钥是否
+加在内容仓库、是否完整、私钥路径和文件 owner；若出现 host key 错误，重新走可信指纹核验，不能
+使用 `StrictHostKeyChecking=no`。
+
+取得不含 `$HOME`、`~` 或 symlink 的真实绝对路径：
+
+```bash
+realpath "$credential_root/deploy-key"   # 复制该输出作为 CONTENT_EXPORT_SSH_KEY_FILE 的值
+realpath "$credential_root/known-hosts" # 复制该输出作为 CONTENT_EXPORT_KNOWN_HOSTS_FILE 的值
+```
+
+当前服务器用户为 `tungchiahui` 时，`.env` 应写成：
+
+```dotenv
+CONTENT_EXPORT_SSH_KEY_FILE=/home/tungchiahui/.config/vinci-cms/content-export/deploy-key
+CONTENT_EXPORT_KNOWN_HOSTS_FILE=/home/tungchiahui/.config/vinci-cms/content-export/known-hosts
+```
+
+不同用户名必须替换为该机 `realpath` 的实际输出。`.env` 不执行 shell 展开，所以不能填写 `$HOME`、
+`${HOME}` 或 `~`；这两个值是**宿主机 bind mount 源路径**，也不是容器内的 `/run/secrets/...`。
+不要将私钥内容写进 `.env`。保存 `.env` 后执行：
+
+```bash
+chmod 600 .env # 保护数据库、S3/COS 和 GitHub 等全部配置
+docker compose -f compose.yaml -f compose.content-export.yaml \
+  --profile content-export config --quiet # 预期无输出且退出码为 0：验证 Compose 展开和变量完整性
+./vinci install --dry-run                  # 预期仅报告安装计划，不启动、不迁移、不 Push
+```
+
+正式安装后再执行 `./vinci doctor`；预期 Git 凭据检查通过且日志只显示路径/脱敏状态，不显示私钥。
+轮换时先用**新文件名**生成新密钥、添加并验证新 Deploy Key，再改 `.env` 和重启相应服务，确认 doctor
+通过后才从 GitHub 删除旧 Deploy Key；绝不原地覆盖正在使用的私钥。若怀疑私钥泄露，应先在 GitHub
+立即删除对应 Deploy Key 并暂停内容 Worker/对账，再签发新密钥，不能等待例行维护窗口。
 
 ## 6. GitHub Pull Request 内容导入
 

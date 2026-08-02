@@ -295,26 +295,30 @@ Dry Run 只列旧用户拥有的精确路径。正式流程停旧 timer，按 `f
 
 ### 前置条件
 
-代码 Actions 用仓库 `GITHUB_TOKEN` 写 GHCR；服务器代码 remote 只读。内容仓库使用单独、仅写
-目标仓库 main 的细粒度凭据；PR 评论/关闭再用另一最小权限 Token。
+代码 Actions 用仓库 `GITHUB_TOKEN` 写 GHCR；服务器代码 remote 只读。内容仓库使用只绑定该仓库
+的独立 Deploy Key 并勾选写权限，应用只操作 main，仓库端再用 branch protection 约束；PR 评论/关闭
+使用另一最小权限 Token。
 
 ### 命令
 
 ```bash
 git remote get-url origin                    # 只读确认代码 remote，没有用户名、Token 或嵌入式密码
 # GHCR 登录使用第 1 节的隐藏输入和 --password-stdin，Token 只授予 read:packages
-ssh-keyscan -t ed25519 github.com > /受限路径/content-known-hosts # 采集候选 key，仍须可信核对
-chmod 600 /受限路径/content-key /受限路径/content-known-hosts # 两个文件仅 owner 可读写
+realpath "$HOME/.config/vinci-cms/content-export/deploy-key" # 应输出内容仓库专用私钥的真实绝对路径
+realpath "$HOME/.config/vinci-cms/content-export/known-hosts" # 应输出已核验 GitHub 指纹的独立文件路径
 ./vinci doctor                               # 验证配置可用且输出已遮盖敏感值
 ```
 
-执行 `ssh-keyscan` 前先设 `umask 077`，并确认目标文件不是 symlink；采集到的 key 不是身份认证，
-必须再与官方公布的指纹或既有可信渠道核对。
+首次创建密钥、在 GitHub 内容仓库勾选 **Allow write access**、可信核验 host key、填写 `.env` 和轮换
+凭据的逐条教程见 [环境配置第 5.1～5.3 节](./ENVIRONMENT_CONFIGURATION.md#51-创建内容仓库专用-ssh-deploy-key)。
+不要只执行 `ssh-keyscan` 就信任结果，也不要把个人 SSH 私钥、代码仓库凭据或 `$HOME` 字面量填进
+`.env`。
 
 ### 预期与验证
 
-origin 与配置完全一致；main 完整 SHA 有两种镜像。内容 Worker 只普通 fast-forward Push；PR
-导入只读 Diff，评论/关闭独立确认，代码没有 Merge/Force Push 路径。
+origin 与配置完全一致；main 完整 SHA 有两种镜像。内容仓库 `git ls-remote` 输出 main 的 40 位
+SHA，doctor 检查通过。内容 Worker 只普通 fast-forward Push；PR 导入只读 Diff，评论/关闭独立
+确认，代码没有 Merge/Force Push 路径。
 
 ### 失败处理、回滚与安全
 
