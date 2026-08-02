@@ -107,29 +107,41 @@ unset compose_project
 
 ### 2.1 保留独立内容仓库：首次快照导入（通常选择）
 
-先把内容仓库克隆到应用仓库之外的来源目录。下例复用环境配置手册第 5.1～5.3 节已经核验的
-专用 Deploy Key 和 known_hosts，只读取内容仓库，不 Commit 或 Push：
+内容仓库 `main` 当前保存的是首次完整复制，受控文件位于 `content/` 下；它是唯一真实内容基线，
+但还没有恢复入口要求的稳定 ID、根级布局和双重哈希清单。先把它克隆到应用仓库之外的只读来源
+目录，再由当前已发布 operations 镜像在另一个全新目录确定性生成导入快照。下例复用环境配置
+手册第 5.1～5.3 节已经核验的专用 Deploy Key 和 known_hosts；全程不 Commit 或 Push：
 
 ```bash
 snapshot_parent="$HOME/.local/share/vinci-cms" # 仓库外、当前用户私有的内容快照父目录
+baseline_root="$snapshot_parent/initial-content-baseline"
 snapshot_root="$snapshot_parent/initial-content-snapshot"
 credential_root="$HOME/.config/vinci-cms/content-export"
 install -d -m 0700 "$snapshot_parent"          # 创建私有父目录
-test ! -e "$snapshot_root"                     # 必须成功；禁止覆盖来源不明的旧目录
+test ! -e "$baseline_root"                     # 必须成功；禁止覆盖来源不明的旧 clone
+test ! -e "$snapshot_root"                     # 必须成功；生成器绝不覆盖既有快照
 GIT_SSH_COMMAND="ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${credential_root}/known-hosts -i ${credential_root}/deploy-key" \
   git clone --branch main --single-branch \
-  git@github.com:SDUTVINCI/sdutvinci_content.git "$snapshot_root" # 只 clone，不写远端
-test -z "$(git -C "$snapshot_root" status --porcelain)"          # 预期无输出：快照工作区干净
-test "$(git -C "$snapshot_root" remote get-url origin)" = \
+  git@github.com:SDUTVINCI/sdutvinci_content.git "$baseline_root" # 只 clone，不写远端
+test -z "$(git -C "$baseline_root" status --porcelain)"          # 预期无输出：来源工作区干净
+test "$(git -C "$baseline_root" remote get-url origin)" = \
   'git@github.com:SDUTVINCI/sdutvinci_content.git'                # 预期成功：来源是正式内容仓库
+baseline_sha="$(git -C "$baseline_root" rev-parse HEAD)"
+test "${#baseline_sha}" = 40                                    # 必须是本次固定的完整内容 Commit
+./vinci prepare-initial-snapshot \
+  --source="$baseline_root" --output="$snapshot_root"
+  # 预期输出 articleCount=228、memberCount=32、来源 Commit 和两个 SHA-256；不连接网络/数据库
 test -f "$snapshot_root/.vinci/snapshot.json"                    # 必须存在稳定 ID/路径快照
 test -f "$snapshot_root/manifest.json"                           # 必须存在逐文件哈希清单
-git -C "$snapshot_root" rev-parse HEAD                           # 记录本次导入的内容 Commit
-unset credential_root snapshot_parent
+test "$(cat "$snapshot_root/.vinci/source-commit")" = "$baseline_sha" # 快照绑定刚才记录的来源
+test -z "$(git -C "$baseline_root" status --porcelain)"          # 生成后来源仍无改动
+unset baseline_sha credential_root snapshot_parent
 ```
 
-任一 `test` 失败都应停止；不要自行修改 Markdown、manifest 或 snapshot 来绕过校验。然后请求恢复
-计划和绑定本次快照的精确确认令牌：
+生成器只接受干净 `main`、与 `origin/main` 一致的固定 Commit、精确 Git remote、仅含三类
+`content/**/*.md` 的普通文件及不重叠的新输出路径，并在无网络只读容器中运行。任一检查失败都应
+停止；不要自行移动 Markdown、制造 manifest 或修改 snapshot 来绕过校验。然后请求恢复计划和
+绑定本次快照的精确确认令牌：
 
 ```bash
 ./vinci install --initialize=snapshot --snapshot="$snapshot_root"
@@ -137,7 +149,7 @@ unset credential_root snapshot_parent
 ./vinci install --initialize=snapshot --snapshot="$snapshot_root" \
   --confirm='INITIALIZE:把上一条输出的完整令牌原样粘贴到这里'
   # 预期：事务导入公开内容与当前 Revision、部署首个槽位并安装五组 timer
-unset snapshot_root
+unset baseline_root snapshot_root
 ```
 
 第一条快照命令以非零退出是确认闸门的设计，不是导入失败；此时不得改用 `empty`。第二条会再次

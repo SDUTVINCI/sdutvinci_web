@@ -69,7 +69,7 @@ printf 'commit=%s\nimage=registry.invalid/runtime-test:%s\nslot=blue\nmode=appli
 ) || { printf 'operations did not select the active deployment image tag\n' >&2; exit 1; }
 
 help_output="$($repository_root/vinci --help)"
-for command in install update status doctor backup backup-prune restore \
+for command in install prepare-initial-snapshot update status doctor backup backup-prune restore \
   admin export-instance import-instance migrate-legacy-user reconcile maintenance; do
   printf '%s\n' "$help_output" | grep -F "$command" >/dev/null
   "$repository_root/vinci" "$command" --help > "$test_root/help-${command}.log"

@@ -14,6 +14,7 @@ Vinci V2.0 统一运维入口
   ./vinci install --dry-run|--systemd-only
   ./vinci install --initialize=empty
   ./vinci install --initialize=snapshot --snapshot=/绝对路径 [--confirm=INITIALIZE:...]
+  ./vinci prepare-initial-snapshot --source=/绝对路径 --output=/绝对路径
   ./vinci update [<40位commit>|--automatic]
   ./vinci status
   ./vinci doctor [--scheduled] [--legacy-user=<用户> --legacy-root=<目录>]
@@ -295,6 +296,64 @@ vinci_install() {
   vinci_install_systemd false
   "$VINCI_ROOT/vinci" doctor
   ops_info "首次安装完成。普通启动未执行任何 Markdown 反向导入。"
+}
+
+vinci_prepare_initial_snapshot() {
+  local source="" output=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --source=*) source="${1#*=}" ;;
+      --output=*) output="${1#*=}" ;;
+      -h|--help) vinci_usage; return 0 ;;
+      *) vinci_die_usage "prepare-initial-snapshot 未知参数：$1" ;;
+    esac
+    shift
+  done
+  [ -n "$source" ] && [ -n "$output" ] \
+    || vinci_die_usage "prepare-initial-snapshot 必须同时提供 --source 和 --output"
+  vinci_preflight
+  ops_export_active_image_tag
+  source="$(ops_require_external_absolute_path 初始内容来源 "$source")"
+  output="$(ops_require_external_absolute_path 初始导入快照 "$output")"
+  [ -d "$source" ] && [ ! -L "$source" ] && [ -d "$source/.git" ] && [ ! -L "$source/.git" ] \
+    || ops_die "初始内容来源必须是安全的 Git working tree"
+  [ ! -e "$output" ] || ops_die "初始导入快照输出已存在；拒绝覆盖"
+  case "$source:$output" in
+    *$'\n'*|*:*:*) ops_die "初始内容路径包含不支持的字符" ;;
+  esac
+  case "$output/" in
+    "$source/"*) ops_die "初始导入快照不得位于来源目录内" ;;
+  esac
+  case "$source/" in
+    "$output/"*) ops_die "初始内容来源不得位于输出目录内" ;;
+  esac
+
+  local output_parent output_name source_commit operations_image
+  output_parent="$(dirname -- "$output")"
+  output_name="$(basename -- "$output")"
+  install -d -m 0700 "$output_parent"
+  [ ! -L "$output_parent" ] && [ "$(stat -c '%u' "$output_parent")" = "$VINCI_RUN_UID" ] \
+    || ops_die "初始导入快照父目录必须由当前用户拥有且不是 symlink"
+  source_commit="$(git -C "$source" rev-parse HEAD)"
+  [[ "$source_commit" =~ ^[0-9a-f]{40}$ ]] || ops_die "初始内容来源 Commit 无效"
+  operations_image="$(ops_required_compose_env APP_OPS_IMAGE):${APP_IMAGE_TAG}"
+  docker image inspect "$operations_image" >/dev/null \
+    || ops_die "缺少当前 Commit 的 operations 镜像：${operations_image}"
+
+  docker run --rm --network none --read-only --cap-drop ALL \
+    --security-opt no-new-privileges \
+    --user "${VINCI_RUN_UID}:${VINCI_RUN_GID}" \
+    --tmpfs /tmp:rw,nosuid,nodev,size=64m \
+    --volume "$source:/source:ro" \
+    --volume "$output_parent:/output-parent:rw" \
+    --workdir /app "$operations_image" \
+    npm run v2:content:prepare-initial-snapshot -- \
+      --source=/source --output="/output-parent/${output_name}" \
+      "--source-commit=${source_commit}" \
+      --expected-remote=git@github.com:SDUTVINCI/sdutvinci_content.git
+  [ -d "$output" ] && [ ! -L "$output" ] \
+    || ops_die "operations 镜像未生成安全的初始导入快照"
+  ops_info "初始导入快照已生成；来源未修改，也未连接或写入 GitHub：${output}"
 }
 
 vinci_update() {
@@ -618,6 +677,7 @@ command="${1:-help}"
 case "$command" in
   help|-h|--help) vinci_usage ;;
   install) vinci_install "$@" ;;
+  prepare-initial-snapshot) vinci_prepare_initial_snapshot "$@" ;;
   update) vinci_update "$@" ;;
   status) vinci_status "$@" ;;
   doctor) vinci_doctor "$@" ;;

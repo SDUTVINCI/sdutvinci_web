@@ -33,6 +33,7 @@
 | 参数 | 填什么 | 作用和写入影响 |
 | --- | --- | --- |
 | `install --dry-run` | 不带值 | 只做环境、权限、Compose、动态 systemd unit 和 logrotate 预检；不部署、不迁移数据库、不安装 timer。 |
+| `prepare-initial-snapshot --source=/绝对路径 --output=/绝对路径` | `source` 填内容仓库干净 `main` clone；`output` 填尚不存在的新目录 | 在断网、只读 operations 容器中把首次 `content/` 复制确定性转换为可恢复快照；不改来源、不访问数据库、不写 GitHub。只用于首次接管，不能替代日常导出或灾备恢复。 |
 | `--initialize=snapshot` | 固定值 `snapshot` | 首次部署需要保留独立内容仓库的正式内容时执行；必须同时提供 `--snapshot=/绝对路径`。不能恢复用户、草稿、完整历史、审核或审计。 |
 | `--initialize=empty` | 固定值 `empty` | 只对真正没有历史公开内容的新站点执行 Migration；不会读取或导入内容仓库。 |
 | `--snapshot=/绝对路径` | 独立内容快照根目录 | 目录须在代码仓库之外、非 symlink，并包含受控 `news/`、`wiki/`、`members/`、snapshot metadata 和 manifest。不能把应用代码仓库或任意 Markdown 目录冒充快照。 |
@@ -241,29 +242,38 @@ Compose 和统一 Dry Run 检查。该检查通过只代表“允许进入正式
 ### 第四步：只选择一种初始化模式
 
 目标 PostgreSQL 是空库，并不表示可以丢弃 `SDUTVINCI/sdutvinci_content` 中真实存在的正式新闻、
-Wiki 和成员 Markdown。只要这些公开内容要保留，就先在应用仓库外取得一份干净的 main 快照：
+Wiki 和成员 Markdown。当前 `main` 是 `content/` 下的首次完整复制；先在应用仓库外取得干净、固定
+Commit 的来源 clone，再用受控生成器得到恢复入口所需的规范快照：
 
 ```bash
 snapshot_parent="$HOME/.local/share/vinci-cms" # 私有、仓库外的父目录
+baseline_root="$snapshot_parent/initial-content-baseline"
 snapshot_root="$snapshot_parent/initial-content-snapshot"
 credential_root="$HOME/.config/vinci-cms/content-export" # 第 5.1～5.3 节配置并核验的专用凭据目录
 install -d -m 0700 "$snapshot_parent"
-test ! -e "$snapshot_root" # 必须成功；存在时先核对来源，不能覆盖或混合旧工作区
+test ! -e "$baseline_root" # 必须成功；不能覆盖或混合旧来源工作区
+test ! -e "$snapshot_root" # 必须成功；生成器拒绝覆盖任何既有目录
 GIT_SSH_COMMAND="ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${credential_root}/known-hosts -i ${credential_root}/deploy-key" \
   git clone --branch main --single-branch \
-  git@github.com:SDUTVINCI/sdutvinci_content.git "$snapshot_root"
+  git@github.com:SDUTVINCI/sdutvinci_content.git "$baseline_root"
   # 预期 clone main 成功；此命令没有 Commit、Push 或 GitHub 写接口
-test -z "$(git -C "$snapshot_root" status --porcelain)" # 工作区必须干净
-test "$(git -C "$snapshot_root" remote get-url origin)" = \
+test -z "$(git -C "$baseline_root" status --porcelain)" # 来源工作区必须干净
+test "$(git -C "$baseline_root" remote get-url origin)" = \
   'git@github.com:SDUTVINCI/sdutvinci_content.git' # 必须来自唯一正式内容仓库
+baseline_sha="$(git -C "$baseline_root" rev-parse HEAD)"
+test "${#baseline_sha}" = 40 # 固定并记录本次初始导入来源
+./vinci prepare-initial-snapshot --source="$baseline_root" --output="$snapshot_root"
+  # 预期：228 articles、32 members、sourceCommit、snapshotSha256、manifestSha256；不写来源/远端/DB
 test -f "$snapshot_root/.vinci/snapshot.json"     # 稳定 vinciId、路径和 tombstone 快照
 test -f "$snapshot_root/manifest.json"            # 逐文件大小和 SHA-256 清单
-git -C "$snapshot_root" rev-parse HEAD            # 记录导入来源的完整内容 Commit
-unset credential_root snapshot_parent
+test "$(cat "$snapshot_root/.vinci/source-commit")" = "$baseline_sha" # 输出与固定来源绑定
+test -z "$(git -C "$baseline_root" status --porcelain)" # 生成后来源仍必须干净
+unset baseline_sha credential_root snapshot_parent
 ```
 
 如果 clone、来源、工作区或 metadata 任一检查失败，停止并修复 Deploy Key、known_hosts、网络或仓库
-本身；不要编辑 manifest/Markdown、改 remote、关闭哈希校验或退回代码仓库中的历史 `content/`。
+本身；不要手工移动 Markdown、编辑 manifest、改 remote 或关闭哈希校验。生成器只接受干净 main、
+与 `origin/main` 一致的固定 Commit、精确 remote、三类受控 Markdown 和全新的不重叠输出目录。
 先完成通用只读预检，再运行快照专用 Dry Run：
 
 ```bash
@@ -273,7 +283,7 @@ unset credential_root snapshot_parent
 ./vinci install --initialize=snapshot --snapshot="$snapshot_root" \
   --confirm='INITIALIZE:把上一条命令输出的完整令牌原样粘贴到这里'
   # 预期在一个事务中导入内容/当前 Revision，随后部署应用并安装五组 timer
-unset snapshot_root
+unset baseline_root snapshot_root
 ```
 
 未带 `--confirm` 的命令会先启动隔离 PostgreSQL、执行向前 Migration 和只读恢复检查，因此结束时
