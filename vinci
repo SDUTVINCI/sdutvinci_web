@@ -368,7 +368,7 @@ vinci_doctor() {
   doctor_check docker info
   doctor_check doctor_repository_clean
   doctor_check docker compose config --quiet
-  doctor_check docker compose ps --status running postgres
+  doctor_check ops_compose_service_is_running postgres
   doctor_check curl --fail --silent --show-error "http://127.0.0.1:$(ops_config_value APP_PORT 3000)/api/health" -o /dev/null
   local backup_root critical_free available_free
   backup_root="$(ops_config_value BACKUP_ROOT /var/backups/vinci-cms)"

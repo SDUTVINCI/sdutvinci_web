@@ -54,6 +54,13 @@ ops_required_compose_env() {
   printf '%s' "$value"
 }
 
+ops_compose_service_is_running() {
+  local service_name="$1"
+  local container_ids
+  container_ids="$(docker compose ps --quiet --status running "$service_name")" || return 1
+  [ -n "$container_ids" ]
+}
+
 ops_config_value() {
   local key="$1"
   local fallback="$2"

@@ -6,6 +6,34 @@ test_root="$(mktemp -d /tmp/vinci-phase11-operations-test.XXXXXX)"
 trap 'rm -rf -- "$test_root"' EXIT
 printf 'vinci-phase11-operations-test\n' > "$test_root/.vinci-phase11-test-owner"
 
+doctor_fake_bin="$test_root/doctor-empty-compose-test-bin"
+mkdir -p "$doctor_fake_bin"
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'if [ "$*" = "compose ps --quiet --status running postgres" ]; then' \
+  '  [ -z "${PHASE11_FAKE_POSTGRES_ID:-}" ] || printf "%s\\n" "$PHASE11_FAKE_POSTGRES_ID"' \
+  '  exit 0' \
+  'fi' \
+  'exit 64' > "$doctor_fake_bin/docker"
+chmod 0755 "$doctor_fake_bin/docker"
+if (
+  PATH="$doctor_fake_bin:/usr/bin:/bin"
+  # shellcheck source=scripts/ops-common.sh
+  source "$repository_root/scripts/ops-common.sh"
+  ops_compose_service_is_running postgres
+); then
+  printf 'operations doctor accepted empty compose ps output as a running service\n' >&2
+  exit 1
+fi
+(
+  PATH="$doctor_fake_bin:/usr/bin:/bin"
+  PHASE11_FAKE_POSTGRES_ID=phase11-postgres-container-test
+  export PHASE11_FAKE_POSTGRES_ID
+  # shellcheck source=scripts/ops-common.sh
+  source "$repository_root/scripts/ops-common.sh"
+  ops_compose_service_is_running postgres
+) || { printf 'operations doctor rejected a non-empty running service id\n' >&2; exit 1; }
+
 fallback_bin="$test_root/phase11-standard-sbin-test/logrotate"
 mkdir -p "$(dirname -- "$fallback_bin")"
 printf '#!/usr/bin/env bash\nexit 0\n' > "$fallback_bin"
