@@ -7,6 +7,7 @@ clone 根目录按本文填写 `.env`。不要把本文示例中的 `replace-*`�
 本文的职责到“配置填写和只读预检通过”为止，**不执行正式安装，也不把 `status`/`doctor` 当作
 安装前检查**。第 11 节通过后，统一回到 [`DEPLOYMENT.md`](../DEPLOYMENT.md#2-首次正式部署先选择内容基线)
 第 2 节执行唯一的正式部署顺序；命令原理、失败处理和高级排障再查 `OPERATIONS.md`。
+已经部署完成、只需要修改现有 `.env` 的维护者可直接看第 12 节的生效方式对照表和短流程。
 
 ## 1. 填写规则与安全验证
 
@@ -740,3 +741,34 @@ volume、部署状态、备份目录或 timer。因此不要在这里运行 `./v
 [`DEPLOYMENT.md` 第 2 节](../DEPLOYMENT.md#2-首次正式部署先选择内容基线) 执行资源占用复核，先判断
 是否保留独立内容仓库；保留时执行 `--initialize=snapshot`，只有真正的空内容新站点才执行
 `--initialize=empty`，随后再做安装后验收。
+
+## 12. 已部署实例修改 `.env` 后如何生效
+
+`.env` 不是一个统一的热加载配置源；不同消费者读取它的时机不同。保存后先执行 `chmod 600 .env`，
+再严格按下表选择一种生效方式，不能一律 `docker restart`、`compose down` 或重新安装：
+
+| 修改类型 | 生效方式 | 说明 |
+| --- | --- | --- |
+| 应用配置，例如 `CONTENT_PR_IMPORT_MODE`、PR Token、CMS/S3、站点 URL 与限流参数 | 用当前活动完整 SHA 执行一次 `./vinci update "$current_deployment_sha"` | 同一不可变镜像做蓝绿重载和健康检查；失败保留原活动槽。 |
+| 常驻内容导出 Worker 配置，例如导出 mode、批量、轮询、重试或 Git 作者 | 按第 5.4 节完成接管；已接管实例用当前 SHA 重新 `up -d --force-recreate content-export-worker` | 只保存 `.env` 不会改变已运行 Worker 的进程环境。首次开启不能跳过 Dry Run/确认令牌。 |
+| 每次由 systemd 新启动的任务，例如 `AUTO_DEPLOY_ENABLED`、备份/清理/对账保留参数 | 无需重启应用或重装 timer；下一次 service 执行自动读取新值 | timer 的 `enabled/active` 状态与业务开关是两回事。需要立即执行时使用对应公开 `./vinci` 命令，不能手工调用内部 `--automatic/--scheduled`。 |
+| systemd 路径或安装身份相关配置 | `./vinci install --systemd-only` | 重新安全创建路径、渲染并启用 unit；不迁移数据库、不部署应用。 |
+| `POSTGRES_DB`、`POSTGRES_USER`、`POSTGRES_PASSWORD`、`DATABASE_URL`、Compose project/volume 身份 | 不得按普通热更新处理 | 已初始化数据库不会因改 `.env` 自动改密码或迁移数据；按备份恢复/实例迁移手册制定停机迁移，禁止删卷试错。 |
+
+同一次只修改已经完成各自启用门槛的应用开关和自动部署开关时，可以一次保存，再做一轮应用蓝绿
+重载。自动部署 timer 会直接读取新值；蓝绿重载是为了让应用进程读取 PR 导入等应用配置：
+
+```bash
+chmod 600 .env # 保存后立即恢复仅 owner 可读写
+current_deployment_sha="$(awk -F= '$1 == "commit" { print $2; exit }' .deploy/current)"
+[[ "$current_deployment_sha" =~ ^[0-9a-f]{40}$ ]] # 必须是当前活动完整 SHA
+./vinci update "$current_deployment_sha" # 同一 SHA 重建候选槽、健康检查并切换 gateway
+./vinci status # 预期 Commit 不变、slot 切换、容器和五组 timer 正常
+./vinci doctor # 预期全部通过且不输出 Token/密钥
+unset current_deployment_sha
+```
+
+若本次**只**修改 `AUTO_DEPLOY_ENABLED`，执行 `chmod 600 .env` 后等待下一轮 timer 即已完成应用，
+不需要为了这个布尔值单独蓝绿重载。若同一次还修改 `CONTENT_PR_IMPORT_MODE` 或 Token，则必须执行
+上面的同 SHA `update`。`CONTENT_RECOVERY_MODE` 和两个 `*_TEST_MODE` 在生产始终保持关闭，不能用
+任何重载方式绕过。
