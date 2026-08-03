@@ -2,8 +2,12 @@ import { readFile, readdir } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { Crepe } from '@milkdown/crepe'
-import { prepareMarkdownForVisualEditor } from '../app/utils/cms-protected-markdown'
 import {
+  collectCmsProtectedMarkdownSources,
+  prepareMarkdownForVisualEditor
+} from '../app/utils/cms-protected-markdown'
+import {
+  assessCmsVisualRoundTrip,
   cmsVisualEditorFeatures,
   isCmsVisualRoundTripLossless
 } from '../app/utils/cms-visual-editor'
@@ -39,6 +43,29 @@ describe('CMS 混合可视化 Markdown 保护', () => {
       .toBe(true)
     expect(assessMarkdownVisualSafety('{% include section.html %}').allowed)
       .toBe(true)
+  })
+
+  it('按最终网页效果接受等价规范化，并严格保留扩展语法', async () => {
+    const bareLink = '访问 https://example.com/path 获取资料。'
+    const normalizedLink = '访问 <https://example.com/path> 获取资料。'
+    expect(isCmsVisualRoundTripLossless(bareLink, normalizedLink)).toBe(false)
+    await expect(assessCmsVisualRoundTrip(bareLink, normalizedLink)).resolves.toEqual({
+      safe: true,
+      reason: 'equivalent'
+    })
+
+    const protectedSource = '<!-- 原始注释 -->\n\n<iframe src="/embed"></iframe>'
+    expect(collectCmsProtectedMarkdownSources(protectedSource)).toEqual([
+      '<!-- 原始注释 -->',
+      '<iframe src="/embed"></iframe>'
+    ])
+    await expect(assessCmsVisualRoundTrip(
+      protectedSource,
+      protectedSource.replace('原始注释', '被修改的注释')
+    )).resolves.toEqual({
+      safe: false,
+      reason: 'protected_syntax_changed'
+    })
   })
 
   it('保留独立 Markdown 图片的可访问说明并拒绝有损往返', () => {

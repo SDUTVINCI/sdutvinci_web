@@ -1756,3 +1756,24 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
   长时间无进度而人工停止；其 test 容器、数据库 volume、network 和临时快照已由退出钩子清理。
 - 新增 `docs/CMS_EDITOR_GUIDE.md`，包含使用方式、登记组件扩展流程、权限/安全/异常、明确非目标、
   本机验证和回滚。实现使用新的独立本地 Commit；完整 SHA 由交付回复报告。
+
+---
+
+## 2026-08-03：CMS 本地文章详情、富文本兼容与 Wiki 预览回归修复
+
+- 用户在 `npm run dev` 中反馈：从文章列表进入详情后卡住，刷新被误报为 404；生产富文本被
+  “无损往返检查”拒绝；Wiki 右侧预览缺少正式页面的自动标题编号。本轮只在本机诊断和验证，
+  未连接、SSH 或修改 `10.0.0.4`，未 Fetch、Push、部署或访问生产数据。
+- 数据库权威模式的 CMS 详情改为直接读取当前 `article_revisions.body/frontmatter/content_hash`，
+  不再重复解析历史 `markdown_source`。详情页同时传播 API 的真实错误码和消息，只有确实没有
+  返回文章时才生成 404；文章详情预览补传 collection variant。本修复不需要 Migration。
+- 富文本初始检查不再比较过严的 Remark 源码 AST，改为使用正式 Comark 插件核对最终渲染树，
+  并单独逐项检查 HTML、Vue/MDC、模板指令等受保护源码。真实 Chromium 对删除前历史快照的
+  228 篇 news/wiki 正文检查中，原逻辑误拒 137 篇；新逻辑允许其中 192 篇，仅对 36 篇确实会
+  改变网页效果或扩展原文的旧 Markdown 保持安全回退。
+- Wiki 标题跳级编号抽到 `app/utils/wiki-heading-numbering.ts`，正式 Wiki 页和
+  `VinciMarkdownRenderer` 的 Wiki variant 共用。CMS 草稿预览和正式文章详情因此显示与前台
+  相同的编号；Wiki 拼音路径和章节模块没有改动。
+- 新增回归覆盖最终渲染等价规范化、扩展语法原文、标题跳级编号、详情真实错误和 Revision
+  权威字段。数据库集成用例只会在显式、名称含 test 的隔离 `TEST_DATABASE_URL` 下运行。
+  实现使用新的独立本地 Commit；完整 SHA 由交付回复报告。

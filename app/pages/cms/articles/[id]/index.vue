@@ -18,11 +18,18 @@ const returnTo = computed(() => {
   return /^\/(news|wiki)(\/|$)/.test(value) && !value.includes('\\') ? value : ''
 })
 
-const { data, refresh } = await useAsyncData(`cms:article:${id}`, () =>
+const { data, error, refresh } = await useAsyncData(`cms:article:${id}`, () =>
   requestFetch<{ article: CmsArticleDetail }>(`/api/cms/articles/${id}`)
 )
 const article = computed(() => data.value?.article)
 const isAdmin = computed(() => session.value?.user.roles.includes('admin') ?? false)
+
+if (error.value) {
+  throw createError({
+    statusCode: error.value.statusCode || 500,
+    statusMessage: error.value.statusMessage || error.value.message || '文章加载失败'
+  })
+}
 
 if (!article.value) {
   throw createError({ statusCode: 404, statusMessage: '文章不存在' })
@@ -164,7 +171,11 @@ onMounted(async () => {
     <div class="cms-detail-grid">
       <article class="cms-panel cms-preview">
         <h2>渲染预览</h2>
-        <VinciMarkdownRenderer v-if="!article.isDeleted" :markdown="article.body" />
+        <VinciMarkdownRenderer
+          v-if="!article.isDeleted"
+          :variant="article.collection"
+          :markdown="article.body"
+        />
         <pre v-else class="cms-source">{{ article.body }}</pre>
       </article>
       <aside class="cms-panel cms-frontmatter">

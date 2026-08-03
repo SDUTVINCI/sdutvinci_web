@@ -10,7 +10,7 @@ import type { CmsMediaUploadResponse } from '../../../../shared/types/cms-media'
 import CmsMarkdownVisualEditor from '../../../components/cms/CmsMarkdownVisualEditor.client.vue'
 import CmsMarkdownSourceEditor from '../../../components/cms/CmsMarkdownSourceEditor.client.vue'
 import VinciMarkdownRenderer from '../../../components/VinciMarkdownRenderer.vue'
-import { isCmsVisualRoundTripLossless } from '../../../utils/cms-visual-editor'
+import { assessCmsVisualRoundTrip } from '../../../utils/cms-visual-editor'
 import {
   getScrollProgress,
   getScrollTopForProgress
@@ -576,13 +576,26 @@ const handleImagePaste = (event: ClipboardEvent) => {
   void uploadImages(files)
 }
 
-const handleVisualReady = (serialized: string) => {
-  clearTimeout(visualCheckTimer)
-  if (!isCmsVisualRoundTripLossless(visualSource.value, serialized)) {
-    handleVisualError('无损往返检查未通过；原文已保留，请使用 Markdown 源码模式编辑')
-    return
+const handleVisualReady = async (serialized: string) => {
+  const checkKey = visualKey.value
+  const source = visualSource.value
+  try {
+    const assessment = await assessCmsVisualRoundTrip(source, serialized)
+    if (checkKey !== visualKey.value || mode.value !== 'visual') return
+    clearTimeout(visualCheckTimer)
+    if (!assessment.safe) {
+      handleVisualError(
+        assessment.reason === 'protected_syntax_changed'
+          ? '扩展语法在初始化时发生变化；原文已保留，请使用 Markdown 源码模式编辑'
+          : '最终网页效果在初始化时发生变化；原文已保留，请使用 Markdown 源码模式编辑'
+      )
+      return
+    }
+    visualChecking.value = false
+  } catch (error) {
+    if (checkKey !== visualKey.value || mode.value !== 'visual') return
+    handleVisualError(error instanceof Error ? error.message : '兼容性检查失败')
   }
-  visualChecking.value = false
 }
 
 const handleVisualError = (error: string) => {
@@ -1042,8 +1055,12 @@ onBeforeUnmount(() => {
           松开即可上传图片
         </div>
 
-        <div v-if="mode === 'visual'" class="cms-visual-editor" :inert="!canEdit">
-          <p v-if="visualChecking" class="cms-editor-checking">正在执行无损往返检查…</p>
+        <div
+          v-if="mode === 'visual'"
+          class="cms-visual-editor"
+          :inert="!canEdit || visualChecking"
+        >
+          <p v-if="visualChecking" class="cms-editor-checking">正在核对最终网页效果和扩展语法…</p>
           <ClientOnly>
             <CmsMarkdownVisualEditor
               ref="visualEditor"

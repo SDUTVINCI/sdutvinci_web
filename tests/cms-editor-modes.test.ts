@@ -14,6 +14,7 @@ import {
   getScrollProgress,
   getScrollTopForProgress
 } from '../app/utils/cms-scroll-sync'
+import { numberWikiHeadings } from '../app/utils/wiki-heading-numbering'
 
 describe('CMS 沉浸式编辑、双栏预览与内容组件', () => {
   it('登记组件可确定性插入、定位和原文编辑，不误判代码或未知语法', () => {
@@ -51,6 +52,22 @@ ${vinciContentComponentDefinitions[3]!.defaultMarkdown}`
     expect(getScrollProgress(2_000, 1_000, 100)).toBe(1)
     expect(getScrollTopForProgress(0.5, 2_000, 200)).toBe(900)
     expect(getScrollTopForProgress(0.5, 2_400, 200)).toBe(1_100)
+  })
+
+  it('CMS Wiki 预览与正式页面共用跳级兼容的标题编号', () => {
+    expect(numberWikiHeadings([
+      { id: 'a', text: 'A', depth: 2 },
+      { id: 'b', text: 'B', depth: 4 },
+      { id: 'c', text: 'C', depth: 4 },
+      { id: 'd', text: 'D', depth: 3 },
+      { id: 'e', text: 'E', depth: 2 }
+    ])).toEqual([
+      { id: 'a', text: 'A', depth: 2, level: 1, number: '1' },
+      { id: 'b', text: 'B', depth: 4, level: 2, number: '1.1' },
+      { id: 'c', text: 'C', depth: 4, level: 2, number: '1.2' },
+      { id: 'd', text: 'D', depth: 3, level: 1, number: '2' },
+      { id: 'e', text: 'E', depth: 2, level: 1, number: '3' }
+    ])
   })
 
   it('最终渲染允许普通 HTML、iframe 和登记组件，只阻断直接执行脚本的写法', async () => {
@@ -104,5 +121,6 @@ ${vinciContentComponentDefinitions[3]!.defaultMarkdown}`
     expect(renderer).toContain("'vinci-download-card': VinciDownloadCard")
     expect(renderer).toContain("'content-prose': variant === 'news'")
     expect(renderer).toContain("'member-prose': variant === 'member'")
+    expect(renderer).toContain('collectNumberedWikiHeadings')
   })
 })

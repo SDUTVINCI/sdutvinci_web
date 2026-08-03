@@ -101,6 +101,45 @@ const describeProtectedSyntax = (source: string) => {
 const protectedTextPattern =
   /VINCIEXTENSION(?:BLOCK|INLINE)[0-9a-f]+ENDTOKEN|\{%[\s\S]*?%\}|\{\{[\s\S]*?\}\}|^:{2,}[A-Za-z][^\n]*$|^:{2,}$|^@[A-Za-z][\w-]*\b[^\n]*$/gm
 
+const protectedSourcePattern =
+  /\{%[\s\S]*?%\}|\{\{[\s\S]*?\}\}|^:{2,}[A-Za-z][^\n]*$|^:{2,}$|^@[A-Za-z][\w-]*\b[^\n]*$/gm
+
+export const collectCmsProtectedMarkdownSources = (markdown: string) => {
+  const tree = remark().parse(markdown) as MarkdownAstNode
+  const protectedSources: Array<{ start: number, source: string }> = []
+
+  const visit = (node: MarkdownAstNode) => {
+    const start = node.position?.start?.offset
+    const end = node.position?.end?.offset
+    if (
+      node.type === 'html'
+      && typeof start === 'number'
+      && typeof end === 'number'
+    ) {
+      protectedSources.push({ start, source: markdown.slice(start, end) })
+      return
+    }
+
+    if (node.type === 'text' && typeof node.value === 'string' && typeof start === 'number') {
+      protectedSourcePattern.lastIndex = 0
+      for (const match of node.value.matchAll(protectedSourcePattern)) {
+        protectedSources.push({
+          start: start + match.index,
+          source: match[0]
+        })
+      }
+      protectedSourcePattern.lastIndex = 0
+    }
+
+    for (const child of node.children || []) visit(child)
+  }
+
+  visit(tree)
+  return protectedSources
+    .sort((left, right) => left.start - right.start)
+    .map(item => item.source)
+}
+
 const splitProtectedText = (value: string): MarkdownAstNode[] => {
   const nodes: MarkdownAstNode[] = []
   let cursor = 0

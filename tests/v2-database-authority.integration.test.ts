@@ -223,6 +223,27 @@ suite('V2 阶段 5 数据库权威与 DB-first 发布事务', () => {
     })
   })
 
+  it('CMS 详情直接使用权威 Revision 字段，不重新解析历史 Markdown 源码', async () => {
+    const seeded = await seed()
+    await getDatabase().update(articleRevisions).set({
+      markdownSource: '---\ntitle: [无法重新解析\n---\n不应读取的正文',
+      body: 'Revision 已解析正文\n',
+      frontmatter: {
+        title: 'Revision 权威标题',
+        preservedField: 'kept'
+      }
+    }).where(eq(articleRevisions.id, seeded.initialRevisionId))
+
+    await expect(getCmsArticle(seeded.articleId)).resolves.toMatchObject({
+      title: 'Revision 权威标题',
+      body: 'Revision 已解析正文\n',
+      frontmatter: {
+        title: 'Revision 权威标题',
+        preservedField: 'kept'
+      }
+    })
+  })
+
   it('生产运行时即使省略变量也安全采用 DB-first/news/wiki database 默认值', () => {
     const values = {
       NODE_ENV: process.env.NODE_ENV,

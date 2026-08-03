@@ -29,7 +29,7 @@
 ```
 
 正式前台和 CMS 最终预览共用 `VinciMarkdownRenderer` 与同一套 Comark 插件、安全策略、
-标题 ID 和目录逻辑。公开页面不调用 `queryCollection` 或 `ContentRenderer`。Wiki 公共路径、
+标题 ID、Wiki 标题编号和目录逻辑。公开页面不调用 `queryCollection` 或 `ContentRenderer`。Wiki 公共路径、
 目录和顺序由普通应用模块从数据库字段派生；发布、恢复和导出使用同一算法。
 
 文章编辑器有两个显式模式：富文本使用 Milkdown/Crepe 单栏画布；源码在桌面端同时显示

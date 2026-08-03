@@ -228,13 +228,37 @@ export const getCmsArticle = async (
   if (databaseAuthority && !currentRevision) {
     throw new Error('ARTICLE_CURRENT_REVISION_MISSING')
   }
+
+  if (databaseAuthority) {
+    const revision = currentRevision!
+    const title = typeof revision.frontmatter.title === 'string'
+      ? revision.frontmatter.title.trim()
+      : row.title
+    return {
+      ...toSummary(row),
+      title,
+      frontmatter: revision.frontmatter,
+      body: revision.body,
+      contentHash: revision.contentHash,
+      currentRevision: {
+        id: revision.id,
+        revisionNumber: revision.revisionNumber,
+        contentHash: revision.contentHash,
+        createdAt: revision.createdAt.toISOString()
+      },
+      exportStatus: await getCmsArticleExportStatus(
+        row.id,
+        row.currentRevisionId,
+        true
+      )
+    }
+  }
+
   let source: string
   try {
-    source = databaseAuthority
-      ? currentRevision!.markdownSource
-      : isCmsRevisionShadowEnabled()
-        ? await readShadowArticleSource(collection, row.relativePath)
-        : (await readContentFile(collection, row.relativePath)).source
+    source = isCmsRevisionShadowEnabled()
+      ? await readShadowArticleSource(collection, row.relativePath)
+      : (await readContentFile(collection, row.relativePath)).source
   } catch (error) {
     if (!includeDeleted) throw error
     source = ''
@@ -257,7 +281,7 @@ export const getCmsArticle = async (
       exportStatus: await getCmsArticleExportStatus(
         row.id,
         row.currentRevisionId,
-        databaseAuthority
+        false
       )
     }
   }
@@ -282,7 +306,7 @@ export const getCmsArticle = async (
     exportStatus: await getCmsArticleExportStatus(
       row.id,
       row.currentRevisionId,
-      databaseAuthority
+      false
     )
   }
 }

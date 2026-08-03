@@ -2,8 +2,15 @@ import { Crepe, type CrepeConfig } from '@milkdown/crepe'
 import { commandsCtx } from '@milkdown/kit/core'
 import { clearTextInCurrentBlockCommand } from '@milkdown/kit/preset/commonmark'
 import { insert } from '@milkdown/kit/utils'
+import { parse } from 'comark'
 import { remark } from 'remark'
 import { vinciContentComponentDefinitions } from '~~/shared/utils/vinci-content-components'
+import {
+  createVinciMarkdownPlugins,
+  protectVinciTemplateTokens,
+  vinciMarkdownOptions
+} from '~~/shared/utils/vinci-markdown'
+import { collectCmsProtectedMarkdownSources } from './cms-protected-markdown'
 
 const markdownSemanticFingerprint = (markdown: string) => JSON.stringify(
   remark().parse(markdown.replace(/\r\n?/g, '\n')),
@@ -64,3 +71,37 @@ export const isCmsVisualRoundTripLossless = (
   source: string,
   serialized: string
 ) => markdownSemanticFingerprint(source) === markdownSemanticFingerprint(serialized)
+
+export interface CmsVisualRoundTripAssessment {
+  safe: boolean
+  reason: 'equivalent' | 'protected_syntax_changed' | 'rendering_changed'
+}
+
+const finalRenderingFingerprint = async (markdown: string) => JSON.stringify(
+  (await parse(protectVinciTemplateTokens(markdown), {
+    ...vinciMarkdownOptions,
+    plugins: createVinciMarkdownPlugins()
+  })).nodes
+)
+
+export const assessCmsVisualRoundTrip = async (
+  source: string,
+  serialized: string
+): Promise<CmsVisualRoundTripAssessment> => {
+  const sourceProtected = collectCmsProtectedMarkdownSources(source)
+  const serializedProtected = collectCmsProtectedMarkdownSources(serialized)
+  if (
+    sourceProtected.length !== serializedProtected.length
+    || sourceProtected.some((item, index) => item !== serializedProtected[index])
+  ) {
+    return { safe: false, reason: 'protected_syntax_changed' }
+  }
+
+  const [sourceRendering, serializedRendering] = await Promise.all([
+    finalRenderingFingerprint(source),
+    finalRenderingFingerprint(serialized)
+  ])
+  return sourceRendering === serializedRendering
+    ? { safe: true, reason: 'equivalent' }
+    : { safe: false, reason: 'rendering_changed' }
+}

@@ -2,14 +2,11 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import mediumZoom from 'medium-zoom'
 import { compareWikiChapters, numberWikiChapters } from '~~/utils/wiki-chapters'
-
-interface TocDisplayLink {
-  id: string
-  text: string
-  depth: number
-  level: number
-  number: string
-}
+import {
+  applyWikiHeadingNumbers,
+  collectNumberedWikiHeadings,
+  type NumberedWikiHeading
+} from '../../utils/wiki-heading-numbering'
 
 interface WikiPage {
   path: string
@@ -127,7 +124,7 @@ const showDocNav = ref(false)
 const showToc = ref(false)
 const activeHeadingId = ref('')
 const readingProgress = ref(0)
-const tocLinks = ref<TocDisplayLink[]>([])
+const tocLinks = ref<NumberedWikiHeading[]>([])
 const defaultHeadingScrollOffset = 108
 const pendingAnchorId = ref('')
 const scrollRetryTimers: ReturnType<typeof setTimeout>[] = []
@@ -200,69 +197,19 @@ const clearViewportSyncFrame = () => {
 }
 
 const buildTocFromDom = () => {
-  const headings = Array.from(
-    document.querySelectorAll('.wiki-content-body h2, .wiki-content-body h3, .wiki-content-body h4, .wiki-content-body h5, .wiki-content-body h6')
-  ) as HTMLElement[]
-
-  headingElements = headings
-  const result: TocDisplayLink[] = []
-  const counters: number[] = []
-  let previousTagLevel = 0
-  let previousLogicalLevel = 1
-
-  headings.forEach((heading) => {
-    if (!heading.id) return
-
-    const tagLevel = Number(heading.tagName.slice(1))
-    if (!Number.isFinite(tagLevel)) return
-
-    let logicalLevel = 1
-    if (previousTagLevel === 0) {
-      logicalLevel = 1
-    } else if (tagLevel > previousTagLevel) {
-      logicalLevel = Math.min(previousLogicalLevel + 1, 5)
-    } else if (tagLevel === previousTagLevel) {
-      logicalLevel = previousLogicalLevel
-    } else {
-      logicalLevel = Math.max(1, previousLogicalLevel - (previousTagLevel - tagLevel))
-    }
-
-    counters[logicalLevel - 1] = (counters[logicalLevel - 1] || 0) + 1
-    counters.length = logicalLevel
-
-    const cloned = heading.cloneNode(true) as HTMLElement
-    cloned.querySelectorAll('.heading-number').forEach((node) => node.remove())
-
-    result.push({
-      id: heading.id,
-      text: (cloned.textContent || '').trim(),
-      depth: tagLevel,
-      level: logicalLevel,
-      number: counters.join('.')
-    })
-
-    previousTagLevel = tagLevel
-    previousLogicalLevel = logicalLevel
-  })
-
-  tocLinks.value = result
+  const content = document.querySelector('.wiki-article .wiki-content-body')
+  if (!content) {
+    headingElements = []
+    tocLinks.value = []
+    return
+  }
+  const { elements, numbered } = collectNumberedWikiHeadings(content)
+  headingElements = elements
+  tocLinks.value = numbered
 }
 
 const applyHeadingDecorations = () => {
-  const headingMap = new Map(tocLinks.value.map((item) => [item.id, item.number]))
-
-  headingElements.forEach((element) => {
-    const number = headingMap.get(element.id)
-
-    element.querySelector('.heading-number')?.remove()
-    if (!number) return
-
-    const numberSpan = document.createElement('span')
-    numberSpan.className = 'heading-number'
-    numberSpan.textContent = `${number} `
-    numberSpan.setAttribute('aria-hidden', 'true')
-    element.prepend(numberSpan)
-  })
+  applyWikiHeadingNumbers(headingElements, tocLinks.value)
 }
 
 const enhanceCodeBlocks = () => {
