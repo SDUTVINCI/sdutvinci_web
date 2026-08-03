@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { CmsMember } from '../../../../shared/types/cms-members'
 import type { CmsManagedUser } from '../../../../shared/types/cms-auth'
+import { resolveStaticMediaUrl } from '~~/shared/utils/static-media'
 
 definePageMeta({ layout: 'cms', middleware: 'cms-auth' })
 const route = useRoute()
@@ -121,7 +122,7 @@ const applyProposal = async (proposalId: string) => {
     <p v-if="errorMessage" class="cms-alert cms-alert-error">{{ errorMessage }}</p>
 
     <form class="cms-panel cms-form" @submit.prevent="save">
-      <img class="cms-member-avatar" :src="form.avatarUrl || '/images/logo.png'" :alt="`${form.name} 头像`">
+      <img class="cms-member-avatar" :src="resolveStaticMediaUrl(form.avatarUrl || '/images/logo.png')" :alt="`${form.name} 头像`">
       <label>
         <span>稳定 ID（不可修改）</span>
         <input :value="member.memberKey" disabled>

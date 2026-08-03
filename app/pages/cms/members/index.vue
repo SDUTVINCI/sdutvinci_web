@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { CmsMember } from '../../../../shared/types/cms-members'
+import { resolveStaticMediaUrl } from '~~/shared/utils/static-media'
 
 definePageMeta({ layout: 'cms', middleware: 'cms-auth' })
 useHead({ title: '成员 · Vinci 内容管理后台' })
@@ -87,7 +88,7 @@ const createMember = async () => {
       </label>
       <label>
         <span>头像路径或 URL</span>
-        <input v-model.trim="form.avatarUrl" maxlength="2048" placeholder="/images/member_photo/example.jpg">
+        <input v-model.trim="form.avatarUrl" maxlength="2048" placeholder="https://cdn.sdutvincirobot.top/site-assets/images/member_photo/example-hash.webp">
       </label>
       <button class="cms-button cms-button-primary" :disabled="submitting">
         {{ submitting ? '正在创建…' : '确认创建' }}
@@ -109,7 +110,7 @@ const createMember = async () => {
         :to="`/cms/members/${member.id}`"
       >
         <img
-          :src="member.avatarUrl || '/images/logo.png'"
+          :src="resolveStaticMediaUrl(member.avatarUrl || '/images/logo.png')"
           :alt="`${member.name} 头像`"
           loading="lazy"
           decoding="async"

@@ -15,6 +15,7 @@ import type {
   PublicContentSearchResult,
   PublicMember
 } from '../../shared/types/public-content'
+import { resolveStaticMediaUrl } from '../../shared/utils/static-media'
 import { getWikiContentMeta } from '../../utils/wiki-content-meta'
 import { getDatabase } from '../db/client'
 import {
@@ -78,6 +79,12 @@ const stringField = (
 const toPublicArticle = (row: PublishedArticleRow): PublicArticle => {
   const collection = row.collection as PublicArticleCollection
   const frontmatter = row.frontmatter || {}
+  const publicFrontmatter = Object.fromEntries(
+    Object.entries(frontmatter).map(([key, value]) => [
+      key,
+      typeof value === 'string' ? resolveStaticMediaUrl(value) : value
+    ])
+  )
   const title = stringField(frontmatter, 'title') || row.articleTitle
   const description = stringField(frontmatter, 'description')
     || stringField(frontmatter, 'summary')
@@ -95,7 +102,7 @@ const toPublicArticle = (row: PublishedArticleRow): PublicArticle => {
   )
 
   return {
-    ...frontmatter,
+    ...publicFrontmatter,
     ...wikiMeta,
     id: row.articleId,
     vinciId: row.articleId,
@@ -105,7 +112,7 @@ const toPublicArticle = (row: PublishedArticleRow): PublicArticle => {
     title,
     description,
     body: row.body,
-    frontmatter,
+    frontmatter: publicFrontmatter,
     revisionId: row.revisionId,
     revisionNumber: row.revisionNumber,
     contentHash: row.contentHash,
@@ -244,9 +251,9 @@ const toPublicMember = (row: typeof members.$inferSelect): PublicMember => {
     memberKey,
     path: `/team/${encodeURIComponent(memberKey)}`,
     name: row.name,
-    image: row.avatarUrl || (
+    image: resolveStaticMediaUrl(row.avatarUrl || (
       typeof metadata.image === 'string' ? metadata.image : null
-    ),
+    )),
     role: row.role,
     type: row.memberType,
     time: row.seasons.length ? row.seasons.join(',') : null,

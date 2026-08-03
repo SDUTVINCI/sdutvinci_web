@@ -5,44 +5,44 @@
   padding: 96px max(24px, calc((100vw - var(--content)) / 2)) 72px;
   background:
     linear-gradient(90deg, rgba(14, 26, 32, 0.9), rgba(14, 26, 32, 0.58)),
-    url('/images/cheer.png') center / cover;
+    url('https://cdn.sdutvincirobot.top/site-assets/images/cheer-2f0a891b.webp') center / cover;
   color: #ffffff;
 }
 
 .members-hero {
   background:
     linear-gradient(90deg, rgba(14, 26, 32, 0.92), rgba(14, 26, 32, 0.54)),
-    url('/images/background_footer.png') center / cover;
+    url('https://cdn.sdutvincirobot.top/site-assets/images/background_footer-03b5c48e.webp') center / cover;
 }
 
 .recruitment-hero {
   background:
     linear-gradient(90deg, rgba(14, 26, 32, 0.9), rgba(14, 26, 32, 0.54)),
-    url('/images/joinus.jpg') center / cover;
+    url('https://cdn.sdutvincirobot.top/site-assets/images/joinus-1ff5973e.webp') center / cover;
 }
 
 .contact-hero {
   background:
     linear-gradient(90deg, rgba(14, 26, 32, 0.9), rgba(14, 26, 32, 0.5)),
-    url('/images/cooporate.jpg') center / cover;
+    url('https://cdn.sdutvincirobot.top/site-assets/images/cooporate-34c74ea5.webp') center / cover;
 }
 
 .projects-hero {
   background:
     linear-gradient(90deg, rgba(14, 26, 32, 0.9), rgba(14, 26, 32, 0.5)),
-    url('/images/cooporate.jpg') center / cover;
+    url('https://cdn.sdutvincirobot.top/site-assets/images/cooporate-34c74ea5.webp') center / cover;
 }
 
 .news-hero {
   background:
     linear-gradient(90deg, rgba(14, 26, 32, 0.9), rgba(14, 26, 32, 0.54)),
-    url('/images/news.png') center / cover;
+    url('https://cdn.sdutvincirobot.top/site-assets/images/news-17867632.webp') center / cover;
 }
 
 .wiki-hero {
   background:
     linear-gradient(90deg, rgba(14, 26, 32, 0.93), rgba(14, 26, 32, 0.5)),
-    url('/images/background_footer.png') center / cover;
+    url('https://cdn.sdutvincirobot.top/site-assets/images/background_footer-03b5c48e.webp') center / cover;
 }
 
 .page-hero > div {

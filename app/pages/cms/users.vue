@@ -8,6 +8,7 @@ import type {
   CmsManagedUser,
   CmsRoleCode
 } from '~~/shared/types/cms-auth'
+import { resolveStaticMediaUrl } from '~~/shared/utils/static-media'
 
 definePageMeta({
   layout: 'cms',
@@ -213,7 +214,7 @@ const changeOwnPassword = async () => {
       <section class="cms-panel cms-account-own">
         <div class="cms-account-heading">
           <img
-            :src="session?.user.member?.avatarUrl || '/images/logo.png'"
+            :src="resolveStaticMediaUrl(session?.user.member?.avatarUrl || '/images/logo.png')"
             :alt="`${session?.user.member?.name || session?.user.account}的头像`"
           >
           <div>
@@ -369,7 +370,7 @@ const changeOwnPassword = async () => {
             >
               <header>
                 <img
-                  :src="user.member?.avatarUrl || '/images/logo.png'"
+                  :src="resolveStaticMediaUrl(user.member?.avatarUrl || '/images/logo.png')"
                   :alt="`${user.member?.name || user.account}的头像`"
                   loading="lazy"
                   decoding="async"

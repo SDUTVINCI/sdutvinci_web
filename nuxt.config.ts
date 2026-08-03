@@ -27,7 +27,7 @@ export default defineNuxtConfig({
         {
           rel: 'icon',
           type: 'image/png',
-          href: '/images/logo.png'
+          href: 'https://cdn.sdutvincirobot.top/site-assets/images/logo-e355a71c.webp'
         }
       ],
       script: [

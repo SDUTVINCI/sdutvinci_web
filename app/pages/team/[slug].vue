@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { resolveStaticMediaUrl } from '~~/shared/utils/static-media'
+
 type Member = Record<string, any>
 
 const route = useRoute()
@@ -122,7 +124,7 @@ const relatedMembers = computed(() => {
   <main v-if="member">
     <section class="member-profile-hero">
       <div class="member-profile-photo">
-        <img :src="member.image || '/images/logo.png'" :alt="`${displayName} 头像`">
+        <img :src="resolveStaticMediaUrl(String(member.image || '/images/logo.png'))" :alt="`${displayName} 头像`">
       </div>
 
       <div class="member-profile-copy">

@@ -34,7 +34,7 @@ const featureSections = [
       '如果你热爱机器人、编程、机械设计，或者只是想和一群志同道合的伙伴做点有趣的事，Vinci 机器人队欢迎你。',
       '在这里，你能接触前沿机器人技术，参与赛事与项目，并在真实协作里快速成长。'
     ],
-    image: '/images/joinus.jpg',
+    image: 'https://cdn.sdutvincirobot.top/site-assets/images/joinus-1ff5973e.webp',
     imageAlt: 'Vinci 机器人队纳新展示',
     href: '/recruitment',
     cta: '了解纳新'
@@ -46,7 +46,7 @@ const featureSections = [
       '2016 至 2026 年，团队围绕 Robocon 主赛、技能赛、马术赛、排球赛持续参赛。',
       '近年多次获得国赛二等奖、三等奖，并在 2026 年获得 Robocon 排球赛国赛一等奖。'
     ],
-    image: '/images/cheer.png',
+    image: 'https://cdn.sdutvincirobot.top/site-assets/images/cheer-2f0a891b.webp',
     imageAlt: 'Vinci 机器人队赛场合影',
     href: '/research',
     cta: '查看成果'
@@ -58,7 +58,7 @@ const featureSections = [
       'Wiki 用来记录队伍训练、环境搭建、工具链配置和项目复盘，让新成员能沿着前人的路径更快上手。',
       '它不是单纯的展示页，而是日常真正会用到的工程手册：遇到问题先查，解决之后继续补充。'
     ],
-    image: '/images/cooporate.jpg',
+    image: 'https://cdn.sdutvincirobot.top/site-assets/images/cooporate-34c74ea5.webp',
     imageAlt: 'Vinci 机器人队知识库资料展示',
     href: '/wiki',
     cta: '进入Wiki知识库'
@@ -70,7 +70,7 @@ const featureSections = [
       '作为多学科交叉的机器人团队，我们与企业、学校等多方面展开合作。',
       '队内项目训练从结构设计、嵌入式控制、视觉算法到工程管理完整展开。'
     ],
-    image: '/images/projects.jpg',
+    image: 'https://cdn.sdutvincirobot.top/site-assets/images/projects-f3c31763.webp',
     imageAlt: '机器人项目协作场景',
     href: '/projects',
     cta: '查看项目'
@@ -82,7 +82,7 @@ const featureSections = [
       '这里聚集了机械、电路、嵌软、算法、运营多方向成员。',
       '队伍以赛季为节奏沉淀经验，也为新成员保留充分的上手机会。'
     ],
-    image: '/images/background_footer.png',
+    image: 'https://cdn.sdutvincirobot.top/site-assets/images/background_footer-03b5c48e.webp',
     imageAlt: 'Vinci 机器人队团队展示',
     href: '/team',
     cta: '查看成员'
@@ -94,7 +94,7 @@ const featureSections = [
       '团队活跃于赛事、交流、招新与社会活动。',
       '新闻栏目将继续记录队伍建设、比赛进展和成员成长。'
     ],
-    image: '/images/news.png',
+    image: 'https://cdn.sdutvincirobot.top/site-assets/images/news-17867632.webp',
     imageAlt: 'Vinci 机器人队新闻动态',
     href: '/news',
     cta: '查看新闻'
@@ -114,8 +114,8 @@ const stats = computed(() => [
     <section class="home-hero">
       <video
         class="hero-video"
-        src="/images/backgroundvideo.mp4"
-        poster="/images/background.jpg"
+        src="https://cdn.sdutvincirobot.top/site-assets/videos/backgroundvideo-2f423f1d.mp4"
+        poster="https://cdn.sdutvincirobot.top/site-assets/images/background-6c09ec06.webp"
         autoplay
         muted
         loop

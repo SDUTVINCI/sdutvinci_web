@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { resolveStaticMediaUrl } from '~~/shared/utils/static-media'
+
 definePageMeta({
   layout: 'cms',
   middleware: 'cms-auth'
@@ -21,7 +23,7 @@ const member = computed(() => session.value?.user.member)
 
     <div class="cms-panel cms-form">
       <div v-if="member" class="cms-profile-member">
-        <img :src="member.avatarUrl || '/images/logo.png'" :alt="`${member.name} 头像`">
+        <img :src="resolveStaticMediaUrl(member.avatarUrl || '/images/logo.png')" :alt="`${member.name} 头像`">
         <div>
           <span class="cms-muted">关联成员资料</span>
           <h2>{{ member.name }}</h2>

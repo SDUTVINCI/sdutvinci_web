@@ -10,7 +10,7 @@
         class="cms-auth-brand"
         to="/"
       >
-        <img src="/images/logo.png" alt="">
+        <img src="https://cdn.sdutvincirobot.top/site-assets/images/logo-e355a71c.webp" alt="">
         <span>
           <strong>山理工 Vinci 机器人队</strong>
           <small><span aria-hidden="true">←</span> 返回官方网站</small>

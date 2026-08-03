@@ -1789,3 +1789,30 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
   端面板重新显示后再同步，原生 textarea 回退也使用相同规则。
 - 本功能不改变正文、数据库、API、权限或安全策略，不需要 Migration。实现使用新的独立本地
   Commit；完整 SHA 由交付回复报告，不 Push、不部署。
+
+---
+
+## 2026-08-03：仓库静态媒体迁移与 CMS 图片内容命名
+
+- CMS 粘贴、拖入和文件选择上传的图片仍由服务端统一转换为 WebP，但对象文件名从随机 UUID
+  改为 `<Unix毫秒>-<最终WebP的SHA-256前8位>.webp`；年月、草稿 ID、数据库登记、编辑锁、
+  权限和 S3 配置模型不变，不需要数据库 Migration。
+- 仓库原有 56 张图片转换为 WebP，首页 MP4 按维护者最终决定不压缩、不转码、逐字节复制；
+  生成的 57 个对象由维护者手动上传到 `cdn.sdutvincirobot.top/site-assets/`。上传后已逐项 GET
+  核对状态、Content-Type、长度和 SHA-256，视频 Range 请求返回 206。
+- `shared/utils/static-media.ts` 登记 57 条旧路径到 CDN 的确定性映射。站点直接引用已切换；
+  正式 Comark 渲染器只改写元素/组件属性中的登记路径，代码文本和未知 `/images/...` 保持
+  原样；公开文章 frontmatter、成员头像和 CMS 头像预览同样兼容旧数据库值。PostgreSQL 正文
+  没有直接改写。独立 `sdutvinci_content` 仓库另建分支
+  `agent/migrate-static-media-to-cdn`，将 32 个成员头像和新闻正文中的 10 个唯一静态对象（共
+  43 处引用）改为已校验的 CDN URL，并创建 Draft PR #1；现有 Wiki 旧 CDN 引用保持不变。
+  正式数据库仍应只通过既有 PR 审核/导入流程更新。
+- CDN 校验、映射回归、typecheck、production build 和本地隔离 HTTP 冒烟通过后，57 个
+  `public/images` 文件从当前工作树移除；可从 Git 历史恢复，本地忽略的 `cdn-upload/` 仍保留。
+  新增 `docs/STATIC_MEDIA_MIGRATION.md` 记录对象目录、转换规则、复现、上传、验证和回滚流程。
+- 测试只使用名称、数据库、账号、密码和端口均明确隔离的 PostgreSQL test 容器；相关数据库
+  集成 9/9、媒体/编辑器定向单元 12/12、本机构建产物 `/`、`/contact`、`/recruitment`、
+  `/cms/login` 均返回 200。临时容器、端口和文件均已清理。没有连接 `10.0.0.4`、生产数据库或
+  生产 S3，没有 SSH、Fetch 或部署。仅按维护者明确选择向 `sdutvinci_content` 推送上述独立
+  分支并创建 Draft PR；`sdutvinci_web` 不 Push。Web 仓库独立本地 Commit 完整 SHA 由交付
+  回复报告。

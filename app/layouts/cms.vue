@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { resolveStaticMediaUrl } from '~~/shared/utils/static-media'
+
 const { session, logout } = useCmsSession()
 const route = useRoute()
 const isAdmin = computed(() => session.value?.user.roles.includes('admin') ?? false)
@@ -9,7 +11,7 @@ const displayName = computed(() =>
   session.value?.user.member?.name || session.value?.user.account || '当前用户'
 )
 const avatarUrl = computed(() =>
-  session.value?.user.member?.avatarUrl || '/images/logo.png'
+  resolveStaticMediaUrl(session.value?.user.member?.avatarUrl || '/images/logo.png')
 )
 const navItems = computed(() => [
   { to: '/cms', code: '01', label: '工作台', caption: 'OVERVIEW', icon: 'dashboard' as const },
@@ -75,7 +77,7 @@ const handleLogout = async () => {
         to="/cms"
       >
         <span class="cms-brand-mark">
-          <img src="/images/logo.png" alt="">
+          <img src="https://cdn.sdutvincirobot.top/site-assets/images/logo-e355a71c.webp" alt="">
         </span>
         <span class="cms-brand-copy">
           <strong>Vinci 机器人队</strong>

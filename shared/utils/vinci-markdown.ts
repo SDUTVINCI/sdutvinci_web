@@ -6,6 +6,7 @@ import { remark } from 'remark'
 import highlight from 'comark/plugins/highlight'
 import taskList from 'comark/plugins/task-list'
 import toc from 'comark/plugins/toc'
+import { resolveStaticMediaUrl } from './static-media'
 
 interface MarkdownAstNode {
   type: string
@@ -116,6 +117,19 @@ export const vinciHeadingIds = (): ComarkPlugin => ({
   }
 })
 
+export const resolveVinciStaticMedia = (): ComarkPlugin => ({
+  name: 'vinci-static-media-cdn',
+  post(state) {
+    visitComarkNodes(state.tree.nodes as VinciComarkNode[], (node) => {
+      const props = node[1] || {}
+      for (const [name, value] of Object.entries(props)) {
+        if (typeof value === 'string') props[name] = resolveStaticMediaUrl(value)
+      }
+      node[1] = props
+    })
+  }
+})
+
 const blockedTagFallback = (element: ComarkElement): ComarkNode => {
   const tag = element[0].toLowerCase()
   return [
@@ -186,6 +200,7 @@ export const createVinciMarkdownPlugins = (): ComarkPlugin<any, any>[] => [
   taskList(),
   removeComarkComments(),
   vinciHeadingIds(),
+  resolveVinciStaticMedia(),
   toc({ depth: 5, searchDepth: 8 }),
   preventExecutableHtml(),
   highlight({

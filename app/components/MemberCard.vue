@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { resolveStaticMediaUrl } from '~~/shared/utils/static-media'
+
 type Member = Record<string, any>
 
 const props = defineProps<{
@@ -71,7 +73,7 @@ const infoRows = computed(() => [
   <article class="member-card" :class="{ compact }">
     <NuxtLink class="member-card-main" :to="memberPath">
       <div class="member-photo">
-        <img :src="member.image || '/images/logo.png'" :alt="`${displayName} 头像`" loading="lazy">
+        <img :src="resolveStaticMediaUrl(String(member.image || '/images/logo.png'))" :alt="`${displayName} 头像`" loading="lazy">
       </div>
 
       <div class="member-card-body">

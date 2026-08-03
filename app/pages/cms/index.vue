@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { CmsDashboardStats } from '../../../shared/types/cms-dashboard'
+import { resolveStaticMediaUrl } from '~~/shared/utils/static-media'
 
 definePageMeta({
   layout: 'cms',
@@ -18,7 +19,7 @@ const displayName = computed(() =>
   session.value?.user.member?.name || session.value?.user.account || '队员'
 )
 const avatarUrl = computed(() =>
-  session.value?.user.member?.avatarUrl || '/images/logo.png'
+  resolveStaticMediaUrl(session.value?.user.member?.avatarUrl || '/images/logo.png')
 )
 </script>
 

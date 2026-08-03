@@ -23,7 +23,7 @@
   background:
     linear-gradient(90deg, rgba(8, 15, 18, 0.96) 0%, rgba(8, 15, 18, 0.88) 42%, rgba(8, 15, 18, 0.66) 100%),
     linear-gradient(0deg, rgba(8, 15, 18, 0.82), rgba(8, 15, 18, 0.06) 58%),
-    url("/images/background.jpg") center 42% / cover no-repeat;
+    url("https://cdn.sdutvincirobot.top/site-assets/images/background-6c09ec06.webp") center 42% / cover no-repeat;
   color: #f4f8f7;
   isolation: isolate;
 }

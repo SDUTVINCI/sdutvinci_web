@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import {
   DeleteObjectCommand,
   PutObjectCommand,
@@ -19,6 +18,7 @@ import {
   CmsEditLockLostError
 } from './cms-edit-locks'
 import { getCmsMediaConfig, type CmsMediaConfig } from '../utils/cms-media-config'
+import { createCmsMediaObjectKey } from '../utils/cms-media-object-key'
 
 type CmsTransaction = Parameters<
   Parameters<ReturnType<typeof getDatabase>['transaction']>[0]
@@ -95,14 +95,6 @@ const escapeMarkdownAlt = (value: string) =>
 
 const defaultAltText = (filename: string) =>
   filename.replace(/\.[^.]+$/, '').trim() || '图片'
-
-const createObjectKey = (config: CmsMediaConfig, draftId: string, now = new Date()) => [
-  config.S3_KEY_PREFIX,
-  now.getUTCFullYear().toString(),
-  String(now.getUTCMonth() + 1).padStart(2, '0'),
-  draftId,
-  `${randomUUID()}.webp`
-].join('/')
 
 const createPublicUrl = (baseUrl: string, objectKey: string) => {
   const encodedKey = objectKey
@@ -243,7 +235,11 @@ export const uploadCmsImage = async (
   )
 
   const transformed = await transformImage(input.data, input.mimeType, config)
-  const objectKey = createObjectKey(config, input.draftId)
+  const objectKey = createCmsMediaObjectKey(
+    config.S3_KEY_PREFIX,
+    input.draftId,
+    transformed.output
+  )
   const publicUrl = createPublicUrl(config.S3_PUBLIC_BASE_URL, objectKey)
 
   try {

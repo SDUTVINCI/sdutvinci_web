@@ -113,7 +113,7 @@ const process = [
       </div>
 
       <div class="join-photo">
-        <img src="/images/joinus.jpg" alt="Vinci 机器人队纳新展示">
+        <img src="https://cdn.sdutvincirobot.top/site-assets/images/joinus-1ff5973e.webp" alt="Vinci 机器人队纳新展示">
       </div>
     </section>
 

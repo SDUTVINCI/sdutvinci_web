@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { resolveStaticMediaUrl } from '~~/shared/utils/static-media'
+
 const route = useRoute()
 const { session, loaded, loadSession, logout } = useCmsSession()
 
@@ -25,7 +27,7 @@ const displayName = computed(() =>
   session.value?.user.member?.name || session.value?.user.account || ''
 )
 const avatarUrl = computed(() =>
-  session.value?.user.member?.avatarUrl || '/images/logo.png'
+  resolveStaticMediaUrl(session.value?.user.member?.avatarUrl || '/images/logo.png')
 )
 
 const isActive = (to: string) => {
@@ -129,7 +131,7 @@ onBeforeUnmount(() => {
 <template>
   <header class="site-header">
     <NuxtLink class="brand" to="/" aria-label="返回首页">
-      <img class="brand-logo" src="/images/logo.png" alt="Vinci 机器人队标志">
+      <img class="brand-logo" src="https://cdn.sdutvincirobot.top/site-assets/images/logo-e355a71c.webp" alt="Vinci 机器人队标志">
       <span class="brand-copy">
         <span class="brand-title">山理工 Vinci 机器人队</span>
         <span class="brand-subtitle">创新，无畏，团结，拼搏</span>
