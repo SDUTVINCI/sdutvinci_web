@@ -2,7 +2,11 @@
 import { markdown } from '@codemirror/lang-markdown'
 import { Compartment, EditorState } from '@codemirror/state'
 import { basicSetup, EditorView } from 'codemirror'
-import { getScrollProgress } from '../../utils/cms-scroll-sync'
+import {
+  createProgrammaticScrollGuard,
+  getScrollProgress,
+  getScrollTopForProgress
+} from '../../utils/cms-scroll-sync'
 
 const props = defineProps<{
   modelValue: string
@@ -22,8 +26,10 @@ const failed = ref(false)
 const editable = new Compartment()
 let view: EditorView | null = null
 let acceptingUpdates = false
+const programmaticScroll = createProgrammaticScrollGuard()
 
 const reportScroll = (element: HTMLElement) => {
+  if (programmaticScroll.consume(element.scrollTop)) return
   emit('scrollProgress', getScrollProgress(
     element.scrollTop,
     element.scrollHeight,
@@ -37,6 +43,24 @@ const handleEditorScroll = () => {
 
 const handleFallbackScroll = (event: Event) => {
   reportScroll(event.currentTarget as HTMLTextAreaElement)
+}
+
+const setScrollProgress = (progress: number) => {
+  const element = view?.scrollDOM || fallback.value
+  if (!element) return false
+  const target = getScrollTopForProgress(
+    progress,
+    element.scrollHeight,
+    element.clientHeight
+  )
+  if (Math.abs(element.scrollTop - target) <= 1) {
+    programmaticScroll.clear()
+    return true
+  }
+
+  programmaticScroll.mark(target)
+  element.scrollTop = target
+  return true
 }
 
 const insertMarkdown = (source: string) => {
@@ -88,7 +112,7 @@ const insertMarkdown = (source: string) => {
   return true
 }
 
-defineExpose({ insertMarkdown })
+defineExpose({ insertMarkdown, setScrollProgress })
 
 watch(
   () => props.modelValue,
@@ -150,6 +174,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   acceptingUpdates = false
+  programmaticScroll.clear()
   view?.scrollDOM.removeEventListener('scroll', handleEditorScroll)
   view?.destroy()
   view = null

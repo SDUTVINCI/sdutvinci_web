@@ -14,3 +14,29 @@ export const getScrollTopForProgress = (
   clientHeight: number
 ) => Math.max(0, scrollHeight - clientHeight)
   * Math.min(1, Math.max(0, progress))
+
+export const createProgrammaticScrollGuard = (timeoutMs = 150) => {
+  let target: number | null = null
+  let timer: ReturnType<typeof setTimeout> | undefined
+
+  const clear = () => {
+    target = null
+    clearTimeout(timer)
+    timer = undefined
+  }
+
+  return {
+    mark(nextTarget: number) {
+      target = nextTarget
+      clearTimeout(timer)
+      timer = setTimeout(clear, timeoutMs)
+    },
+    consume(actualScrollTop: number, tolerance = 1) {
+      if (target === null) return false
+      const matches = Math.abs(actualScrollTop - target) <= tolerance
+      clear()
+      return matches
+    },
+    clear
+  }
+}

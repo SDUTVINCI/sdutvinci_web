@@ -11,6 +11,7 @@ import {
   vinciMarkdownOptions
 } from '../shared/utils/vinci-markdown'
 import {
+  createProgrammaticScrollGuard,
   getScrollProgress,
   getScrollTopForProgress
 } from '../app/utils/cms-scroll-sync'
@@ -46,12 +47,26 @@ ${vinciContentComponentDefinitions[3]!.defaultMarkdown}`
     expect(isRegisteredVinciComponentSource('::unknown-widget\n::')).toBe(false)
   })
 
-  it('源码滚动映射会钳制范围，内容刷新后可恢复相同比例而不回到顶部', () => {
+  it('双向滚动映射会钳制范围，内容刷新后可恢复相同比例而不回到顶部', () => {
     expect(getScrollProgress(450, 1_000, 100)).toBe(0.5)
     expect(getScrollProgress(-20, 1_000, 100)).toBe(0)
     expect(getScrollProgress(2_000, 1_000, 100)).toBe(1)
     expect(getScrollTopForProgress(0.5, 2_000, 200)).toBe(900)
     expect(getScrollTopForProgress(0.5, 2_400, 200)).toBe(1_100)
+    for (const progress of [0, 0.25, 0.5, 0.75, 1]) {
+      expect(getScrollProgress(
+        getScrollTopForProgress(progress, 2_400, 200),
+        2_400,
+        200
+      )).toBeCloseTo(progress)
+    }
+
+    const guard = createProgrammaticScrollGuard(1_000)
+    guard.mark(450)
+    expect(guard.consume(450.5)).toBe(true)
+    guard.mark(450)
+    expect(guard.consume(470)).toBe(false)
+    guard.clear()
   })
 
   it('CMS Wiki 预览与正式页面共用跳级兼容的标题编号', () => {
@@ -112,10 +127,14 @@ ${vinciContentComponentDefinitions[3]!.defaultMarkdown}`
     expect(page).toContain('cms-source-workspace')
     expect(page).toContain('cms-source-mobile-switch')
     expect(page).toContain('@scroll-progress="handleSourceScroll"')
+    expect(page).toContain('@scroll="handlePreviewScroll"')
+    expect(page).toContain('syncSourceScroll')
     expect(page).toContain('<VinciMarkdownRenderer :variant="initial.collection" :markdown="body" />')
     expect(page).not.toContain("switchMode('preview')")
     expect(sourceEditor).toContain('scrollProgress')
     expect(sourceEditor).toContain('getScrollProgress')
+    expect(sourceEditor).toContain('setScrollProgress')
+    expect(sourceEditor).toContain('programmaticScroll')
     expect(visualEditor).toContain('createCmsVisualEditorFeatureConfigs')
     expect(renderer).toContain("'vinci-alert': VinciAlert")
     expect(renderer).toContain("'vinci-download-card': VinciDownloadCard")

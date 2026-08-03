@@ -12,6 +12,7 @@ import CmsMarkdownSourceEditor from '../../../components/cms/CmsMarkdownSourceEd
 import VinciMarkdownRenderer from '../../../components/VinciMarkdownRenderer.vue'
 import { assessCmsVisualRoundTrip } from '../../../utils/cms-visual-editor'
 import {
+  createProgrammaticScrollGuard,
   getScrollProgress,
   getScrollTopForProgress
 } from '../../../utils/cms-scroll-sync'
@@ -104,6 +105,7 @@ const editingComponent = ref<VinciContentComponentOccurrence | null>(null)
 const componentSourceDraft = ref('')
 const sourceScrollProgress = ref(0)
 const previewScroller = ref<HTMLElement | null>(null)
+const fallbackSourceEditor = ref<HTMLTextAreaElement | null>(null)
 type CmsImageUploadState = 'queued' | 'uploading' | 'uploaded' | 'failed'
 interface CmsImageUploadItem {
   id: number
@@ -118,6 +120,9 @@ let saveTimer: ReturnType<typeof setTimeout> | undefined
 let visualCheckTimer: ReturnType<typeof setTimeout> | undefined
 let heartbeatTimer: ReturnType<typeof setInterval> | undefined
 let previewSyncFrame: number | undefined
+let sourceSyncFrame: number | undefined
+const previewProgrammaticScroll = createProgrammaticScrollGuard()
+const fallbackSourceProgrammaticScroll = createProgrammaticScrollGuard()
 let saving = false
 let saveQueued = false
 let leaving = false
@@ -342,11 +347,40 @@ const syncPreviewScroll = () => {
     previewSyncFrame = undefined
     const scroller = previewScroller.value
     if (!scroller) return
-    scroller.scrollTop = getScrollTopForProgress(
+    const target = getScrollTopForProgress(
       sourceScrollProgress.value,
       scroller.scrollHeight,
       scroller.clientHeight
     )
+    if (Math.abs(scroller.scrollTop - target) <= 1) {
+      previewProgrammaticScroll.clear()
+      return
+    }
+    previewProgrammaticScroll.mark(target)
+    scroller.scrollTop = target
+  })
+}
+
+const syncSourceScroll = () => {
+  if (!import.meta.client) return
+  if (sourceSyncFrame !== undefined) cancelAnimationFrame(sourceSyncFrame)
+  sourceSyncFrame = requestAnimationFrame(() => {
+    sourceSyncFrame = undefined
+    if (sourceEditor.value?.setScrollProgress(sourceScrollProgress.value)) return
+
+    const scroller = fallbackSourceEditor.value
+    if (!scroller) return
+    const target = getScrollTopForProgress(
+      sourceScrollProgress.value,
+      scroller.scrollHeight,
+      scroller.clientHeight
+    )
+    if (Math.abs(scroller.scrollTop - target) <= 1) {
+      fallbackSourceProgrammaticScroll.clear()
+      return
+    }
+    fallbackSourceProgrammaticScroll.mark(target)
+    scroller.scrollTop = target
   })
 }
 
@@ -357,6 +391,7 @@ const handleSourceScroll = (progress: number) => {
 
 const handleFallbackSourceScroll = (event: Event) => {
   const target = event.currentTarget as HTMLTextAreaElement
+  if (fallbackSourceProgrammaticScroll.consume(target.scrollTop)) return
   handleSourceScroll(getScrollProgress(
     target.scrollTop,
     target.scrollHeight,
@@ -364,9 +399,20 @@ const handleFallbackSourceScroll = (event: Event) => {
   ))
 }
 
+const handlePreviewScroll = (event: Event) => {
+  const target = event.currentTarget as HTMLElement
+  if (previewProgrammaticScroll.consume(target.scrollTop)) return
+  sourceScrollProgress.value = getScrollProgress(
+    target.scrollTop,
+    target.scrollHeight,
+    target.clientHeight
+  )
+  syncSourceScroll()
+}
+
 const selectMobileSourcePane = (pane: 'source' | 'preview') => {
   mobileSourcePane.value = pane
-  if (pane === 'preview') nextTick(() => syncPreviewScroll())
+  nextTick(() => pane === 'preview' ? syncPreviewScroll() : syncSourceScroll())
 }
 
 const switchMode = (next: 'source' | 'visual') => {
@@ -762,6 +808,9 @@ onBeforeUnmount(() => {
   clearTimeout(saveTimer)
   clearTimeout(visualCheckTimer)
   if (previewSyncFrame !== undefined) cancelAnimationFrame(previewSyncFrame)
+  if (sourceSyncFrame !== undefined) cancelAnimationFrame(sourceSyncFrame)
+  previewProgrammaticScroll.clear()
+  fallbackSourceProgrammaticScroll.clear()
   clearHeartbeat()
   for (const timer of imageUploadRemovalTimers.values()) clearTimeout(timer)
   for (const item of imageUploadItems.value) releaseImagePreview(item.previewUrl)
@@ -1102,11 +1151,13 @@ onBeforeUnmount(() => {
                 ref="sourceEditor"
                 v-model="body"
                 :readonly="!canEdit"
+                @ready="syncSourceScroll"
                 @error="handleSourceError"
                 @scroll-progress="handleSourceScroll"
               />
               <template #fallback>
                 <textarea
+                  ref="fallbackSourceEditor"
                   v-model="body"
                   class="cms-markdown-source"
                   spellcheck="false"
@@ -1122,6 +1173,7 @@ onBeforeUnmount(() => {
             class="cms-final-preview cms-preview-pane"
             :class="{ 'cms-source-mobile-hidden': mobileSourcePane !== 'preview' }"
             aria-label="文章发布效果预览"
+            @scroll="handlePreviewScroll"
           >
             <header>
               <strong>发布效果</strong>
