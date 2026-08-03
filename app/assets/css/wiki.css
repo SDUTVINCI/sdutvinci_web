@@ -458,6 +458,147 @@
   color: var(--muted);
 }
 
+.wiki-content-body iframe {
+  max-width: 100%;
+  border: 0;
+}
+
+.vinci-content-alert,
+.vinci-parameter-card,
+.vinci-video-embed,
+.vinci-download-card {
+  margin: 1.5rem 0;
+}
+
+.vinci-content-alert {
+  --component-accent: var(--cyan);
+  border: 1px solid color-mix(in srgb, var(--component-accent) 38%, var(--line));
+  border-left: 5px solid var(--component-accent);
+  border-radius: 8px;
+  padding: 1rem 1.1rem;
+  background: color-mix(in srgb, var(--component-accent) 8%, var(--surface));
+}
+
+.vinci-content-alert[data-tone="success"] {
+  --component-accent: var(--green);
+}
+
+.vinci-content-alert[data-tone="warning"] {
+  --component-accent: var(--gold);
+}
+
+.vinci-content-alert[data-tone="danger"] {
+  --component-accent: var(--red);
+}
+
+.vinci-content-alert > strong {
+  display: block;
+  color: var(--ink);
+}
+
+.vinci-content-component-body > :first-child {
+  margin-top: 0;
+}
+
+.vinci-content-component-body > :last-child {
+  margin-bottom: 0;
+}
+
+.vinci-parameter-card {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.vinci-parameter-card > header {
+  border-bottom: 1px solid var(--line);
+  padding: 0.8rem 1rem;
+  background: var(--surface-soft);
+  color: var(--ink);
+  font-weight: 900;
+}
+
+.vinci-parameter-card > .vinci-content-component-body {
+  padding: 0.2rem 1rem 0.8rem;
+}
+
+.vinci-video-embed {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.vinci-video-embed-frame {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding-top: 56.25%;
+  background: #0b1115;
+}
+
+.vinci-video-embed-frame iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.vinci-video-embed figcaption {
+  color: var(--muted);
+  font-size: 0.86rem;
+  text-align: center;
+}
+
+.vinci-download-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 1rem 1.1rem;
+  background: var(--surface-soft);
+  color: var(--ink) !important;
+  text-decoration: none !important;
+}
+
+.vinci-download-card:hover {
+  border-color: color-mix(in srgb, var(--cyan) 48%, var(--line));
+  background: color-mix(in srgb, var(--cyan) 7%, var(--surface));
+}
+
+.vinci-download-card-icon {
+  display: grid;
+  width: 2.35rem;
+  height: 2.35rem;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--cyan);
+  color: #fff;
+  font-size: 1.35rem;
+}
+
+.vinci-download-card > span:nth-child(2) {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.vinci-download-card small,
+.vinci-download-card-size,
+.vinci-content-component-error {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.vinci-content-component-error {
+  border: 1px dashed var(--red);
+  border-radius: 8px;
+  padding: 0.8rem 1rem;
+}
+
 .wiki-content-body img {
   display: block;
   max-width: 100%;

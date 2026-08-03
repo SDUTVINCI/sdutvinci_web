@@ -2,6 +2,7 @@
 import { markdown } from '@codemirror/lang-markdown'
 import { Compartment, EditorState } from '@codemirror/state'
 import { basicSetup, EditorView } from 'codemirror'
+import { getScrollProgress } from '../../utils/cms-scroll-sync'
 
 const props = defineProps<{
   modelValue: string
@@ -12,6 +13,7 @@ const emit = defineEmits<{
   'update:modelValue': [value: string]
   ready: []
   error: [message: string]
+  scrollProgress: [progress: number]
 }>()
 
 const root = ref<HTMLElement | null>(null)
@@ -20,6 +22,22 @@ const failed = ref(false)
 const editable = new Compartment()
 let view: EditorView | null = null
 let acceptingUpdates = false
+
+const reportScroll = (element: HTMLElement) => {
+  emit('scrollProgress', getScrollProgress(
+    element.scrollTop,
+    element.scrollHeight,
+    element.clientHeight
+  ))
+}
+
+const handleEditorScroll = () => {
+  if (view) reportScroll(view.scrollDOM)
+}
+
+const handleFallbackScroll = (event: Event) => {
+  reportScroll(event.currentTarget as HTMLTextAreaElement)
+}
 
 const insertMarkdown = (source: string) => {
   if (view) {
@@ -121,6 +139,7 @@ onMounted(() => {
         ]
       })
     })
+    view.scrollDOM.addEventListener('scroll', handleEditorScroll, { passive: true })
     acceptingUpdates = true
     emit('ready')
   } catch (error) {
@@ -131,6 +150,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   acceptingUpdates = false
+  view?.scrollDOM.removeEventListener('scroll', handleEditorScroll)
   view?.destroy()
   view = null
 })
@@ -148,6 +168,7 @@ onUnmounted(() => {
       aria-label="Markdown 源码回退编辑器"
       :readonly="readonly"
       @input="emit('update:modelValue', ($event.target as HTMLTextAreaElement).value)"
+      @scroll="handleFallbackScroll"
     />
   </div>
 </template>

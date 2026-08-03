@@ -153,7 +153,7 @@ const relatedMembers = computed(() => {
 
     <section class="member-profile-content">
       <article class="member-prose">
-        <VinciMarkdownRenderer :markdown="String(member.body || '')" />
+        <VinciMarkdownRenderer variant="member" :markdown="String(member.body || '')" />
       </article>
 
       <aside v-if="relatedMembers.length" class="related-members">

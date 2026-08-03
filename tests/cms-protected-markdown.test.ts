@@ -8,6 +8,7 @@ import {
   isCmsVisualRoundTripLossless
 } from '../app/utils/cms-visual-editor'
 import { assessMarkdownVisualSafety } from '../shared/utils/cms-markdown-safety'
+import { vinciContentComponentDefinitions } from '../shared/utils/vinci-content-components'
 
 describe('CMS 混合可视化 Markdown 保护', () => {
   it('只替换真正的 HTML/Vue 语法，不误判代码块和自动链接', () => {
@@ -61,6 +62,19 @@ describe('CMS 混合可视化 Markdown 保护', () => {
       '```text\n第一行\n\n第三行\n```',
       '```text\n第一行\n第三行\n```'
     )).toBe(false)
+  })
+
+  it('系统登记组件进入富文本保护管线且 Markdown 原文可完整还原', () => {
+    for (const definition of vinciContentComponentDefinitions) {
+      const prepared = prepareMarkdownForVisualEditor(definition.defaultMarkdown)
+      expect(prepared).toBe(definition.defaultMarkdown)
+      expect(assessMarkdownVisualSafety(prepared).reasons)
+        .toContain('正文包含 MDC 容器语法，将在可视化模式中作为只读区域保护')
+      expect(isCmsVisualRoundTripLossless(
+        definition.defaultMarkdown,
+        definition.defaultMarkdown
+      )).toBe(true)
+    }
   })
 
   it('现有全部新闻和 Wiki 正文都能完成可视化预处理', async () => {

@@ -11,6 +11,17 @@ import CmsMarkdownVisualEditor from '../../../components/cms/CmsMarkdownVisualEd
 import CmsMarkdownSourceEditor from '../../../components/cms/CmsMarkdownSourceEditor.client.vue'
 import VinciMarkdownRenderer from '../../../components/VinciMarkdownRenderer.vue'
 import { isCmsVisualRoundTripLossless } from '../../../utils/cms-visual-editor'
+import {
+  getScrollProgress,
+  getScrollTopForProgress
+} from '../../../utils/cms-scroll-sync'
+import {
+  findVinciContentComponents,
+  isRegisteredVinciComponentSource,
+  vinciContentComponentDefinitions,
+  type VinciContentComponentDefinition,
+  type VinciContentComponentOccurrence
+} from '~~/shared/utils/vinci-content-components'
 
 definePageMeta({ layout: 'cms', middleware: 'cms-auth' })
 const route = useRoute()
@@ -67,7 +78,8 @@ const proposalLabel = computed(() => ({
 const lastSavedAt = ref(initial.lastSavedAt)
 const comparison = ref(comparisonData.value?.comparison || null)
 const reviewEvents = ref(eventData.value?.events || [])
-const mode = ref<'source' | 'visual' | 'preview'>('source')
+const mode = ref<'source' | 'visual'>('source')
+const mobileSourcePane = ref<'source' | 'preview'>('source')
 const visualKey = ref(0)
 const visualSource = ref('')
 const visualChecking = ref(false)
@@ -86,6 +98,12 @@ const imageUploading = ref(false)
 const imageDragging = ref(false)
 const imageUploadMessage = ref('')
 const imageUploadFailed = ref(false)
+const showDocumentSettings = ref(false)
+const showComponentMenu = ref(false)
+const editingComponent = ref<VinciContentComponentOccurrence | null>(null)
+const componentSourceDraft = ref('')
+const sourceScrollProgress = ref(0)
+const previewScroller = ref<HTMLElement | null>(null)
 type CmsImageUploadState = 'queued' | 'uploading' | 'uploaded' | 'failed'
 interface CmsImageUploadItem {
   id: number
@@ -99,6 +117,7 @@ let imageUploadSequence = 0
 let saveTimer: ReturnType<typeof setTimeout> | undefined
 let visualCheckTimer: ReturnType<typeof setTimeout> | undefined
 let heartbeatTimer: ReturnType<typeof setInterval> | undefined
+let previewSyncFrame: number | undefined
 let saving = false
 let saveQueued = false
 let leaving = false
@@ -314,12 +333,49 @@ const scheduleSave = () => {
 
 watch([title, description, body, authorKeys], scheduleSave, { deep: true })
 
-const switchMode = (next: 'source' | 'visual' | 'preview') => {
+const componentOccurrences = computed(() => findVinciContentComponents(body.value))
+
+const syncPreviewScroll = () => {
+  if (!import.meta.client) return
+  if (previewSyncFrame !== undefined) cancelAnimationFrame(previewSyncFrame)
+  previewSyncFrame = requestAnimationFrame(() => {
+    previewSyncFrame = undefined
+    const scroller = previewScroller.value
+    if (!scroller) return
+    scroller.scrollTop = getScrollTopForProgress(
+      sourceScrollProgress.value,
+      scroller.scrollHeight,
+      scroller.clientHeight
+    )
+  })
+}
+
+const handleSourceScroll = (progress: number) => {
+  sourceScrollProgress.value = progress
+  syncPreviewScroll()
+}
+
+const handleFallbackSourceScroll = (event: Event) => {
+  const target = event.currentTarget as HTMLTextAreaElement
+  handleSourceScroll(getScrollProgress(
+    target.scrollTop,
+    target.scrollHeight,
+    target.clientHeight
+  ))
+}
+
+const selectMobileSourcePane = (pane: 'source' | 'preview') => {
+  mobileSourcePane.value = pane
+  if (pane === 'preview') nextTick(() => syncPreviewScroll())
+}
+
+const switchMode = (next: 'source' | 'visual') => {
   message.value = ''
   clearTimeout(visualCheckTimer)
   if (next !== 'visual') {
     mode.value = next
     visualChecking.value = false
+    nextTick(() => syncPreviewScroll())
     return
   }
 
@@ -339,6 +395,55 @@ const appendMarkdown = (markdown: string) => {
   const suffix = body.value ? '\n' : ''
   body.value = `${body.value}${prefix}${markdown}${suffix}`
 }
+
+const insertContentComponent = (definition: VinciContentComponentDefinition) => {
+  if (mode.value === 'visual' && visualEditor.value?.insertMarkdown(definition.defaultMarkdown)) {
+    showComponentMenu.value = false
+    return
+  }
+  if (mode.value === 'source' && sourceEditor.value?.insertMarkdown(definition.defaultMarkdown)) {
+    showComponentMenu.value = false
+    return
+  }
+  appendMarkdown(definition.defaultMarkdown)
+  showComponentMenu.value = false
+}
+
+const beginComponentEdit = (occurrence: VinciContentComponentOccurrence) => {
+  editingComponent.value = { ...occurrence }
+  componentSourceDraft.value = occurrence.source
+}
+
+const cancelComponentEdit = () => {
+  editingComponent.value = null
+  componentSourceDraft.value = ''
+}
+
+const saveComponentEdit = () => {
+  const occurrence = editingComponent.value
+  if (!occurrence) return
+  if (!isRegisteredVinciComponentSource(
+    componentSourceDraft.value,
+    occurrence.definition.tag
+  )) {
+    message.value = `组件源码必须保留 ${occurrence.definition.tag} 起始标签。`
+    return
+  }
+  if (body.value.slice(occurrence.start, occurrence.end) !== occurrence.source) {
+    message.value = '组件在编辑期间已发生变化，请关闭窗口后重新打开。'
+    return
+  }
+  body.value = body.value.slice(0, occurrence.start)
+    + componentSourceDraft.value
+    + body.value.slice(occurrence.end)
+  cancelComponentEdit()
+  showComponentMenu.value = false
+  if (mode.value === 'visual') nextTick(() => switchMode('visual'))
+}
+
+watch(body, () => {
+  if (mode.value === 'source') nextTick(() => syncPreviewScroll())
+})
 
 const insertUploadedMarkdown = async (markdown: string) => {
   if (mode.value === 'visual' && visualEditor.value?.insertMarkdown(markdown)) {
@@ -643,6 +748,7 @@ onBeforeRouteLeave(async () => {
 onBeforeUnmount(() => {
   clearTimeout(saveTimer)
   clearTimeout(visualCheckTimer)
+  if (previewSyncFrame !== undefined) cancelAnimationFrame(previewSyncFrame)
   clearHeartbeat()
   for (const timer of imageUploadRemovalTimers.values()) clearTimeout(timer)
   for (const item of imageUploadItems.value) releaseImagePreview(item.previewUrl)
@@ -765,8 +871,22 @@ onBeforeUnmount(() => {
     </section>
 
     <div class="cms-draft-layout" :class="{ 'cms-editor-readonly': !canEdit }">
-      <aside class="cms-panel cms-draft-fields">
-        <h2>Frontmatter</h2>
+      <aside
+        v-if="showDocumentSettings"
+        class="cms-panel cms-draft-fields cms-draft-fields-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label="文章信息"
+      >
+        <header class="cms-draft-fields-header">
+          <div>
+            <p class="cms-eyebrow">ARTICLE SETTINGS</p>
+            <h2>文章信息</h2>
+          </div>
+          <button class="cms-button cms-button-quiet" type="button" @click="showDocumentSettings = false">
+            关闭
+          </button>
+        </header>
         <label>
           <span>title</span>
           <input v-model="title" required maxlength="200" :disabled="!canEdit">
@@ -814,28 +934,78 @@ onBeforeUnmount(() => {
         @drop.capture="handleImageDrop"
         @paste.capture="handleImagePaste"
       >
-        <section class="cms-image-upload" :class="{ 'cms-image-upload-disabled': !canEdit }">
-          <div>
-            <strong>文章图片</strong>
-            <span>支持选择、拖入编辑区或粘贴截图；JPEG / PNG / WebP / GIF 将由服务端转换和压缩。</span>
+        <div class="cms-editor-chrome">
+          <div class="cms-editor-tabs" role="tablist" aria-label="编辑模式">
+            <button type="button" :class="{ active: mode === 'visual' }" @click="switchMode('visual')">
+              富文本
+            </button>
+            <button type="button" :class="{ active: mode === 'source' }" @click="switchMode('source')">
+              Markdown 源码与预览
+            </button>
           </div>
-          <input
-            ref="imageInput"
-            class="cms-visually-hidden"
-            type="file"
-            accept=".jpg,.jpeg,.png,.webp,.gif,image/jpeg,image/png,image/webp,image/gif"
-            multiple
-            :disabled="!canEdit || imageUploading"
-            @change="handleImageSelection"
-          >
-          <button
-            class="cms-button cms-button-quiet"
-            type="button"
-            :disabled="!canEdit || imageUploading"
-            @click="imageInput?.click()"
-          >
-            {{ imageUploading ? '正在处理图片…' : '选择图片' }}
-          </button>
+          <div class="cms-editor-tools">
+            <input
+              ref="imageInput"
+              class="cms-visually-hidden"
+              type="file"
+              accept=".jpg,.jpeg,.png,.webp,.gif,image/jpeg,image/png,image/webp,image/gif"
+              multiple
+              :disabled="!canEdit || imageUploading"
+              @change="handleImageSelection"
+            >
+            <button
+              class="cms-button cms-button-quiet"
+              type="button"
+              :disabled="!canEdit || imageUploading"
+              @click="imageInput?.click()"
+            >
+              {{ imageUploading ? '正在处理…' : '插入图片' }}
+            </button>
+            <button
+              class="cms-button cms-button-quiet"
+              type="button"
+              :aria-expanded="showComponentMenu"
+              @click="showComponentMenu = !showComponentMenu"
+            >
+              内容组件
+            </button>
+            <button class="cms-button cms-button-quiet" type="button" @click="showDocumentSettings = true">
+              文章信息
+            </button>
+          </div>
+        </div>
+        <section v-if="showComponentMenu" class="cms-component-menu" aria-label="网站内容组件">
+          <header>
+            <div>
+              <strong>网站登记组件</strong>
+              <span>可从工具栏或输入 / 打开斜杠菜单；组件源码会完整保存在 Markdown 中。</span>
+            </div>
+            <button class="cms-button cms-button-quiet" type="button" @click="showComponentMenu = false">收起</button>
+          </header>
+          <div class="cms-component-menu-grid">
+            <button
+              v-for="definition in vinciContentComponentDefinitions"
+              :key="definition.id"
+              type="button"
+              :disabled="!canEdit"
+              @click="insertContentComponent(definition)"
+            >
+              <strong>{{ definition.label }}</strong>
+              <span>{{ definition.description }}</span>
+            </button>
+          </div>
+          <div v-if="componentOccurrences.length" class="cms-component-occurrences">
+            <strong>本文已插入的组件</strong>
+            <button
+              v-for="(occurrence, index) in componentOccurrences"
+              :key="`${occurrence.start}:${occurrence.definition.id}`"
+              type="button"
+              :disabled="!canEdit"
+              @click="beginComponentEdit(occurrence)"
+            >
+              {{ occurrence.definition.label }} {{ index + 1 }} · 编辑内容和属性
+            </button>
+          </div>
         </section>
         <p
           v-if="imageUploadMessage"
@@ -872,18 +1042,6 @@ onBeforeUnmount(() => {
           松开即可上传图片
         </div>
 
-        <div class="cms-editor-tabs" role="tablist" aria-label="编辑模式">
-          <button type="button" :class="{ active: mode === 'visual' }" @click="switchMode('visual')">
-            可视化编辑
-          </button>
-          <button type="button" :class="{ active: mode === 'source' }" @click="switchMode('source')">
-            Markdown 源码
-          </button>
-          <button type="button" :class="{ active: mode === 'preview' }" @click="switchMode('preview')">
-            最终效果预览
-          </button>
-        </div>
-
         <div v-if="mode === 'visual'" class="cms-visual-editor" :inert="!canEdit">
           <p v-if="visualChecking" class="cms-editor-checking">正在执行无损往返检查…</p>
           <ClientOnly>
@@ -893,41 +1051,105 @@ onBeforeUnmount(() => {
               v-model="body"
               @ready="handleVisualReady"
               @error="handleVisualError"
+              @open-component-menu="showComponentMenu = true"
             />
             <template #fallback>
               <p class="cms-editor-checking">正在加载可视化编辑器…</p>
             </template>
           </ClientOnly>
         </div>
-        <ClientOnly v-else-if="mode === 'source'">
-          <CmsMarkdownSourceEditor
-            ref="sourceEditor"
-            v-model="body"
-            :readonly="!canEdit"
-            @error="handleSourceError"
-          />
-          <template #fallback>
-            <textarea
-              v-model="body"
-              class="cms-markdown-source"
-              spellcheck="false"
-              aria-label="Markdown 源码临时回退编辑器"
-              :readonly="!canEdit"
-            />
-          </template>
-        </ClientOnly>
-        <section v-else class="cms-final-preview" aria-label="最终效果预览">
-          <header>
-            <strong>Comark 最终效果预览</strong>
-            <span>使用未来前台候选渲染组件；不会改变当前 Nuxt Content 前台。</span>
-          </header>
-          <VinciMarkdownRenderer :markdown="body" />
-        </section>
+        <div v-else class="cms-source-workspace">
+          <div class="cms-source-mobile-switch" role="tablist" aria-label="源码和预览">
+            <button
+              type="button"
+              :class="{ active: mobileSourcePane === 'source' }"
+              @click="selectMobileSourcePane('source')"
+            >
+              源码
+            </button>
+            <button
+              type="button"
+              :class="{ active: mobileSourcePane === 'preview' }"
+              @click="selectMobileSourcePane('preview')"
+            >
+              发布效果
+            </button>
+          </div>
+          <section
+            class="cms-source-pane"
+            :class="{ 'cms-source-mobile-hidden': mobileSourcePane !== 'source' }"
+            aria-label="Markdown 源码编辑器"
+          >
+            <ClientOnly>
+              <CmsMarkdownSourceEditor
+                ref="sourceEditor"
+                v-model="body"
+                :readonly="!canEdit"
+                @error="handleSourceError"
+                @scroll-progress="handleSourceScroll"
+              />
+              <template #fallback>
+                <textarea
+                  v-model="body"
+                  class="cms-markdown-source"
+                  spellcheck="false"
+                  aria-label="Markdown 源码临时回退编辑器"
+                  :readonly="!canEdit"
+                  @scroll="handleFallbackSourceScroll"
+                />
+              </template>
+            </ClientOnly>
+          </section>
+          <section
+            ref="previewScroller"
+            class="cms-final-preview cms-preview-pane"
+            :class="{ 'cms-source-mobile-hidden': mobileSourcePane !== 'preview' }"
+            aria-label="文章发布效果预览"
+          >
+            <header>
+              <strong>发布效果</strong>
+              <span>与正式网页共用 VinciMarkdownRenderer、组件、代码高亮和文章样式。</span>
+            </header>
+            <VinciMarkdownRenderer :variant="initial.collection" :markdown="body" />
+          </section>
+        </div>
       </main>
     </div>
 
+    <div
+      v-if="editingComponent"
+      class="cms-editor-dialog-backdrop"
+      @click.self="cancelComponentEdit"
+    >
+      <section class="cms-panel cms-component-source-dialog" role="dialog" aria-modal="true">
+        <header>
+          <div>
+            <p class="cms-eyebrow">REGISTERED COMPONENT</p>
+            <h2>编辑{{ editingComponent.definition.label }}</h2>
+          </div>
+          <button class="cms-button cms-button-quiet" type="button" @click="cancelComponentEdit">关闭</button>
+        </header>
+        <p>
+          可修改花括号中的属性和组件正文。系统只替换这一段源码，未识别内容不会被格式化。
+        </p>
+        <textarea
+          v-model="componentSourceDraft"
+          class="cms-component-source-input"
+          rows="14"
+          spellcheck="false"
+          :readonly="!canEdit"
+        />
+        <div class="cms-editor-actions">
+          <button class="cms-button cms-button-quiet" type="button" @click="cancelComponentEdit">取消</button>
+          <button class="cms-button cms-button-primary" type="button" :disabled="!canEdit" @click="saveComponentEdit">
+            保存组件修改
+          </button>
+        </div>
+      </section>
+    </div>
+
     <footer class="cms-draft-scope-note">
-      图片仅上传到已配置的 S3 兼容对象存储并关联当前草稿；正式发布仍沿用既有审核与 Git 流程。
+      图片仅上传到已配置的 S3 兼容对象存储并关联当前草稿；正式发布仍沿用既有审核与数据库 Revision 流程。
     </footer>
   </section>
 </template>

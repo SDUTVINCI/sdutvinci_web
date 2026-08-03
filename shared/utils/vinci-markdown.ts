@@ -4,7 +4,6 @@ import githubLight from '@shikijs/themes/github-light'
 import GithubSlugger from 'github-slugger'
 import { remark } from 'remark'
 import highlight from 'comark/plugins/highlight'
-import security from 'comark/plugins/security'
 import taskList from 'comark/plugins/task-list'
 import toc from 'comark/plugins/toc'
 
@@ -129,17 +128,66 @@ const blockedTagFallback = (element: ComarkElement): ComarkNode => {
   ]
 }
 
+const executableProtocolPattern = /^(?:javascript|vbscript|data\s*:\s*(?:text\/(?:html|javascript|vbscript)|application\/javascript))/i
+
+const decodeCodePoint = (value: string, radix: number) => {
+  const codePoint = Number.parseInt(value, radix)
+  return Number.isSafeInteger(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff
+    ? String.fromCodePoint(codePoint)
+    : ''
+}
+
+const containsExecutableProtocol = (value: unknown) => {
+  if (typeof value !== 'string') return false
+  let normalized = value.trim().replace(/[\u0000-\u0020\u007f]+/g, '')
+  try {
+    normalized = decodeURIComponent(normalized)
+  } catch {
+    // Keep malformed escapes as plain text and still run the direct check.
+  }
+  normalized = normalized
+    .replace(/&#x([0-9a-f]+);?/gi, (_match, value) => decodeCodePoint(value, 16))
+    .replace(/&#(\d+);?/g, (_match, value) => decodeCodePoint(value, 10))
+    .replace(/&colon;?/gi, ':')
+    .replace(/&(tab|newline);?/gi, '')
+    .replace(/[\u0000-\u0020\u007f]+/g, '')
+  return executableProtocolPattern.test(normalized)
+}
+
+const preventExecutableHtml = (): ComarkPlugin => ({
+  name: 'vinci-executable-html-safety',
+  post(state) {
+    const sanitize = (container: any[], start = 0) => {
+      for (let index = start; index < container.length; index += 1) {
+        const node = container[index]
+        if (typeof node === 'string' || node[0] === null) continue
+        if (String(node[0]).toLowerCase() === 'script') {
+          container[index] = blockedTagFallback(node as ComarkElement)
+          continue
+        }
+
+        const props = node[1] || {}
+        node[1] = Object.fromEntries(
+          Object.entries(props).filter(([name, value]) => {
+            const normalizedName = name.toLowerCase()
+            return !normalizedName.startsWith('on')
+              && normalizedName !== 'srcdoc'
+              && !containsExecutableProtocol(value)
+          })
+        )
+        sanitize(node, 2)
+      }
+    }
+    sanitize(state.tree.nodes as VinciComarkNode[])
+  }
+})
+
 export const createVinciMarkdownPlugins = (): ComarkPlugin<any, any>[] => [
   taskList(),
   removeComarkComments(),
   vinciHeadingIds(),
   toc({ depth: 5, searchDepth: 8 }),
-  security({
-    blockedTags: ['script', 'style', 'object', 'embed', 'base', 'meta', 'link'],
-    allowedProtocols: ['http', 'https', 'mailto', 'tel'],
-    allowDataImages: false,
-    tagFallback: blockedTagFallback
-  }),
+  preventExecutableHtml(),
   highlight({
     preStyles: false,
     themes: {

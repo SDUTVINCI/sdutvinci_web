@@ -722,7 +722,7 @@ function normalizePath(path: string) {
           </header>
 
           <div class="wiki-content-body">
-            <VinciMarkdownRenderer :markdown="String(page.body || '')" />
+            <VinciMarkdownRenderer variant="wiki" :markdown="String(page.body || '')" />
           </div>
 
           <footer v-if="previousPage || nextPage" class="wiki-page-navigation">

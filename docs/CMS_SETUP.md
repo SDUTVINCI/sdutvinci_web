@@ -31,6 +31,8 @@ npm run dev
 - 成员资料数据库权威，账号绑定/角色/密码不能通过 Markdown PR 修改。
 - 图片经服务端 Sharp 校验并转 WebP 后进入 S3/COS，浏览器拿不到对象存储密钥。
 - CMS 最终预览和正式前台共用 `VinciMarkdownRenderer`/Comark。
+- 富文本单栏、源码双栏滚动同步、移动切换和登记内容组件的使用及扩展方法见
+  `docs/CMS_EDITOR_GUIDE.md`。
 
 外部内容导入只读取配置仓库的 PR API：安全文章变更创建草稿，成员变更创建 Proposal，
 删除/移动走后续审核。评论和关闭 PR 均需独立授权；不会 Merge、批准或发布。

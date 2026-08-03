@@ -74,7 +74,7 @@ const bilibiliSrc = computed(() => {
       </div>
 
       <div class="content-prose">
-        <VinciMarkdownRenderer :markdown="String(page.body || '')" />
+        <VinciMarkdownRenderer variant="news" :markdown="String(page.body || '')" />
       </div>
 
       <div class="article-footer-actions">

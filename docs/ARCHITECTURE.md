@@ -32,6 +32,11 @@
 标题 ID 和目录逻辑。公开页面不调用 `queryCollection` 或 `ContentRenderer`。Wiki 公共路径、
 目录和顺序由普通应用模块从数据库字段派生；发布、恢复和导出使用同一算法。
 
+文章编辑器有两个显式模式：富文本使用 Milkdown/Crepe 单栏画布；源码在桌面端同时显示
+CodeMirror 和正式渲染预览，移动端在保持两个面板状态的前提下切换。源码滚动只单向驱动预览，
+正文更新后按原进度恢复，避免循环和回顶。网站内容组件由共享注册表、富文本插入入口、
+`VinciMarkdownRenderer` Vue 组件映射和正式 CSS 共同登记。
+
 ## 3. 运行与部署
 
 技术栈为 Nuxt 4.5、Vue 3.5、Nitro node-server、TypeScript、PostgreSQL/Drizzle、Comark、
@@ -89,7 +94,8 @@ API。页面的白话说明、中文状态和 Git diff 行级材料属于长期�
 - 服务端会话令牌只以 SHA-256 摘要入库；密码用 Argon2id；写 API 校验同源、CSRF 和角色。
 - 浏览器拿不到数据库、Git、GitHub、S3 密钥。错误、审计与报告不得记录 Token、Cookie、
   私钥、带凭据 URL 或未脱敏 stderr。
-- Markdown 渲染阻断脚本、事件属性和危险协议；未知模板 token 以文本保留，不能静默丢失。
+- Markdown 渲染阻断 `script`、事件属性、`srcdoc` 和可执行 URL；普通 HTML、HTTPS iframe、
+  Vue/MDC 与登记组件允许渲染。处理只改变渲染树，不回写正文；未知语法和模板 token 必须保留。
 - 内容路径拒绝绝对路径、`..`、反斜线、NUL、symlink、特殊文件和受控根越界。
 - 恢复只允许名称带 `test` 的隔离空数据库完成演练；生产恢复需要绑定项目和数据库的精确
   确认令牌。

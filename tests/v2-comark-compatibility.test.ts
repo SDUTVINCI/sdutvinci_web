@@ -141,19 +141,20 @@ const ok = true
     }
   })
 
-  it('草稿页接入三模式、CodeMirror 回退和三模式图片插入', async () => {
+  it('草稿页接入富文本单栏、源码双栏预览、CodeMirror 回退和图片插入', async () => {
     const [page, editor] = await Promise.all([
       readFile('app/pages/cms/drafts/[id].vue', 'utf8'),
       readFile('app/components/cms/CmsMarkdownSourceEditor.client.vue', 'utf8')
     ])
-    expect(page).toContain("ref<'source' | 'visual' | 'preview'>('source')")
-    expect(page).toContain('可视化编辑')
-    expect(page).toContain('Markdown 源码')
-    expect(page).toContain('最终效果预览')
-    expect(page).toContain('<VinciMarkdownRenderer :markdown="body" />')
+    expect(page).toContain("ref<'source' | 'visual'>('source')")
+    expect(page).toContain('富文本')
+    expect(page).toContain('Markdown 源码与预览')
+    expect(page).toContain('cms-source-workspace')
+    expect(page).toContain('<VinciMarkdownRenderer :variant="initial.collection" :markdown="body" />')
     expect(page).toContain("if (mode.value === 'source'")
     expect(page).toContain('sourceEditor.value?.insertMarkdown(markdown)')
     expect(page).toContain('appendMarkdown(markdown)')
+    expect(page).toContain('@scroll-progress="handleSourceScroll"')
     expect(editor).toContain('basicSetup')
     expect(editor).toContain('EditorView.lineWrapping')
     expect(editor).toContain('<textarea')

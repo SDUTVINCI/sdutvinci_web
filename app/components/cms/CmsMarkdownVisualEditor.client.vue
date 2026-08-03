@@ -7,7 +7,10 @@ import {
   cmsProtectedMarkdownPlugins,
   prepareMarkdownForVisualEditor
 } from '../../utils/cms-protected-markdown'
-import { cmsVisualEditorFeatures } from '../../utils/cms-visual-editor'
+import {
+  cmsVisualEditorFeatures,
+  createCmsVisualEditorFeatureConfigs
+} from '../../utils/cms-visual-editor'
 
 const props = defineProps<{
   modelValue: string
@@ -17,6 +20,7 @@ const emit = defineEmits<{
   'update:modelValue': [value: string]
   ready: [serialized: string]
   error: [message: string]
+  openComponentMenu: []
 }>()
 
 const root = ref<HTMLElement | null>(null)
@@ -38,7 +42,10 @@ onMounted(async () => {
     crepe = new Crepe({
       root: root.value,
       defaultValue: prepareMarkdownForVisualEditor(props.modelValue),
-      features: cmsVisualEditorFeatures
+      features: cmsVisualEditorFeatures,
+      featureConfigs: createCmsVisualEditorFeatureConfigs(() => {
+        emit('openComponentMenu')
+      })
     })
     crepe.editor.use(cmsProtectedMarkdownPlugins)
     crepe.on((listener) => {

@@ -1729,3 +1729,30 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
   包括 operations、真实 systemd/logrotate、当前用户迁移、自动部署、清理和阶段 7 回归。
 - 该修复不改变产品代码、数据库、API、依赖、权限或生产行为；继续不 Fetch、不 Push、不部署，
   不访问生产资源。独立本地修复 Commit 完整 SHA 由交付回复报告。
+
+---
+
+## 2026-08-03：CMS 沉浸式编辑与正式效果双栏预览
+
+- 从干净 `main` `6622627f03edd4b4445ed2f1b353bb66df455581` 开始，接手时 HEAD 与
+  `origin/main` 相同、ahead/behind 为 0/0。本轮没有 Fetch、Push、Reset、Rebase、Amend、
+  Squash、SSH 或部署，也没有访问位于 `10.0.0.4` 的生产服务器。
+- 草稿页面调整为富文本单栏和 Markdown 源码/正式效果双栏两个模式；桌面端源码滚动按进度
+  单向驱动预览，正文重渲染后保持同一进度，移动端在两个持续挂载的面板之间切换。文章信息改为
+  独立弹层，富文本继续使用 Crepe 工具栏、选区工具栏和斜杠菜单。
+- 新增提示框、参数卡、视频和下载卡片共享注册表、插入/整段源码编辑入口及正式 Vue 渲染组件。
+  CMS 预览和新闻、Wiki、成员页面继续共用 `VinciMarkdownRenderer`、Comark、代码高亮和正文
+  CSS；各 collection 通过 variant 使用对应正式样式。
+- 富文本保护管线继续把 HTML、Vue/MDC、模板 token 和未知扩展作为原文/占位保留。最终渲染
+  允许普通 HTML、HTTPS iframe 和登记组件，只把 `script` 转为可见安全代码，并移除 `on*`、
+  `srcdoc` 和可执行 URL。处理不回写正文，未知语法不做自动修复或删除。
+- PostgreSQL 现有 `body`/Revision Markdown 字段已经完整承载上述源码，因此本功能不新增表、
+  字段或 Migration，不改变 API、审核、发布、Outbox 或导出模型；没有恢复代码仓库 `content/`，
+  没有引入 Nuxt Content，也没有改动 Wiki 拼音/章节模块。
+- 本机隔离验证通过：编辑器/Comark/阶段 10 定向回归 18/18；历史 Markdown 富文本保护 5/5；
+  固定删除前快照共 260 个 Markdown，Wiki 226/226 的 order、URL 与站内链接检查通过；typecheck、
+  production build 和 `git diff --check` 通过。build 仅有既有静态图片解析、chunk 体积和并行
+  prerender `console.time` 警告。曾启动的完整 Phase 11 本机 test 套件因包含无关旧运维用例且
+  长时间无进度而人工停止；其 test 容器、数据库 volume、network 和临时快照已由退出钩子清理。
+- 新增 `docs/CMS_EDITOR_GUIDE.md`，包含使用方式、登记组件扩展流程、权限/安全/异常、明确非目标、
+  本机验证和回滚。实现使用新的独立本地 Commit；完整 SHA 由交付回复报告。
