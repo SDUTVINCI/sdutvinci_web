@@ -13,10 +13,6 @@ if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) {
 if (typeof process.geteuid === 'function' && rootStat.uid !== process.geteuid()) {
   throw new Error('INSTANCE_PRUNE_ROOT_OWNER_MISMATCH')
 }
-const marker = await readFile(join(root, '.vinci-instance-root'), 'utf8')
-if (marker !== `vinci-instance-root-v1\n${project}\n`) {
-  throw new Error('INSTANCE_PRUNE_ROOT_MARKER_MISMATCH')
-}
 const retentionDays = Number(process.env.INSTANCE_RETENTION_DAYS || 30)
 if (!Number.isInteger(retentionDays) || retentionDays < 1 || retentionDays > 3660) {
   throw new Error('INSTANCE_PRUNE_RETENTION_INVALID')
@@ -28,8 +24,39 @@ const pattern = new RegExp(`^${project.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-i
 const deleted = []
 const protectedItems = []
 const entries = await readdir(root, { withFileTypes: true })
+const markerName = '.vinci-instance-root'
+const markerPath = join(root, markerName)
+const markerStat = await lstat(markerPath).catch((error) => {
+  if (error.code === 'ENOENT') return null
+  throw error
+})
+if (!markerStat) {
+  if (entries.length > 0) {
+    throw new Error('INSTANCE_PRUNE_ROOT_MARKER_MISSING_NONEMPTY')
+  }
+  process.stdout.write(`${JSON.stringify({
+    formatVersion: 1,
+    dryRun,
+    retentionDays,
+    state: 'uninitialized_empty',
+    protected: [],
+    deleted: []
+  }, null, 2)}\n`)
+  process.exit(0)
+}
+if (
+  !markerStat.isFile()
+  || markerStat.isSymbolicLink()
+  || (typeof process.geteuid === 'function' && markerStat.uid !== process.geteuid())
+) {
+  throw new Error('INSTANCE_PRUNE_ROOT_MARKER_UNSAFE')
+}
+const marker = await readFile(markerPath, 'utf8')
+if (marker !== `vinci-instance-root-v1\n${project}\n`) {
+  throw new Error('INSTANCE_PRUNE_ROOT_MARKER_MISMATCH')
+}
 for (const entry of entries) {
-  if (entry.name === '.vinci-instance-root') continue
+  if (entry.name === markerName) continue
   const match = entry.name.match(pattern)
   if (!match || !entry.isDirectory() || entry.isSymbolicLink()) {
     throw new Error(`INSTANCE_PRUNE_UNOWNED:${entry.name}`)

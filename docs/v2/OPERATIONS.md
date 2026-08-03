@@ -522,6 +522,11 @@ sudo journalctl -u vinci-cms-maintenance-cleanup.service -n 50 --no-pager # 查�
 `maintenance --scheduled`，等价于受保护的 apply：它先要求备份保留门禁成立，并跳过活动镜像、
 锁定迁移包和被回滚 marker 引用的版本。
 
+首次执行 `export-instance` 前，`INSTANCE_EXPORT_ROOT` 是安装器创建的 `0700` 空目录且还没有
+`.vinci-instance-root`。维护清理会将这个精确状态报告为 `uninitialized_empty` 并安全跳过，不会
+为了通过检查而创建 marker；空目录之外的任何无 marker 内容、错误属主、symlink 或特殊文件仍会
+使整轮 fail closed。marker 只允许由首次 `./vinci export-instance` 在完成路径和属主校验后创建。
+
 03:00 对账以 PostgreSQL 为权威，但不是首次导入机制。数据库文章/成员合计为 0、独立内容仓库却
 存在受控文件时，对账会记录报告并以 `CONTENT_RECONCILIATION_EMPTY_DATABASE_GUARD` 失败；它不会
 删除工作区文件、创建 Commit 或 Push。先按第 1 节 snapshot 初始化数据库，验证文章数非零后再

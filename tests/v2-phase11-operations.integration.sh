@@ -113,6 +113,32 @@ grep -Fq 'find "$snapshot_root" -xdev -depth -mindepth 1 -delete' \
 instance_root="$test_root/phase11-instance-packages-test"
 project=vinci-phase11-prune-test
 mkdir -m 0700 "$instance_root"
+
+node "$repository_root/scripts/instance-prune.mjs" \
+  "$instance_root" "$project" --dry-run \
+  > "$test_root/instance-prune-uninitialized-dry-run.json"
+grep -Fq '"state": "uninitialized_empty"' \
+  "$test_root/instance-prune-uninitialized-dry-run.json"
+test ! -e "$instance_root/.vinci-instance-root"
+
+node "$repository_root/scripts/instance-prune.mjs" \
+  "$instance_root" "$project" --apply \
+  > "$test_root/instance-prune-uninitialized-apply.json"
+grep -Fq '"state": "uninitialized_empty"' \
+  "$test_root/instance-prune-uninitialized-apply.json"
+test ! -e "$instance_root/.vinci-instance-root"
+
+printf 'unowned-test\n' > "$instance_root/unowned-test.txt"
+if node "$repository_root/scripts/instance-prune.mjs" \
+  "$instance_root" "$project" --dry-run \
+  > "$test_root/instance-prune-uninitialized-nonempty.log" 2>&1; then
+  printf 'instance prune accepted a non-empty root without its marker\n' >&2
+  exit 1
+fi
+grep -Fq INSTANCE_PRUNE_ROOT_MARKER_MISSING_NONEMPTY \
+  "$test_root/instance-prune-uninitialized-nonempty.log"
+rm "$instance_root/unowned-test.txt"
+
 printf 'vinci-instance-root-v1\n%s\n' "$project" > "$instance_root/.vinci-instance-root"
 create_instance() {
   local stamp="$1"
@@ -153,6 +179,19 @@ if node "$repository_root/scripts/instance-prune.mjs" "$instance_root" "$project
 fi
 grep -Fq INSTANCE_PRUNE_UNOWNED "$test_root/symlink.log"
 rm "$instance_root/${project}-instance-20200101T000000Z"
+
+mv "$instance_root/.vinci-instance-root" "$instance_root/.vinci-instance-root.real-test"
+ln -s "$instance_root/.vinci-instance-root.real-test" \
+  "$instance_root/.vinci-instance-root"
+if node "$repository_root/scripts/instance-prune.mjs" "$instance_root" "$project" --dry-run \
+  > "$test_root/instance-prune-marker-symlink.log" 2>&1; then
+  printf 'instance prune accepted a symlink root marker\n' >&2
+  exit 1
+fi
+grep -Fq INSTANCE_PRUNE_ROOT_MARKER_UNSAFE \
+  "$test_root/instance-prune-marker-symlink.log"
+rm "$instance_root/.vinci-instance-root"
+mv "$instance_root/.vinci-instance-root.real-test" "$instance_root/.vinci-instance-root"
 
 for token in 'RESTORE:' 'IMPORT:' 'MIGRATE:' 'INITIALIZE:' 'RECOVERABLE:'; do
   grep -R -F "$token" "$repository_root/vinci" "$repository_root/scripts" >/dev/null

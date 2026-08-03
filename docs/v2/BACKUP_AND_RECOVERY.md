@@ -345,4 +345,6 @@ S3/COS 无密钥清单和受控格式 marker 的实例包目录。真实 `.env`�
 
 迁移包默认位于仓库外 `INSTANCE_EXPORT_ROOT`，保留 30 日；`.vinci-locked` 包不自动删除。
 `./vinci maintenance --dry-run|--apply` 同时处理迁移包、备份、对账报告/临时目录和未引用镜像
-缓存；未知路径、marker、属主、symlink 或特殊文件使整轮 fail closed。
+缓存。首次导出前，由安装器创建且仍完全为空的实例包根没有 marker，清理会以
+`uninitialized_empty` 安全跳过且不写入 marker；只要该无 marker 目录非空，或出现未知路径、
+错误属主、symlink、特殊文件，整轮仍会 fail closed。
