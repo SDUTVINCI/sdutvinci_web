@@ -36,7 +36,7 @@ describe('CMS 深色模式切换', () => {
     expect(cmsStyles).toContain('rgba(243, 247, 245, 0.97)')
     expect(cmsStyles).toContain('rgba(214, 224, 220, 0.62)')
     expect(cmsStyles).toContain('linear-gradient(135deg, #ffffff, #edf6f3 72%)')
-    expect(cmsStyles).toMatch(/\.cms-dashboard-identity > img\s*\{[^}]*width:\s*136px;[^}]*height:\s*136px;/s)
+    expect(cmsStyles).toMatch(/\.cms-dashboard-identity > img\s*\{[^}]*width:\s*160px;[^}]*height:\s*160px;/s)
     expect(cmsStyles).toMatch(/\.cms-editor-workspace\s*\{[^}]*overflow:\s*clip;/s)
     expect(cmsStyles).toMatch(/\.cms-milkdown-root \.milkdown \.milkdown-top-bar\s*\{[^}]*top:\s*68px;/s)
     expect(cmsStyles).toMatch(/@media \(max-width: 760px\)[\s\S]*\.milkdown-top-bar\s*\{[^}]*top:\s*56px;/)

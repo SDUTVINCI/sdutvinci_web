@@ -1448,8 +1448,8 @@
 .cms-dashboard-hero {
   position: relative;
   display: grid;
-  min-height: 330px;
-  grid-template-columns: minmax(0, 1.4fr) minmax(310px, 0.6fr);
+  min-height: 350px;
+  grid-template-columns: minmax(0, 1.36fr) minmax(350px, 0.64fr);
   gap: clamp(28px, 5vw, 74px);
   align-items: center;
   margin-bottom: 34px;
@@ -1570,7 +1570,7 @@
 
 .cms-dashboard-identity {
   display: grid;
-  min-width: 280px;
+  min-width: 320px;
   justify-items: center;
   text-align: center;
 }
@@ -1578,33 +1578,33 @@
 .cms-dashboard-identity > img {
   position: relative;
   z-index: 1;
-  width: 136px;
-  height: 136px;
-  padding: 6px;
+  width: 160px;
+  height: 160px;
+  padding: 7px;
   border: 1px solid rgba(139, 233, 240, 0.3);
   border-radius: 50%;
   background: #152126;
   box-shadow:
-    0 0 0 10px rgba(139, 233, 240, 0.045),
-    0 24px 48px rgba(0, 0, 0, 0.3);
+    0 0 0 12px rgba(139, 233, 240, 0.045),
+    0 28px 54px rgba(0, 0, 0, 0.32);
   object-fit: cover;
 }
 
 .cms-dashboard-orbit {
   position: absolute;
-  top: -22px;
-  width: 182px;
-  height: 182px;
+  top: -27px;
+  width: 214px;
+  height: 214px;
   border: 1px dashed rgba(139, 233, 240, 0.24);
   border-radius: 50%;
 }
 
 .cms-dashboard-orbit::after {
   position: absolute;
-  top: 23px;
-  right: 9px;
-  width: 8px;
-  height: 8px;
+  top: 28px;
+  right: 11px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
   background: #67e8a3;
   box-shadow: 0 0 12px rgba(103, 232, 163, 0.85);
@@ -1613,13 +1613,13 @@
 
 .cms-dashboard-identity > div {
   display: grid;
-  margin-top: 24px;
+  margin-top: 30px;
 }
 
 .cms-dashboard-identity span {
   color: rgba(139, 233, 240, 0.56);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.6rem;
+  font-size: 0.64rem;
   font-weight: 800;
   letter-spacing: 0.14em;
 }
@@ -1627,12 +1627,12 @@
 .cms-dashboard-identity strong {
   margin-top: 7px;
   color: #ffffff;
-  font-size: 1.28rem;
+  font-size: 1.42rem;
 }
 
 .cms-dashboard-identity small {
   color: rgba(255, 255, 255, 0.35);
-  font-size: 0.65rem;
+  font-size: 0.69rem;
   font-weight: 800;
   letter-spacing: 0.12em;
 }
@@ -3613,6 +3613,10 @@
   .cms-dashboard-hero {
     gap: 32px;
     grid-template-columns: minmax(0, 1fr) 260px;
+  }
+
+  .cms-dashboard-identity {
+    min-width: 240px;
   }
 }
 
