@@ -1654,6 +1654,197 @@
   box-shadow: 0 0 9px rgba(103, 232, 163, 0.8);
 }
 
+/* The sidebar and dashboard hero have their own visual language, so their
+   light palette is explicit instead of inheriting the former fixed dark skin. */
+:root[data-theme="light"] .cms-sidebar {
+  border-right-color: color-mix(in srgb, var(--cyan) 16%, var(--line));
+  background:
+    radial-gradient(circle at 18% 3%, color-mix(in srgb, var(--cyan) 12%, transparent), transparent 17rem),
+    radial-gradient(circle at 95% 90%, color-mix(in srgb, var(--red) 7%, transparent), transparent 18rem),
+    linear-gradient(165deg, #f4f9f7, #e9f1ee 76%);
+  color: var(--ink);
+  box-shadow: 12px 0 36px rgba(23, 33, 43, 0.08);
+}
+
+:root[data-theme="light"] .cms-brand {
+  border-bottom-color: color-mix(in srgb, var(--line) 82%, transparent);
+  color: var(--ink);
+}
+
+:root[data-theme="light"] .cms-brand-mark {
+  border-color: color-mix(in srgb, var(--cyan) 22%, var(--line));
+  background: linear-gradient(145deg, color-mix(in srgb, var(--cyan) 9%, var(--surface)), var(--surface));
+  box-shadow: 0 10px 24px rgba(23, 33, 43, 0.1), inset 0 1px #ffffff;
+}
+
+:root[data-theme="light"] .cms-brand strong,
+:root[data-theme="light"] .cms-user-identity strong {
+  color: var(--ink);
+}
+
+:root[data-theme="light"] .cms-brand small,
+:root[data-theme="light"] .cms-nav-hint strong,
+:root[data-theme="light"] .cms-user-role {
+  color: color-mix(in srgb, var(--cyan) 78%, var(--ink));
+}
+
+:root[data-theme="light"] .cms-sidebar-heading > span,
+:root[data-theme="light"] .cms-sidebar-label,
+:root[data-theme="light"] .cms-nav-copy small,
+:root[data-theme="light"] .cms-nav-code,
+:root[data-theme="light"] .cms-user-identity small {
+  color: color-mix(in srgb, var(--muted) 82%, transparent);
+}
+
+:root[data-theme="light"] .cms-nav a {
+  color: var(--ink-soft);
+}
+
+:root[data-theme="light"] .cms-nav a:hover {
+  border-color: color-mix(in srgb, var(--cyan) 18%, var(--line));
+  background: color-mix(in srgb, var(--cyan) 7%, var(--surface));
+  color: var(--ink);
+}
+
+:root[data-theme="light"] .cms-nav a.router-link-exact-active,
+:root[data-theme="light"] .cms-nav a:not([href="/cms"]).router-link-active {
+  border-color: color-mix(in srgb, var(--cyan) 24%, var(--line));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--cyan) 13%, var(--surface)), var(--surface-glass));
+  color: var(--ink);
+  box-shadow: inset 3px 0 var(--cyan), 0 8px 22px rgba(23, 33, 43, 0.07);
+}
+
+:root[data-theme="light"] .cms-nav-icon {
+  border-color: color-mix(in srgb, var(--cyan) 13%, var(--line));
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+  color: color-mix(in srgb, var(--cyan) 72%, var(--muted));
+}
+
+:root[data-theme="light"] .cms-nav a:hover .cms-nav-icon,
+:root[data-theme="light"] .cms-nav a.router-link-exact-active .cms-nav-icon,
+:root[data-theme="light"] .cms-nav a:not([href="/cms"]).router-link-active .cms-nav-icon {
+  border-color: color-mix(in srgb, var(--cyan) 28%, var(--line));
+  background: color-mix(in srgb, var(--cyan) 10%, var(--surface));
+  color: var(--cyan);
+}
+
+:root[data-theme="light"] .cms-nav-hint {
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  color: var(--muted);
+}
+
+:root[data-theme="light"] .cms-nav-hint-icon {
+  border-color: color-mix(in srgb, var(--cyan) 20%, var(--line));
+  background: color-mix(in srgb, var(--cyan) 7%, var(--surface));
+  color: var(--cyan);
+}
+
+:root[data-theme="light"] .cms-sidebar-user {
+  border-top-color: var(--line);
+}
+
+:root[data-theme="light"] .cms-user-presence {
+  border-color: #edf4f1;
+}
+
+:root[data-theme="light"] .cms-user-identity > img {
+  border-color: var(--surface);
+  background: var(--surface);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--cyan) 24%, var(--line));
+}
+
+:root[data-theme="light"] .cms-user-role {
+  border-color: color-mix(in srgb, var(--cyan) 24%, var(--line));
+  background: color-mix(in srgb, var(--cyan) 5%, var(--surface));
+}
+
+:root[data-theme="light"] .cms-user-actions .cms-button {
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--surface) 76%, transparent);
+  color: var(--ink-soft);
+}
+
+:root[data-theme="light"] .cms-user-actions .cms-button:hover {
+  border-color: color-mix(in srgb, var(--cyan) 30%, var(--line));
+  background: color-mix(in srgb, var(--cyan) 8%, var(--surface));
+  color: var(--cyan);
+}
+
+:root[data-theme="light"] .cms-dashboard-hero {
+  border-color: color-mix(in srgb, var(--cyan) 20%, var(--line));
+  background:
+    radial-gradient(circle at 82% 16%, color-mix(in srgb, var(--cyan) 15%, transparent), transparent 18rem),
+    radial-gradient(circle at 96% 105%, color-mix(in srgb, var(--red) 8%, transparent), transparent 21rem),
+    linear-gradient(135deg, #ffffff, #edf6f3 72%);
+  color: var(--ink);
+  box-shadow: 0 22px 52px rgba(23, 33, 43, 0.12);
+}
+
+:root[data-theme="light"] .cms-dashboard-hero::before {
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--cyan) 9%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--cyan) 9%, transparent) 1px, transparent 1px);
+}
+
+:root[data-theme="light"] .cms-dashboard-hero::after {
+  border-color: color-mix(in srgb, var(--cyan) 16%, transparent);
+  box-shadow:
+    0 0 0 62px color-mix(in srgb, var(--cyan) 3%, transparent),
+    0 0 0 124px color-mix(in srgb, var(--cyan) 2%, transparent);
+}
+
+:root[data-theme="light"] .cms-dashboard-kicker,
+:root[data-theme="light"] .cms-dashboard-hero h1 em,
+:root[data-theme="light"] .cms-dashboard-identity span {
+  color: var(--cyan);
+}
+
+:root[data-theme="light"] .cms-dashboard-kicker > span {
+  border-color: color-mix(in srgb, var(--cyan) 24%, var(--line));
+  background: color-mix(in srgb, var(--cyan) 8%, var(--surface));
+}
+
+:root[data-theme="light"] .cms-dashboard-hero h1,
+:root[data-theme="light"] .cms-dashboard-identity strong {
+  color: var(--ink);
+}
+
+:root[data-theme="light"] .cms-dashboard-hero-copy > p:not(.cms-dashboard-kicker),
+:root[data-theme="light"] .cms-dashboard-identity small {
+  color: var(--muted);
+}
+
+:root[data-theme="light"] .cms-button-dashboard {
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  color: var(--ink-soft);
+}
+
+:root[data-theme="light"] .cms-button-dashboard:hover {
+  border-color: color-mix(in srgb, var(--cyan) 32%, var(--line));
+  background: color-mix(in srgb, var(--cyan) 8%, var(--surface));
+  color: var(--cyan);
+}
+
+:root[data-theme="light"] .cms-dashboard-identity > img {
+  border-color: color-mix(in srgb, var(--cyan) 30%, var(--line));
+  background: var(--surface);
+  box-shadow:
+    0 0 0 8px color-mix(in srgb, var(--cyan) 5%, transparent),
+    0 18px 36px rgba(23, 33, 43, 0.14);
+}
+
+:root[data-theme="light"] .cms-dashboard-orbit {
+  border-color: color-mix(in srgb, var(--cyan) 30%, transparent);
+}
+
+:root[data-theme="light"] .cms-dashboard-meta {
+  border-top-color: var(--line);
+  background: color-mix(in srgb, var(--cyan) 4%, var(--surface-glass));
+  color: var(--muted);
+}
+
 .cms-section-heading {
   display: flex;
   align-items: end;
