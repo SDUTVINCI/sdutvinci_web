@@ -2859,7 +2859,7 @@
 
 .cms-editor-workspace {
   min-width: 0;
-  overflow: hidden;
+  overflow: clip;
   border: 1px solid var(--line);
   border-radius: 16px;
   background: var(--surface);
@@ -3312,6 +3312,12 @@
   min-height: max(42rem, calc(100svh - 210px));
   background: var(--surface);
   color: var(--ink);
+}
+
+.cms-milkdown-root .milkdown .milkdown-top-bar {
+  top: 68px;
+  z-index: 25;
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--ink) 9%, transparent);
 }
 
 :root[data-theme="dark"] .cms-milkdown-root .milkdown {
@@ -3852,6 +3858,10 @@
   .cms-workspace-bar {
     min-height: 56px;
     padding: 0 18px;
+  }
+
+  .cms-milkdown-root .milkdown .milkdown-top-bar {
+    top: 56px;
   }
 
   .cms-workspace-icon {
