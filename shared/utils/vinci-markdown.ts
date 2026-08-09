@@ -1,6 +1,45 @@
 import type { ComarkElement, ComarkNode, ComarkPlugin } from 'comark'
 import githubDark from '@shikijs/themes/github-dark'
 import githubLight from '@shikijs/themes/github-light'
+import astro from '@shikijs/langs/astro'
+import bash from '@shikijs/langs/bash'
+import c from '@shikijs/langs/c'
+import cmake from '@shikijs/langs/cmake'
+import cpp from '@shikijs/langs/cpp'
+import csharp from '@shikijs/langs/csharp'
+import css from '@shikijs/langs/css'
+import dart from '@shikijs/langs/dart'
+import diff from '@shikijs/langs/diff'
+import dockerfile from '@shikijs/langs/dockerfile'
+import gitCommit from '@shikijs/langs/git-commit'
+import go from '@shikijs/langs/go'
+import html from '@shikijs/langs/html'
+import ini from '@shikijs/langs/ini'
+import java from '@shikijs/langs/java'
+import javascript from '@shikijs/langs/javascript'
+import json from '@shikijs/langs/json'
+import kotlin from '@shikijs/langs/kotlin'
+import lua from '@shikijs/langs/lua'
+import make from '@shikijs/langs/make'
+import markdown from '@shikijs/langs/markdown'
+import nginx from '@shikijs/langs/nginx'
+import php from '@shikijs/langs/php'
+import powershell from '@shikijs/langs/powershell'
+import python from '@shikijs/langs/python'
+import r from '@shikijs/langs/r'
+import ruby from '@shikijs/langs/ruby'
+import rust from '@shikijs/langs/rust'
+import scala from '@shikijs/langs/scala'
+import scss from '@shikijs/langs/scss'
+import sql from '@shikijs/langs/sql'
+import svelte from '@shikijs/langs/svelte'
+import swift from '@shikijs/langs/swift'
+import toml from '@shikijs/langs/toml'
+import tsx from '@shikijs/langs/tsx'
+import typescript from '@shikijs/langs/typescript'
+import vue from '@shikijs/langs/vue'
+import xml from '@shikijs/langs/xml'
+import yaml from '@shikijs/langs/yaml'
 import GithubSlugger from 'github-slugger'
 import { remark } from 'remark'
 import highlight from 'comark/plugins/highlight'
@@ -196,6 +235,48 @@ const preventExecutableHtml = (): ComarkPlugin => ({
   }
 })
 
+export const vinciShikiLanguages = [
+  astro,
+  bash,
+  c,
+  cmake,
+  cpp,
+  csharp,
+  css,
+  dart,
+  diff,
+  dockerfile,
+  gitCommit,
+  go,
+  html,
+  ini,
+  java,
+  javascript,
+  json,
+  kotlin,
+  lua,
+  make,
+  markdown,
+  nginx,
+  php,
+  powershell,
+  python,
+  r,
+  ruby,
+  rust,
+  scala,
+  scss,
+  sql,
+  svelte,
+  swift,
+  toml,
+  tsx,
+  typescript,
+  vue,
+  xml,
+  yaml
+]
+
 export const createVinciMarkdownPlugins = (): ComarkPlugin<any, any>[] => [
   taskList(),
   removeComarkComments(),
@@ -205,6 +286,8 @@ export const createVinciMarkdownPlugins = (): ComarkPlugin<any, any>[] => [
   preventExecutableHtml(),
   highlight({
     preStyles: false,
+    registerDefaultLanguages: false,
+    languages: vinciShikiLanguages,
     themes: {
       light: githubLight,
       dark: githubDark

@@ -2,6 +2,11 @@ import { LanguageDescription } from '@codemirror/language'
 import { languages } from '@codemirror/language-data'
 import { readFile } from 'node:fs/promises'
 import { describe, expect, it } from 'vitest'
+import { parse } from 'comark'
+import {
+  createVinciMarkdownPlugins,
+  vinciMarkdownOptions
+} from '../shared/utils/vinci-markdown'
 
 describe('CMS 编辑器代码高亮', () => {
   it.each(['bash', 'cpp', 'python', 'typescript', 'json', 'yaml', 'sql'])(
@@ -35,4 +40,19 @@ describe('CMS 编辑器代码高亮', () => {
     expect(renderer).toContain('className = \'code-toolbar\'')
     expect(renderer).toContain('@click="handleRendererClick"')
   })
+
+  it.each(['cpp', 'c', 'python', 'rust', 'go', 'java', 'csharp', 'bash', 'sql'])(
+    '发布渲染器为 %s 生成 GitHub 深浅双色 token',
+    async (language) => {
+      const fence = '`'.repeat(3)
+      const tree = await parse(`${fence}${language}\nconst value = 42; // Vinci\n${fence}`, {
+        ...vinciMarkdownOptions,
+        plugins: createVinciMarkdownPlugins()
+      })
+      const serialized = JSON.stringify(tree.nodes)
+      expect(serialized).toContain('shiki shiki-themes github-light github-dark')
+      expect(serialized).toContain('--shiki-dark:')
+      expect(serialized).toContain('class":"line')
+    }
+  )
 })

@@ -25,6 +25,7 @@
 - 富文本编辑器代码块跟随页面主题：浅色使用冷灰浅色表面，深色使用深蓝黑表面；两者的语法色、语言菜单、工具按钮、行号和当前行均独立适配。
 - CMS“发布效果”和真实发布页面均由共享渲染器生成语言栏与复制按钮，不再由 Wiki 页面单独决定预览能力。
 - 正式发布预览继续由 `VinciMarkdownRenderer` 和 Shiki 渲染，不改变内容或发布结果。
+- Shiki 显式注册常见工程语言，包括 C/C++、Python、Rust、Go、Java/Kotlin、C#、Swift、Dart、Ruby、PHP、Lua、R、Scala、JavaScript/TypeScript、Vue/Svelte/Astro、HTML/CSS/SCSS、Shell/PowerShell、SQL、JSON/YAML/TOML/XML、Dockerfile、Makefile、CMake、Nginx、Diff 与 Git Commit，并使用 GitHub Light/Dark 配色。
 本功能没有新增 API，请求和响应契约均不改变。
 
 ## 权限、安全和异常情况

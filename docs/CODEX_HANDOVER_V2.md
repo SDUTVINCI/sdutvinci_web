@@ -1887,3 +1887,5 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
 - 代码语言栏与复制按钮由 `VinciMarkdownRenderer` 统一增强，因此 CMS“发布效果”和真实发布页
   使用相同实现；既有 Wiki 页面增强逻辑检测到工具栏后会跳过，不会生成重复按钮。
 - 正式预览继续复用 `VinciMarkdownRenderer` 与 Shiki，数据库、Markdown 源码和发布契约不变。
+- Comark 默认仅注册少量 Web 语言，现由共享 Markdown 配置显式注册 39 种常用工程语言，并关闭默认
+  注册以避免重复；C/C++、Python、Rust 等在 CMS 预览和正式页面均输出 GitHub Light/Dark token。
