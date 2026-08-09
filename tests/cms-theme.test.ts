@@ -30,6 +30,8 @@ describe('CMS 深色模式切换', () => {
     expect(cmsStyles).toContain('rgba(244, 248, 246, 0.46) 100%')
     expect(cmsStyles).toContain(':root[data-theme="light"] .cms-login-capabilities')
     expect(cmsStyles).toContain('color-mix(in srgb, var(--cyan) 82%, var(--ink))')
+    expect(cmsStyles).toContain('rgba(243, 247, 245, 0.97)')
+    expect(cmsStyles).toContain('rgba(214, 224, 220, 0.62)')
     expect(cmsStyles).toContain('linear-gradient(135deg, #ffffff, #edf6f3 72%)')
   })
 })
