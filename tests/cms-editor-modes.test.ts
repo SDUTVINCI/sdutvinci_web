@@ -124,6 +124,9 @@ ${vinciContentComponentDefinitions[3]!.defaultMarkdown}`
     ])
 
     expect(page).toContain("ref<'source' | 'visual'>('source')")
+    expect(page).toContain('visualCompatibilityWarning')
+    expect(page).toContain('你仍可编辑')
+    expect(page).toContain('cms-editor-compatibility-warning')
     expect(page).toContain('cms-source-workspace')
     expect(page).toContain('cms-source-mobile-switch')
     expect(page).toContain('@scroll-progress="handleSourceScroll"')

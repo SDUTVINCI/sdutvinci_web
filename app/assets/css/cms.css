@@ -3123,6 +3123,16 @@
   font-size: 0.82rem;
 }
 
+.cms-editor-compatibility-warning {
+  margin: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--gold) 38%, var(--line));
+  padding: 12px 20px;
+  background: color-mix(in srgb, var(--gold) 10%, var(--surface));
+  color: color-mix(in srgb, var(--gold) 76%, var(--ink));
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
 .cms-image-upload {
   display: flex;
   align-items: center;

@@ -28,6 +28,7 @@
 - Shiki 显式注册常见工程语言，包括 C/C++、Python、Rust、Go、Java/Kotlin、C#、Swift、Dart、Ruby、PHP、Lua、R、Scala、JavaScript/TypeScript、Vue/Svelte/Astro、HTML/CSS/SCSS、Shell/PowerShell、SQL、JSON/YAML/TOML/XML、Dockerfile、Makefile、CMake、Nginx、Diff 与 Git Commit，并使用 GitHub Light/Dark 配色。
 - 深色主题显式覆盖 Shiki token 内联的 GitHub Light 颜色，确保 CMS 发布预览与正式页面实际显示 GitHub Dark token；浅色主题继续使用原始 GitHub Light 值。
 - 富文本兼容性检查会忽略 Shiki token 包装与颜色等纯表现差异，但仍严格比较代码语言、代码原文以及列表、段落等页面结构，避免高亮器首次加载造成误报。
+- 草稿默认进入“Markdown 源码与预览”。用户主动切换富文本时，兼容性差异以警告展示而不再强制退回源码；保存前应核对发布效果，必要时可从 Revision 历史回退。
 本功能没有新增 API，请求和响应契约均不改变。
 
 ## 权限、安全和异常情况

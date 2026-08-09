@@ -84,6 +84,7 @@ const mobileSourcePane = ref<'source' | 'preview'>('source')
 const visualKey = ref(0)
 const visualSource = ref('')
 const visualChecking = ref(false)
+const visualCompatibilityWarning = ref('')
 const dirty = ref(false)
 const saveState = ref<'saved' | 'dirty' | 'saving' | 'error' | 'conflict'>('saved')
 const message = ref('')
@@ -417,6 +418,7 @@ const selectMobileSourcePane = (pane: 'source' | 'preview') => {
 
 const switchMode = (next: 'source' | 'visual') => {
   message.value = ''
+  visualCompatibilityWarning.value = ''
   clearTimeout(visualCheckTimer)
   if (next !== 'visual') {
     mode.value = next
@@ -630,12 +632,9 @@ const handleVisualReady = async (serialized: string) => {
     if (checkKey !== visualKey.value || mode.value !== 'visual') return
     clearTimeout(visualCheckTimer)
     if (!assessment.safe) {
-      handleVisualError(
-        assessment.reason === 'protected_syntax_changed'
-          ? '扩展语法在初始化时发生变化；原文已保留，请使用 Markdown 源码模式编辑'
-          : '列表、代码块或段落结构在富文本初始化时发生变化；原文已保留，请使用 Markdown 源码模式编辑'
-      )
-      return
+      visualCompatibilityWarning.value = assessment.reason === 'protected_syntax_changed'
+        ? '此文档包含富文本无法无损往返的扩展语法。你仍可编辑，但保存后请在“发布效果”中核对组件与扩展语法；历史 Revision 可用于回退。'
+        : '此文档包含会被富文本规范化的旧式列表、代码块或段落结构。你仍可编辑，但保存后排版可能变化；请在“发布效果”中核对，历史 Revision 可用于回退。'
     }
     visualChecking.value = false
   } catch (error) {
@@ -1110,6 +1109,13 @@ onBeforeUnmount(() => {
           :inert="!canEdit || visualChecking"
         >
           <p v-if="visualChecking" class="cms-editor-checking">正在核对最终网页效果和扩展语法…</p>
+          <p
+            v-else-if="visualCompatibilityWarning"
+            class="cms-editor-compatibility-warning"
+            role="status"
+          >
+            {{ visualCompatibilityWarning }}
+          </p>
           <ClientOnly>
             <CmsMarkdownVisualEditor
               ref="visualEditor"
