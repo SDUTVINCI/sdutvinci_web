@@ -1116,7 +1116,42 @@
 .cms-workspace-tools {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 10px;
+}
+
+.cms-theme-toggle {
+  display: inline-flex;
+  min-height: 34px;
+  gap: 7px;
+  align-items: center;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 750;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
+}
+
+.cms-theme-toggle:hover,
+.cms-theme-toggle:focus-visible {
+  border-color: color-mix(in srgb, var(--cyan) 30%, var(--line));
+  color: var(--cyan);
+  outline: none;
+}
+
+.cms-theme-toggle:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cyan) 14%, transparent);
+}
+
+.cms-theme-toggle > span:first-child {
+  width: 1em;
+  font-size: 1rem;
+  line-height: 1;
+  text-align: center;
 }
 
 .cms-workspace-health {
@@ -3490,6 +3525,17 @@
   }
 
   .cms-workspace-health {
+    display: none;
+  }
+
+  .cms-theme-toggle {
+    width: 34px;
+    height: 34px;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .cms-theme-toggle > span:last-child {
     display: none;
   }
 

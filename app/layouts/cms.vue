@@ -7,6 +7,8 @@ const isAdmin = computed(() => session.value?.user.roles.includes('admin') ?? fa
 const canImport = computed(() => isAdmin.value
   || (session.value?.user.roles.includes('content_importer') ?? false))
 const loggingOut = ref(false)
+type Theme = 'light' | 'dark'
+const theme = ref<Theme>('light')
 const displayName = computed(() =>
   session.value?.user.member?.name || session.value?.user.account || '当前用户'
 )
@@ -56,6 +58,34 @@ const sectionTitle = computed(() => {
     users: '账号',
     profile: '个人资料'
   }[section] || '工作台'
+})
+const themeLabel = computed(() => theme.value === 'dark' ? '切换浅色模式' : '切换深色模式')
+const themeIcon = computed(() => theme.value === 'dark' ? '☀' : '☾')
+
+const applyTheme = (nextTheme: Theme, persist = true) => {
+  theme.value = nextTheme
+  if (!import.meta.client) return
+
+  document.documentElement.dataset.theme = nextTheme
+  if (persist) {
+    try {
+      localStorage.setItem('vinci-theme', nextTheme)
+    } catch {
+      // Restricted browsers may deny storage; the current page still switches.
+    }
+  }
+}
+
+const toggleTheme = () => {
+  applyTheme(theme.value === 'dark' ? 'light' : 'dark')
+}
+
+onMounted(() => {
+  const activeTheme = document.documentElement.dataset.theme
+  const initialTheme = activeTheme === 'light' || activeTheme === 'dark'
+    ? activeTheme
+    : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+  applyTheme(initialTheme, false)
 })
 
 const handleLogout = async () => {
@@ -157,6 +187,17 @@ const handleLogout = async () => {
           </p>
         </div>
         <div class="cms-workspace-tools">
+          <button
+            class="cms-theme-toggle"
+            type="button"
+            :aria-label="themeLabel"
+            :title="themeLabel"
+            :aria-pressed="theme === 'dark'"
+            @click="toggleTheme"
+          >
+            <span aria-hidden="true">{{ themeIcon }}</span>
+            <span>{{ theme === 'dark' ? '浅色模式' : '深色模式' }}</span>
+          </button>
           <span class="cms-workspace-health">
             <i class="cms-workspace-dot" aria-hidden="true" />
             系统在线

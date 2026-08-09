@@ -1838,3 +1838,16 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
 - 生产仓库未改动，未部署应用代码；本地永久修复将以独立 Commit 交付，不 Push。生产侧最终
   `./vinci doctor` 报告 issueCount 0，公开首页、新闻、Wiki、团队、CMS 登录及本机 health
   均返回 200。
+
+---
+
+## 2026-08-09：CMS 深色模式切换
+
+- 已登录 CMS 顶部工具栏新增亮色/深色切换按钮，复用全站 `data-theme` CSS token 和
+  `vinci-theme` 浏览器本地偏好；首次访问沿用系统配色，切换后立即生效并在刷新后保留。
+- 按钮提供动态中文标签、提示和 `aria-pressed` 状态；窄屏保留图标按钮。浏览器限制本地存储时
+  当前页面仍能切换，刷新后回到系统偏好。
+- 本功能是浏览器显示偏好，不调用 API，不新增数据库表、字段、Migration、依赖或环境变量，
+  不改变权限、草稿、Revision、审核、发布、导出或 Markdown 渲染。
+- 没有恢复代码仓库 `content/`，没有引入 Nuxt Content，没有修改 Wiki 拼音路径或章节模块，
+  没有 SSH、生产数据操作、Push 或部署。
