@@ -1851,3 +1851,14 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
   不改变权限、草稿、Revision、审核、发布、导出或 Markdown 渲染。
 - 没有恢复代码仓库 `content/`，没有引入 Nuxt Content，没有修改 Wiki 拼音路径或章节模块，
   没有 SSH、生产数据操作、Push 或部署。
+
+---
+
+## 2026-08-09：CMS 一键本地测试环境
+
+- 新增 `scripts/cms-local-test.sh`，以 `start|status|restart|stop` 管理只监听回环地址的隔离
+  PostgreSQL 和 Nuxt 开发容器；资源使用固定 test 名称与归属标签，名称或标签不匹配时拒绝清理。
+- `start` 自动执行完整 Migration，从同级干净 `sdutvinci_content` 只读导入 228 篇文章和 32 名
+  成员及当前 Revision，并创建管理员 `testadmin`；不读取或修改项目 `.env`。
+- 固定测试密码只用于一次性本地数据库，教程明确记录启动、登录、端口覆盖、日志、重建和不可恢复
+  清理行为。未新增生产 API、Migration、环境变量或部署行为。

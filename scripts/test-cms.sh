@@ -22,4 +22,5 @@ exec ./node_modules/.bin/vitest run \
   tests/v2-content-pr-import.integration.test.ts \
   tests/cms-protected-markdown.test.ts \
   tests/cms-security.test.ts \
-  tests/cms-theme.test.ts
+  tests/cms-theme.test.ts \
+  tests/cms-local-test-environment.test.ts
