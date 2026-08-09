@@ -3,14 +3,17 @@ import { describe, expect, it } from 'vitest'
 
 describe('CMS 深色模式切换', () => {
   it('复用全站主题契约并提供可访问、可持久化的 CMS 顶栏按钮', async () => {
-    const [layout, tokens, config, cmsStyles] = await Promise.all([
+    const [layout, authLayout, tokens, config, cmsStyles] = await Promise.all([
       readFile('app/layouts/cms.vue', 'utf8'),
+      readFile('app/layouts/cms-auth.vue', 'utf8'),
       readFile('app/assets/css/tokens.css', 'utf8'),
       readFile('nuxt.config.ts', 'utf8'),
       readFile('app/assets/css/cms.css', 'utf8')
     ])
 
     expect(layout).toContain('class="cms-theme-toggle"')
+    expect(authLayout).toContain('class="cms-theme-toggle cms-auth-theme-toggle"')
+    expect(authLayout).toContain("localStorage.setItem('vinci-theme', nextTheme)")
     expect(layout).toContain(':aria-label="themeLabel"')
     expect(layout).toContain(':aria-pressed="theme === \'dark\'"')
     expect(layout).toContain("localStorage.setItem('vinci-theme', nextTheme)")
@@ -22,6 +25,8 @@ describe('CMS 深色模式切换', () => {
     expect(config).toContain('document.documentElement.dataset.theme = theme')
     expect(cmsStyles).toContain(':root[data-theme="light"] .cms-sidebar')
     expect(cmsStyles).toContain(':root[data-theme="light"] .cms-dashboard-hero')
+    expect(cmsStyles).toContain(':root[data-theme="light"] .cms-auth-shell')
+    expect(cmsStyles).toContain(':root[data-theme="light"] .cms-auth-card')
     expect(cmsStyles).toContain('linear-gradient(135deg, #ffffff, #edf6f3 72%)')
   })
 })

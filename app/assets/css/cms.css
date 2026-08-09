@@ -158,6 +158,19 @@
   color: #fff;
 }
 
+.cms-auth-tools {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.cms-auth-theme-toggle {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(8, 15, 18, 0.5);
+  color: rgba(255, 255, 255, 0.76);
+  backdrop-filter: blur(12px);
+}
+
 .cms-auth-main {
   display: grid;
   align-items: start;
@@ -1664,6 +1677,138 @@
     linear-gradient(165deg, #f4f9f7, #e9f1ee 76%);
   color: var(--ink);
   box-shadow: 12px 0 36px rgba(23, 33, 43, 0.08);
+}
+
+:root[data-theme="light"] .cms-auth-shell {
+  background:
+    linear-gradient(90deg, rgba(247, 250, 249, 0.97), rgba(239, 246, 243, 0.9) 48%, rgba(244, 248, 246, 0.8)),
+    linear-gradient(0deg, rgba(241, 247, 244, 0.9), rgba(255, 255, 255, 0.32) 58%),
+    url("https://cdn.sdutvincirobot.top/site-assets/images/background-6c09ec06.webp") center 42% / cover no-repeat;
+  color: var(--ink);
+}
+
+:root[data-theme="light"] .cms-auth-shell::before {
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--cyan) 8%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--cyan) 8%, transparent) 1px, transparent 1px);
+}
+
+:root[data-theme="light"] .cms-auth-shell::after {
+  border-color: color-mix(in srgb, var(--cyan) 18%, transparent);
+  box-shadow:
+    0 0 0 7rem color-mix(in srgb, var(--cyan) 3%, transparent),
+    0 0 0 14rem color-mix(in srgb, var(--cyan) 2%, transparent);
+}
+
+:root[data-theme="light"] .cms-auth-brand,
+:root[data-theme="light"] .cms-login-story h1,
+:root[data-theme="light"] .cms-login-capabilities strong,
+:root[data-theme="light"] .cms-auth-card h2 {
+  color: var(--ink);
+}
+
+:root[data-theme="light"] .cms-auth-brand img {
+  border-color: var(--line);
+  background: var(--surface-glass);
+  box-shadow: var(--shadow-card);
+}
+
+:root[data-theme="light"] .cms-auth-brand small,
+:root[data-theme="light"] .cms-login-intro,
+:root[data-theme="light"] .cms-auth-card > .cms-muted {
+  color: var(--muted);
+}
+
+:root[data-theme="light"] .cms-auth-system-mark,
+:root[data-theme="light"] .cms-auth-footer,
+:root[data-theme="light"] .cms-login-status,
+:root[data-theme="light"] .cms-login-note {
+  color: color-mix(in srgb, var(--muted) 78%, transparent);
+}
+
+:root[data-theme="light"] .cms-auth-system-mark span {
+  border-color: var(--line);
+  color: var(--ink-soft);
+}
+
+:root[data-theme="light"] .cms-auth-theme-toggle {
+  border-color: var(--line);
+  background: var(--surface-glass);
+  color: var(--muted);
+}
+
+:root[data-theme="light"] .cms-login-story {
+  text-shadow: none;
+}
+
+:root[data-theme="light"] .cms-login-story h1 em {
+  color: transparent;
+  -webkit-text-stroke-color: color-mix(in srgb, var(--ink) 64%, transparent);
+}
+
+:root[data-theme="light"] .cms-login-kicker,
+:root[data-theme="light"] .cms-login-capabilities span,
+:root[data-theme="light"] .cms-login-note span {
+  color: var(--cyan);
+}
+
+:root[data-theme="light"] .cms-login-capabilities {
+  border-top-color: var(--line);
+}
+
+:root[data-theme="light"] .cms-login-capabilities li + li {
+  border-left-color: var(--line);
+}
+
+:root[data-theme="light"] .cms-login-capabilities small {
+  color: var(--muted);
+}
+
+:root[data-theme="light"] .cms-auth-card {
+  border-color: color-mix(in srgb, var(--cyan) 18%, var(--line));
+  background: color-mix(in srgb, var(--surface) 91%, transparent);
+  box-shadow: var(--shadow);
+}
+
+:root[data-theme="light"] .cms-auth-card::after {
+  border-color: color-mix(in srgb, var(--cyan) 12%, transparent);
+}
+
+:root[data-theme="light"] .cms-login-field-label {
+  color: var(--ink-soft);
+}
+
+:root[data-theme="light"] .cms-login-field-label small {
+  color: var(--muted);
+}
+
+:root[data-theme="light"] .cms-login-input {
+  border-color: var(--line);
+  background: var(--surface-soft);
+}
+
+:root[data-theme="light"] .cms-login-input:focus-within {
+  border-color: color-mix(in srgb, var(--cyan) 68%, var(--line));
+  background: var(--surface);
+}
+
+:root[data-theme="light"] .cms-login-field-index {
+  border-right-color: var(--line);
+  color: var(--cyan);
+}
+
+:root[data-theme="light"] .cms-form .cms-login-input input {
+  color: var(--ink);
+}
+
+:root[data-theme="light"] .cms-login-input input::placeholder {
+  color: color-mix(in srgb, var(--muted) 58%, transparent);
+}
+
+:root[data-theme="light"] .cms-login-input input:-webkit-autofill,
+:root[data-theme="light"] .cms-login-input input:-webkit-autofill:hover,
+:root[data-theme="light"] .cms-login-input input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--ink);
 }
 
 :root[data-theme="light"] .cms-brand {
