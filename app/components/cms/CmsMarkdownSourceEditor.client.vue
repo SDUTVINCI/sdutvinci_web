@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { markdown } from '@codemirror/lang-markdown'
+import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
+import { languages } from '@codemirror/language-data'
 import { Compartment, EditorState } from '@codemirror/state'
 import { basicSetup, EditorView } from 'codemirror'
+import { tags } from '@lezer/highlight'
 import {
   createProgrammaticScrollGuard,
   getScrollProgress,
@@ -27,6 +30,22 @@ const editable = new Compartment()
 let view: EditorView | null = null
 let acceptingUpdates = false
 const programmaticScroll = createProgrammaticScrollGuard()
+
+const cmsSyntaxHighlighting = HighlightStyle.define([
+  { tag: tags.heading, color: 'var(--cms-code-heading)', fontWeight: '750' },
+  { tag: [tags.link, tags.url], color: 'var(--cms-code-link)', textDecoration: 'underline' },
+  { tag: [tags.keyword, tags.modifier, tags.operatorKeyword], color: 'var(--cms-code-keyword)' },
+  { tag: [tags.string, tags.special(tags.string)], color: 'var(--cms-code-string)' },
+  { tag: [tags.number, tags.bool, tags.null], color: 'var(--cms-code-number)' },
+  { tag: [tags.comment, tags.meta], color: 'var(--cms-code-comment)', fontStyle: 'italic' },
+  { tag: [tags.function(tags.variableName), tags.labelName], color: 'var(--cms-code-function)' },
+  { tag: [tags.typeName, tags.className, tags.namespace], color: 'var(--cms-code-type)' },
+  { tag: [tags.variableName, tags.propertyName, tags.attributeName], color: 'var(--cms-code-variable)' },
+  { tag: [tags.punctuation, tags.processingInstruction], color: 'var(--cms-code-punctuation)' },
+  { tag: [tags.emphasis], fontStyle: 'italic' },
+  { tag: [tags.strong], fontWeight: '800' },
+  { tag: [tags.invalid], color: 'var(--cms-code-invalid)', textDecoration: 'underline wavy' }
+])
 
 const reportScroll = (element: HTMLElement) => {
   if (programmaticScroll.consume(element.scrollTop)) return
@@ -142,7 +161,8 @@ onMounted(() => {
         doc: props.modelValue,
         extensions: [
           basicSetup,
-          markdown(),
+          markdown({ codeLanguages: languages }),
+          syntaxHighlighting(cmsSyntaxHighlighting),
           editable.of(EditorView.editable.of(!props.readonly)),
           EditorView.lineWrapping,
           EditorView.updateListener.of((update) => {
@@ -158,7 +178,13 @@ onMounted(() => {
               overflow: 'auto'
             },
             '.cm-content': { padding: '1rem 0' },
-            '.cm-gutters': { backgroundColor: 'transparent' }
+            '.cm-gutters': { backgroundColor: 'transparent' },
+            '.cm-activeLine': { backgroundColor: 'var(--cms-code-active-line)' },
+            '.cm-activeLineGutter': { backgroundColor: 'var(--cms-code-active-gutter)' },
+            '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': {
+              backgroundColor: 'var(--cms-code-selection) !important'
+            },
+            '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--cms-code-caret)' }
           })
         ]
       })

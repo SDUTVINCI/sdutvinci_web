@@ -1877,3 +1877,11 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
   功能栏使用局部半透明承托，兼顾照片展示和文字对比度。
 - 浅色登录卡片采用冷灰绿色渐变表面，输入区、边框与辅助文字使用更深层级，避免纯白卡片眩光和
   表单控件边界不清；深色登录样式保持原样。
+
+## 2026-08-09：CMS 编辑器代码高亮与对比度
+
+- Markdown 源码编辑器通过 `@codemirror/language-data` 为 fenced code block 加载语言支持，并使用
+  CSS token 驱动的 CMS 深浅语法主题；切换主题不重建编辑器状态。
+- Milkdown/Crepe 富文本编辑器的主题变量已映射至 CMS token，代码块在深浅模式中统一使用高对比
+  深色表面，并适配行号、当前行、语言菜单与工具按钮。
+- 正式预览继续复用 `VinciMarkdownRenderer` 与 Shiki，数据库、Markdown 源码和发布契约不变。
