@@ -92,7 +92,12 @@ integration('CMS Markdown 编辑器与草稿系统', () => {
       articleId: null,
       title: '新文章',
       baseContentHash: null,
-      version: 1
+      version: 1,
+      systemFrontmatter: {
+        contributors: [],
+        updatedAt: null,
+        publishedAt: null
+      }
     })
     expect(draft.authors.map(author => author.memberKey)).toEqual(['dongjiahui'])
 

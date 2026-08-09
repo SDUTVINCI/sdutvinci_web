@@ -153,6 +153,12 @@ const statusLabels: Record<CmsDraftStatus, string> = {
   withdrawn: '已撤回'
 }
 
+const formatSystemDate = (value: string | null) => {
+  if (!value) return '历史内容未记录（下次 CMS 正式发布时自动生成）'
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString('zh-CN')
+}
+
 const clearHeartbeat = () => {
   clearInterval(heartbeatTimer)
   heartbeatTimer = undefined
@@ -968,10 +974,16 @@ onBeforeUnmount(() => {
 
         <h3>系统维护字段（只读）</h3>
         <dl class="cms-system-fields">
-          <template v-for="key in ['contributors', 'updatedAt', 'publishedAt']" :key="key">
-            <dt>{{ key }}</dt>
-            <dd>{{ JSON.stringify(initial.systemFrontmatter[key as keyof typeof initial.systemFrontmatter]) }}</dd>
-          </template>
+          <dt>contributors</dt>
+          <dd>
+            {{ initial.systemFrontmatter.contributors.length
+              ? initial.systemFrontmatter.contributors.join('、')
+              : '暂无（非作者成功发布修改后自动记录）' }}
+          </dd>
+          <dt>updatedAt</dt>
+          <dd>{{ formatSystemDate(initial.systemFrontmatter.updatedAt) }}</dd>
+          <dt>publishedAt</dt>
+          <dd>{{ formatSystemDate(initial.systemFrontmatter.publishedAt) }}</dd>
         </dl>
 
         <details>

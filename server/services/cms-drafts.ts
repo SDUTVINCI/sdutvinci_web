@@ -46,10 +46,19 @@ const preserveFrontmatter = (frontmatter: Record<string, unknown>) =>
     Object.entries(frontmatter).filter(([key]) => !editableFrontmatterKeys.has(key))
   )
 
+const stringArray = (value: unknown) => Array.isArray(value)
+  ? value
+      .filter((item): item is string => typeof item === 'string' && Boolean(item.trim()))
+      .map(item => item.trim())
+  : []
+
+const optionalString = (value: unknown) =>
+  typeof value === 'string' && value.trim() ? value : null
+
 const systemFrontmatterFrom = (frontmatter: Record<string, unknown>) => ({
-  contributors: frontmatter.contributors ?? null,
-  updatedAt: frontmatter.updatedAt ?? null,
-  publishedAt: frontmatter.publishedAt ?? null
+  contributors: stringArray(frontmatter.contributors),
+  updatedAt: optionalString(frontmatter.updatedAt),
+  publishedAt: optionalString(frontmatter.publishedAt)
 })
 
 const loadDraftAuthors = async (draftIds: string[]) => {

@@ -29,9 +29,9 @@ export interface CmsDraft {
   authors: CmsDraftAuthor[]
   preservedFrontmatter: Record<string, unknown>
   systemFrontmatter: {
-    contributors: unknown
-    updatedAt: unknown
-    publishedAt: unknown
+    contributors: string[]
+    updatedAt: string | null
+    publishedAt: string | null
   }
   baseContentHash: string | null
   baseRevisionId: string | null
