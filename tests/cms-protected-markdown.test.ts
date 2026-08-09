@@ -8,6 +8,7 @@ import {
 } from '../app/utils/cms-protected-markdown'
 import {
   assessCmsVisualRoundTrip,
+  canonicalizeCmsRenderingTree,
   cmsVisualEditorFeatures,
   isCmsVisualRoundTripLossless
 } from '../app/utils/cms-visual-editor'
@@ -65,6 +66,65 @@ describe('CMS 混合可视化 Markdown 保护', () => {
     )).resolves.toEqual({
       safe: false,
       reason: 'protected_syntax_changed'
+    })
+  })
+
+  it('忽略 Shiki 纯表现 token 差异但保留代码语言与原文比较', () => {
+    const lightComment = [[
+      'pre',
+      { language: 'cpp', class: 'shiki shiki-themes github-light github-dark' },
+      ['code', { class: 'language-cpp' }, [
+        'span',
+        { class: 'line', style: 'display:inline' },
+        ['span', { style: 'color:#24292E;--shiki-dark:#6A737D' }, '\t// 注释']
+      ]]
+    ]] as any
+    const scopedComment = [[
+      'pre',
+      { language: 'cpp', class: 'shiki shiki-themes github-light github-dark' },
+      ['code', { class: 'language-cpp' }, [
+        'span',
+        { class: 'line', style: 'display:inline' },
+        ['span', { style: 'color:#6A737D;--shiki-dark:#6A737D' }, '\t// 注释']
+      ]]
+    ]] as any
+
+    expect(canonicalizeCmsRenderingTree(lightComment)).toEqual(
+      canonicalizeCmsRenderingTree(scopedComment)
+    )
+    expect(canonicalizeCmsRenderingTree(lightComment)).toEqual([
+      ['pre', { language: 'cpp' }, ['code', {}, '\t// 注释']]
+    ])
+  })
+
+  it('C++ 首次高亮差异不阻止富文本，真实列表结构变化仍阻止', async () => {
+    const cppSource = '```cpp\nint main() {\n\n\t// 指针注释\n\treturn 0;\n}\n```'
+    await expect(assessCmsVisualRoundTrip(cppSource, cppSource)).resolves.toEqual({
+      safe: true,
+      reason: 'equivalent'
+    })
+
+    const legacyList = `1. 外层
+
+    1. ARM
+
+    10. X86
+
+        1. 应用
+
+    11. LoongArch`
+    const changedStructure = `1. 外层
+
+   1. ARM
+
+10. X86
+
+    1. 应用
+
+11. LoongArch`
+    await expect(assessCmsVisualRoundTrip(legacyList, changedStructure)).resolves.toEqual({
+      safe: false,
+      reason: 'rendering_changed'
     })
   })
 

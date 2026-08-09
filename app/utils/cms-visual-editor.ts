@@ -109,11 +109,48 @@ export interface CmsVisualRoundTripAssessment {
   reason: 'equivalent' | 'protected_syntax_changed' | 'rendering_changed'
 }
 
+type VinciRenderingNode = string | [string | null, Record<string, unknown>, ...VinciRenderingNode[]]
+
+const renderingText = (node: VinciRenderingNode): string => {
+  if (typeof node === 'string') return node
+  return node.slice(2).map(child => renderingText(child as VinciRenderingNode)).join('')
+}
+
+export const canonicalizeCmsRenderingTree = (
+  nodes: VinciRenderingNode[]
+): VinciRenderingNode[] => nodes.map((node) => {
+  if (typeof node === 'string') return node
+  const [tag, attrs, ...children] = node
+  const code = tag === 'pre' && Array.isArray(children[0]) && children[0][0] === 'code'
+    ? children[0]
+    : null
+  const classes = String(attrs.class || '')
+  if (code && classes.split(/\s+/).includes('shiki')) {
+    const codeAttrs = code[1] || {}
+    const languageClass = String(codeAttrs.class || '')
+      .split(/\s+/)
+      .find(value => value.startsWith('language-'))
+    const language = String(attrs.language || languageClass?.slice('language-'.length) || '')
+    return [
+      'pre',
+      language ? { language } : {},
+      ['code', {}, renderingText(code as VinciRenderingNode)]
+    ]
+  }
+  return [
+    tag,
+    attrs,
+    ...canonicalizeCmsRenderingTree(children as VinciRenderingNode[])
+  ]
+})
+
 const finalRenderingFingerprint = async (markdown: string) => JSON.stringify(
-  (await parse(protectVinciTemplateTokens(markdown), {
-    ...vinciMarkdownOptions,
-    plugins: createVinciMarkdownPlugins()
-  })).nodes
+  canonicalizeCmsRenderingTree(
+    (await parse(protectVinciTemplateTokens(markdown), {
+      ...vinciMarkdownOptions,
+      plugins: createVinciMarkdownPlugins()
+    })).nodes as VinciRenderingNode[]
+  )
 )
 
 export const assessCmsVisualRoundTrip = async (

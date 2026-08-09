@@ -1891,3 +1891,11 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
   注册以避免重复；C/C++、Python、Rust 等在 CMS 预览和正式页面均输出 GitHub Light/Dark token。
 - Shiki 的 Light token 以行内 `color` 输出，深色 CSS 现使用必要的优先级应用 `--shiki-dark`，避免
   CMS 深色预览和正式深色页面继续显示近黑色的 Light token。
+
+## 2026-08-09：富文本兼容性检查去除 Shiki 误报
+
+- CMS 富文本往返检查此前直接比较完整 Comark 树，Shiki 首次加载 C++ grammar 时即使代码完全
+  相同，也可能仅因 token 切分或颜色属性不同而被误判为“最终网页效果发生变化”。
+- 比较前现将 Shiki `<pre>` 规范化为代码语言与原始文本，忽略 token `<span>`、主题 class 和颜色
+  style；代码文本、语言及其余页面结构仍严格比较。
+- 真实结构变化仍拒绝进入富文本模式，提示现明确说明可能变化的是列表、代码块或段落结构。

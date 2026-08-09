@@ -633,7 +633,7 @@ const handleVisualReady = async (serialized: string) => {
       handleVisualError(
         assessment.reason === 'protected_syntax_changed'
           ? '扩展语法在初始化时发生变化；原文已保留，请使用 Markdown 源码模式编辑'
-          : '最终网页效果在初始化时发生变化；原文已保留，请使用 Markdown 源码模式编辑'
+          : '列表、代码块或段落结构在富文本初始化时发生变化；原文已保留，请使用 Markdown 源码模式编辑'
       )
       return
     }
