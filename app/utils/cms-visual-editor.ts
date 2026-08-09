@@ -1,4 +1,7 @@
 import { Crepe, type CrepeConfig } from '@milkdown/crepe'
+import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
+import { EditorView } from '@codemirror/view'
+import { tags } from '@lezer/highlight'
 import { commandsCtx } from '@milkdown/kit/core'
 import { clearTextInCurrentBlockCommand } from '@milkdown/kit/preset/commonmark'
 import { insert } from '@milkdown/kit/utils'
@@ -27,11 +30,40 @@ export const cmsVisualEditorFeatures = {
   [Crepe.Feature.ImageBlock]: false
 }
 
+const cmsVisualCodeHighlighting = HighlightStyle.define([
+  { tag: [tags.keyword, tags.modifier, tags.operatorKeyword], color: 'var(--cms-code-keyword)' },
+  { tag: [tags.string, tags.special(tags.string)], color: 'var(--cms-code-string)' },
+  { tag: [tags.number, tags.bool, tags.null], color: 'var(--cms-code-number)' },
+  { tag: [tags.comment, tags.meta], color: 'var(--cms-code-comment)', fontStyle: 'italic' },
+  { tag: [tags.function(tags.variableName), tags.labelName], color: 'var(--cms-code-function)' },
+  { tag: [tags.typeName, tags.className, tags.namespace], color: 'var(--cms-code-type)' },
+  { tag: [tags.variableName, tags.propertyName, tags.attributeName], color: 'var(--cms-code-variable)' },
+  { tag: [tags.punctuation, tags.processingInstruction], color: 'var(--cms-code-punctuation)' },
+  { tag: tags.invalid, color: 'var(--cms-code-invalid)', textDecoration: 'underline wavy' }
+])
+
+export const cmsVisualCodeMirrorTheme = [
+  syntaxHighlighting(cmsVisualCodeHighlighting),
+  EditorView.theme({
+    '&': { backgroundColor: 'transparent', color: 'var(--cms-code-variable)' },
+    '.cm-content': { caretColor: 'var(--cms-code-caret)' },
+    '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--cms-code-caret)' },
+    '.cm-activeLine': { backgroundColor: 'var(--cms-code-active-line)' },
+    '.cm-activeLineGutter': { backgroundColor: 'var(--cms-code-active-gutter)' },
+    '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': {
+      backgroundColor: 'var(--cms-code-selection) !important'
+    }
+  })
+]
+
 const componentIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 3h10a2 2 0 0 1 2 2v4h-2V5H7v14h4v2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm8 8h2v3h3v2h-3v3h-2v-3h-3v-2h3v-3Z"/></svg>'
 
 export const createCmsVisualEditorFeatureConfigs = (
   openComponentMenu: () => void
 ): NonNullable<CrepeConfig['featureConfigs']> => ({
+  [Crepe.Feature.CodeMirror]: {
+    theme: cmsVisualCodeMirrorTheme
+  },
   [Crepe.Feature.BlockEdit]: {
     buildMenu: (builder) => {
       const group = builder.addGroup('vinci-components', 'Vinci 内容组件')

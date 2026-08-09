@@ -44,10 +44,49 @@ const updateHeadingNumbers = () => {
   applyWikiHeadingNumbers(elements, numbered)
 }
 
+const enhanceCodeBlocks = () => {
+  if (!rendererRoot.value) return
+  const blocks = rendererRoot.value.querySelectorAll('pre')
+  blocks.forEach((block) => {
+    if (block.querySelector(':scope > .code-toolbar')) return
+    const code = block.querySelector('code')
+    const classes = [...block.classList, ...(code ? [...code.classList] : [])]
+    const langClass = classes.find(className => className.startsWith('language-'))
+    const language = langClass ? langClass.slice('language-'.length).toUpperCase() : 'CODE'
+    const toolbar = document.createElement('div')
+    toolbar.className = 'code-toolbar'
+    toolbar.innerHTML = `<span class="code-language"></span><button class="code-copy-btn" type="button">复制</button>`
+    const label = toolbar.querySelector('.code-language')
+    if (label) label.textContent = language
+    block.insertBefore(toolbar, block.firstChild)
+  })
+}
+
+const handleRendererClick = async (event: MouseEvent) => {
+  const target = event.target as HTMLElement
+  const button = target.closest<HTMLButtonElement>('.code-copy-btn')
+  if (!button || !rendererRoot.value?.contains(button)) return
+  const code = button.closest('pre')?.querySelector('code')?.textContent || ''
+  try {
+    await navigator.clipboard.writeText(code)
+    button.textContent = '已复制'
+    button.classList.add('copied')
+    window.setTimeout(() => {
+      button.textContent = '复制'
+      button.classList.remove('copied')
+    }, 1800)
+  } catch {
+    button.textContent = '复制失败'
+  }
+}
+
 const scheduleHeadingNumberUpdate = () => {
-  if (headingUpdateScheduled || props.variant !== 'wiki') return
+  if (headingUpdateScheduled) return
   headingUpdateScheduled = true
-  queueMicrotask(updateHeadingNumbers)
+  queueMicrotask(() => {
+    updateHeadingNumbers()
+    enhanceCodeBlocks()
+  })
 }
 
 onMounted(() => {
@@ -76,6 +115,7 @@ onBeforeUnmount(() => {
         'member-prose': variant === 'member'
       }
     ]"
+    @click="handleRendererClick"
   >
     <Comark
       :markdown="preparedMarkdown"

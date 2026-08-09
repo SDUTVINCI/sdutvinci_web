@@ -144,5 +144,7 @@ ${vinciContentComponentDefinitions[3]!.defaultMarkdown}`
     expect(renderer).toContain("'content-prose': variant === 'news'")
     expect(renderer).toContain("'member-prose': variant === 'member'")
     expect(renderer).toContain('collectNumberedWikiHeadings')
+    expect(renderer).toContain('enhanceCodeBlocks')
+    expect(renderer).toContain('code-copy-btn')
   })
 })

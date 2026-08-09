@@ -1882,6 +1882,8 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
 
 - Markdown 源码编辑器通过 `@codemirror/language-data` 为 fenced code block 加载语言支持，并使用
   CSS token 驱动的 CMS 深浅语法主题；切换主题不重建编辑器状态。
-- Milkdown/Crepe 富文本编辑器的主题变量已映射至 CMS token，代码块在深浅模式中统一使用高对比
-  深色表面，并适配行号、当前行、语言菜单与工具按钮。
+- Milkdown/Crepe 富文本编辑器的主题变量已映射至 CMS token，浅色代码块使用冷灰浅色表面、深色
+  代码块使用深蓝黑表面，并分别配置语法色、行号、当前行、语言菜单与工具按钮。
+- 代码语言栏与复制按钮由 `VinciMarkdownRenderer` 统一增强，因此 CMS“发布效果”和真实发布页
+  使用相同实现；既有 Wiki 页面增强逻辑检测到工具栏后会跳过，不会生成重复按钮。
 - 正式预览继续复用 `VinciMarkdownRenderer` 与 Shiki，数据库、Markdown 源码和发布契约不变。

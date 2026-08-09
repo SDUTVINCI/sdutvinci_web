@@ -14,8 +14,10 @@ describe('CMS 编辑器代码高亮', () => {
   )
 
   it('源码与富文本编辑器均定义高对比深浅配色且不改正式渲染器', async () => {
-    const [sourceEditor, styles, renderer] = await Promise.all([
+    const [sourceEditor, visualEditor, visualUtils, styles, renderer] = await Promise.all([
       readFile('app/components/cms/CmsMarkdownSourceEditor.client.vue', 'utf8'),
+      readFile('app/components/cms/CmsMarkdownVisualEditor.client.vue', 'utf8'),
+      readFile('app/utils/cms-visual-editor.ts', 'utf8'),
       readFile('app/assets/css/cms.css', 'utf8'),
       readFile('app/components/VinciMarkdownRenderer.vue', 'utf8')
     ])
@@ -24,7 +26,13 @@ describe('CMS 编辑器代码高亮', () => {
     expect(sourceEditor).toContain('syntaxHighlighting(cmsSyntaxHighlighting)')
     expect(styles).toContain(':root[data-theme="dark"] .cms-codemirror-shell .cm-editor')
     expect(styles).toContain('.cms-milkdown-root .milkdown .milkdown-code-block')
-    expect(styles).toContain('background: #111a1f')
+    expect(styles).toContain('background: #edf2f0')
+    expect(styles).toContain(':root[data-theme="dark"] .cms-milkdown-root .milkdown .milkdown-code-block')
+    expect(visualEditor).toContain('createCmsVisualEditorFeatureConfigs')
+    expect(visualUtils).toContain('cmsVisualCodeMirrorTheme')
+    expect(visualUtils).toContain('[Crepe.Feature.CodeMirror]')
     expect(renderer).toContain(':options="vinciMarkdownOptions"')
+    expect(renderer).toContain('className = \'code-toolbar\'')
+    expect(renderer).toContain('@click="handleRendererClick"')
   })
 })
