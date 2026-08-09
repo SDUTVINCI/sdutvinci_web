@@ -41,6 +41,13 @@ describe('CMS 编辑器代码高亮', () => {
     expect(renderer).toContain('@click="handleRendererClick"')
   })
 
+  it('Shiki 深色 token 明确覆盖内联的 GitHub Light 颜色', async () => {
+    const wikiStyles = await readFile('app/assets/css/wiki.css', 'utf8')
+    expect(wikiStyles).toContain('color: var(--shiki-dark) !important')
+    expect(wikiStyles).toContain('background-color: var(--shiki-dark-bg) !important')
+    expect(wikiStyles).toContain(':root:not([data-theme="light"]) .wiki-content-body .shiki span')
+  })
+
   it.each(['cpp', 'c', 'python', 'rust', 'go', 'java', 'csharp', 'bash', 'sql'])(
     '发布渲染器为 %s 生成 GitHub 深浅双色 token',
     async (language) => {

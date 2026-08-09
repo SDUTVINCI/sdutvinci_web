@@ -26,6 +26,7 @@
 - CMS“发布效果”和真实发布页面均由共享渲染器生成语言栏与复制按钮，不再由 Wiki 页面单独决定预览能力。
 - 正式发布预览继续由 `VinciMarkdownRenderer` 和 Shiki 渲染，不改变内容或发布结果。
 - Shiki 显式注册常见工程语言，包括 C/C++、Python、Rust、Go、Java/Kotlin、C#、Swift、Dart、Ruby、PHP、Lua、R、Scala、JavaScript/TypeScript、Vue/Svelte/Astro、HTML/CSS/SCSS、Shell/PowerShell、SQL、JSON/YAML/TOML/XML、Dockerfile、Makefile、CMake、Nginx、Diff 与 Git Commit，并使用 GitHub Light/Dark 配色。
+- 深色主题显式覆盖 Shiki token 内联的 GitHub Light 颜色，确保 CMS 发布预览与正式页面实际显示 GitHub Dark token；浅色主题继续使用原始 GitHub Light 值。
 本功能没有新增 API，请求和响应契约均不改变。
 
 ## 权限、安全和异常情况

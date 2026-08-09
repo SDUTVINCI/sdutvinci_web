@@ -1889,3 +1889,5 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
 - 正式预览继续复用 `VinciMarkdownRenderer` 与 Shiki，数据库、Markdown 源码和发布契约不变。
 - Comark 默认仅注册少量 Web 语言，现由共享 Markdown 配置显式注册 39 种常用工程语言，并关闭默认
   注册以避免重复；C/C++、Python、Rust 等在 CMS 预览和正式页面均输出 GitHub Light/Dark token。
+- Shiki 的 Light token 以行内 `color` 输出，深色 CSS 现使用必要的优先级应用 `--shiki-dark`，避免
+  CMS 深色预览和正式深色页面继续显示近黑色的 Light token。
