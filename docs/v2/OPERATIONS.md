@@ -587,6 +587,15 @@ expand/contract。
 用新修复 Commit 或普通 `git revert` 后重新部署；不直接覆盖容器、改 gateway 状态或 down。
 日志按日/30 份/100 MiB 轮转且须脱敏；禁止 system/volume prune 和强删引用镜像。
 
+安装器会预创建五个 `0600` 日志文件并保持其属主为当前运行用户，因为 systemd 在应用
+`User=` 前打开 `StandardOutput=append:` 目标，缺少预创建时可能生成 `root:root` 文件，导致
+logrotate 的 `su` 规则无法读取。`./vinci install --systemd-only` 会保留既有日志内容并修复
+这五个文件的属主和权限；符号链接、硬链接或非普通文件会 fail closed。
+
+应用更新还会检测当前是否已经运行常驻 `content-export-worker`。未启用时不会擅自启动；已启用
+时会随目标 Commit 强制重建为同 SHA 的 operations 镜像并校验运行状态。重建失败会尝试恢复
+更新前的精确 Worker 镜像，并按部署失败处理，不会静默留下版本漂移。
+
 ## 9. 内容仓库、异步导出、03:00 对账和重试
 
 ### 前置条件

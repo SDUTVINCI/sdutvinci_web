@@ -159,6 +159,25 @@ VINCI_LOG_ROOT|$(ops_config_value VINCI_LOG_ROOT "$VINCI_RUN_HOME/.local/state/v
 EOF
 }
 
+vinci_prepare_log_files() {
+  local log_root="$1"
+  local name path
+  for name in auto-deploy backup content-reconcile maintenance-cleanup health; do
+    path="$log_root/${name}.log"
+    if [ -e "$path" ]; then
+      [ -f "$path" ] && [ ! -L "$path" ] && [ "$(stat -c '%h' "$path")" = 1 ] \
+        || ops_die "运维日志必须是非硬链接普通文件：${path}"
+    else
+      vinci_privileged install -o "$VINCI_RUN_UID" -g "$VINCI_RUN_GID" -m 0600 \
+        /dev/null "$path"
+    fi
+    # systemd opens StandardOutput=append targets as root before applying User=.
+    # Preserve existing bytes while restoring the identity required by logrotate `su`.
+    vinci_privileged chown "$VINCI_RUN_UID:$VINCI_RUN_GID" "$path"
+    vinci_privileged chmod 0600 "$path"
+  done
+}
+
 vinci_install_systemd() {
   local dry_run="$1"
   local logrotate_bin
@@ -180,6 +199,7 @@ vinci_install_systemd() {
     return 0
   fi
   vinci_privileged install -d -o "$VINCI_RUN_UID" -g "$VINCI_RUN_GID" -m 0750 "$log_root"
+  vinci_prepare_log_files "$log_root"
   vinci_privileged install -d -o root -g root -m 0755 "$unit_directory"
   local unit
   for unit in "$rendered"/*.service "$rendered"/*.timer; do

@@ -1816,3 +1816,25 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
   生产 S3，没有 SSH、Fetch 或部署。仅按维护者明确选择向 `sdutvinci_content` 推送上述独立
   分支并创建 Draft PR；`sdutvinci_web` 不 Push。Web 仓库独立本地 Commit 完整 SHA 由交付
   回复报告。
+
+---
+
+## 2026-08-09：生产健康检查、日志轮转与常驻 Worker 版本修复
+
+- 经维护者明确授权连接 `10.0.0.4` 检查并处理问题；按维护者要求未处理 TLS 证书。检查时
+  线上活动应用为 `bcfd53756508e7d14d00642f2d247b019d3381e2`，应用、PostgreSQL、gateway
+  容器均健康且无重启；核心公开页面和 CMS 登录页返回 200，数据库指针、导出队列、对象存储、
+  定时任务、当日备份及最近七次 03:00 内容对账均正常。
+- 修复了 `logrotate.service` 连续失败：systemd 在应用 `User=` 前以 root 打开 append 日志，
+  与 logrotate 的 `su` 用户不匹配。本次仅将五个 Vinci 运维日志恢复为运行用户属主和 `0600`，
+  强制执行 Vinci 专用轮转并重新运行服务；轮转成功、历史内容保留，后续定时任务写入后属主
+  仍正确，系统失败单元为 0。
+- 已启用的常驻内容导出 Worker 仍在使用旧 operations 镜像。本次确认导出队列为空后，只拉取并
+  强制重建该 Worker 为当前线上 Commit 的精确镜像；重建后处于 idle、jobCount 0、failed 0、
+  restart 0。应用、PostgreSQL 和 gateway 的启动时间未变化，未写业务数据、未执行 Migration。
+- 永久修复会让 systemd 安装器安全预创建/修复五个日志文件；符号链接、硬链接和非普通文件会
+  fail closed。应用部署只在 Worker 原本已运行时同步其镜像，并在后续部署失败时尝试恢复原精确
+  镜像；未启用时不会自动启动。相应安装、logrotate 和部署静态回归已补充到测试及运维文档。
+- 生产仓库未改动，未部署应用代码；本地永久修复将以独立 Commit 交付，不 Push。生产侧最终
+  `./vinci doctor` 报告 issueCount 0，公开首页、新闻、Wiki、团队、CMS 登录及本机 health
+  均返回 200。

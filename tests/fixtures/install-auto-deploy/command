@@ -68,6 +68,9 @@ case "$command_name" in
     cp -- "$source_file" "$destination"
     chmod 0644 "$destination"
     ;;
+  chown)
+    exit 0
+    ;;
   systemctl)
     case "${1:-}" in
       daemon-reload) ;;

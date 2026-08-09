@@ -74,6 +74,24 @@ case "$previous_slot" in
   *) ops_die "部署状态中的 slot 无效" ;;
 esac
 
+project="$(ops_project_name)"
+worker_was_running=false
+worker_replaced=false
+previous_worker_image=""
+mapfile -t content_export_workers < <(
+  docker ps -q \
+    --filter "label=com.docker.compose.project=${project}" \
+    --filter "label=com.docker.compose.service=content-export-worker"
+)
+[ "${#content_export_workers[@]}" -le 1 ] \
+  || ops_die "发现多个常驻内容导出 Worker，拒绝自动选择"
+if [ "${#content_export_workers[@]}" -eq 1 ]; then
+  worker_was_running=true
+  previous_worker_image="$(docker inspect --format '{{.Config.Image}}' "${content_export_workers[0]}")"
+  [[ "$previous_worker_image" =~ ^[A-Za-z0-9._/:@-]+:[0-9a-f]{40}$ ]] \
+    || ops_die "当前内容导出 Worker 镜像不可追踪，拒绝自动替换"
+fi
+
 target_image="${APP_IMAGE:?APP_IMAGE is required}:${APP_IMAGE_TAG:?APP_IMAGE_TAG is required}"
 [[ "$APP_IMAGE" =~ ^[A-Za-z0-9._/:@-]+$ ]] || ops_die "APP_IMAGE 格式不安全"
 [[ "$APP_IMAGE_TAG" =~ ^[A-Za-z0-9._-]+$ ]] || ops_die "APP_IMAGE_TAG 格式不安全"
@@ -159,6 +177,17 @@ rollback() {
     docker start "$legacy_container" >/dev/null 2>&1 || true
   fi
 
+  if [ "$worker_replaced" = true ] && [ "$worker_was_running" = true ]; then
+    local previous_worker_repository previous_worker_tag
+    previous_worker_repository="${previous_worker_image%:*}"
+    previous_worker_tag="${previous_worker_image##*:}"
+    ops_info "恢复原内容导出 Worker 镜像..."
+    APP_OPS_IMAGE="$previous_worker_repository" APP_IMAGE_TAG="$previous_worker_tag" \
+      docker compose -f compose.yaml -f compose.content-export.yaml \
+      --profile content-export up -d --no-deps --force-recreate content-export-worker \
+      >/dev/null 2>&1 || true
+  fi
+
   if [[ "$previous_commit" =~ ^[0-9a-f]{40}$ ]]; then
     git switch --detach "$previous_commit" >/dev/null 2>&1 || true
   fi
@@ -189,7 +218,26 @@ docker compose up -d --no-deps --wait --wait-timeout 180 "$candidate_service"
 docker compose exec -T "$candidate_service" node -e \
   "fetch('http://127.0.0.1:3000/api/health').then(response => { if (!response.ok) process.exit(1) }).catch(() => process.exit(1))"
 
-project="$(ops_project_name)"
+if [ "$worker_was_running" = true ]; then
+  target_worker_image="${APP_OPS_IMAGE}:${APP_IMAGE_TAG}"
+  if [ "$previous_worker_image" != "$target_worker_image" ]; then
+    ops_info "同步已启用的常驻内容导出 Worker 到目标运维镜像..."
+    docker compose -f compose.yaml -f compose.content-export.yaml \
+      --profile content-export pull content-export-worker
+    worker_replaced=true
+    docker compose -f compose.yaml -f compose.content-export.yaml \
+      --profile content-export up -d --no-deps --force-recreate content-export-worker
+    worker_container="$(docker compose -f compose.yaml -f compose.content-export.yaml \
+      --profile content-export ps -q content-export-worker)"
+    [ -n "$worker_container" ] \
+      || ops_die "内容导出 Worker 重建后容器不存在"
+    [ "$(docker inspect --format '{{.State.Running}}' "$worker_container")" = true ] \
+      || ops_die "内容导出 Worker 重建后未运行"
+    [ "$(docker inspect --format '{{.Config.Image}}' "$worker_container")" = "$target_worker_image" ] \
+      || ops_die "内容导出 Worker 重建后镜像与目标 Commit 不一致"
+  fi
+fi
+
 mapfile -t legacy_containers < <(
   docker ps -aq \
     --filter "label=com.docker.compose.project=${project}" \

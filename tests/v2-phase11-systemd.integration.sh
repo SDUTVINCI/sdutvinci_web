@@ -30,6 +30,13 @@ systemd-analyze verify "$rendered"/*.service "$rendered"/*.timer
 if command -v logrotate >/dev/null 2>&1; then
   logrotate --debug --state "$test_root/logrotate-state-test" \
     "$rendered/vinci-cms.logrotate" >/dev/null
+  printf 'phase11-logrotate-owner-test\n' > "$logs/health.log"
+  chmod 0600 "$logs/health.log"
+  logrotate --force --state "$test_root/logrotate-state-force-test" \
+    "$rendered/vinci-cms.logrotate"
+  test -f "$logs/health.log.1"
+  grep -Fqx 'phase11-logrotate-owner-test' "$logs/health.log.1"
+  test ! -s "$logs/health.log"
 fi
 if grep -R -nF '@VINCI_' "$rendered"; then
   printf 'systemd test retained unresolved template placeholders\n' >&2

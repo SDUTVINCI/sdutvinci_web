@@ -18,7 +18,7 @@ cp "$repository_root/scripts/ops-common.sh" "$checkout/scripts/ops-common.sh"
 cp "$repository_root/systemd/"* "$checkout/systemd/"
 cp "$repository_root/tests/fixtures/install-auto-deploy/command" "$fake_bin/fake-command"
 chmod 0755 "$checkout/vinci" "$fake_bin/fake-command"
-for command_name in docker find getent install logrotate runuser stat systemctl systemd-analyze; do
+for command_name in chown docker find getent install logrotate runuser stat systemctl systemd-analyze; do
   ln -s fake-command "$fake_bin/$command_name"
 done
 
@@ -99,6 +99,8 @@ export FAKE_TEST_UID=22001
 export FAKE_TEST_GID=22002
 export FAKE_TEST_HOME="$test_root/nonstandard-beta-home-test"
 mkdir -p "$FAKE_TEST_HOME"
+mkdir -p "$test_root/logs-test"
+printf 'existing-log-must-survive\n' > "$test_root/logs-test/health.log"
 mkdir -p "$checkout/.deploy"
 printf 'commit=%s\nimage=registry.invalid/vinci/runtime-test:%s\nslot=blue\nmode=application\n' \
   "$fixture_commit" "$fixture_commit" > "$checkout/.deploy/current"
@@ -117,6 +119,13 @@ for unit in auto-deploy backup content-reconcile maintenance-cleanup health; do
 done
 test -f "$fake_logrotate/vinci-cms"
 grep -Fq 'su phase11beta phase11testgroup' "$fake_logrotate/vinci-cms"
+for log_name in auto-deploy backup content-reconcile maintenance-cleanup health; do
+  test -f "$test_root/logs-test/${log_name}.log"
+  test "$(stat -c '%a' "$test_root/logs-test/${log_name}.log")" = 600
+  grep -Fq "chown 22001:22002 $test_root/logs-test/${log_name}.log" \
+    "$FAKE_INSTALLER_LOG"
+done
+grep -Fqx 'existing-log-must-survive' "$test_root/logs-test/health.log"
 grep -Fqx 'user=phase11beta' "$checkout/.deploy/install.env"
 grep -Fqx 'uid=22001' "$checkout/.deploy/install.env"
 grep -Fqx 'gid=22002' "$checkout/.deploy/install.env"
