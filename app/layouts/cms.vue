@@ -187,6 +187,10 @@ const handleLogout = async () => {
           </p>
         </div>
         <div class="cms-workspace-tools">
+          <span class="cms-workspace-health">
+            <i class="cms-workspace-dot" aria-hidden="true" />
+            系统在线
+          </span>
           <button
             class="cms-theme-toggle"
             type="button"
@@ -198,10 +202,6 @@ const handleLogout = async () => {
             <span aria-hidden="true">{{ themeIcon }}</span>
             <span>{{ theme === 'dark' ? '浅色模式' : '深色模式' }}</span>
           </button>
-          <span class="cms-workspace-health">
-            <i class="cms-workspace-dot" aria-hidden="true" />
-            系统在线
-          </span>
           <NuxtLink to="/">
             查看官网
             <CmsIcon name="external" />
