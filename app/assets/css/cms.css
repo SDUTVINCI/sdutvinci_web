@@ -1681,8 +1681,8 @@
 
 :root[data-theme="light"] .cms-auth-shell {
   background:
-    linear-gradient(90deg, rgba(247, 250, 249, 0.97), rgba(239, 246, 243, 0.9) 48%, rgba(244, 248, 246, 0.8)),
-    linear-gradient(0deg, rgba(241, 247, 244, 0.9), rgba(255, 255, 255, 0.32) 58%),
+    linear-gradient(90deg, rgba(247, 250, 249, 0.92) 0%, rgba(239, 246, 243, 0.76) 45%, rgba(244, 248, 246, 0.46) 100%),
+    linear-gradient(180deg, rgba(247, 250, 249, 0.82) 0%, rgba(247, 250, 249, 0.34) 48%, rgba(11, 20, 23, 0.14) 100%),
     url("https://cdn.sdutvincirobot.top/site-assets/images/background-6c09ec06.webp") center 42% / cover no-repeat;
   color: var(--ink);
 }
@@ -1691,6 +1691,7 @@
   background-image:
     linear-gradient(color-mix(in srgb, var(--cyan) 8%, transparent) 1px, transparent 1px),
     linear-gradient(90deg, color-mix(in srgb, var(--cyan) 8%, transparent) 1px, transparent 1px);
+  opacity: 0.72;
 }
 
 :root[data-theme="light"] .cms-auth-shell::after {
@@ -1698,6 +1699,14 @@
   box-shadow:
     0 0 0 7rem color-mix(in srgb, var(--cyan) 3%, transparent),
     0 0 0 14rem color-mix(in srgb, var(--cyan) 2%, transparent);
+}
+
+:root[data-theme="light"] .cms-auth-ambient span:first-child {
+  background: radial-gradient(circle, rgba(0, 137, 150, 0.12), transparent 68%);
+}
+
+:root[data-theme="light"] .cms-auth-ambient span:last-child {
+  background: radial-gradient(circle, rgba(201, 52, 52, 0.12), transparent 66%);
 }
 
 :root[data-theme="light"] .cms-auth-brand,
@@ -1741,9 +1750,19 @@
   text-shadow: none;
 }
 
+:root[data-theme="light"] .cms-login-story::after {
+  display: block;
+  width: min(540px, 86%);
+  height: 1px;
+  margin-top: 18px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--cyan) 42%, var(--line)), transparent);
+  content: "";
+}
+
 :root[data-theme="light"] .cms-login-story h1 em {
-  color: transparent;
-  -webkit-text-stroke-color: color-mix(in srgb, var(--ink) 64%, transparent);
+  color: color-mix(in srgb, var(--cyan) 82%, var(--ink));
+  -webkit-text-stroke: 0;
+  text-shadow: 0 12px 34px color-mix(in srgb, var(--cyan) 16%, transparent);
 }
 
 :root[data-theme="light"] .cms-login-kicker,
@@ -1753,11 +1772,17 @@
 }
 
 :root[data-theme="light"] .cms-login-capabilities {
-  border-top-color: var(--line);
+  border-top-color: color-mix(in srgb, var(--cyan) 24%, var(--line));
+  background: linear-gradient(90deg, rgba(247, 250, 249, 0.24), rgba(247, 250, 249, 0.06));
+  backdrop-filter: blur(2px);
 }
 
 :root[data-theme="light"] .cms-login-capabilities li + li {
   border-left-color: var(--line);
+}
+
+:root[data-theme="light"] .cms-login-capabilities li {
+  padding-bottom: 10px;
 }
 
 :root[data-theme="light"] .cms-login-capabilities small {
@@ -1766,8 +1791,10 @@
 
 :root[data-theme="light"] .cms-auth-card {
   border-color: color-mix(in srgb, var(--cyan) 18%, var(--line));
-  background: color-mix(in srgb, var(--surface) 91%, transparent);
-  box-shadow: var(--shadow);
+  background: rgba(255, 255, 255, 0.93);
+  box-shadow:
+    0 32px 80px rgba(23, 33, 43, 0.18),
+    inset 0 1px rgba(255, 255, 255, 0.9);
 }
 
 :root[data-theme="light"] .cms-auth-card::after {
