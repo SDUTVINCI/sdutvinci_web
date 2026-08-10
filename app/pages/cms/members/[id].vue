@@ -23,16 +23,16 @@ const { data: auxiliary, refresh: refreshAuxiliary } = await useAsyncData(`cms:m
   ])
   return { revisions: revisions.revisions, proposals: proposals.proposals, users: users.users }
 })
-const knownLinks = new Set(['github', 'homepage'])
+const knownLinks = new Set(['github', 'home-page', 'homepage'])
 const initialLinks = member.value?.links || {}
 const form = reactive<MemberProfileFormModel & {
   avatarUrl: string, metadata: string, otherLinks: string, sortOrder: number, linkedUserId: string
 }>({
-  name: member.value?.name || '', avatarUrl: member.value?.avatarUrl || '',
+  name: member.value?.name || '', avatarUrl: member.value?.avatarUrl ? resolveStaticMediaUrl(member.value.avatarUrl) : '',
   groupName: member.value?.groupName || '', positions: [...(member.value?.positions || [])],
   seasons: [...(member.value?.seasons || [])], advisorSeasons: [...(member.value?.advisorSeasons || [])],
   grade: member.value?.grade || '', affiliation: member.value?.affiliation || '',
-  links: { github: initialLinks.github || '', homepage: initialLinks.homepage || '' },
+  links: { github: initialLinks.github || '', 'home-page': initialLinks['home-page'] || initialLinks.homepage || '' },
   otherLinks: JSON.stringify(Object.fromEntries(Object.entries(initialLinks).filter(([key]) => !knownLinks.has(key))), null, 2),
   metadata: JSON.stringify(member.value?.metadata || {}, null, 2),
   body: member.value?.body || '', sortOrder: member.value?.sortOrder || 0,
@@ -58,7 +58,7 @@ const save = async () => {
         seasons: form.seasons,
         advisorSeasons: form.advisorSeasons,
         grade: form.grade || null, affiliation: form.affiliation || null,
-        links: { ...JSON.parse(form.otherLinks || '{}'), github: form.links.github || null, homepage: form.links.homepage || null },
+        links: { ...JSON.parse(form.otherLinks || '{}'), github: form.links.github || null, 'home-page': form.links['home-page'] || null },
         body: form.body, sortOrder: Number(form.sortOrder), expectedVersion: member.value!.version
       }
     })

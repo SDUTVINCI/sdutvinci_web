@@ -9,7 +9,6 @@ export interface MemberProfileFormModel {
   body: string
   links: {
     github: string
-    homepage: string
+    'home-page': string
   }
 }
-

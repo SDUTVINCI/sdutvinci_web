@@ -7,7 +7,7 @@ const { data: options } = await useFetch<any>('/api/member-options')
 const application = ref<{ id: string, token: string } | null>(null)
 const form = reactive<MemberProfileFormModel>({
   name: '', grade: '', groupName: '', positions: [] as string[], seasons: [] as string[],
-  advisorSeasons: [] as string[], affiliation: '', body: '', links: { github: '', homepage: '' }
+  advisorSeasons: [] as string[], affiliation: '', body: '', links: { github: '', 'home-page': '' }
 })
 const avatarUrl = ref('')
 const message = ref('')

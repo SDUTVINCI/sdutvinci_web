@@ -25,6 +25,6 @@ watch(cohort, (value) => {
   <label><span>简介</span><textarea v-model="form.body" :disabled="disabled" rows="7" maxlength="10000" placeholder="介绍职责、方向或主要经历" /></label>
   <div class="member-application-grid">
     <label><span>GitHub 链接（可选）</span><input v-model.trim="form.links.github" :disabled="disabled" type="url" maxlength="2048" placeholder="https://github.com/..."></label>
-    <label><span>个人主页链接（可选）</span><input v-model.trim="form.links.homepage" :disabled="disabled" type="url" maxlength="2048" placeholder="https://..."></label>
+    <label><span>个人主页链接（可选）</span><input v-model.trim="form.links['home-page']" :disabled="disabled" type="url" maxlength="2048" placeholder="https://..."></label>
   </div>
 </template>
