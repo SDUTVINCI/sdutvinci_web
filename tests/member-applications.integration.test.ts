@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { sql } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { closeDatabase, getDatabase } from '../server/db/client'
 import { runMigrations } from '../server/db/migrate'
 import { bootstrapCmsAdmin } from '../server/services/cms-auth'
@@ -27,16 +27,19 @@ integration('公开成员申请审核', () => {
     await expect(submitMemberApplication(application.id, 'wrong-token', {})).rejects.toThrow('MEMBER_APPLICATION_NOT_FOUND')
     await submitMemberApplication(application.id, application.token, {
       name: '测试成员', grade: '2025', groupName: '软件算法组', positions: ['成员'], seasons: ['24', '25'],
-      affiliation: '机械工程学院', advisorSeasons: [], body: '公开简介', links: { 'home-page': 'https://example.com/profile' }
+      affiliation: '机械工程学院', advisorSeasons: [], body: '公开简介', links: { github: '', 'home-page': 'https://example.com/profile' }
     })
     expect(await getDatabase().select().from(members)).toHaveLength(0)
     const submitted = await listSubmittedMemberApplications()
     expect(submitted).toHaveLength(1)
+    await getDatabase().update(memberApplications).set({
+      profile: { ...(submitted[0]!.profile as Record<string, unknown>), links: { github: '', 'home-page': 'https://example.com/profile' } }
+    }).where(eq(memberApplications.id, application.id))
     const result = await reviewMemberApplication(application.id, 'approve', '资料核对通过', admin!.id)
     expect(result.status).toBe('approved')
     const online = await getDatabase().select().from(members)
     expect(online).toHaveLength(1)
-    expect(online[0]).toMatchObject({ name: '测试成员', groupName: '软件算法组', memberType: '软件算法组', positions: ['成员'], seasons: ['24', '25'] })
+    expect(online[0]).toMatchObject({ name: '测试成员', groupName: '软件算法组', memberType: '软件算法组', positions: ['成员'], seasons: ['24', '25'], links: { 'home-page': 'https://example.com/profile' } })
     expect((await getDatabase().select().from(memberApplications))[0]?.status).toBe('approved')
   })
 

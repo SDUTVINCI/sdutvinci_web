@@ -19,6 +19,17 @@ const storage = () => {
 }
 const publicUrl = (base: string, key: string) => `${base.replace(/\/$/, '')}/${key.split('/').map(encodeURIComponent).join('/')}`
 const safeName = (name: string) => name.normalize('NFC').replace(/[/\\\u0000-\u001f\u007f]/g, '').trim().slice(0, 100)
+const normalizeApplicationLinks = (value: unknown) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  const links: Record<string, string> = {}
+  for (const [key, item] of Object.entries(value)) {
+    if (item === null || item === undefined || item === '') continue
+    if (typeof item !== 'string') throw new Error('MEMBER_APPLICATION_PROFILE_INVALID')
+    const trimmed = item.trim()
+    if (trimmed) links[key] = trimmed
+  }
+  return links
+}
 
 const ownedApplication = async (id: string, token: string) => {
   const [application] = await getDatabase().select().from(memberApplications).where(and(
@@ -92,7 +103,7 @@ export const submitMemberApplication = async (id: string, token: string, profile
   const normalized = {
     name, grade: String(grade), seasons: requestedSeasons, advisorSeasons,
     groupName: groupName || null, positions, affiliation: affiliation || null,
-    links: profile.links && typeof profile.links === 'object' ? profile.links : {}, body: String(profile.body || ''),
+    links: normalizeApplicationLinks(profile.links), body: String(profile.body || ''),
     avatarUrl: application.avatarPublicUrl
   }
   await getDatabase().update(memberApplications).set({ profile: normalized, status: 'submitted', submittedAt: new Date(), updatedAt: new Date() }).where(eq(memberApplications.id, id))
@@ -126,6 +137,7 @@ export const reviewMemberApplication = async (id: string, action: 'approve' | 'r
     return { status: 'rejected' }
   }
   const profile = application.profile as any
+  profile.links = normalizeApplicationLinks(profile.links)
   const member = await createCmsMember({ ...profile, memberKey: memberKeyFor(profile.name, id), sourcePath: `applications/${id}.md`, role: deriveMemberRole(profile.positions, profile.groupName), memberType: deriveMemberType(profile.positions, profile.groupName) }, actorUserId)
   await getDatabase().update(memberApplications).set({ status: 'approved', approvedMemberId: member!.id, reviewNote: note, reviewedAt: new Date(), reviewedByUserId: actorUserId, updatedAt: new Date() }).where(eq(memberApplications.id, id))
   return { status: 'approved', member }
