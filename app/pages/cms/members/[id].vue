@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { CmsMember } from '../../../../shared/types/cms-members'
 import type { CmsManagedUser } from '../../../../shared/types/cms-auth'
+import type { MemberProfileFormModel } from '../../../../shared/types/member-profile-form'
 import { resolveStaticMediaUrl } from '~~/shared/utils/static-media'
 
 definePageMeta({ layout: 'cms', middleware: 'cms-auth' })
@@ -22,12 +23,17 @@ const { data: auxiliary, refresh: refreshAuxiliary } = await useAsyncData(`cms:m
   ])
   return { revisions: revisions.revisions, proposals: proposals.proposals, users: users.users }
 })
-const form = reactive({
+const knownLinks = new Set(['github', 'homepage'])
+const initialLinks = member.value?.links || {}
+const form = reactive<MemberProfileFormModel & {
+  avatarUrl: string, metadata: string, otherLinks: string, sortOrder: number, linkedUserId: string
+}>({
   name: member.value?.name || '', avatarUrl: member.value?.avatarUrl || '',
   groupName: member.value?.groupName || '', positions: [...(member.value?.positions || [])],
   seasons: [...(member.value?.seasons || [])], advisorSeasons: [...(member.value?.advisorSeasons || [])],
   grade: member.value?.grade || '', affiliation: member.value?.affiliation || '',
-  links: JSON.stringify(member.value?.links || {}, null, 2),
+  links: { github: initialLinks.github || '', homepage: initialLinks.homepage || '' },
+  otherLinks: JSON.stringify(Object.fromEntries(Object.entries(initialLinks).filter(([key]) => !knownLinks.has(key))), null, 2),
   metadata: JSON.stringify(member.value?.metadata || {}, null, 2),
   body: member.value?.body || '', sortOrder: member.value?.sortOrder || 0,
   linkedUserId: member.value?.linkedUserId || ''
@@ -52,7 +58,7 @@ const save = async () => {
         seasons: form.seasons,
         advisorSeasons: form.advisorSeasons,
         grade: form.grade || null, affiliation: form.affiliation || null,
-        links: JSON.parse(form.links || '{}'), metadata: JSON.parse(form.metadata || '{}'),
+        links: { ...JSON.parse(form.otherLinks || '{}'), github: form.links.github || null, homepage: form.links.homepage || null },
         body: form.body, sortOrder: Number(form.sortOrder), expectedVersion: member.value!.version
       }
     })
@@ -128,24 +134,14 @@ const applyProposal = async (proposalId: string) => {
         <img class="cms-member-avatar member-edit-avatar" :src="resolveStaticMediaUrl(form.avatarUrl || '/images/logo.png')" :alt="`${form.name} 头像`">
       </div>
 
-      <div class="member-application-grid">
-        <label><span>姓名</span><input v-model.trim="form.name" :disabled="!isAdmin" required maxlength="100"></label>
-        <label><span>年级</span><select v-model="form.grade" :disabled="!isAdmin"><option value="">请选择</option><option v-for="cohort in memberOptions?.cohorts" :key="cohort.id" :value="String(cohort.gradeYear)">{{ cohort.gradeYear }} 级</option></select></label>
-        <label><span>组别</span><select v-model="form.groupName" :disabled="!isAdmin"><option value="">不属于具体组别</option><option v-for="group in (memberOptions?.cohorts.find((item: any) => String(item.gradeYear) === form.grade)?.groups || [])" :key="group" :value="group">{{ group }}</option></select></label>
-        <label><span>学院 / 单位</span><select v-model="form.affiliation" :disabled="!isAdmin"><option value="">请选择（可选）</option><option v-for="college in memberOptions?.colleges || []" :key="college">{{ college }}</option></select></label>
-      </div>
-
-      <fieldset class="member-choice-fieldset"><legend>职责（可多选，成员类型由系统自动推导）</legend><div class="member-choice-grid"><label v-for="position in memberOptions?.positions" :key="position" class="member-choice"><input v-model="form.positions" type="checkbox" :value="position" :disabled="!isAdmin"><span>{{ position }}</span></label></div></fieldset>
-      <fieldset class="member-choice-fieldset"><legend>参加过的赛季（可多选）</legend><div class="member-choice-grid member-season-grid"><label v-for="cohort in memberOptions?.cohorts" :key="cohort.id" class="member-choice"><input v-model="form.seasons" type="checkbox" :value="cohort.season" :disabled="!isAdmin"><span>{{ cohort.season }} 赛季</span></label></div></fieldset>
-      <fieldset class="member-choice-fieldset"><legend>顾问 / 指导届次（可选、多选）</legend><p class="member-choice-help">仅顾问或指导老师需要选择所指导的届次。</p><div class="member-choice-grid member-season-grid"><label v-for="cohort in memberOptions?.cohorts" :key="cohort.id" class="member-choice"><input v-model="form.advisorSeasons" type="checkbox" :value="cohort.season" :disabled="!isAdmin"><span>{{ cohort.season }} 赛季</span></label></div></fieldset>
+      <MemberProfileFields v-model="form" :options="memberOptions" :disabled="!isAdmin" />
 
       <label><span>头像路径或 URL</span><input v-model.trim="form.avatarUrl" :disabled="!isAdmin" maxlength="2048"></label>
-      <label><span>简介正文（Markdown）</span><textarea v-model="form.body" :disabled="!isAdmin" rows="10" /></label>
 
       <details class="member-edit-advanced">
         <summary>高级公开字段</summary>
         <div class="member-edit-advanced-fields">
-          <label><span>公开链接（JSON，仅 HTTP(S)）</span><textarea v-model="form.links" :disabled="!isAdmin" rows="5" /></label>
+          <label><span>其他公开链接（JSON，仅 HTTP(S)）</span><textarea v-model="form.otherLinks" :disabled="!isAdmin" rows="5" /></label>
           <label><span>扩展公开字段（JSON；敏感字段会被拒绝）</span><textarea v-model="form.metadata" :disabled="!isAdmin" rows="7" /></label>
           <div class="member-application-grid"><label><span>排序号</span><input v-model.number="form.sortOrder" :disabled="!isAdmin" type="number" min="0" max="1000000"></label><label><span>Markdown 源文件（只读）</span><input :value="member.sourcePath" disabled></label></div>
         </div>
