@@ -103,9 +103,9 @@ suite('V2 阶段 9 成员数据库权威与迁移', () => {
     const admin = await bootstrapCmsAdmin({ account: 'phaseadmin', password: 'AdminPassword123' })
     const created = await createCmsMember({ memberKey: 'memberone', name: 'One', role: 'Member', body: 'original' }, admin!.id)
     const updated = await updateCmsMember(created!.id, {
-      name: 'One Updated', role: 'Captain', body: 'changed', expectedVersion: 1
+      name: 'One Updated', positions: ['队长'], body: 'changed', expectedVersion: 1
     }, admin!.id)
-    expect(updated).toMatchObject({ version: 2, role: 'Captain', body: 'changed' })
+    expect(updated).toMatchObject({ version: 2, role: '队长', body: 'changed' })
     await expect(updateCmsMember(created!.id, { name: 'stale', expectedVersion: 1 }, admin!.id))
       .rejects.toThrow('成员资料已被其他操作更新')
     const revisions = await getDatabase().select().from(memberRevisions).where(eq(memberRevisions.memberId, created!.id))
