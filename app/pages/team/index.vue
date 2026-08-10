@@ -7,6 +7,9 @@ const { data: rawMembers } = await usePublicContentQuery<Member[]>({
     await $fetch<{ items: Member[] }>('/api/v2/content/members')
   ).items
 })
+const { data: memberOptions } = await useFetch<{
+  cohorts: Array<{ id: string, season: string, groups: string[] }>
+}>('/api/member-options')
 
 useContentSeo({
   title: '成员 | 山东理工大学 Vinci 机器人队',
@@ -17,21 +20,16 @@ useContentSeo({
 const search = ref('')
 const selectedGroup = ref('all')
 
-const groupDefs = [
+const fixedGroupDefs = [
   { key: 'all', label: '全部' },
   { key: 'teachers', label: '指导老师' },
-  { key: 'leaders', label: '团队负责人' },
-  { key: 'mechanical', label: '机械组' },
-  { key: 'control', label: '控制组' },
-  { key: 'circuit', label: '电路组' },
-  { key: 'embedded', label: '嵌入式组' },
-  { key: 'algorithm', label: '视觉 / 软件算法组' },
-  { key: 'operation', label: '运营组' },
+  { key: 'leaders', label: '团队负责人' }
+]
+
+const trailingGroupDefs = [
   { key: 'advisors', label: '顾问' },
   { key: 'others', label: '其他' }
 ]
-
-const visibleGroupDefs = groupDefs.filter((group) => group.key !== 'all')
 
 const normalize = (value: unknown) => String(value ?? '').toLowerCase()
 const splitSeason = (value: unknown) =>
@@ -62,6 +60,26 @@ const availableSeasons = computed(() => {
 })
 
 const selectedSeason = ref('all')
+
+const configuredGroups = computed(() => {
+  const cohorts = memberOptions.value?.cohorts ?? []
+  const relevant = selectedSeason.value === 'all'
+    ? cohorts
+    : cohorts.filter(cohort => cohort.season === selectedSeason.value)
+  return [...new Set(relevant.flatMap(cohort => cohort.groups))]
+})
+
+const groupDefs = computed(() => [
+  ...fixedGroupDefs,
+  ...configuredGroups.value.map(group => ({ key: `group:${group}`, label: group })),
+  ...trailingGroupDefs
+])
+
+const visibleGroupDefs = computed(() => groupDefs.value.filter(group => group.key !== 'all'))
+
+watch(configuredGroups, () => {
+  if (!groupDefs.value.some(group => group.key === selectedGroup.value)) selectedGroup.value = 'all'
+})
 
 const seasonTabs = computed(() => {
   return [
@@ -104,12 +122,14 @@ const groupFor = (member: Member, season = selectedSeason.value) => {
   if (type.includes('顾问') || member.positions?.includes('顾问')) return 'advisors'
   if (isAdvisorForSeason(member, season)) return 'advisors'
   if (isLeaderForSeason(member, season) || type.includes('团队负责人')) return 'leaders'
-  if (group.includes('机械') || type.includes('机械') || role.includes('机械')) return 'mechanical'
-  if (group.includes('控制') || group.includes('电控') || type.includes('控制') || role.includes('控制') || role.includes('电控')) return 'control'
-  if (group.includes('电路') || type.includes('电路') || role.includes('电路')) return 'circuit'
-  if (group.includes('嵌入式')) return 'embedded'
-  if (group.includes('算法') || type.includes('算法') || role.includes('算法')) return 'algorithm'
-  if (group.includes('运营') || type.includes('运营') || role.includes('运营')) return 'operation'
+  const exactGroup = configuredGroups.value.find(item => normalize(item) === group)
+  if (exactGroup) return `group:${exactGroup}`
+
+  // 兼容少量旧资料中的“控制组 / 电控组”异名，同时仍以当前赛季配置的名称展示。
+  if (group === '控制组' || group === '电控组') {
+    const compatibleGroup = configuredGroups.value.find(item => ['控制组', '电控组'].includes(item))
+    if (compatibleGroup) return `group:${compatibleGroup}`
+  }
   if (member.advisor) return 'advisors'
   return 'others'
 }
@@ -140,7 +160,7 @@ const filteredMembers = computed(() =>
 )
 
 const groupedMembers = computed(() =>
-  visibleGroupDefs
+  visibleGroupDefs.value
     .map((group) => ({
       ...group,
       members: filteredMembers.value.filter((member) => groupFor(member) === group.key)

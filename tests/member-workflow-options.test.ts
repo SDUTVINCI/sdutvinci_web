@@ -40,11 +40,12 @@ describe('成员选项、自动归类与 Markdown 图床', () => {
   })
 
   it('公开申请与 CMS 创建复用成员资料表单，并区分参赛和指导届次', async () => {
-    const [form, fields, cmsMembers, cmsMemberEdit] = await Promise.all([
+    const [form, fields, cmsMembers, cmsMemberEdit, team] = await Promise.all([
       readFile('app/components/MemberProfileApplicationForm.vue', 'utf8'),
       readFile('app/components/MemberProfileFields.vue', 'utf8'),
       readFile('app/pages/cms/members/index.vue', 'utf8'),
-      readFile('app/pages/cms/members/[id].vue', 'utf8')
+      readFile('app/pages/cms/members/[id].vue', 'utf8'),
+      readFile('app/pages/team/index.vue', 'utf8')
     ])
     expect(fields).toContain('参加过的赛季（可多选）')
     expect(fields).toContain('顾问 / 指导届次（可选、多选）')
@@ -54,5 +55,8 @@ describe('成员选项、自动归类与 Markdown 图床', () => {
     expect(cmsMembers).toContain('MemberProfileApplicationForm')
     expect(cmsMembers).toContain('immediate-approval')
     expect(cmsMemberEdit).toContain('MemberProfileFields')
+    expect(team).toContain("useFetch<{\n  cohorts:")
+    expect(team).toContain("cohort.season === selectedSeason.value")
+    expect(team).toContain('cohort.groups')
   })
 })
