@@ -26,7 +26,7 @@ integration('公开成员申请审核', () => {
     const application = await startMemberApplication()
     await expect(submitMemberApplication(application.id, 'wrong-token', {})).rejects.toThrow('MEMBER_APPLICATION_NOT_FOUND')
     await submitMemberApplication(application.id, application.token, {
-      name: '测试成员', grade: '2025', groupName: '软件算法组', positions: ['成员'],
+      name: '测试成员', grade: '2025', groupName: '软件算法组', positions: ['成员'], seasons: ['24', '25'],
       affiliation: '机械工程学院', advisorSeasons: [], body: '公开简介', links: { homepage: 'https://example.com/profile' }
     })
     expect(await getDatabase().select().from(members)).toHaveLength(0)
@@ -36,7 +36,7 @@ integration('公开成员申请审核', () => {
     expect(result.status).toBe('approved')
     const online = await getDatabase().select().from(members)
     expect(online).toHaveLength(1)
-    expect(online[0]).toMatchObject({ name: '测试成员', groupName: '软件算法组', memberType: '软件算法组', positions: ['成员'] })
+    expect(online[0]).toMatchObject({ name: '测试成员', groupName: '软件算法组', memberType: '软件算法组', positions: ['成员'], seasons: ['24', '25'] })
     expect((await getDatabase().select().from(memberApplications))[0]?.status).toBe('approved')
   })
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { deriveMemberRole, deriveMemberType, normalizeMemberPositions } from '../server/services/member-profile'
 import { defaultGroupsForGrade } from '../server/services/member-options'
+import { readFile } from 'node:fs/promises'
 import { resolveMarkdownMediaUrls } from '../shared/utils/static-media'
 import { MEMBER_COLLEGE_OPTIONS } from '../shared/constants/member-colleges'
 import { WIKI_PDF_CSS } from '../server/services/wiki-pdf'
@@ -34,5 +35,16 @@ describe('成员选项、自动归类与 Markdown 图床', () => {
     expect(MEMBER_COLLEGE_OPTIONS).toContain('计算机科学与技术学院')
     expect(WIKI_PDF_CSS).toContain('@page { size: A4;')
     expect(WIKI_PDF_CSS).toContain('nav#TOC')
+  })
+
+  it('公开申请与 CMS 创建复用成员资料表单，并区分参赛和指导届次', async () => {
+    const [form, cmsMembers] = await Promise.all([
+      readFile('app/components/MemberProfileApplicationForm.vue', 'utf8'),
+      readFile('app/pages/cms/members/index.vue', 'utf8')
+    ])
+    expect(form).toContain('参加过的赛季（可多选）')
+    expect(form).toContain('顾问 / 指导届次（可选、多选）')
+    expect(cmsMembers).toContain('MemberProfileApplicationForm')
+    expect(cmsMembers).toContain('immediate-approval')
   })
 })

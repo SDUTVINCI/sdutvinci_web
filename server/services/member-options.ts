@@ -60,9 +60,9 @@ export const assertMemberProfileOptions = async (profile: Pick<MemberProfileSnap
     .where(eq(memberCohorts.gradeYear, gradeYear)).limit(1)
   if (!cohort || !cohort.active) throw new Error('MEMBER_GRADE_INVALID')
   if (profile.groupName && !cohort.groups.includes(profile.groupName)) throw new Error('MEMBER_GROUP_INVALID')
-  if (profile.seasons.some(season => season !== cohort.season)) throw new Error('MEMBER_SEASON_INVALID')
   const active = await getDatabase().select({ season: memberCohorts.season }).from(memberCohorts)
     .where(eq(memberCohorts.active, true))
   const seasons = new Set(active.map(item => item.season))
+  if (profile.seasons.some(season => !seasons.has(season))) throw new Error('MEMBER_SEASON_INVALID')
   if (profile.advisorSeasons.some(season => !seasons.has(season))) throw new Error('MEMBER_ADVISOR_SEASON_INVALID')
 }

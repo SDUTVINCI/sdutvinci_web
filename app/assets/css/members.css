@@ -97,6 +97,40 @@
 .member-application-form {
   display: grid;
   gap: 26px;
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--cyan) 28%, var(--line));
+  padding: clamp(24px, 4vw, 42px);
+  background:
+    radial-gradient(circle at 100% 0, color-mix(in srgb, var(--cyan) 10%, transparent), transparent 30rem),
+    var(--surface);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.16);
+}
+
+.member-application-intro {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 22px;
+}
+
+.member-application-intro span {
+  color: var(--cyan);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+}
+
+.member-application-intro h2,
+.member-application-intro p {
+  margin: 5px 0 0;
+}
+
+.member-application-intro p {
+  max-width: 420px;
+  color: var(--ink-soft);
+  text-align: right;
 }
 
 .member-application-grid {
@@ -111,7 +145,7 @@
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 18px;
-  background: var(--surface-soft);
+  background: linear-gradient(145deg, var(--surface-soft), color-mix(in srgb, var(--surface) 96%, var(--cyan) 4%));
 }
 
 .member-choice-fieldset legend {
@@ -136,6 +170,17 @@
   padding: 10px 12px;
   background: var(--surface);
   cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.member-choice:hover {
+  border-color: color-mix(in srgb, var(--cyan) 55%, var(--line));
+  transform: translateY(-1px);
+}
+
+.member-choice:has(input:checked) {
+  border-color: color-mix(in srgb, var(--cyan) 70%, var(--line));
+  background: color-mix(in srgb, var(--cyan) 10%, var(--surface));
 }
 
 .member-choice input {
@@ -158,11 +203,43 @@
   padding: 8px !important;
 }
 
+.member-choice-help {
+  margin: -2px 0 14px;
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+}
+
+.member-avatar-upload {
+  border: 1px dashed color-mix(in srgb, var(--cyan) 45%, var(--line));
+  border-radius: 10px;
+  padding: 16px;
+  background: color-mix(in srgb, var(--cyan) 5%, var(--surface));
+}
+
+.member-application-actions {
+  display: flex;
+  justify-content: flex-end;
+  border-top: 1px solid var(--line);
+  padding-top: 22px;
+}
+
+.member-application-actions .cms-button {
+  min-width: 180px;
+}
+
 @media (max-width: 760px) {
   .member-application-grid,
   .member-choice-grid,
   .member-season-grid {
     grid-template-columns: 1fr;
+  }
+
+  .member-application-intro {
+    display: block;
+  }
+
+  .member-application-intro p {
+    text-align: left;
   }
 }
 

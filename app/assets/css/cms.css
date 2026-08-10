@@ -4188,3 +4188,128 @@
     grid-template-columns: 1fr;
   }
 }
+.cms-member-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.member-options-page {
+  --member-option-accent: color-mix(in srgb, var(--cyan) 75%, var(--ink));
+}
+
+.member-option-summary {
+  display: grid;
+  grid-template-columns: 150px 150px minmax(0, 1fr);
+  gap: 14px;
+  align-items: stretch;
+  margin: 22px 0;
+}
+
+.member-option-summary > * {
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 18px;
+  background: var(--surface);
+}
+
+.member-option-summary div {
+  display: grid;
+  gap: 3px;
+}
+
+.member-option-summary strong {
+  color: var(--member-option-accent);
+  font-size: 1.8rem;
+}
+
+.member-option-summary span,
+.member-option-summary p {
+  color: var(--muted);
+}
+
+.member-option-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.member-option-card {
+  display: grid;
+  gap: 18px;
+  border-color: color-mix(in srgb, var(--cyan) 22%, var(--line));
+  background: radial-gradient(circle at 100% 0, color-mix(in srgb, var(--cyan) 8%, transparent), transparent 18rem), var(--surface);
+}
+
+.member-option-new {
+  margin-top: 22px;
+  border-color: color-mix(in srgb, var(--red) 38%, var(--line));
+}
+
+.member-option-card-heading,
+.member-option-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.member-option-card-heading h2 {
+  margin: 3px 0 0;
+}
+
+.member-option-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.member-option-card label:not(.member-option-toggle) {
+  display: grid;
+  gap: 7px;
+  font-weight: 800;
+}
+
+.member-option-card input[type="text"],
+.member-option-card input[type="number"],
+.member-option-card input:not([type]) {
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 10px 13px;
+  background: var(--surface-soft);
+  color: var(--ink);
+  font: inherit;
+}
+
+.member-option-card small {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.member-option-card-actions {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+
+.member-option-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+}
+
+.member-option-toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--cyan);
+}
+
+@media (max-width: 900px) {
+  .member-option-list,
+  .member-option-summary {
+    grid-template-columns: 1fr;
+  }
+}

@@ -4,7 +4,7 @@ import { resolveStaticMediaUrl } from '~~/shared/utils/static-media'
 
 definePageMeta({ layout: 'cms', middleware: 'cms-auth' })
 useHead({ title: '成员 · Vinci 内容管理后台' })
-const { session, csrfHeaders } = useCmsSession()
+const { session } = useCmsSession()
 const isAdmin = computed(() => session.value?.user.roles.includes('admin') ?? false)
 const requestFetch = import.meta.server ? useRequestFetch() : $fetch
 const { data, status, error, refresh } = await useAsyncData('cms:members', () =>
@@ -22,34 +22,10 @@ const filteredMembers = computed(() => {
 })
 
 const showCreate = ref(false)
-const submitting = ref(false)
 const message = ref('')
-const errorMessage = ref('')
-const form = reactive({ memberKey: '', name: '', avatarUrl: '' })
-
-const createMember = async () => {
-  submitting.value = true
-  message.value = ''
-  errorMessage.value = ''
-  try {
-    await $fetch('/api/cms/members', {
-      method: 'POST',
-      headers: csrfHeaders(),
-      body: {
-        memberKey: form.memberKey,
-        name: form.name,
-        avatarUrl: form.avatarUrl || null
-      }
-    })
-    Object.assign(form, { memberKey: '', name: '', avatarUrl: '' })
-    showCreate.value = false
-    message.value = '成员创建成功。'
-    await refresh()
-  } catch (error: any) {
-    errorMessage.value = error?.data?.message || '创建失败'
-  } finally {
-    submitting.value = false
-  }
+const created = async () => {
+  message.value = '成员创建成功。'
+  await refresh()
 }
 </script>
 
@@ -61,7 +37,7 @@ const createMember = async () => {
         <h1>成员管理</h1>
         <p>共识别 {{ data?.members.length ?? 0 }} 份成员档案；成员 ID 与账号 ID 可一一对应。</p>
       </div>
-      <div v-if="isAdmin" class="cms-button-row">
+      <div v-if="isAdmin" class="cms-button-row cms-member-header-actions">
         <NuxtLink class="cms-button cms-button-quiet" to="/cms/member-options">成员选项</NuxtLink>
         <button class="cms-button cms-button-primary" type="button" @click="showCreate = !showCreate">
           {{ showCreate ? '取消' : '创建成员' }}
@@ -70,28 +46,10 @@ const createMember = async () => {
     </header>
 
     <p v-if="message" class="cms-alert">{{ message }}</p>
-    <p v-if="errorMessage" class="cms-alert cms-alert-error">{{ errorMessage }}</p>
     <p v-if="status === 'pending'" class="cms-muted">正在加载成员档案…</p>
     <p v-else-if="error" class="cms-alert cms-alert-error">{{ error.message || '成员加载失败' }}</p>
 
-    <form v-if="showCreate && isAdmin" class="cms-panel cms-inline-form" @submit.prevent="createMember">
-      <h2>创建成员档案</h2>
-      <label>
-        <span>稳定 ID（也是对应账号 ID）</span>
-        <input v-model.trim="form.memberKey" required pattern="[a-z][a-z0-9]{2,31}" placeholder="dongjiahui">
-      </label>
-      <label>
-        <span>姓名</span>
-        <input v-model.trim="form.name" required maxlength="100">
-      </label>
-      <label>
-        <span>头像路径或 URL</span>
-        <input v-model.trim="form.avatarUrl" maxlength="2048" placeholder="https://cdn.sdutvincirobot.top/site-assets/images/member_photo/example-hash.webp">
-      </label>
-      <button class="cms-button cms-button-primary" :disabled="submitting">
-        {{ submitting ? '正在创建…' : '确认创建' }}
-      </button>
-    </form>
+    <MemberProfileApplicationForm v-if="showCreate && isAdmin" immediate-approval @complete="created" />
 
     <div v-if="status !== 'pending' && !error" class="cms-toolbar cms-toolbar-compact">
       <label>
