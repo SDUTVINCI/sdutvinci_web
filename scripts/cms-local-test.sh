@@ -5,6 +5,8 @@ set -Eeuo pipefail
 repository_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 container_name="vinci-cms-local-test-postgres"
 app_container_name="vinci-cms-local-test-app"
+s3_container_name="vinci-cms-local-test-s3"
+runtime_image="vinci-cms-local-test-runtime:test"
 container_label_key="com.sdutvinci.scope"
 container_label_value="cms-local-test"
 database_name="vinci_cms_local_test"
@@ -12,6 +14,7 @@ database_user="vinci_local_test"
 database_password="vinci-local-test-password"
 database_port="${CMS_LOCAL_TEST_DATABASE_PORT:-55439}"
 app_port="${CMS_LOCAL_TEST_APP_PORT:-3300}"
+s3_port="${CMS_LOCAL_TEST_S3_PORT:-5901}"
 state_root="/tmp/vinci-cms-local-test-${UID}"
 state_marker="${state_root}/owner"
 content_root="${CMS_LOCAL_TEST_CONTENT_ROOT:-$(dirname -- "$repository_root")/sdutvinci_content}"
@@ -60,6 +63,8 @@ start_environment() {
     && die "已存在同名容器，拒绝覆盖：${container_name}"
   docker inspect "$app_container_name" >/dev/null 2>&1 \
     && die "已存在同名容器，拒绝覆盖：${app_container_name}"
+  docker inspect "$s3_container_name" >/dev/null 2>&1 \
+    && die "已存在同名容器，拒绝覆盖：${s3_container_name}"
 
   install -d -m 0700 "$state_root"
   printf 'vinci-cms-local-test\n' > "$state_marker"
@@ -73,6 +78,13 @@ start_environment() {
     -p "127.0.0.1:${database_port}:5432" \
     -d postgres:17-bookworm >/dev/null
 
+  docker run --name "$s3_container_name" \
+    --label "${container_label_key}=${container_label_value}" \
+    -e MINIO_ROOT_USER=vinci-local-test \
+    -e MINIO_ROOT_PASSWORD=vinci-local-test-password \
+    -p "127.0.0.1:${s3_port}:9000" \
+    -d minio/minio server /data >/dev/null
+
   local attempt
   for attempt in $(seq 1 30); do
     if docker exec "$container_name" pg_isready -U "$database_user" -d "$database_name" >/dev/null 2>&1; then
@@ -82,6 +94,14 @@ start_environment() {
     sleep 1
   done
 
+  for attempt in $(seq 1 30); do
+    if curl --fail --silent --output /dev/null "http://127.0.0.1:${s3_port}/minio/health/live"; then break; fi
+    [ "$attempt" -lt 30 ] || die '隔离 S3 未在 30 秒内就绪'
+    sleep 1
+  done
+  docker run --rm --network host --entrypoint /bin/sh minio/mc -c \
+    "mc alias set local http://127.0.0.1:${s3_port} vinci-local-test vinci-local-test-password >/dev/null && mc mb --ignore-existing local/vinci-local-test >/dev/null && mc anonymous set download local/vinci-local-test >/dev/null"
+
   (
     cd -- "$repository_root"
     DATABASE_URL="$database_url" CMS_AUTH_SECRET="$auth_secret" npm run db:migrate
@@ -89,6 +109,7 @@ start_environment() {
       CMS_CONTENT_ROOT="$content_root" ./node_modules/.bin/tsx scripts/cms-local-test-fixture.ts
   )
 
+  docker build --target runtime --tag "$runtime_image" "$repository_root" >/dev/null
   docker run --name "$app_container_name" \
     --label "${container_label_key}=${container_label_value}" \
     --network host \
@@ -100,9 +121,16 @@ start_environment() {
     -e CMS_AUTH_SECRET="$auth_secret" \
     -e CMS_SECURE_COOKIES=false \
     -e NUXT_PUBLIC_SITE_URL="http://127.0.0.1:${app_port}" \
+    -e S3_ENDPOINT="http://127.0.0.1:${s3_port}" \
+    -e S3_REGION=local-test \
+    -e S3_BUCKET=vinci-local-test \
+    -e S3_ACCESS_KEY_ID=vinci-local-test \
+    -e S3_SECRET_ACCESS_KEY=vinci-local-test-password \
+    -e S3_PUBLIC_BASE_URL="http://127.0.0.1:${s3_port}/vinci-local-test" \
+    -e S3_FORCE_PATH_STYLE=true \
     --volume "${repository_root}:/app:rw" \
     --workdir /app \
-    -d node:24-bookworm \
+    -d "$runtime_image" \
     npm run dev -- --host 127.0.0.1 --port "$app_port" >/dev/null
 
   for attempt in $(seq 1 60); do
@@ -125,18 +153,24 @@ stop_environment() {
   if [ -e "$state_root" ]; then
     assert_state_root
   fi
-
   if docker inspect "$app_container_name" >/dev/null 2>&1; then
     container_is_owned "$app_container_name" \
       || die "同名容器不属于本测试环境，拒绝删除：${app_container_name}"
     docker rm -f "$app_container_name" >/dev/null
   fi
+  docker image inspect "$runtime_image" >/dev/null 2>&1 && docker image rm "$runtime_image" >/dev/null || true
 
   if docker inspect "$container_name" >/dev/null 2>&1; then
     container_is_owned "$container_name" \
       || die "同名容器不属于本测试环境，拒绝删除：${container_name}"
     docker rm -f "$container_name" >/dev/null
     printf '已删除隔离测试数据库；其中数据不可恢复。\n'
+  fi
+
+  if docker inspect "$s3_container_name" >/dev/null 2>&1; then
+    container_is_owned "$s3_container_name" || die "同名 S3 容器不属于本测试环境，拒绝删除：${s3_container_name}"
+    docker rm -f "$s3_container_name" >/dev/null
+    printf '已删除隔离测试 S3；其中对象不可恢复。\n'
   fi
 
   if [ -e "$state_root" ]; then
@@ -155,6 +189,7 @@ show_status() {
   assert_state_root
   server_is_running || die 'Nuxt 测试服务未运行'
   container_is_owned "$container_name" || die '隔离 PostgreSQL 未运行或归属不匹配'
+  container_is_owned "$s3_container_name" || die '隔离 S3 未运行或归属不匹配'
   docker exec "$container_name" psql -U "$database_user" -d "$database_name" -Atc \
     "select 'articles=' || count(*) || ',members=' || (select count(*) from members) from articles;"
   printf 'URL=http://127.0.0.1:%s/cms/login\n' "$app_port"

@@ -20,6 +20,8 @@ const schema = z.object({
   avatarUrl: safeAvatarUrl.nullable().optional(),
   role: z.string().trim().max(100).nullable().optional(),
   memberType: z.string().trim().max(100).nullable().optional(),
+  groupName: z.string().trim().max(64).nullable().optional(),
+  positions: z.array(z.enum(['队长', '副队长', '组长', '机电创新学会会长', '指导老师', '成员', '顾问'])).max(7).optional(),
   seasons: z.array(z.string().trim().min(1).max(100)).max(100).optional(),
   advisorSeasons: z.array(z.string().trim().min(1).max(100)).max(100).optional(),
   grade: z.string().trim().max(100).nullable().optional(),

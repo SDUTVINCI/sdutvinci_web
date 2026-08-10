@@ -13,6 +13,7 @@ const { data, refresh } = await useAsyncData(`cms:member:${id}`, () =>
   requestFetch<{ member: CmsMember }>(`/api/cms/members/${id}`)
 )
 const member = computed(() => data.value?.member)
+const { data: memberOptions } = await useFetch<any>('/api/member-options')
 const { data: auxiliary, refresh: refreshAuxiliary } = await useAsyncData(`cms:member:${id}:auxiliary`, async () => {
   const [revisions, proposals, users] = await Promise.all([
     requestFetch<{ revisions: Array<{ id: string, revisionNumber: number, sourceKind: string, contentHash: string, createdAt: string }> }>(`/api/cms/members/${id}/revisions`),
@@ -23,8 +24,8 @@ const { data: auxiliary, refresh: refreshAuxiliary } = await useAsyncData(`cms:m
 })
 const form = reactive({
   name: member.value?.name || '', avatarUrl: member.value?.avatarUrl || '',
-  role: member.value?.role || '', memberType: member.value?.memberType || '',
-  seasons: member.value?.seasons.join(', ') || '', advisorSeasons: member.value?.advisorSeasons.join(', ') || '',
+  groupName: member.value?.groupName || '', positions: [...(member.value?.positions || [])],
+  seasons: member.value?.seasons[0] || '', advisorSeasons: [...(member.value?.advisorSeasons || [])],
   grade: member.value?.grade || '', affiliation: member.value?.affiliation || '',
   links: JSON.stringify(member.value?.links || {}, null, 2),
   metadata: JSON.stringify(member.value?.metadata || {}, null, 2),
@@ -47,9 +48,9 @@ const save = async () => {
       headers: csrfHeaders(),
       body: {
         name: form.name, avatarUrl: form.avatarUrl || null,
-        role: form.role || null, memberType: form.memberType || null,
+        groupName: form.groupName || null, positions: form.positions,
         seasons: form.seasons.split(/[,，]/).map(value => value.trim()).filter(Boolean),
-        advisorSeasons: form.advisorSeasons.split(/[,，]/).map(value => value.trim()).filter(Boolean),
+        advisorSeasons: form.advisorSeasons,
         grade: form.grade || null, affiliation: form.affiliation || null,
         links: JSON.parse(form.links || '{}'), metadata: JSON.parse(form.metadata || '{}'),
         body: form.body, sortOrder: Number(form.sortOrder), expectedVersion: member.value!.version
@@ -135,11 +136,11 @@ const applyProposal = async (proposalId: string) => {
         <span>头像路径或 URL</span>
         <input v-model.trim="form.avatarUrl" :disabled="!isAdmin" maxlength="2048">
       </label>
-      <label><span>职责 / 角色</span><input v-model.trim="form.role" :disabled="!isAdmin"></label>
-      <label><span>成员类型</span><input v-model.trim="form.memberType" :disabled="!isAdmin"></label>
-      <label><span>参与届次（逗号分隔）</span><input v-model="form.seasons" :disabled="!isAdmin"></label>
-      <label><span>指导届次（逗号分隔）</span><input v-model="form.advisorSeasons" :disabled="!isAdmin"></label>
-      <label><span>年级</span><input v-model.trim="form.grade" :disabled="!isAdmin"></label>
+      <label><span>年级</span><select v-model="form.grade" :disabled="!isAdmin"><option value="">请选择</option><option v-for="cohort in memberOptions?.cohorts" :key="cohort.id" :value="String(cohort.gradeYear)">{{ cohort.gradeYear }} 级</option></select></label>
+      <label><span>参与赛季</span><select v-model="form.seasons" :disabled="!isAdmin"><option value="">请选择</option><option v-for="cohort in memberOptions?.cohorts" :key="cohort.id" :value="cohort.season">{{ cohort.season }} 赛季</option></select></label>
+      <label><span>指导届次（可多选）</span><select v-model="form.advisorSeasons" :disabled="!isAdmin" multiple><option v-for="cohort in memberOptions?.cohorts" :key="cohort.id" :value="cohort.season">{{ cohort.season }} 赛季</option></select></label>
+      <label><span>组别</span><select v-model="form.groupName" :disabled="!isAdmin"><option value="">不属于具体组别</option><option v-for="group in (memberOptions?.cohorts.find((item: any) => String(item.gradeYear) === form.grade)?.groups || [])" :key="group" :value="group">{{ group }}</option></select></label>
+      <fieldset><legend>职责（可多选，成员类型由系统自动推导）</legend><label v-for="position in memberOptions?.positions" :key="position"><input v-model="form.positions" type="checkbox" :value="position" :disabled="!isAdmin"> {{ position }}</label></fieldset>
       <label><span>单位 / 所属</span><input v-model.trim="form.affiliation" :disabled="!isAdmin"></label>
       <label><span>公开链接（JSON，仅 HTTP(S)）</span><textarea v-model="form.links" :disabled="!isAdmin" rows="5" /></label>
       <label><span>简介正文（Markdown）</span><textarea v-model="form.body" :disabled="!isAdmin" rows="12" /></label>

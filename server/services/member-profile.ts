@@ -27,6 +27,8 @@ export interface MemberProfileSnapshot {
   sourcePath: string
   role: string | null
   memberType: string | null
+  groupName: string | null
+  positions: string[]
   seasons: string[]
   advisorSeasons: string[]
   grade: string | null
@@ -37,11 +39,59 @@ export interface MemberProfileSnapshot {
   metadata: Record<string, unknown>
 }
 
+export const MEMBER_POSITION_OPTIONS = [
+  '队长', '副队长', '组长', '机电创新学会会长', '指导老师', '成员', '顾问'
+] as const
+
+export type MemberPosition = typeof MEMBER_POSITION_OPTIONS[number]
+const memberPositionSet = new Set<string>(MEMBER_POSITION_OPTIONS)
+
+export const normalizeMemberPositions = (value: unknown): string[] => {
+  const values = Array.isArray(value) ? value : String(value ?? '').split(/[,，]/)
+  const normalized = [...new Set(values.map(item => String(item).trim()).filter(Boolean))]
+  if (normalized.some(item => !memberPositionSet.has(item))) {
+    throw new Error('MEMBER_POSITION_INVALID')
+  }
+  return normalized
+}
+
+export const deriveMemberType = (positions: readonly string[], groupName: string | null) => {
+  if (positions.includes('指导老师')) return '指导老师'
+  if (positions.some(position => ['队长', '副队长', '机电创新学会会长'].includes(position))) {
+    return '团队负责人'
+  }
+  if (positions.includes('顾问')) return '顾问'
+  return groupName || '普通成员'
+}
+
+export const deriveMemberRole = (positions: readonly string[], groupName: string | null) => {
+  const labels = positions.map(position => position === '组长' && groupName ? `${groupName}组长` : position)
+  if (groupName && positions.includes('成员')) labels.unshift(`${groupName}成员`)
+  return [...new Set(labels)].join('，') || (groupName ? `${groupName}成员` : '成员')
+}
+
+const inferLegacyGroup = (role: string | null, memberType: string | null) => {
+  const value = `${memberType || ''} ${role || ''}`
+  return ['机械组', '控制组', '电控组', '电路组', '视觉算法组', '算法组', '嵌入式组', '软件算法组', '运营组']
+    .find(group => value.includes(group)) || null
+}
+
+const inferLegacyPositions = (role: string | null, memberType: string | null) => {
+  const value = `${memberType || ''} ${role || ''}`
+  const positions = MEMBER_POSITION_OPTIONS.filter(position =>
+    position === '队长'
+      ? value.includes('队长') && !value.includes('副队长')
+      : value.includes(position)
+  )
+  if (!positions.length && !value.includes('指导老师')) positions.push('成员')
+  return [...positions]
+}
+
 const memberKeyPattern = /^[a-z][a-z0-9]{2,31}$/
 const sensitiveKeyPattern = /^(?:account|accounts|login|loginid|login_id|username|user_id|userid|password|password_hash|roles?|permissions?|binding|member_id|sessions?|security|status|token|secret)$/i
 const knownFrontmatterKeys = new Set([
   'id', 'name', 'image', 'role', 'type', 'time', 'advisor', 'grade',
-  'affiliation', 'links', 'metadata', 'sortOrder'
+  'affiliation', 'links', 'metadata', 'sortOrder', 'group', 'positions'
 ])
 
 const stringOrNull = (value: unknown) => {
@@ -171,13 +221,22 @@ export const memberProfileFromMarkdown = (
   }
   if (Buffer.byteLength(parsed.body) > 1_000_000) throw new Error('MEMBER_BODY_TOO_LARGE')
 
+  const legacyRole = stringOrNull(parsed.frontmatter.role)
+  const legacyType = stringOrNull(parsed.frontmatter.type)
+  const groupName = stringOrNull(parsed.frontmatter.group) || inferLegacyGroup(legacyRole, legacyType)
+  const positions = parsed.frontmatter.positions === undefined
+    ? inferLegacyPositions(legacyRole, legacyType)
+    : normalizeMemberPositions(parsed.frontmatter.positions)
+
   return {
     memberKey,
     name,
     avatarUrl,
     sourcePath,
-    role: stringOrNull(parsed.frontmatter.role),
-    memberType: stringOrNull(parsed.frontmatter.type),
+    role: legacyRole || deriveMemberRole(positions, groupName),
+    memberType: legacyType || deriveMemberType(positions, groupName),
+    groupName,
+    positions,
     seasons: normalizeMemberSeasons(parsed.frontmatter.time),
     advisorSeasons: normalizeMemberSeasons(parsed.frontmatter.advisor),
     grade: stringOrNull(parsed.frontmatter.grade),
@@ -244,6 +303,8 @@ export const profileRecord = (profile: MemberProfileSnapshot): Record<string, un
   sourcePath: profile.sourcePath,
   role: profile.role,
   memberType: profile.memberType,
+  groupName: profile.groupName,
+  positions: profile.positions,
   seasons: profile.seasons,
   advisorSeasons: profile.advisorSeasons,
   grade: profile.grade,
@@ -261,6 +322,13 @@ export const profileFromRecord = (value: Record<string, unknown>): MemberProfile
   sourcePath: String(value.sourcePath || ''),
   role: typeof value.role === 'string' ? value.role : null,
   memberType: typeof value.memberType === 'string' ? value.memberType : null,
+  groupName: typeof value.groupName === 'string' ? value.groupName : null,
+  positions: value.positions === undefined
+    ? inferLegacyPositions(
+        typeof value.role === 'string' ? value.role : null,
+        typeof value.memberType === 'string' ? value.memberType : null
+      )
+    : normalizeMemberPositions(value.positions),
   seasons: normalizeMemberSeasons(value.seasons),
   advisorSeasons: normalizeMemberSeasons(value.advisorSeasons),
   grade: typeof value.grade === 'string' ? value.grade : null,

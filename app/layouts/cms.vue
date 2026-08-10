@@ -32,6 +32,8 @@ const navItems = computed(() => [
     caption: 'MEMBERS',
     icon: 'members' as const
   },
+  ...(isAdmin.value ? [{ to: '/cms/member-options', code: 'OP', label: '成员选项', caption: 'MEMBER OPTIONS', icon: 'members' as const }] : []),
+  ...(isAdmin.value ? [{ to: '/cms/member-applications', code: 'AP', label: '成员申请', caption: 'MEMBER REVIEW', icon: 'reviews' as const }] : []),
   {
     to: '/cms/users',
     code: isAdmin.value ? '06' : '05',

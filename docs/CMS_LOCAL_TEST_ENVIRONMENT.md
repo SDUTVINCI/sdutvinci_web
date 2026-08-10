@@ -2,8 +2,8 @@
 
 ## 1. 用途与安全边界
 
-该脚本为浏览器人工测试创建一次性 CMS：独立 PostgreSQL 17、完整 Migration、独立内容仓库中的
-2 篇新闻、226 篇 Wiki、32 名成员及一个测试管理员。数据库和网页只监听 `127.0.0.1`，不读取或
+该脚本为浏览器人工测试创建一次性 CMS：独立 PostgreSQL 17、回环 MinIO 测试图床、完整 Migration、独立内容仓库中的
+2 篇新闻、226 篇 Wiki、32 名成员及一个测试管理员。数据库、图床和网页只监听 `127.0.0.1`，不读取或
 修改项目 `.env`，不连接生产服务，也不写 `sdutvinci_content`。
 
 默认要求两个仓库互为同级目录：
@@ -62,7 +62,9 @@ CMS_LOCAL_TEST_DATABASE_PORT=55449 CMS_LOCAL_TEST_APP_PORT=3310 \
   ./scripts/cms-local-test.sh start
 ```
 
-同一环境后续的 `status`/`stop` 应继续传入相同端口变量。
+同一环境后续的 `status`/`stop` 应继续传入相同端口变量。测试图床端口可用
+`CMS_LOCAL_TEST_S3_PORT` 覆盖，默认 `5901`。脚本会构建名称含 `test` 的 runtime 镜像，确保
+人工环境内具备 Pandoc、XeLaTeX 和中文字体。
 
 ## 4. 停止并清理
 
@@ -72,13 +74,14 @@ CMS_LOCAL_TEST_DATABASE_PORT=55449 CMS_LOCAL_TEST_APP_PORT=3310 \
 ./scripts/cms-local-test.sh stop
 ```
 
-该命令只会删除名称为 `vinci-cms-local-test-app`、`vinci-cms-local-test-postgres`，且标签均为
+该命令只会删除名称为 `vinci-cms-local-test-app`、`vinci-cms-local-test-postgres`、
+`vinci-cms-local-test-s3`，且标签均为
 `com.sdutvinci.scope=cms-local-test` 的隔离容器。
 数据库随容器删除且不可恢复。名称或归属不匹配时脚本 fail closed，不会删除其他容器。
 
 ## 5. 明确不包含的内容
 
-- 不模拟生产 S3/COS、GitHub PR、内容导出 Worker、定时服务或部署。
+- MinIO 仅模拟本功能明确需要的头像上传；不模拟生产 S3/COS、GitHub PR、内容导出 Worker、定时服务或部署。
 - 不把测试账号或密码写入生产配置、数据库 Migration 或项目 `.env`。
 - 不 Push、不部署、不修改生产数据库和独立内容仓库。
 - 正式自动化验证仍应运行 `npm run test:cms`、`npm run typecheck` 和 `npm run build`。

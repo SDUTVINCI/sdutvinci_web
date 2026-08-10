@@ -24,7 +24,8 @@ const groupDefs = [
   { key: 'mechanical', label: '机械组' },
   { key: 'control', label: '控制组' },
   { key: 'circuit', label: '电路组' },
-  { key: 'algorithm', label: '算法组' },
+  { key: 'embedded', label: '嵌入式组' },
+  { key: 'algorithm', label: '视觉 / 软件算法组' },
   { key: 'operation', label: '运营组' },
   { key: 'advisors', label: '顾问' },
   { key: 'others', label: '其他' }
@@ -97,15 +98,18 @@ const isLeaderForSeason = (member: Member, season: string) => {
 const groupFor = (member: Member, season = selectedSeason.value) => {
   const role = normalize(member.role)
   const type = normalize(member.type)
+  const group = normalize(member.group)
 
   if (type.includes('指导老师') || role.includes('指导老师')) return 'teachers'
+  if (type.includes('顾问') || member.positions?.includes('顾问')) return 'advisors'
   if (isAdvisorForSeason(member, season)) return 'advisors'
   if (isLeaderForSeason(member, season) || type.includes('团队负责人')) return 'leaders'
-  if (type.includes('机械') || role.includes('机械')) return 'mechanical'
-  if (type.includes('控制') || role.includes('控制') || role.includes('电控')) return 'control'
-  if (type.includes('电路') || role.includes('电路')) return 'circuit'
-  if (type.includes('算法') || role.includes('算法')) return 'algorithm'
-  if (type.includes('运营') || role.includes('运营')) return 'operation'
+  if (group.includes('机械') || type.includes('机械') || role.includes('机械')) return 'mechanical'
+  if (group.includes('控制') || group.includes('电控') || type.includes('控制') || role.includes('控制') || role.includes('电控')) return 'control'
+  if (group.includes('电路') || type.includes('电路') || role.includes('电路')) return 'circuit'
+  if (group.includes('嵌入式')) return 'embedded'
+  if (group.includes('算法') || type.includes('算法') || role.includes('算法')) return 'algorithm'
+  if (group.includes('运营') || type.includes('运营') || role.includes('运营')) return 'operation'
   if (member.advisor) return 'advisors'
   return 'others'
 }
@@ -176,6 +180,7 @@ const stats = computed(() => {
         <p>
           这里按赛季、职责和专业方向重新组织成员信息。成员档案字段已经规整，页面逻辑改成更适合浏览和筛选的结构。
         </p>
+        <NuxtLink class="cms-button cms-button-primary" to="/team/apply">新增成员信息</NuxtLink>
       </div>
     </section>
 

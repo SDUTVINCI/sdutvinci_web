@@ -6,6 +6,8 @@ export interface CmsMember {
   sourcePath: string
   role: string | null
   memberType: string | null
+  groupName: string | null
+  positions: string[]
   seasons: string[]
   advisorSeasons: string[]
   grade: string | null
@@ -31,6 +33,8 @@ export interface CmsMemberInput {
   sourcePath?: string
   role?: string | null
   memberType?: string | null
+  groupName?: string | null
+  positions?: string[]
   seasons?: string[]
   advisorSeasons?: string[]
   grade?: string | null

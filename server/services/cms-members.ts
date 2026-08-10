@@ -12,12 +12,16 @@ import {
   users
 } from '../db/schema'
 import { listMarkdownFiles, readContentFile } from '../utils/cms-content-path'
+import { assertMemberProfileOptions } from './member-options'
 import {
   assertSafeMemberAvatarUrl,
+  deriveMemberRole,
+  deriveMemberType,
   memberProfileFromMarkdown,
   memberFieldDiff,
   profileFromRecord,
   profileRecord,
+  normalizeMemberPositions,
   serializeMemberProfile,
   type MemberProfileSnapshot
 } from './member-profile'
@@ -54,6 +58,8 @@ const memberSelection = {
   sourcePath: members.sourcePath,
   role: members.role,
   memberType: members.memberType,
+  groupName: members.groupName,
+  positions: members.positions,
   seasons: members.seasons,
   advisorSeasons: members.advisorSeasons,
   grade: members.grade,
@@ -106,6 +112,8 @@ const profileFromMemberRow = (row: typeof members.$inferSelect): MemberProfileSn
   sourcePath: row.sourcePath || `cms/${row.memberKey}.md`,
   role: row.role,
   memberType: row.memberType,
+  groupName: row.groupName,
+  positions: row.positions,
   seasons: row.seasons,
   advisorSeasons: row.advisorSeasons,
   grade: row.grade,
@@ -123,6 +131,8 @@ const memberValues = (profile: MemberProfileSnapshot) => ({
   sourcePath: safeSourcePath(profile.sourcePath),
   role: profile.role,
   memberType: profile.memberType,
+  groupName: profile.groupName,
+  positions: profile.positions,
   seasons: profile.seasons,
   advisorSeasons: profile.advisorSeasons,
   grade: profile.grade,
@@ -179,13 +189,17 @@ const inputProfile = (
   input: CmsMemberInput & { memberKey: string },
   sourcePath: string
 ): MemberProfileSnapshot => {
+  const groupName = input.groupName?.trim() || null
+  const positions = normalizeMemberPositions(input.positions || [])
   const profile: MemberProfileSnapshot = {
     memberKey: input.memberKey.trim().toLowerCase(),
     name: input.name.trim(),
     avatarUrl: input.avatarUrl ?? null,
     sourcePath: safeSourcePath(sourcePath),
-    role: input.role?.trim() || null,
-    memberType: input.memberType?.trim() || null,
+    role: deriveMemberRole(positions, groupName),
+    memberType: deriveMemberType(positions, groupName),
+    groupName,
+    positions,
     seasons: input.seasons || [],
     advisorSeasons: input.advisorSeasons || [],
     grade: input.grade?.trim() || null,
@@ -205,6 +219,7 @@ export const createCmsMember = async (
   actorUserId: string
 ) => {
   const profile = inputProfile(input, input.sourcePath || `cms/${input.memberKey.trim().toLowerCase()}.md`)
+  await assertMemberProfileOptions(profile)
   const memberId = randomUUID()
   await getDatabase().transaction(async (tx) => {
     await tx.insert(members).values({ id: memberId, ...memberValues(profile) })
@@ -256,8 +271,8 @@ export const updateCmsMember = async (
       memberKey: current.memberKey,
       name: input.name,
       avatarUrl: input.avatarUrl === undefined ? before.avatarUrl : input.avatarUrl,
-      role: input.role === undefined ? before.role : input.role,
-      memberType: input.memberType === undefined ? before.memberType : input.memberType,
+      groupName: input.groupName === undefined ? before.groupName : input.groupName,
+      positions: input.positions === undefined ? before.positions : input.positions,
       seasons: input.seasons === undefined ? before.seasons : input.seasons,
       advisorSeasons: input.advisorSeasons === undefined ? before.advisorSeasons : input.advisorSeasons,
       grade: input.grade === undefined ? before.grade : input.grade,
@@ -268,6 +283,7 @@ export const updateCmsMember = async (
       metadata: input.metadata === undefined ? before.metadata : input.metadata
     }, before.sourcePath)
     const changes = memberFieldDiff(before, next)
+    await assertMemberProfileOptions(next)
     if (!Object.keys(changes).length) return
     const revisionNumber = (await tx.select({ value: sql<number>`coalesce(max(${memberRevisions.revisionNumber}), 0)::int` })
       .from(memberRevisions).where(eq(memberRevisions.memberId, id)))[0]!.value + 1

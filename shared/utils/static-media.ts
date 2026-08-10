@@ -83,3 +83,22 @@ export function resolveStaticMediaUrl(value: string | null | undefined) {
 }
 
 export const registeredStaticMediaPaths = Object.freeze(Object.keys(staticMediaUrls))
+
+export const VINCI_CDN_ORIGIN = 'https://cdn.sdutvincirobot.top'
+
+export const resolveMarkdownMediaUrls = (markdown: string) => markdown
+  .replace(
+    /(!\[[^\]]*]\()\/(?!\/)([^)\s]+)(\s+(?:"[^"]*"|'[^']*'))?(\))/g,
+    (_match, opening, path, title = '', closing) => {
+      const rootPath = `/${path}`
+      const resolved = resolveStaticMediaUrl(rootPath)
+      return `${opening}${resolved === rootPath ? `${VINCI_CDN_ORIGIN}${rootPath}` : resolved}${title}${closing}`
+    }
+  )
+  .replace(
+    /(<(?:img|source)\b[^>]*?\s(?:src|srcset)=["'])(\/(?!\/)[^"']*)/gi,
+    (_match, opening, rootPath) => {
+      const resolved = resolveStaticMediaUrl(rootPath)
+      return `${opening}${resolved === rootPath ? `${VINCI_CDN_ORIGIN}${rootPath}` : resolved}`
+    }
+  )

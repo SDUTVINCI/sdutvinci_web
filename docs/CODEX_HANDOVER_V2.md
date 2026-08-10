@@ -1901,3 +1901,13 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
 - 草稿仍默认进入 Markdown 源码与预览。用户主动选择富文本时，真实结构或扩展语法差异改为编辑器内
   警告，不再强制退回源码；用户应核对发布效果，数据库 Revision 继续提供回退能力。初始化失败或
   超时仍安全返回源码模式。
+
+## 2026-08-10：成员选项、公开申请与 Wiki PDF
+
+- 新增 expand-only Migration `0018`：年度/赛季/组别配置、公开成员申请与成员结构化组别/职责。
+- 成员类型改为服务端从多选职责自动推导；顾问保留。CMS 可维护每届选项和新增届次。
+- 未登录访客可提交成员资料和 WebP 头像，管理员明确审核通过后才创建正式成员 Revision/Outbox。
+- Wiki 增加登录保护的 Pandoc PDF 下载；Markdown 根路径媒体在渲染/PDF 时补齐固定 CDN，不改原文。
+- 本地人工环境增加仅回环的 MinIO 测试图床和带 Pandoc/XeLaTeX 的 test runtime 镜像。
+- 本功能未修改独立内容仓库、Wiki 拼音模块或生产数据；使用与验收见
+  `docs/MEMBER_APPLICATION_AND_WIKI_PDF.md`。

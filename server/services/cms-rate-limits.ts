@@ -182,6 +182,15 @@ export const consumeCmsMediaUploadLimit = async (
   })
 }
 
+export const consumePublicMemberApplicationLimit = async (ipKey: string, now = new Date()) =>
+  consumeRateLimit({
+    scope: 'public-member-application-ip',
+    key: ipKey,
+    limit: 10,
+    windowMinutes: 60,
+    now
+  })
+
 export const pruneCmsRateLimitBuckets = async (now = new Date()) => {
   const retentionCutoff = new Date(now.getTime() - 7 * 24 * 60 * 60_000)
   await getDatabase()

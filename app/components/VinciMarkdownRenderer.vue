@@ -13,6 +13,7 @@ import VinciAlert from './markdown/VinciAlert.vue'
 import VinciDownloadCard from './markdown/VinciDownloadCard.vue'
 import VinciParameterCard from './markdown/VinciParameterCard.vue'
 import VinciVideo from './markdown/VinciVideo.vue'
+import { resolveMarkdownMediaUrls } from '~~/shared/utils/static-media'
 
 const props = defineProps<{
   markdown: string
@@ -20,7 +21,7 @@ const props = defineProps<{
 }>()
 
 const preparedMarkdown = computed(() =>
-  protectVinciTemplateTokens(props.markdown)
+  protectVinciTemplateTokens(resolveMarkdownMediaUrls(props.markdown))
 )
 const plugins = createVinciMarkdownPlugins()
 const NuxtLinkComponent = resolveComponent('NuxtLink')

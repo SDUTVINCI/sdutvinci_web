@@ -256,6 +256,8 @@ const toPublicMember = (row: typeof members.$inferSelect): PublicMember => {
     )),
     role: row.role,
     type: row.memberType,
+    group: row.groupName,
+    positions: row.positions,
     time: row.seasons.length ? row.seasons.join(',') : null,
     advisor: row.advisorSeasons.length ? row.advisorSeasons.join(',') : null,
     grade: row.grade,

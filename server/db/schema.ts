@@ -65,6 +65,8 @@ export const members = pgTable('members', {
   sourcePath: text('source_path'),
   role: text('role'),
   memberType: text('member_type'),
+  groupName: varchar('group_name', { length: 64 }),
+  positions: jsonb('positions').$type<string[]>().default([]).notNull(),
   seasons: jsonb('seasons').$type<string[]>().default([]).notNull(),
   advisorSeasons: jsonb('advisor_seasons').$type<string[]>().default([]).notNull(),
   grade: varchar('grade', { length: 32 }),
@@ -154,6 +156,46 @@ export const memberProposals = pgTable('member_proposals', {
   ),
   uniqueIndex('member_proposals_import_item_unique').on(table.sourceImportItemId),
   index('member_proposals_member_status_index').on(table.memberId, table.status, table.createdAt)
+])
+
+export const memberCohorts = pgTable('member_cohorts', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  gradeYear: integer('grade_year').notNull(),
+  season: varchar('season', { length: 16 }).notNull(),
+  groups: jsonb('groups').$type<string[]>().default([]).notNull(),
+  active: boolean('active').default(true).notNull(),
+  ...timestamps
+}, table => [
+  check('member_cohorts_grade_year_check', sql`${table.gradeYear} between 2000 and 2200`),
+  uniqueIndex('member_cohorts_grade_year_unique').on(table.gradeYear),
+  uniqueIndex('member_cohorts_season_unique').on(table.season),
+  index('member_cohorts_active_index').on(table.active, table.gradeYear)
+])
+
+export const memberApplications = pgTable('member_applications', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  accessTokenHash: varchar('access_token_hash', { length: 64 }).notNull(),
+  status: varchar('status', { length: 16 }).default('editing').notNull(),
+  profile: jsonb('profile').$type<Record<string, unknown>>().default({}).notNull(),
+  avatarObjectKey: text('avatar_object_key'),
+  avatarPublicUrl: text('avatar_public_url'),
+  avatarByteSize: integer('avatar_byte_size'),
+  submittedAt: timestamp('submitted_at', { withTimezone: true }),
+  reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+  reviewedByUserId: uuid('reviewed_by_user_id')
+    .references(() => users.id, { onDelete: 'set null' }),
+  reviewNote: text('review_note'),
+  approvedMemberId: uuid('approved_member_id')
+    .references(() => members.id, { onDelete: 'restrict' }),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  ...timestamps
+}, table => [
+  check('member_applications_status_check', sql`${table.status} in ('editing', 'submitted', 'approved', 'rejected', 'abandoned')`),
+  check('member_applications_avatar_byte_size_check', sql`${table.avatarByteSize} is null or ${table.avatarByteSize} > 0`),
+  uniqueIndex('member_applications_access_token_hash_unique').on(table.accessTokenHash),
+  uniqueIndex('member_applications_avatar_object_key_unique').on(table.avatarObjectKey),
+  index('member_applications_status_created_index').on(table.status, table.createdAt),
+  index('member_applications_expires_at_index').on(table.expiresAt)
 ])
 
 export const articles = pgTable('articles', {
@@ -860,6 +902,8 @@ export type RateLimitBucket = typeof rateLimitBuckets.$inferSelect
 export type Member = typeof members.$inferSelect
 export type MemberRevision = typeof memberRevisions.$inferSelect
 export type MemberProposal = typeof memberProposals.$inferSelect
+export type MemberCohort = typeof memberCohorts.$inferSelect
+export type MemberApplication = typeof memberApplications.$inferSelect
 export type Article = typeof articles.$inferSelect
 export type ArticleRevision = typeof articleRevisions.$inferSelect
 export type Draft = typeof drafts.$inferSelect

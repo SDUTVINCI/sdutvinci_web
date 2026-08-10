@@ -1,0 +1,29 @@
+import { describe, expect, it } from 'vitest'
+import { deriveMemberRole, deriveMemberType, normalizeMemberPositions } from '../server/services/member-profile'
+import { defaultGroupsForGrade } from '../server/services/member-options'
+import { resolveMarkdownMediaUrls } from '../shared/utils/static-media'
+
+describe('成员选项、自动归类与 Markdown 图床', () => {
+  it('按年级提供指定组别', () => {
+    expect(defaultGroupsForGrade(2021)).toEqual(['机械组', '电控组', '运营组'])
+    expect(defaultGroupsForGrade(2024)).toEqual(['机械组', '控制组', '电路组', '视觉算法组', '运营组'])
+    expect(defaultGroupsForGrade(2025)).toEqual(['机械组', '嵌入式组', '软件算法组', '运营组'])
+  })
+
+  it('从多选职责推导类型，不接受任意职责', () => {
+    expect(deriveMemberType(['队长', '组长'], '机械组')).toBe('团队负责人')
+    expect(deriveMemberType(['指导老师'], null)).toBe('指导老师')
+    expect(deriveMemberType(['成员'], '软件算法组')).toBe('软件算法组')
+    expect(deriveMemberType(['顾问'], null)).toBe('顾问')
+    expect(deriveMemberRole(['组长', '副队长'], '机械组')).toBe('机械组组长，副队长')
+    expect(() => normalizeMemberPositions(['随便填写'])).toThrow('MEMBER_POSITION_INVALID')
+  })
+
+  it('为 Markdown 根路径图片补齐固定 CDN，不改绝对和协议相对 URL', () => {
+    expect(resolveMarkdownMediaUrls('![](/images/a b.webp "图")\n<img src="/images/c.webp">\n![](https://example.com/x.png)'))
+      .toContain('<img src="https://cdn.sdutvincirobot.top/images/c.webp">')
+    expect(resolveMarkdownMediaUrls('![](/images/a.webp)')).toBe('![](https://cdn.sdutvincirobot.top/images/a.webp)')
+    expect(resolveMarkdownMediaUrls('![](https://example.com/x.png)')).toBe('![](https://example.com/x.png)')
+    expect(resolveMarkdownMediaUrls('![](/images/logo.png)')).toContain('https://cdn.sdutvincirobot.top/site-assets/images/logo-')
+  })
+})

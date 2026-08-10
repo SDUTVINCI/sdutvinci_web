@@ -11,7 +11,7 @@ const errorMessage = ref('')
 
 const safeRedirect = computed(() => {
   const value = typeof route.query.redirect === 'string' ? route.query.redirect : ''
-  return value.startsWith('/cms') && !value.startsWith('//') && !value.includes('\\')
+  return value.startsWith('/') && !value.startsWith('//') && !value.includes('\\')
     ? value
     : '/cms'
 })

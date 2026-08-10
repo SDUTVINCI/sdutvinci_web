@@ -139,3 +139,10 @@ docs/v2/                     需求、阶段验收与运行手册
 
 代码仓库内若测试需要 Markdown，必须使用具名临时夹具；全量内容检查必须显式传入独立内容
 仓库 snapshot 根。任何普通 build、runtime 启动或 application 部署都不得读取该 snapshot。
+
+## 9. 成员申请与 Wiki PDF（2026-08）
+
+成员年级/赛季/组别选项由 PostgreSQL `member_cohorts` 管理；公开申请进入
+`member_applications`，审核通过后才复用正式成员 Revision/Outbox 事务。临时头像由 S3/COS
+承载并带 24 小时过期清理边界。Wiki PDF 是登录保护的按需 Pandoc 导出，不成为新的内容权威。
+完整操作与验收见 `docs/MEMBER_APPLICATION_AND_WIKI_PDF.md`。
