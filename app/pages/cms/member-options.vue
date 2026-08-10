@@ -1,5 +1,5 @@
 <script setup lang="ts">
-definePageMeta({ middleware: ['cms-auth', 'cms-admin'] })
+definePageMeta({ layout: 'cms', middleware: ['cms-auth', 'cms-admin'] })
 const { csrfHeaders } = useCmsSession()
 const { data, refresh } = await useFetch<any>('/api/cms/member-options')
 const message = ref('')
