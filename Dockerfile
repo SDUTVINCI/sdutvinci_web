@@ -15,7 +15,7 @@ RUN npm run build
 FROM node:24-bookworm-slim AS runtime
 
 RUN apt-get update \
-  && apt-get install --yes --no-install-recommends ca-certificates gosu pandoc texlive-xetex fonts-noto-cjk \
+  && apt-get install --yes --no-install-recommends ca-certificates gosu pandoc texlive-xetex texlive-lang-chinese texlive-fonts-recommended fonts-noto-cjk lmodern \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

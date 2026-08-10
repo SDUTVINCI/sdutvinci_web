@@ -12,7 +12,7 @@ export const createWikiPdf = async (title: string, markdown: string) => {
   const sourcePath = join(workRoot, 'article.md')
   const outputPath = join(workRoot, 'article.pdf')
   try {
-    const source = `---\ntitle: ${JSON.stringify(title)}\nlang: zh-CN\n---\n\n${resolveMarkdownMediaUrls(markdown)}`
+    const source = `---\ntitle: ${JSON.stringify(title)}\n---\n\n${resolveMarkdownMediaUrls(markdown)}`
     await writeFile(sourcePath, source, { encoding: 'utf8', mode: 0o600 })
     await execFileAsync('pandoc', [
       sourcePath,

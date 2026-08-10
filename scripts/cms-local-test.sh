@@ -109,7 +109,9 @@ start_environment() {
       CMS_CONTENT_ROOT="$content_root" ./node_modules/.bin/tsx scripts/cms-local-test-fixture.ts
   )
 
-  docker build --target runtime --tag "$runtime_image" "$repository_root" >/dev/null
+  if ! docker image inspect "$runtime_image" >/dev/null 2>&1; then
+    docker build --target runtime --tag "$runtime_image" "$repository_root" >/dev/null
+  fi
   docker run --name "$app_container_name" \
     --label "${container_label_key}=${container_label_value}" \
     --network host \

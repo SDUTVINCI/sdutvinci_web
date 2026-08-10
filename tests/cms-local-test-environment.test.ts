@@ -16,6 +16,7 @@ describe('CMS 一键本地测试环境', () => {
     expect(shell).toContain('127.0.0.1 --port "$app_port"')
     expect(shell).toContain('container_is_owned "$container_name"')
     expect(shell).toContain('runtime_image="vinci-cms-local-test-runtime:test"')
+    expect(shell).toContain('docker image inspect "$runtime_image"')
     expect(shell).toContain('s3_container_name="vinci-cms-local-test-s3"')
     expect(shell).toContain('-d "$runtime_image"')
     expect(shell).toContain('find "$state_root" -xdev -depth -mindepth 1 -delete')
