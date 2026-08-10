@@ -25,7 +25,7 @@ const { data: auxiliary, refresh: refreshAuxiliary } = await useAsyncData(`cms:m
 const form = reactive({
   name: member.value?.name || '', avatarUrl: member.value?.avatarUrl || '',
   groupName: member.value?.groupName || '', positions: [...(member.value?.positions || [])],
-  seasons: member.value?.seasons[0] || '', advisorSeasons: [...(member.value?.advisorSeasons || [])],
+  seasons: [...(member.value?.seasons || [])], advisorSeasons: [...(member.value?.advisorSeasons || [])],
   grade: member.value?.grade || '', affiliation: member.value?.affiliation || '',
   links: JSON.stringify(member.value?.links || {}, null, 2),
   metadata: JSON.stringify(member.value?.metadata || {}, null, 2),
@@ -49,7 +49,7 @@ const save = async () => {
       body: {
         name: form.name, avatarUrl: form.avatarUrl || null,
         groupName: form.groupName || null, positions: form.positions,
-        seasons: form.seasons.split(/[,，]/).map(value => value.trim()).filter(Boolean),
+        seasons: form.seasons,
         advisorSeasons: form.advisorSeasons,
         grade: form.grade || null, affiliation: form.affiliation || null,
         links: JSON.parse(form.links || '{}'), metadata: JSON.parse(form.metadata || '{}'),
@@ -122,37 +122,36 @@ const applyProposal = async (proposalId: string) => {
     <p v-if="message" class="cms-alert">{{ message }}</p>
     <p v-if="errorMessage" class="cms-alert cms-alert-error">{{ errorMessage }}</p>
 
-    <form class="cms-panel cms-form" @submit.prevent="save">
-      <img class="cms-member-avatar" :src="resolveStaticMediaUrl(form.avatarUrl || '/images/logo.png')" :alt="`${form.name} 头像`">
-      <label>
-        <span>稳定 ID（不可修改）</span>
-        <input :value="member.memberKey" disabled>
-      </label>
-      <label>
-        <span>姓名</span>
-        <input v-model.trim="form.name" :disabled="!isAdmin" required maxlength="100">
-      </label>
-      <label>
-        <span>头像路径或 URL</span>
-        <input v-model.trim="form.avatarUrl" :disabled="!isAdmin" maxlength="2048">
-      </label>
-      <label><span>年级</span><select v-model="form.grade" :disabled="!isAdmin"><option value="">请选择</option><option v-for="cohort in memberOptions?.cohorts" :key="cohort.id" :value="String(cohort.gradeYear)">{{ cohort.gradeYear }} 级</option></select></label>
-      <label><span>参与赛季</span><select v-model="form.seasons" :disabled="!isAdmin"><option value="">请选择</option><option v-for="cohort in memberOptions?.cohorts" :key="cohort.id" :value="cohort.season">{{ cohort.season }} 赛季</option></select></label>
-      <label><span>指导届次（可多选）</span><select v-model="form.advisorSeasons" :disabled="!isAdmin" multiple><option v-for="cohort in memberOptions?.cohorts" :key="cohort.id" :value="cohort.season">{{ cohort.season }} 赛季</option></select></label>
-      <label><span>组别</span><select v-model="form.groupName" :disabled="!isAdmin"><option value="">不属于具体组别</option><option v-for="group in (memberOptions?.cohorts.find((item: any) => String(item.gradeYear) === form.grade)?.groups || [])" :key="group" :value="group">{{ group }}</option></select></label>
-      <fieldset><legend>职责（可多选，成员类型由系统自动推导）</legend><label v-for="position in memberOptions?.positions" :key="position"><input v-model="form.positions" type="checkbox" :value="position" :disabled="!isAdmin"> {{ position }}</label></fieldset>
-      <label><span>单位 / 所属</span><input v-model.trim="form.affiliation" :disabled="!isAdmin"></label>
-      <label><span>公开链接（JSON，仅 HTTP(S)）</span><textarea v-model="form.links" :disabled="!isAdmin" rows="5" /></label>
-      <label><span>简介正文（Markdown）</span><textarea v-model="form.body" :disabled="!isAdmin" rows="12" /></label>
-      <label><span>扩展公开字段（JSON；账号、权限、绑定等敏感字段会被拒绝）</span><textarea v-model="form.metadata" :disabled="!isAdmin" rows="7" /></label>
-      <label><span>排序号</span><input v-model.number="form.sortOrder" :disabled="!isAdmin" type="number" min="0" max="1000000"></label>
-      <label>
-        <span>Markdown 源文件（只读）</span>
-        <input :value="member.sourcePath" disabled>
-      </label>
-      <button v-if="isAdmin" class="cms-button cms-button-primary" :disabled="submitting">
-        {{ submitting ? '正在保存…' : '保存资料' }}
-      </button>
+    <form class="cms-panel cms-form member-application-form member-edit-form" @submit.prevent="save">
+      <div class="member-application-intro member-edit-intro">
+        <div><span>MEMBER PROFILE</span><h2>成员档案资料</h2><p>当前版本 v{{ member.version }} · 稳定 ID：<code>{{ member.memberKey }}</code></p></div>
+        <img class="cms-member-avatar member-edit-avatar" :src="resolveStaticMediaUrl(form.avatarUrl || '/images/logo.png')" :alt="`${form.name} 头像`">
+      </div>
+
+      <div class="member-application-grid">
+        <label><span>姓名</span><input v-model.trim="form.name" :disabled="!isAdmin" required maxlength="100"></label>
+        <label><span>年级</span><select v-model="form.grade" :disabled="!isAdmin"><option value="">请选择</option><option v-for="cohort in memberOptions?.cohorts" :key="cohort.id" :value="String(cohort.gradeYear)">{{ cohort.gradeYear }} 级</option></select></label>
+        <label><span>组别</span><select v-model="form.groupName" :disabled="!isAdmin"><option value="">不属于具体组别</option><option v-for="group in (memberOptions?.cohorts.find((item: any) => String(item.gradeYear) === form.grade)?.groups || [])" :key="group" :value="group">{{ group }}</option></select></label>
+        <label><span>学院 / 单位</span><select v-model="form.affiliation" :disabled="!isAdmin"><option value="">请选择（可选）</option><option v-for="college in memberOptions?.colleges || []" :key="college">{{ college }}</option></select></label>
+      </div>
+
+      <fieldset class="member-choice-fieldset"><legend>职责（可多选，成员类型由系统自动推导）</legend><div class="member-choice-grid"><label v-for="position in memberOptions?.positions" :key="position" class="member-choice"><input v-model="form.positions" type="checkbox" :value="position" :disabled="!isAdmin"><span>{{ position }}</span></label></div></fieldset>
+      <fieldset class="member-choice-fieldset"><legend>参加过的赛季（可多选）</legend><div class="member-choice-grid member-season-grid"><label v-for="cohort in memberOptions?.cohorts" :key="cohort.id" class="member-choice"><input v-model="form.seasons" type="checkbox" :value="cohort.season" :disabled="!isAdmin"><span>{{ cohort.season }} 赛季</span></label></div></fieldset>
+      <fieldset class="member-choice-fieldset"><legend>顾问 / 指导届次（可选、多选）</legend><p class="member-choice-help">仅顾问或指导老师需要选择所指导的届次。</p><div class="member-choice-grid member-season-grid"><label v-for="cohort in memberOptions?.cohorts" :key="cohort.id" class="member-choice"><input v-model="form.advisorSeasons" type="checkbox" :value="cohort.season" :disabled="!isAdmin"><span>{{ cohort.season }} 赛季</span></label></div></fieldset>
+
+      <label><span>头像路径或 URL</span><input v-model.trim="form.avatarUrl" :disabled="!isAdmin" maxlength="2048"></label>
+      <label><span>简介正文（Markdown）</span><textarea v-model="form.body" :disabled="!isAdmin" rows="10" /></label>
+
+      <details class="member-edit-advanced">
+        <summary>高级公开字段</summary>
+        <div class="member-edit-advanced-fields">
+          <label><span>公开链接（JSON，仅 HTTP(S)）</span><textarea v-model="form.links" :disabled="!isAdmin" rows="5" /></label>
+          <label><span>扩展公开字段（JSON；敏感字段会被拒绝）</span><textarea v-model="form.metadata" :disabled="!isAdmin" rows="7" /></label>
+          <div class="member-application-grid"><label><span>排序号</span><input v-model.number="form.sortOrder" :disabled="!isAdmin" type="number" min="0" max="1000000"></label><label><span>Markdown 源文件（只读）</span><input :value="member.sourcePath" disabled></label></div>
+        </div>
+      </details>
+
+      <footer v-if="isAdmin" class="member-application-actions"><button class="cms-button cms-button-primary" :disabled="submitting">{{ submitting ? '正在保存…' : '保存成员资料' }}</button></footer>
     </form>
 
     <form v-if="isAdmin" class="cms-panel cms-form" @submit.prevent="saveBinding">
