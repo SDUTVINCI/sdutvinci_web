@@ -8,6 +8,7 @@ import { memberApplications, memberCohorts } from '../db/schema'
 import { getCmsMediaConfig } from '../utils/cms-media-config'
 import { createCmsMember } from './cms-members'
 import { deriveMemberRole, deriveMemberType, normalizeMemberPositions } from './member-profile'
+import { MEMBER_COLLEGE_OPTIONS } from '../../shared/constants/member-colleges'
 
 const tokenHash = (token: string) => createHash('sha256').update(token).digest('hex')
 const contentHash = (data: Uint8Array) => createHash('sha256').update(data).digest('hex')
@@ -79,11 +80,13 @@ export const submitMemberApplication = async (id: string, token: string, profile
   const grade = Number(profile.grade)
   const [cohort] = await getDatabase().select().from(memberCohorts).where(and(eq(memberCohorts.gradeYear, grade), eq(memberCohorts.active, true))).limit(1)
   const groupName = String(profile.groupName || '').trim()
+  const affiliation = String(profile.affiliation || '').trim()
   const positions = normalizeMemberPositions(profile.positions)
-  if (!name || !cohort || (groupName && !cohort.groups.includes(groupName)) || !positions.length) throw new Error('MEMBER_APPLICATION_PROFILE_INVALID')
+  if (!name || !cohort || (groupName && !cohort.groups.includes(groupName)) || !positions.length
+    || (affiliation && !(MEMBER_COLLEGE_OPTIONS as readonly string[]).includes(affiliation))) throw new Error('MEMBER_APPLICATION_PROFILE_INVALID')
   const normalized = {
     name, grade: String(grade), seasons: [cohort.season], advisorSeasons: Array.isArray(profile.advisorSeasons) ? profile.advisorSeasons : [],
-    groupName: groupName || null, positions, affiliation: String(profile.affiliation || '').trim() || null,
+    groupName: groupName || null, positions, affiliation: affiliation || null,
     links: profile.links && typeof profile.links === 'object' ? profile.links : {}, body: String(profile.body || ''),
     avatarUrl: application.avatarPublicUrl
   }

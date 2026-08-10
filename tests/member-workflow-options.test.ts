@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { deriveMemberRole, deriveMemberType, normalizeMemberPositions } from '../server/services/member-profile'
 import { defaultGroupsForGrade } from '../server/services/member-options'
 import { resolveMarkdownMediaUrls } from '../shared/utils/static-media'
+import { MEMBER_COLLEGE_OPTIONS } from '../shared/constants/member-colleges'
+import { WIKI_PDF_CSS } from '../server/services/wiki-pdf'
 
 describe('成员选项、自动归类与 Markdown 图床', () => {
   it('按年级提供指定组别', () => {
@@ -25,5 +27,12 @@ describe('成员选项、自动归类与 Markdown 图床', () => {
     expect(resolveMarkdownMediaUrls('![](/images/a.webp)')).toBe('![](https://cdn.sdutvincirobot.top/images/a.webp)')
     expect(resolveMarkdownMediaUrls('![](https://example.com/x.png)')).toBe('![](https://example.com/x.png)')
     expect(resolveMarkdownMediaUrls('![](/images/logo.png)')).toContain('https://cdn.sdutvincirobot.top/site-assets/images/logo-')
+  })
+
+  it('使用学校教学单位作为学院选择题，并以浏览器样式导出 A4 PDF', () => {
+    expect(MEMBER_COLLEGE_OPTIONS).toContain('机械工程学院')
+    expect(MEMBER_COLLEGE_OPTIONS).toContain('计算机科学与技术学院')
+    expect(WIKI_PDF_CSS).toContain('@page { size: A4;')
+    expect(WIKI_PDF_CSS).toContain('nav#TOC')
   })
 })

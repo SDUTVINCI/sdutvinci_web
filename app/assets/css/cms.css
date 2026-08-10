@@ -4149,3 +4149,42 @@
     transform: none;
   }
 }
+.cms-review-section {
+  display: grid;
+  gap: 18px;
+  margin-top: 36px;
+}
+
+.cms-review-cards {
+  display: grid;
+  gap: 16px;
+}
+
+.cms-member-review-card {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 20px;
+}
+
+.cms-member-review-content dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 18px;
+}
+
+.cms-member-review-content dt {
+  color: var(--cms-muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.cms-member-review-content dd {
+  margin: 3px 0 0;
+}
+
+@media (max-width: 720px) {
+  .cms-member-review-card,
+  .cms-member-review-content dl {
+    grid-template-columns: 1fr;
+  }
+}

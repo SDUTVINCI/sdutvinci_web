@@ -61,14 +61,12 @@ const createMember = async () => {
         <h1>成员管理</h1>
         <p>共识别 {{ data?.members.length ?? 0 }} 份成员档案；成员 ID 与账号 ID 可一一对应。</p>
       </div>
-      <button
-        v-if="isAdmin"
-        class="cms-button cms-button-primary"
-        type="button"
-        @click="showCreate = !showCreate"
-      >
-        {{ showCreate ? '取消' : '创建成员' }}
-      </button>
+      <div v-if="isAdmin" class="cms-button-row">
+        <NuxtLink class="cms-button cms-button-quiet" to="/cms/member-options">成员选项</NuxtLink>
+        <button class="cms-button cms-button-primary" type="button" @click="showCreate = !showCreate">
+          {{ showCreate ? '取消' : '创建成员' }}
+        </button>
+      </div>
     </header>
 
     <p v-if="message" class="cms-alert">{{ message }}</p>

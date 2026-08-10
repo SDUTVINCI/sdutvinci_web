@@ -27,7 +27,7 @@ integration('公开成员申请审核', () => {
     await expect(submitMemberApplication(application.id, 'wrong-token', {})).rejects.toThrow('MEMBER_APPLICATION_NOT_FOUND')
     await submitMemberApplication(application.id, application.token, {
       name: '测试成员', grade: '2025', groupName: '软件算法组', positions: ['成员'],
-      affiliation: '测试学院', advisorSeasons: [], body: '公开简介', links: {}
+      affiliation: '机械工程学院', advisorSeasons: [], body: '公开简介', links: { homepage: 'https://example.com/profile' }
     })
     expect(await getDatabase().select().from(members)).toHaveLength(0)
     const submitted = await listSubmittedMemberApplications()

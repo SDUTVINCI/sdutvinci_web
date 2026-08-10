@@ -180,7 +180,7 @@ const stats = computed(() => {
         <p>
           这里按赛季、职责和专业方向重新组织成员信息。成员档案字段已经规整，页面逻辑改成更适合浏览和筛选的结构。
         </p>
-        <NuxtLink class="cms-button cms-button-primary" to="/team/apply">新增成员信息</NuxtLink>
+        <NuxtLink class="member-application-link" to="/team/apply">申请成员信息</NuxtLink>
       </div>
     </section>
 

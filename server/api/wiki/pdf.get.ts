@@ -16,7 +16,7 @@ export default defineEventHandler(async (event) => {
   try {
     const pdf = await createWikiPdf(article.title, String(article.body || ''))
     setResponseHeader(event, 'content-type', 'application/pdf')
-    setResponseHeader(event, 'content-disposition', `attachment; filename*=UTF-8''${encodeURIComponent(`${safeFilename(article.title)}.pdf`)}`)
+    setResponseHeader(event, 'content-disposition', `attachment; filename*=UTF-8''${encodeURIComponent(`${safeFilename(article.title)}-Pandoc文档版.pdf`)}`)
     setResponseHeader(event, 'cache-control', 'private, no-store')
     return pdf
   } catch {

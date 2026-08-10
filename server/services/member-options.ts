@@ -3,6 +3,7 @@ import { getDatabase } from '../db/client'
 import { memberCohorts } from '../db/schema'
 import { MEMBER_POSITION_OPTIONS } from './member-profile'
 import type { MemberProfileSnapshot } from './member-profile'
+import { MEMBER_COLLEGE_OPTIONS } from '../../shared/constants/member-colleges'
 
 export const DEFAULT_MEMBER_GROUPS: Record<string, string[]> = {
   legacy: ['机械组', '电控组', '运营组'],
@@ -26,7 +27,8 @@ export const listMemberOptions = async (includeInactive = false) => {
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString()
     })),
-    positions: [...MEMBER_POSITION_OPTIONS]
+    positions: [...MEMBER_POSITION_OPTIONS],
+    colleges: [...MEMBER_COLLEGE_OPTIONS]
   }
 }
 
