@@ -4,6 +4,7 @@ import { cmsDraftStatuses } from '../../shared/types/cms-drafts'
 import { getDatabase } from '../db/client'
 import {
   articles,
+  contentReconciliationRequests,
   contentReconciliationRuns,
   drafts,
   members
@@ -26,7 +27,8 @@ export const getCmsDashboardStats = async (
     memberRows,
     draftRows,
     pendingRows,
-    reconciliationRows
+    reconciliationRows,
+    reconciliationRequestRows
   ] = await Promise.all([
     db.select({ value: count() }).from(articles).where(and(
       eq(articles.isPresent, 'true'),
@@ -44,6 +46,9 @@ export const getCmsDashboardStats = async (
     )),
     db.select().from(contentReconciliationRuns)
       .orderBy(desc(contentReconciliationRuns.startedAt))
+      .limit(1),
+    db.select().from(contentReconciliationRequests)
+      .orderBy(desc(contentReconciliationRequests.createdAt))
       .limit(1)
   ])
   const byStatus = Object.fromEntries(cmsDraftStatuses.map(status => [status, 0])) as
@@ -83,6 +88,16 @@ export const getCmsDashboardStats = async (
             : reconciliationRows[0].status === 'busy'
               ? '增量导出或另一轮对账正在运行，本轮未写仓库。'
               : null
+        }
+      : null,
+    reconciliationRequest: reconciliationRequestRows[0]
+      ? {
+          id: reconciliationRequestRows[0].id,
+          status: reconciliationRequestRows[0].status as
+            'pending' | 'processing' | 'succeeded' | 'failed' | 'busy',
+          createdAt: reconciliationRequestRows[0].createdAt.toISOString(),
+          completedAt: reconciliationRequestRows[0].completedAt?.toISOString() || null,
+          errorSummary: reconciliationRequestRows[0].errorSummary
         }
       : null
   }

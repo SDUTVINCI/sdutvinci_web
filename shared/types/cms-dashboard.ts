@@ -20,4 +20,11 @@ export interface CmsDashboardStats {
     differenceCount: number
     summary: string | null
   } | null
+  reconciliationRequest: {
+    id: string
+    status: 'pending' | 'processing' | 'succeeded' | 'failed' | 'busy'
+    createdAt: string
+    completedAt: string | null
+    errorSummary: string | null
+  } | null
 }

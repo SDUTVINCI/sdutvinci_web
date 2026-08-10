@@ -8,7 +8,7 @@ definePageMeta({
 })
 useHead({ title: '工作台 · Vinci 内容管理后台' })
 
-const { session } = useCmsSession()
+const { session, csrfHeaders } = useCmsSession()
 const requestFetch = import.meta.server ? useRequestFetch() : $fetch
 const { data, status, error, refresh } = await useAsyncData('cms:dashboard', () =>
   requestFetch<{ stats: CmsDashboardStats }>('/api/cms/dashboard')
@@ -21,6 +21,49 @@ const displayName = computed(() =>
 const avatarUrl = computed(() =>
   resolveStaticMediaUrl(session.value?.user.member?.avatarUrl || '/images/logo.png')
 )
+const reconciliationSubmitting = ref(false)
+const reconciliationNotice = ref('')
+const reconciliationRequestActive = computed(() =>
+  ['pending', 'processing'].includes(stats.value?.reconciliationRequest?.status || '')
+)
+let reconciliationPoll: ReturnType<typeof setInterval> | undefined
+
+const stopReconciliationPoll = () => {
+  if (reconciliationPoll) clearInterval(reconciliationPoll)
+  reconciliationPoll = undefined
+}
+
+const startReconciliationPoll = () => {
+  stopReconciliationPoll()
+  reconciliationPoll = setInterval(async () => {
+    await refresh()
+    if (!reconciliationRequestActive.value) stopReconciliationPoll()
+  }, 2000)
+}
+
+const requestReconciliation = async () => {
+  if (!isAdmin.value || reconciliationSubmitting.value || reconciliationRequestActive.value) return
+  reconciliationSubmitting.value = true
+  reconciliationNotice.value = ''
+  try {
+    const result = await $fetch<{ request: { created: boolean } }>('/api/cms/content-reconciliation/request', {
+      method: 'POST',
+      headers: csrfHeaders()
+    })
+    reconciliationNotice.value = result.request.created ? '全量导出任务已提交' : '已有全量导出任务正在执行'
+    await refresh()
+    startReconciliationPoll()
+  } catch (requestError: any) {
+    reconciliationNotice.value = requestError?.data?.message || requestError?.message || '提交失败，请稍后重试'
+  } finally {
+    reconciliationSubmitting.value = false
+  }
+}
+
+onMounted(() => {
+  if (reconciliationRequestActive.value) startReconciliationPoll()
+})
+onBeforeUnmount(stopReconciliationPoll)
 </script>
 
 <template>
@@ -102,6 +145,21 @@ const avatarUrl = computed(() =>
         <small v-if="stats?.reconciliation?.summary" class="cms-muted">
           {{ stats.reconciliation.summary }}
         </small>
+        <div v-if="isAdmin" class="cms-reconciliation-actions">
+          <button
+            class="cms-button cms-button-quiet"
+            type="button"
+            :disabled="reconciliationSubmitting || reconciliationRequestActive"
+            @click="requestReconciliation"
+          >
+            {{ reconciliationSubmitting
+              ? '正在提交…'
+              : reconciliationRequestActive
+                ? (stats?.reconciliationRequest?.status === 'pending' ? '等待执行…' : '正在全量导出…')
+                : '手动全量导出' }}
+          </button>
+          <small v-if="reconciliationNotice" role="status">{{ reconciliationNotice }}</small>
+        </div>
       </article>
       <NuxtLink class="cms-card cms-card-link" data-tone="cyan" to="/cms/articles">
         <span class="cms-card-top">

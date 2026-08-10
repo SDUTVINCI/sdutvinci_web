@@ -134,6 +134,13 @@
       "when": 1786361947070,
       "tag": "0018_cool_naoko",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1786380403261,
+      "tag": "0019_tan_black_cat",
+      "breakpoints": true
     }
   ]
 }

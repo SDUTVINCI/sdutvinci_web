@@ -261,10 +261,11 @@ const persistReport = async (runId: string, report: ContentReconciliationReport)
 }
 
 export const runContentReconciliation = async (
-  trigger: 'schedule' | 'manual' = 'manual'
+  trigger: 'schedule' | 'manual' = 'manual',
+  requestedRunId?: string
 ) => {
   const db = getDatabase()
-  const runId = randomUUID()
+  const runId = requestedRunId || randomUUID()
   await db.insert(contentReconciliationRuns).values({ id: runId, trigger })
   const lockClient = await getDatabasePool().connect()
   let acquired = false

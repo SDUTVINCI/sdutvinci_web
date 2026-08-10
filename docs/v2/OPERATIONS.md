@@ -610,6 +610,12 @@ logrotate 的 `su` 规则无法读取。`./vinci install --systemd-only` 会保�
 ./vinci reconcile             # 立即执行一次 DB→内容仓库对账；可能产生普通 Commit/Push
 ```
 
+管理员也可以在 CMS 工作台“最近全量对账”卡片点击“手动全量导出”。Web
+进程只写入 `content_reconciliation_requests` 队列，常驻内容导出 Worker 在隔离的 Git
+工作区中领取并执行；未登录用户和普通成员不能提交，重复点击会复用当前排队或执行中的任务。
+页面会轮询显示排队、执行和最终结果。该入口与 `./vinci reconcile` 使用相同的全量对账、
+互斥锁、空数据库保护和差异报告逻辑。
+
 `reconcile` 会写独立内容仓库，运行前确认凭据、远端和 workspace 都是目标环境；失败 Outbox 在
 CMS 中逐项明确手动重试。`--scheduled` 只供 03:00 timer 使用，人工命令不需要填写。
 

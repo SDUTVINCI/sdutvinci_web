@@ -593,6 +593,25 @@ export const contentReconciliationRuns = pgTable('content_reconciliation_runs', 
   index('content_reconciliation_runs_status_index').on(table.status, table.completedAt)
 ])
 
+export const contentReconciliationRequests = pgTable('content_reconciliation_requests', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  requestedByUserId: uuid('requested_by_user_id').notNull()
+    .references(() => users.id, { onDelete: 'restrict' }),
+  status: varchar('status', { length: 32 }).default('pending').notNull(),
+  errorCode: varchar('error_code', { length: 64 }),
+  errorSummary: text('error_summary'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  startedAt: timestamp('started_at', { withTimezone: true }),
+  completedAt: timestamp('completed_at', { withTimezone: true })
+}, table => [
+  check(
+    'content_reconciliation_requests_status_check',
+    sql`${table.status} in ('pending', 'processing', 'succeeded', 'failed', 'busy')`
+  ),
+  index('content_reconciliation_requests_status_index').on(table.status, table.createdAt),
+  index('content_reconciliation_requests_user_index').on(table.requestedByUserId, table.createdAt)
+])
+
 export const contentImportRuns = pgTable('content_import_runs', {
   id: uuid('id').defaultRandom().primaryKey(),
   mode: varchar('mode', { length: 32 }).notNull(),

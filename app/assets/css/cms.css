@@ -4369,3 +4369,16 @@
     height: 72px;
   }
 }
+.cms-reconciliation-actions {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.cms-reconciliation-actions .cms-button {
+  width: 100%;
+}
+
+.cms-reconciliation-actions small {
+  color: var(--cms-muted);
+}

@@ -20,12 +20,18 @@ import {
   auditLogs,
   contentImportItems,
   contentImportRuns,
-  contentReconciliationRuns
+  contentReconciliationRequests,
+  contentReconciliationRuns,
+  users
 } from '../server/db/schema'
 import {
   getLatestContentReconciliation,
   runContentReconciliation
 } from '../server/services/content-reconciliation'
+import {
+  requestContentReconciliation,
+  runNextRequestedContentReconciliation
+} from '../server/services/content-reconciliation-requests'
 import {
   applyContentRecovery,
   dryRunContentRecovery
@@ -172,7 +178,7 @@ suite('V2 阶段 7 全量对账、空库初始化和灾难恢复', () => {
 
   const truncate = () => getDatabase().execute(`
     truncate table rate_limit_buckets, media_assets, content_import_items,
-    content_import_runs, content_reconciliation_runs, content_export_jobs,
+    content_import_runs, content_reconciliation_requests, content_reconciliation_runs, content_export_jobs,
     content_export_runs, article_deletion_events, publish_records, edit_locks,
     review_events, audit_logs, sessions, draft_authors, article_revisions,
     drafts, user_members, user_roles, articles, members, users
@@ -191,6 +197,25 @@ suite('V2 阶段 7 全量对账、空库初始化和灾难恢复', () => {
     maintenanceRoot = join(root, 'maintenance')
     configureEnvironment()
     await truncate()
+  })
+
+  it('管理员请求由常驻 Worker 领取并执行一次全量对账', async () => {
+    const item = await seedArticle()
+    await seedRepository([item])
+    const [admin] = await getDatabase().insert(users).values({
+      account: 'phase7admin',
+      passwordHash: 'test-only-password-hash'
+    }).returning({ id: users.id })
+    const first = await requestContentReconciliation(admin!.id)
+    const duplicate = await requestContentReconciliation(admin!.id)
+    expect(first.created).toBe(true)
+    expect(duplicate).toMatchObject({ id: first.id, created: false, status: 'pending' })
+
+    const result = await runNextRequestedContentReconciliation()
+    expect(result).toMatchObject({ requestId: first.id, state: 'succeeded', runId: first.id })
+    const [request] = await getDatabase().select().from(contentReconciliationRequests)
+    expect(request).toMatchObject({ id: first.id, status: 'succeeded' })
+    expect((await getDatabase().select().from(contentReconciliationRuns))).toHaveLength(1)
   })
 
   afterAll(async () => {
