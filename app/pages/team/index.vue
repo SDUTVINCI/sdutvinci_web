@@ -122,12 +122,22 @@ const groupFor = (member: Member, season = selectedSeason.value) => {
   if (type.includes('顾问') || member.positions?.includes('顾问')) return 'advisors'
   if (isAdvisorForSeason(member, season)) return 'advisors'
   if (isLeaderForSeason(member, season) || type.includes('团队负责人')) return 'leaders'
-  const exactGroup = configuredGroups.value.find(item => normalize(item) === group)
+  const memberSeasons = splitSeason(member.time)
+  const memberGroups = season === 'all'
+    ? [...new Set((memberOptions.value?.cohorts ?? [])
+        .filter(cohort => memberSeasons.includes(cohort.season))
+        .flatMap(cohort => cohort.groups))]
+    : configuredGroups.value
+  const exactGroup = memberGroups.find(item => normalize(item) === group)
   if (exactGroup) return `group:${exactGroup}`
 
-  // 兼容少量旧资料中的“控制组 / 电控组”异名，同时仍以当前赛季配置的名称展示。
+  // 兼容旧资料组名，同时仍以成员所处赛季的当前配置名称展示。
   if (group === '控制组' || group === '电控组') {
-    const compatibleGroup = configuredGroups.value.find(item => ['控制组', '电控组'].includes(item))
+    const compatibleGroup = memberGroups.find(item => ['控制组', '电控组'].includes(item))
+    if (compatibleGroup) return `group:${compatibleGroup}`
+  }
+  if (group === '算法组') {
+    const compatibleGroup = memberGroups.find(item => ['视觉算法组', '软件算法组'].includes(item))
     if (compatibleGroup) return `group:${compatibleGroup}`
   }
   if (member.advisor) return 'advisors'

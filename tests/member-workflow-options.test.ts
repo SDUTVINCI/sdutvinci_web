@@ -58,5 +58,7 @@ describe('成员选项、自动归类与 Markdown 图床', () => {
     expect(team).toContain("useFetch<{\n  cohorts:")
     expect(team).toContain("cohort.season === selectedSeason.value")
     expect(team).toContain('cohort.groups')
+    expect(team).toContain("group === '算法组'")
+    expect(team).toContain("['视觉算法组', '软件算法组']")
   })
 })
