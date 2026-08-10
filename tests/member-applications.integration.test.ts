@@ -39,7 +39,7 @@ integration('公开成员申请审核', () => {
     expect(result.status).toBe('approved')
     const online = await getDatabase().select().from(members)
     expect(online).toHaveLength(1)
-    expect(online[0]).toMatchObject({ name: '测试成员', groupName: '软件算法组', memberType: '软件算法组', positions: ['成员'], seasons: ['24', '25'], links: { 'home-page': 'https://example.com/profile' } })
+    expect(online[0]).toMatchObject({ memberKey: 'ceshichengyuan', name: '测试成员', groupName: '软件算法组', memberType: '软件算法组', positions: ['成员'], seasons: ['24', '25'], links: { 'home-page': 'https://example.com/profile' } })
     expect((await getDatabase().select().from(memberApplications))[0]?.status).toBe('approved')
   })
 

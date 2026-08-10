@@ -4,7 +4,7 @@ import { and, asc, eq, lt } from 'drizzle-orm'
 import { pinyin } from 'pinyin-pro'
 import sharp from 'sharp'
 import { getDatabase } from '../db/client'
-import { memberApplications, memberCohorts } from '../db/schema'
+import { memberApplications, memberCohorts, members } from '../db/schema'
 import { getCmsMediaConfig } from '../utils/cms-media-config'
 import { createCmsMember } from './cms-members'
 import { deriveMemberRole, deriveMemberType, normalizeMemberPositions } from './member-profile'
@@ -123,9 +123,12 @@ export const abandonMemberApplication = async (id: string, token: string) => {
 export const listSubmittedMemberApplications = async () => getDatabase().select().from(memberApplications)
   .where(eq(memberApplications.status, 'submitted')).orderBy(asc(memberApplications.createdAt))
 
-const memberKeyFor = (name: string, id: string) => {
+const memberKeyFor = async (name: string, id: string) => {
   const base = pinyin(name, { toneType: 'none', type: 'array' }).join('').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 24)
-  return `${base.length >= 3 ? base : 'member'}${id.replaceAll('-', '').slice(0, 8)}`.slice(0, 32)
+  const readable = base.length >= 3 ? base : 'member'
+  const [collision] = await getDatabase().select({ id: members.id }).from(members)
+    .where(eq(members.memberKey, readable)).limit(1)
+  return collision ? `${readable}${id.replaceAll('-', '').slice(0, 8)}`.slice(0, 32) : readable
 }
 
 export const reviewMemberApplication = async (id: string, action: 'approve' | 'reject', note: string, actorUserId: string) => {
@@ -138,7 +141,7 @@ export const reviewMemberApplication = async (id: string, action: 'approve' | 'r
   }
   const profile = application.profile as any
   profile.links = normalizeApplicationLinks(profile.links)
-  const member = await createCmsMember({ ...profile, memberKey: memberKeyFor(profile.name, id), sourcePath: `applications/${id}.md`, role: deriveMemberRole(profile.positions, profile.groupName), memberType: deriveMemberType(profile.positions, profile.groupName) }, actorUserId)
+  const member = await createCmsMember({ ...profile, memberKey: await memberKeyFor(profile.name, id), sourcePath: `applications/${id}.md`, role: deriveMemberRole(profile.positions, profile.groupName), memberType: deriveMemberType(profile.positions, profile.groupName) }, actorUserId)
   await getDatabase().update(memberApplications).set({ status: 'approved', approvedMemberId: member!.id, reviewNote: note, reviewedAt: new Date(), reviewedByUserId: actorUserId, updatedAt: new Date() }).where(eq(memberApplications.id, id))
   return { status: 'approved', member }
 }
