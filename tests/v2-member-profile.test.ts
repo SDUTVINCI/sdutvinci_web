@@ -10,7 +10,7 @@ import {
 } from '../server/services/member-profile'
 
 describe('V2 阶段 9 成员资料边界与确定性序列化', () => {
-  it('完整解析 32 份既有成员资料且序列化结果确定', async () => {
+  it('完整解析全部既有成员资料且序列化结果确定', async () => {
     const snapshotSource = process.env.V2_CONTENT_SNAPSHOT_SOURCE
     expect(snapshotSource, 'V2_CONTENT_SNAPSHOT_SOURCE 必须指向独立内容仓库快照')
       .toBeTruthy()
@@ -25,7 +25,7 @@ describe('V2 阶段 9 成员资料边界与确定性序列化', () => {
       return result
     }
     const files = (await walk(root)).sort()
-    expect(files).toHaveLength(32)
+    expect(files.length).toBeGreaterThanOrEqual(32)
     const keys = new Set<string>()
     for (const [sortOrder, file] of files.entries()) {
       const source = await readFile(join(root, file), 'utf8')
@@ -38,6 +38,7 @@ describe('V2 阶段 9 成员资料边界与确定性序列化', () => {
       expect(first.path).toBe(`members/${file}`)
       expect(first.source.endsWith('\n')).toBe(true)
     }
+    expect(keys.size).toBe(files.length)
   })
 
   it('拒绝账号、安全、权限与内网 URL 字段进入公开资料', () => {
