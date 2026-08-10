@@ -65,8 +65,12 @@ export const deriveMemberType = (positions: readonly string[], groupName: string
 }
 
 export const deriveMemberRole = (positions: readonly string[], groupName: string | null) => {
-  const labels = positions.map(position => position === '组长' && groupName ? `${groupName}组长` : position)
-  if (groupName && positions.includes('成员')) labels.unshift(`${groupName}成员`)
+  const labels = positions.map((position) => {
+    if (!groupName) return position
+    if (position === '组长') return `${groupName}组长`
+    if (position === '成员') return `${groupName}成员`
+    return position
+  })
   return [...new Set(labels)].join('，') || (groupName ? `${groupName}成员` : '成员')
 }
 

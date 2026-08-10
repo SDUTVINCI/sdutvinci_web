@@ -19,6 +19,8 @@ describe('成员选项、自动归类与 Markdown 图床', () => {
     expect(deriveMemberType(['成员'], '软件算法组')).toBe('软件算法组')
     expect(deriveMemberType(['顾问'], null)).toBe('顾问')
     expect(deriveMemberRole(['组长', '副队长'], '机械组')).toBe('机械组组长，副队长')
+    expect(deriveMemberRole(['成员'], '机械组')).toBe('机械组成员')
+    expect(deriveMemberRole(['成员', '组长'], '软件算法组')).toBe('软件算法组成员，软件算法组组长')
     expect(() => normalizeMemberPositions(['随便填写'])).toThrow('MEMBER_POSITION_INVALID')
   })
 
