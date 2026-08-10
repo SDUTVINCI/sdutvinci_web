@@ -49,4 +49,16 @@ integration('公开成员申请审核', () => {
       name: '错误组别', grade: '2025', groupName: '电路组', positions: ['成员']
     })).rejects.toThrow('MEMBER_APPLICATION_PROFILE_INVALID')
   })
+
+  it('同名成员使用从 1 开始的最小可用数字后缀', async () => {
+    const admin = await bootstrapCmsAdmin({ account: 'keyadmin', password: 'KeyAdminPassword123!' })
+    for (const expectedKey of ['tongmingchengyuan', 'tongmingchengyuan1', 'tongmingchengyuan2']) {
+      const application = await startMemberApplication()
+      await submitMemberApplication(application.id, application.token, {
+        name: '同名成员', grade: '2025', groupName: '软件算法组', positions: ['成员'], seasons: ['25']
+      })
+      const result = await reviewMemberApplication(application.id, 'approve', '', admin!.id)
+      expect(result.member?.memberKey).toBe(expectedKey)
+    }
+  })
 })

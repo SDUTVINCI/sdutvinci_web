@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { DeleteObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
-import { and, asc, eq, lt } from 'drizzle-orm'
+import { and, asc, eq, like, lt } from 'drizzle-orm'
 import { pinyin } from 'pinyin-pro'
 import sharp from 'sharp'
 import { getDatabase } from '../db/client'
@@ -123,12 +123,17 @@ export const abandonMemberApplication = async (id: string, token: string) => {
 export const listSubmittedMemberApplications = async () => getDatabase().select().from(memberApplications)
   .where(eq(memberApplications.status, 'submitted')).orderBy(asc(memberApplications.createdAt))
 
-const memberKeyFor = async (name: string, id: string) => {
+const memberKeyFor = async (name: string) => {
   const base = pinyin(name, { toneType: 'none', type: 'array' }).join('').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 24)
   const readable = base.length >= 3 ? base : 'member'
-  const [collision] = await getDatabase().select({ id: members.id }).from(members)
-    .where(eq(members.memberKey, readable)).limit(1)
-  return collision ? `${readable}${id.replaceAll('-', '').slice(0, 8)}`.slice(0, 32) : readable
+  const existing = new Set((await getDatabase().select({ memberKey: members.memberKey }).from(members)
+    .where(like(members.memberKey, `${readable}%`))).map(item => item.memberKey))
+  if (!existing.has(readable)) return readable
+  for (let suffix = 1; suffix < 1_000_000; suffix += 1) {
+    const candidate = `${readable.slice(0, 32 - String(suffix).length)}${suffix}`
+    if (!existing.has(candidate)) return candidate
+  }
+  throw new Error('MEMBER_KEY_EXHAUSTED')
 }
 
 export const reviewMemberApplication = async (id: string, action: 'approve' | 'reject', note: string, actorUserId: string) => {
@@ -141,7 +146,7 @@ export const reviewMemberApplication = async (id: string, action: 'approve' | 'r
   }
   const profile = application.profile as any
   profile.links = normalizeApplicationLinks(profile.links)
-  const member = await createCmsMember({ ...profile, memberKey: await memberKeyFor(profile.name, id), sourcePath: `applications/${id}.md`, role: deriveMemberRole(profile.positions, profile.groupName), memberType: deriveMemberType(profile.positions, profile.groupName) }, actorUserId)
+  const member = await createCmsMember({ ...profile, memberKey: await memberKeyFor(profile.name), sourcePath: `applications/${id}.md`, role: deriveMemberRole(profile.positions, profile.groupName), memberType: deriveMemberType(profile.positions, profile.groupName) }, actorUserId)
   await getDatabase().update(memberApplications).set({ status: 'approved', approvedMemberId: member!.id, reviewNote: note, reviewedAt: new Date(), reviewedByUserId: actorUserId, updatedAt: new Date() }).where(eq(memberApplications.id, id))
   return { status: 'approved', member }
 }
