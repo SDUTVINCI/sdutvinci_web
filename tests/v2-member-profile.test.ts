@@ -3,6 +3,7 @@ import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   isSafeMemberPublicUrl,
+  isSafeMemberAvatarUrl,
   memberProfileFromMarkdown,
   mergeMemberProfiles,
   serializeMemberProfile
@@ -46,6 +47,19 @@ describe('V2 阶段 9 成员资料边界与确定性序列化', () => {
       .toThrow('MEMBER_AVATAR_URL_UNSAFE')
     expect(isSafeMemberPublicUrl('https://example.com/avatar.png')).toBe(true)
     expect(isSafeMemberPublicUrl('http://localhost/private')).toBe(false)
+  })
+
+  it('头像只额外允许当前配置的 S3 公共前缀', () => {
+    const previous = process.env.S3_PUBLIC_BASE_URL
+    process.env.S3_PUBLIC_BASE_URL = 'http://127.0.0.1:5901/vinci-local-test'
+    try {
+      expect(isSafeMemberAvatarUrl('http://127.0.0.1:5901/vinci-local-test/member-applications/2026/a.webp')).toBe(true)
+      expect(isSafeMemberAvatarUrl('http://127.0.0.1:5901/other/private.webp')).toBe(false)
+      expect(isSafeMemberAvatarUrl('http://127.0.0.1:9999/vinci-local-test/private.webp')).toBe(false)
+    } finally {
+      if (previous === undefined) delete process.env.S3_PUBLIC_BASE_URL
+      else process.env.S3_PUBLIC_BASE_URL = previous
+    }
   })
 
   it('字段级三方合并保留并行安全修改并阻止同字段冲突', () => {

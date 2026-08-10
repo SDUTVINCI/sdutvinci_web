@@ -2,14 +2,14 @@ import { createError, readValidatedBody } from 'h3'
 import { z } from 'zod'
 import { cmsAccountPattern } from '../../../../shared/types/cms-auth'
 import { createCmsMember } from '../../../services/cms-members'
-import { isSafeMemberPublicUrl } from '../../../services/member-profile'
+import { isSafeMemberAvatarUrl } from '../../../services/member-profile'
 import {
   requireCmsCsrf,
   requireCmsRequestAuth
 } from '../../../utils/cms-http'
 
 const safeAvatarUrl = z.string().trim().max(2048)
-  .refine(value => isSafeMemberPublicUrl(value, true), '头像地址不安全')
+  .refine(value => isSafeMemberAvatarUrl(value), '头像地址不安全')
 
 const metadataSchema = z.record(z.string(), z.unknown()).refine(
   value => JSON.stringify(value).length <= 100_000,

@@ -163,8 +163,25 @@ export const isSafeMemberPublicUrl = (value: string, allowRootRelative = false) 
   }
 }
 
+const isConfiguredMemberMediaUrl = (value: string) => {
+  const configuredBase = process.env.S3_PUBLIC_BASE_URL?.trim()
+  if (!configuredBase) return false
+  try {
+    const candidate = new URL(value)
+    const base = new URL(configuredBase.endsWith('/') ? configuredBase : `${configuredBase}/`)
+    if (candidate.username || candidate.password || candidate.origin !== base.origin) return false
+    const basePath = base.pathname.endsWith('/') ? base.pathname : `${base.pathname}/`
+    return candidate.pathname.startsWith(basePath) && !/[\u0000-\u001f\u007f]/.test(value)
+  } catch {
+    return false
+  }
+}
+
+export const isSafeMemberAvatarUrl = (value: string) =>
+  isSafeMemberPublicUrl(value, true) || isConfiguredMemberMediaUrl(value)
+
 export const assertSafeMemberAvatarUrl = (value: string | null) => {
-  if (value !== null && !isSafeMemberPublicUrl(value, true)) {
+  if (value !== null && !isSafeMemberAvatarUrl(value)) {
     throw new Error('MEMBER_AVATAR_URL_UNSAFE')
   }
 }
