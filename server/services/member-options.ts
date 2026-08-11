@@ -27,7 +27,7 @@ export const listMemberOptions = async (includeInactive = false) => {
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString()
     })),
-    positions: [...MEMBER_POSITION_OPTIONS],
+    positions: MEMBER_POSITION_OPTIONS.filter(position => position !== '顾问'),
     colleges: [...MEMBER_COLLEGE_OPTIONS]
   }
 }

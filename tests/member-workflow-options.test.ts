@@ -40,21 +40,32 @@ describe('成员选项、自动归类与 Markdown 图床', () => {
   })
 
   it('公开申请与 CMS 创建复用成员资料表单，并区分参赛和指导届次', async () => {
-    const [form, fields, cmsMembers, cmsMemberEdit, team] = await Promise.all([
+    const [form, fields, avatar, cmsMembers, cmsMemberEdit, team, avatarRoute, optionService] = await Promise.all([
       readFile('app/components/MemberProfileApplicationForm.vue', 'utf8'),
       readFile('app/components/MemberProfileFields.vue', 'utf8'),
+      readFile('app/components/MemberAvatarUpload.vue', 'utf8'),
       readFile('app/pages/cms/members/index.vue', 'utf8'),
       readFile('app/pages/cms/members/[id].vue', 'utf8'),
-      readFile('app/pages/team/index.vue', 'utf8')
+      readFile('app/pages/team/index.vue', 'utf8'),
+      readFile('server/api/cms/members/[id]/avatar.post.ts', 'utf8'),
+      readFile('server/services/member-options.ts', 'utf8')
     ])
     expect(fields).toContain('参加过的赛季（可多选）')
     expect(fields).toContain('顾问 / 指导届次（可选、多选）')
     expect(fields).toContain('GitHub 链接（可选）')
     expect(fields).toContain('个人主页链接（可选）')
+    expect(avatar).toContain('头像（文件名自动转为姓名-哈希.webp）')
+    expect(avatar).toContain('头像预览')
+    expect(form).toContain('MemberAvatarUpload')
     expect(form).toContain('MemberProfileFields')
     expect(cmsMembers).toContain('MemberProfileApplicationForm')
     expect(cmsMembers).toContain('immediate-approval')
     expect(cmsMemberEdit).toContain('MemberProfileFields')
+    expect(cmsMemberEdit).toContain('MemberAvatarUpload')
+    expect(cmsMemberEdit).not.toContain('头像路径或 URL')
+    expect(avatarRoute).toContain("requireCmsRequestAuth(event, 'admin')")
+    expect(avatarRoute).toContain('requireCmsCsrf(event, auth)')
+    expect(optionService).toContain("filter(position => position !== '顾问')")
     expect(team).toContain("useFetch<{\n  cohorts:")
     expect(team).toContain("cohort.season === selectedSeason.value")
     expect(team).toContain('cohort.groups')

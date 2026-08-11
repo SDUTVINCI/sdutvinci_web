@@ -1,23 +1,21 @@
 import { createHash, randomBytes } from 'node:crypto'
-import { DeleteObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
+import { DeleteObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { and, asc, eq, like, lt } from 'drizzle-orm'
 import { pinyin } from 'pinyin-pro'
-import sharp from 'sharp'
 import { getDatabase } from '../db/client'
 import { memberApplications, memberCohorts, members } from '../db/schema'
 import { getCmsMediaConfig } from '../utils/cms-media-config'
 import { createCmsMember } from './cms-members'
 import { deriveMemberRole, deriveMemberType, normalizeMemberPositions } from './member-profile'
 import { MEMBER_COLLEGE_OPTIONS } from '../../shared/constants/member-colleges'
+import { prepareMemberAvatar, uploadMemberAvatarObject } from './member-avatar-storage'
 
 const tokenHash = (token: string) => createHash('sha256').update(token).digest('hex')
-const contentHash = (data: Uint8Array) => createHash('sha256').update(data).digest('hex')
 const storage = () => {
   const config = getCmsMediaConfig()
   return { config, client: new S3Client({ endpoint: config.S3_ENDPOINT, region: config.S3_REGION,
     forcePathStyle: config.S3_FORCE_PATH_STYLE, credentials: { accessKeyId: config.S3_ACCESS_KEY_ID, secretAccessKey: config.S3_SECRET_ACCESS_KEY } }) }
 }
-const publicUrl = (base: string, key: string) => `${base.replace(/\/$/, '')}/${key.split('/').map(encodeURIComponent).join('/')}`
 const safeName = (name: string) => name.normalize('NFC').replace(/[/\\\u0000-\u001f\u007f]/g, '').trim().slice(0, 100)
 const normalizeApplicationLinks = (value: unknown) => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
@@ -67,21 +65,20 @@ export const startMemberApplication = async () => {
 export const uploadMemberApplicationAvatar = async (input: { id: string, token: string, name: string, data: Buffer, mimeType: string }) => {
   const application = await ownedApplication(input.id, input.token)
   if (application.status !== 'editing' || application.expiresAt < new Date()) throw new Error('MEMBER_APPLICATION_STATE_INVALID')
-  const name = safeName(input.name)
-  if (!name || input.data.length > 10 * 1024 * 1024 || !['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(input.mimeType)) throw new Error('MEMBER_APPLICATION_IMAGE_INVALID')
-  const output = await sharp(input.data, { animated: true, failOn: 'error', limitInputPixels: 100_000_000 })
-    .rotate().resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true })
-    .webp({ quality: 82, effort: 4 }).toBuffer()
-  const hash = contentHash(output).slice(0, 8)
-  const key = `member-applications/${new Date().getUTCFullYear()}/${name}-${hash}.webp`
+  const { output, filename } = await prepareMemberAvatar(input)
+  const key = `member-applications/${new Date().getUTCFullYear()}/${filename}`
   const { config, client } = storage()
-  await client.send(new PutObjectCommand({ Bucket: config.S3_BUCKET, Key: key, Body: output, ContentType: 'image/webp', CacheControl: 'private, max-age=86400', Metadata: { 'member-application-id': input.id } }))
+  const { url } = await uploadMemberAvatarObject({
+    key,
+    output,
+    cacheControl: 'private, max-age=86400',
+    metadata: { 'member-application-id': input.id }
+  })
   if (application.avatarObjectKey && application.avatarObjectKey !== key) {
     await client.send(new DeleteObjectCommand({ Bucket: config.S3_BUCKET, Key: application.avatarObjectKey }))
   }
-  const url = publicUrl(config.S3_PUBLIC_BASE_URL, key)
   await getDatabase().update(memberApplications).set({ avatarObjectKey: key, avatarPublicUrl: url, avatarByteSize: output.length, updatedAt: new Date() }).where(eq(memberApplications.id, input.id))
-  return { url, filename: `${name}-${hash}.webp` }
+  return { url, filename }
 }
 
 export const submitMemberApplication = async (id: string, token: string, profile: Record<string, unknown>) => {

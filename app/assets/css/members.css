@@ -216,6 +216,38 @@
   background: color-mix(in srgb, var(--cyan) 5%, var(--surface));
 }
 
+.member-avatar-field {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 20px;
+  align-items: center;
+  border: 1px solid color-mix(in srgb, var(--cyan) 22%, var(--line));
+  border-radius: 12px;
+  padding: 18px;
+  background: color-mix(in srgb, var(--cyan) 4%, var(--surface));
+}
+
+.member-avatar-preview {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+
+.member-avatar-preview img {
+  width: 112px;
+  height: 112px;
+  border: 3px solid var(--surface);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--line), var(--shadow-soft);
+  object-fit: cover;
+}
+
+.member-avatar-preview span,
+.member-avatar-upload small {
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+}
+
 .member-application-actions {
   display: flex;
   justify-content: flex-end;
@@ -240,6 +272,10 @@
 
   .member-application-intro p {
     text-align: left;
+  }
+
+  .member-avatar-field {
+    grid-template-columns: 1fr;
   }
 }
 

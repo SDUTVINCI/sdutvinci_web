@@ -39,10 +39,35 @@ const form = reactive<MemberProfileFormModel & {
   linkedUserId: member.value?.linkedUserId || ''
 })
 const submitting = ref(false)
+const avatarUploading = ref(false)
 const message = ref('')
 const errorMessage = ref('')
 
 useHead(() => ({ title: `${member.value?.name || '成员'} · Vinci 内容管理后台` }))
+
+const uploadAvatar = async (file: File) => {
+  if (!isAdmin.value || !member.value) return
+  avatarUploading.value = true
+  message.value = ''
+  errorMessage.value = ''
+  const body = new FormData()
+  body.append('expectedVersion', String(member.value.version))
+  body.append('image', file)
+  try {
+    const result = await $fetch<{ url: string }>(`/api/cms/members/${id}/avatar`, {
+      method: 'POST',
+      headers: csrfHeaders(),
+      body
+    })
+    form.avatarUrl = result.url
+    await refresh()
+    message.value = '头像已转换为 WebP、上传并生成新的成员版本。'
+  } catch (error: any) {
+    errorMessage.value = error?.data?.message || '头像上传失败'
+  } finally {
+    avatarUploading.value = false
+  }
+}
 
 const save = async () => {
   submitting.value = true
@@ -131,12 +156,16 @@ const applyProposal = async (proposalId: string) => {
     <form class="cms-panel cms-form member-application-form member-edit-form" @submit.prevent="save">
       <div class="member-application-intro member-edit-intro">
         <div><span>MEMBER PROFILE</span><h2>成员档案资料</h2><p>当前版本 v{{ member.version }} · 稳定 ID：<code>{{ member.memberKey }}</code></p></div>
-        <img class="cms-member-avatar member-edit-avatar" :src="resolveStaticMediaUrl(form.avatarUrl || '/images/logo.png')" :alt="`${form.name} 头像`">
       </div>
 
+      <MemberAvatarUpload
+        :name="form.name"
+        :current-url="form.avatarUrl"
+        :disabled="!isAdmin"
+        :uploading="avatarUploading"
+        @select="uploadAvatar"
+      />
       <MemberProfileFields v-model="form" :options="memberOptions" :disabled="!isAdmin" />
-
-      <label><span>头像路径或 URL</span><input v-model.trim="form.avatarUrl" :disabled="!isAdmin" maxlength="2048"></label>
 
       <details class="member-edit-advanced">
         <summary>高级公开字段</summary>

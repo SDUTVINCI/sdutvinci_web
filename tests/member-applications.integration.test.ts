@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { eq, sql } from 'drizzle-orm'
+import sharp from 'sharp'
 import { closeDatabase, getDatabase } from '../server/db/client'
 import { runMigrations } from '../server/db/migrate'
 import { bootstrapCmsAdmin } from '../server/services/cms-auth'
@@ -10,6 +11,8 @@ import {
   submitMemberApplication
 } from '../server/services/member-applications'
 import { memberApplications, members } from '../server/db/schema'
+import { uploadCmsMemberAvatar } from '../server/services/cms-member-avatar'
+import { createCmsMember } from '../server/services/cms-members'
 import { configureCmsTestDatabase } from './helpers/cms-test-database'
 
 const integration = configureCmsTestDatabase() ? describe : describe.skip
@@ -60,5 +63,31 @@ integration('公开成员申请审核', () => {
       const result = await reviewMemberApplication(application.id, 'approve', '', admin!.id)
       expect(result.member?.memberKey).toBe(expectedKey)
     }
+  })
+
+  it('CMS 编辑头像复用 WebP 哈希命名并直接生成成员 Revision', async () => {
+    const admin = await bootstrapCmsAdmin({ account: 'avataradmin', password: 'AvatarAdminPassword123!' })
+    const member = await createCmsMember({
+      memberKey: 'avatarmember',
+      name: '头像成员',
+      sourcePath: 'members/2025/头像成员.md',
+      groupName: '软件算法组',
+      positions: ['成员'],
+      seasons: ['25'],
+      grade: '2025'
+    }, admin!.id)
+    const image = await sharp({
+      create: { width: 32, height: 32, channels: 3, background: '#21a5b5' }
+    }).png().toBuffer()
+    const result = await uploadCmsMemberAvatar({
+      memberId: member!.id,
+      expectedVersion: member!.version,
+      data: image,
+      mimeType: 'image/png',
+      actorUserId: admin!.id
+    })
+    expect(result.filename).toMatch(/^头像成员-[0-9a-f]{8}\.webp$/)
+    expect(result.url).toContain('/site-assets/images/member_photo/')
+    expect(result.member).toMatchObject({ avatarUrl: result.url, version: 2 })
   })
 })

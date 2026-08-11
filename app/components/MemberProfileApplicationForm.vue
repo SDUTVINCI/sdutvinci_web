@@ -13,20 +13,23 @@ const avatarUrl = ref('')
 const message = ref('')
 const errorMessage = ref('')
 const submitting = ref(false)
+const avatarUploading = ref(false)
 const ensureApplication = async () => { application.value ||= await $fetch('/api/member-applications/start', { method: 'POST' }) }
 
-const uploadAvatar = async (event: Event) => {
-  const file = (event.target as HTMLInputElement).files?.[0]
+const uploadAvatar = async (file: File) => {
   if (!file || !form.name) { errorMessage.value = '请先填写姓名，再选择头像'; return }
-  await ensureApplication()
-  const body = new FormData()
-  body.append('token', application.value!.token)
-  body.append('name', form.name)
-  body.append('image', file)
+  avatarUploading.value = true
+  errorMessage.value = ''
   try {
+    await ensureApplication()
+    const body = new FormData()
+    body.append('token', application.value!.token)
+    body.append('name', form.name)
+    body.append('image', file)
     const result = await $fetch<{ url: string }>(`/api/member-applications/${application.value!.id}/avatar`, { method: 'POST', body })
     avatarUrl.value = result.url
   } catch (error: any) { errorMessage.value = error?.data?.message || '头像上传失败' }
+  finally { avatarUploading.value = false }
 }
 
 const submit = async () => {
@@ -62,9 +65,13 @@ onBeforeUnmount(() => {
     <p v-if="errorMessage" class="cms-alert cms-alert-error">{{ errorMessage }}</p>
     <form v-if="!message" class="cms-panel cms-form member-application-form" @submit.prevent="submit">
       <div class="member-application-intro"><div><span>MEMBER PROFILE</span><h2>{{ immediateApproval ? '创建成员档案' : '填写成员资料' }}</h2></div><p>带“可选”的字段可以留空，其余信息将用于成员页分类和展示。</p></div>
+      <MemberAvatarUpload
+        :name="form.name"
+        :current-url="avatarUrl"
+        :uploading="avatarUploading"
+        @select="uploadAvatar"
+      />
       <MemberProfileFields v-model="form" :options="options" />
-      <label class="member-avatar-upload"><span>头像（文件名自动转为姓名-哈希.webp）</span><input class="member-file-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif" @change="uploadAvatar"></label>
-      <img v-if="avatarUrl" class="cms-member-avatar" :src="avatarUrl" :alt="`${form.name} 头像预览`">
       <footer class="member-application-actions"><button class="cms-button cms-button-primary" :disabled="submitting">{{ submitting ? '正在处理…' : (immediateApproval ? '创建并上线' : '提交审核') }}</button></footer>
     </form>
   </div>
