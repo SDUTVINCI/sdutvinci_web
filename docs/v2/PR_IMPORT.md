@@ -18,7 +18,7 @@ Outbox、评论/关闭确认或“绝不自动 Merge”的边界。
 
 ## 2. 权限和 GitHub API
 
-- `admin` 始终可以访问；也可把 Migration 创建的 `content_importer` 角色明确授予用户。
+- `admin` 和 `member` 均可访问外部内容导入；不再使用独立的 `content_importer` 角色。导入只生成草稿或成员 Proposal，最终审核、发布和上线仍由管理员执行。
 - 每个 API 都在服务端复核登录态和角色；写请求还必须通过同源与 CSRF 校验。
 - 只接受 `SDUTVINCI/sdutvinci_content` 或与 PR 编号一致的官方 GitHub PR URL。
 - PR 必须 open、Base repository 必须匹配、Base branch 必须为 `main`，Base/Head 必须是

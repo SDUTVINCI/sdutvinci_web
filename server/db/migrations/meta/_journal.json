@@ -141,6 +141,13 @@
       "when": 1786380403261,
       "tag": "0019_tan_black_cat",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1786461003234,
+      "tag": "0020_thankful_manta",
+      "breakpoints": true
     }
   ]
 }

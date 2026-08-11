@@ -37,6 +37,13 @@ export class CmsLastAdminError extends Error {
   }
 }
 
+export class CmsCurrentUserDeletionError extends Error {
+  constructor() {
+    super('不能删除当前登录账号')
+    this.name = 'CmsCurrentUserDeletionError'
+  }
+}
+
 const normalizeAccount = (account: string) => account.trim().toLowerCase()
 const dummyPasswordHash = [
   '$argon2id$v=19$m=19456,p=1,t=2',
@@ -69,7 +76,10 @@ const loadUserRows = async (userId?: string) => {
     .leftJoin(members, eq(userMembers.memberId, members.id))
     .orderBy(asc(users.createdAt), asc(users.id))
 
-  return userId ? query.where(eq(users.id, userId)) : query
+  return query.where(and(
+    isNull(users.deletedAt),
+    ...(userId ? [eq(users.id, userId)] : [])
+  ))
 }
 
 const rowsToManagedUsers = (rows: Awaited<ReturnType<typeof loadUserRows>>): CmsManagedUser[] => {
@@ -110,6 +120,9 @@ const replaceRoles = async (
   roleCodes: CmsRoleCode[]
 ) => {
   const codes = uniqueRoleCodes(roleCodes)
+  if (codes.length !== 1) {
+    throw new Error('CMS_USER_ROLE_MUST_BE_SINGLE')
+  }
   const roleRows = await tx
     .select({ id: roles.id, code: roles.code })
     .from(roles)
@@ -155,7 +168,11 @@ export const countAdmins = async () => {
     .select({ userId: userRoles.userId })
     .from(userRoles)
     .innerJoin(roles, and(eq(userRoles.roleId, roles.id), eq(roles.code, 'admin')))
-    .innerJoin(users, and(eq(userRoles.userId, users.id), eq(users.status, 'active')))
+    .innerJoin(users, and(
+      eq(userRoles.userId, users.id),
+      eq(users.status, 'active'),
+      isNull(users.deletedAt)
+    ))
 
   return new Set(rows.map(row => row.userId)).size
 }
@@ -327,6 +344,51 @@ export const updateCmsUser = async (
   })
 
   return getCmsUser(userId)
+}
+
+export const deleteCmsUser = async (userId: string, actorUserId: string) => {
+  if (userId === actorUserId) throw new CmsCurrentUserDeletionError()
+  await getDatabase().transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(884021502)`)
+    const [target] = await tx.select({
+      id: users.id,
+      account: users.account,
+      status: users.status,
+      deletedAt: users.deletedAt
+    }).from(users).where(eq(users.id, userId)).limit(1).for('update')
+    if (!target || target.deletedAt) throw new Error('CMS_USER_NOT_FOUND')
+    const [adminRole] = await tx.select({ userId: userRoles.userId })
+      .from(userRoles).innerJoin(roles, and(
+        eq(userRoles.roleId, roles.id),
+        eq(roles.code, 'admin')
+      )).where(eq(userRoles.userId, userId)).limit(1)
+    if (adminRole && target.status === 'active') {
+      const admins = await tx.select({ userId: users.id }).from(users)
+        .innerJoin(userRoles, eq(users.id, userRoles.userId))
+        .innerJoin(roles, and(eq(userRoles.roleId, roles.id), eq(roles.code, 'admin')))
+        .where(and(eq(users.status, 'active'), isNull(users.deletedAt)))
+      if (new Set(admins.map(item => item.userId)).size <= 1) throw new CmsLastAdminError()
+    }
+    const now = new Date()
+    await tx.update(users).set({
+      status: 'disabled',
+      deletedAt: now,
+      deletedByUserId: actorUserId,
+      updatedAt: now
+    }).where(eq(users.id, userId))
+    await tx.delete(userRoles).where(eq(userRoles.userId, userId))
+    await tx.delete(userMembers).where(eq(userMembers.userId, userId))
+    await tx.update(sessions).set({ revokedAt: now })
+      .where(and(eq(sessions.userId, userId), isNull(sessions.revokedAt)))
+    await tx.insert(auditLogs).values({
+      actorUserId,
+      action: 'user.delete',
+      targetType: 'user',
+      targetId: userId,
+      metadata: { account: target.account, softDelete: true }
+    })
+  })
+  return { id: userId, deleted: true }
 }
 
 export const changeCmsOwnPassword = async (

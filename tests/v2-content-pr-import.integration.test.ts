@@ -144,7 +144,6 @@ suite('V2 阶段 8 本地 Markdown PR 导入与三方冲突', () => {
     process.env.CONTENT_PR_IMPORT_MAX_FILE_BYTES = '1048576'
     process.env.CONTENT_PR_IMPORT_MAX_FILES = '200'
     process.env.CONTENT_PR_IMPORT_RETRY_ATTEMPTS = '3'
-    process.env.CONTENT_PR_IMPORT_ROLE_CODES = 'content_importer'
     delete process.env.CONTENT_PR_IMPORT_GITHUB_TOKEN
     resetContentImportConfigForTests()
   }
@@ -620,8 +619,8 @@ suite('V2 阶段 8 本地 Markdown PR 导入与三方冲突', () => {
 
   it('仓库和角色边界、外部评论/关闭均显式且只写 mock', async () => {
     expect(canUseContentPrImport(['admin'])).toBe(true)
-    expect(canUseContentPrImport(['content_importer'])).toBe(true)
-    expect(canUseContentPrImport(['member'])).toBe(false)
+    expect(canUseContentPrImport(['content_importer'])).toBe(false)
+    expect(canUseContentPrImport(['member'])).toBe(true)
     await expect(dryRunContentPrImport(
       actorUserId,
       { repository: 'attacker/other', pullRequestNumber: 8 },
@@ -710,12 +709,10 @@ suite('V2 阶段 8 本地 Markdown PR 导入与三方冲突', () => {
       CONTENT_PR_IMPORT_REPOSITORY_ID: 'SDUTVINCI/sdutvinci_content',
       CONTENT_PR_IMPORT_API_URL: 'http://mock.test',
       CONTENT_PR_IMPORT_GITHUB_TOKEN: 'test-token',
-      CONTENT_PR_IMPORT_ROLE_CODES: 'content_importer',
       CONTENT_PR_IMPORT_MAX_FILE_BYTES: 1024,
       CONTENT_PR_IMPORT_MAX_FILES: 200,
       CONTENT_PR_IMPORT_RETRY_ATTEMPTS: 3,
       CONTENT_PR_IMPORT_TEST_MODE: 'true',
-      authorizedRoles: ['content_importer'],
       testMode: true
     }, mockFetch)
     expect(await client.listPullFiles('SDUTVINCI/sdutvinci_content', 8)).toHaveLength(101)
@@ -738,12 +735,10 @@ suite('V2 阶段 8 本地 Markdown PR 导入与三方冲突', () => {
       CONTENT_PR_IMPORT_REPOSITORY_ID: 'SDUTVINCI/sdutvinci_content',
       CONTENT_PR_IMPORT_API_URL: 'http://mock.test',
       CONTENT_PR_IMPORT_GITHUB_TOKEN: undefined,
-      CONTENT_PR_IMPORT_ROLE_CODES: 'content_importer',
       CONTENT_PR_IMPORT_MAX_FILE_BYTES: 1024,
       CONTENT_PR_IMPORT_MAX_FILES: 200,
       CONTENT_PR_IMPORT_RETRY_ATTEMPTS: 1,
       CONTENT_PR_IMPORT_TEST_MODE: 'true',
-      authorizedRoles: ['content_importer'],
       testMode: true
     }, async input => Response.json(responseFor(String(input))))
     await expect(client.readFile('SDUTVINCI/sdutvinci_content', 'wiki/symlink.md', BASE))

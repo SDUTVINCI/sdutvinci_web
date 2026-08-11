@@ -75,8 +75,7 @@ export class ContentPrImportError extends Error {
 }
 
 export const canUseContentPrImport = (roles: readonly string[]) => {
-  const config = getContentImportConfig()
-  return roles.includes('admin') || roles.some(role => config.authorizedRoles.includes(role))
+  return roles.includes('admin') || roles.includes('member')
 }
 
 export const requireContentPrImportEnabled = () => {

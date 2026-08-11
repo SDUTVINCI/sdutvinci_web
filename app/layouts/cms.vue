@@ -4,8 +4,9 @@ import { resolveStaticMediaUrl } from '~~/shared/utils/static-media'
 const { session, logout } = useCmsSession()
 const route = useRoute()
 const isAdmin = computed(() => session.value?.user.roles.includes('admin') ?? false)
-const canImport = computed(() => isAdmin.value
-  || (session.value?.user.roles.includes('content_importer') ?? false))
+const canImport = computed(() => session.value?.user.roles.some(
+  role => role === 'admin' || role === 'member'
+) ?? false)
 const loggingOut = ref(false)
 type Theme = 'light' | 'dark'
 const theme = ref<Theme>('light')

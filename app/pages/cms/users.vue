@@ -18,7 +18,7 @@ useHead({ title: '账号管理 · Vinci 内容管理后台' })
 
 interface UserEditForm {
   status: 'active' | 'disabled'
-  roles: CmsRoleCode[]
+  role: CmsRoleCode
   password: string
 }
 
@@ -27,7 +27,6 @@ const isAdmin = computed(() => session.value?.user.roles.includes('admin') ?? fa
 const requestFetch = import.meta.server ? useRequestFetch() : $fetch
 const roleLabels: Record<CmsRoleCode, string> = {
   admin: '管理员',
-  content_importer: '外部内容导入',
   member: '成员'
 }
 const roleOptions = cmsRoleCodes.map(code => ({
@@ -57,7 +56,7 @@ watch(users, (currentUsers) => {
   for (const user of currentUsers) {
     userForms[user.id] = {
       status: user.status,
-      roles: [...user.roles],
+      role: user.roles[0] || 'member',
       password: ''
     }
   }
@@ -66,11 +65,11 @@ watch(users, (currentUsers) => {
 const newUser = reactive<{
   account: string
   password: string
-  roles: CmsRoleCode[]
+  role: CmsRoleCode
 }>({
   account: '',
   password: '',
-  roles: ['member']
+  role: 'member'
 })
 const creating = ref(false)
 const createMessage = ref('')
@@ -90,9 +89,6 @@ const errorMessage = (error: any, fallback: string) =>
   ?? error?.data?.statusMessage
   ?? fallback
 
-const sameRoles = (left: CmsRoleCode[], right: CmsRoleCode[]) =>
-  [...left].sort().join(',') === [...right].sort().join(',')
-
 const createUser = async () => {
   creating.value = true
   createMessage.value = ''
@@ -105,13 +101,13 @@ const createUser = async () => {
       body: {
         account: newUser.account,
         password: newUser.password,
-        roles: newUser.roles
+        roles: [newUser.role]
       }
     })
     createMessage.value = `账号 @${newUser.account} 已创建。`
     newUser.account = ''
     newUser.password = ''
-    newUser.roles = ['member']
+    newUser.role = 'member'
     await refresh()
   } catch (error: any) {
     createError.value = errorMessage(error, '创建账号失败')
@@ -130,7 +126,7 @@ const saveUser = async (user: CmsManagedUser) => {
     password?: string
   } = {}
   if (form.status !== user.status) body.status = form.status
-  if (!sameRoles(form.roles, user.roles)) body.roles = form.roles
+  if (user.roles.length !== 1 || form.role !== user.roles[0]) body.roles = [form.role]
   if (form.password) body.password = form.password
 
   if (Object.keys(body).length === 0) {
@@ -160,6 +156,27 @@ const saveUser = async (user: CmsManagedUser) => {
     await refresh()
   } catch (error: any) {
     accountError.value = errorMessage(error, '更新账号失败')
+  } finally {
+    savingUserId.value = ''
+  }
+}
+
+const deleteUser = async (user: CmsManagedUser) => {
+  if (user.id === session.value?.user.id) return
+  if (!confirm(`确定删除账号 @${user.account}？该账号会立即退出，且不再出现在账号列表中。`)) return
+  savingUserId.value = user.id
+  accountMessage.value = ''
+  accountError.value = ''
+  try {
+    await $fetch(`/api/cms/admin/users/${user.id}`, {
+      method: 'DELETE',
+      headers: csrfHeaders(),
+      body: { confirmation: 'DELETE_USER' }
+    })
+    accountMessage.value = `账号 @${user.account} 已删除。`
+    await refresh()
+  } catch (error: any) {
+    accountError.value = errorMessage(error, '删除账号失败')
   } finally {
     savingUserId.value = ''
   }
@@ -316,7 +333,7 @@ const changeOwnPassword = async () => {
               v-for="role in roleOptions"
               :key="role.code"
             >
-              <input v-model="newUser.roles" type="checkbox" :value="role.code">
+              <input v-model="newUser.role" type="radio" name="new-user-role" :value="role.code">
               <span>{{ role.label }}</span>
             </label>
           </fieldset>
@@ -329,7 +346,7 @@ const changeOwnPassword = async () => {
           <button
             class="cms-button cms-button-primary"
             type="submit"
-            :disabled="creating || !cmsAccountPattern.test(newUser.account) || newUser.roles.length === 0"
+            :disabled="creating || !cmsAccountPattern.test(newUser.account)"
           >
             {{ creating ? '正在创建…' : '创建账号' }}
           </button>
@@ -407,8 +424,9 @@ const changeOwnPassword = async () => {
                     :key="role.code"
                   >
                     <input
-                      v-model="userForms[user.id]!.roles"
-                      type="checkbox"
+                      v-model="userForms[user.id]!.role"
+                      type="radio"
+                      :name="`user-role-${user.id}`"
                       :value="role.code"
                     >
                     <span>{{ role.label }}</span>
@@ -431,16 +449,22 @@ const changeOwnPassword = async () => {
                   当前账号请使用左侧“修改我的密码”，修改时会验证当前密码。
                 </p>
 
-                <button
-                  class="cms-button cms-button-primary"
-                  type="submit"
-                  :disabled="
-                    savingUserId === user.id
-                      || userForms[user.id]!.roles.length === 0
-                  "
-                >
-                  {{ savingUserId === user.id ? '正在保存…' : '保存账号' }}
-                </button>
+                <div class="cms-form-actions">
+                  <button
+                    class="cms-button cms-button-primary"
+                    type="submit"
+                    :disabled="savingUserId === user.id"
+                  >
+                    {{ savingUserId === user.id ? '正在保存…' : '保存账号' }}
+                  </button>
+                  <button
+                    v-if="user.id !== session?.user.id"
+                    class="cms-button cms-button-danger"
+                    type="button"
+                    :disabled="savingUserId === user.id"
+                    @click="deleteUser(user)"
+                  >删除账号</button>
+                </div>
               </form>
             </article>
           </div>

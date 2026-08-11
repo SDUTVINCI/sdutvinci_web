@@ -14,7 +14,7 @@ import {
 const createUserSchema = z.object({
   account: z.string().trim().toLowerCase().regex(cmsAccountPattern),
   password: z.string().min(cmsPasswordMinLength).max(1024),
-  roles: z.array(z.enum(cmsRoleCodes)).min(1).default(['member'])
+  roles: z.array(z.enum(cmsRoleCodes)).length(1).default(['member'])
 }).strict()
 
 export default defineEventHandler(async (event) => {

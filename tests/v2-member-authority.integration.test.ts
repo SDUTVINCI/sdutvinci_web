@@ -11,6 +11,7 @@ import {
   applyCmsMemberMarkdownMigration,
   bindCmsMemberAccount,
   createCmsMember,
+  deleteCmsMember,
   listCmsMembers,
   planCmsMemberMarkdownMigration,
   restoreCmsMemberRevision,
@@ -113,6 +114,28 @@ suite('V2 阶段 9 成员数据库权威与迁移', () => {
     const restored = await restoreCmsMemberRevision(created!.id, revisions.find(item => item.revisionNumber === 1)!.id, 2, admin!.id)
     expect(restored).toMatchObject({ version: 3, name: 'One', body: 'original' })
     expect(await getDatabase().select().from(contentExportJobs).where(eq(contentExportJobs.targetId, created!.id))).toHaveLength(3)
+  })
+
+  it('删除成员使用乐观锁软删除并生成 Git 删除 Outbox', async () => {
+    const admin = await bootstrapCmsAdmin({ account: 'deleteadmin', password: 'AdminPassword123' })
+    const created = await createCmsMember({
+      memberKey: 'memberdelete', name: 'Delete Me', body: 'preserved history'
+    }, admin!.id)
+    await bindCmsMemberAccount(created!.id, admin!.id, admin!.id)
+
+    await expect(deleteCmsMember(created!.id, 99, admin!.id))
+      .rejects.toThrow('成员资料已被其他操作更新')
+    const deleted = await deleteCmsMember(created!.id, 1, admin!.id)
+    expect(deleted).toMatchObject({ version: 2, deletedAt: expect.any(String) })
+    expect(await listPublicMembersFromDatabase()).toHaveLength(0)
+    expect(await getPublicMemberFromDatabase('memberdelete')).toBeNull()
+    expect(await getDatabase().select().from(userMembers).where(eq(userMembers.memberId, created!.id))).toHaveLength(0)
+    const revisions = await getDatabase().select().from(memberRevisions).where(eq(memberRevisions.memberId, created!.id))
+    expect(revisions.map(item => item.sourceKind)).toEqual(['cms_create', 'delete'])
+    const jobs = await getDatabase().select().from(contentExportJobs).where(eq(contentExportJobs.targetId, created!.id))
+    expect(jobs.map(item => item.operation)).toEqual(['create', 'delete'])
+    const audit = await getDatabase().select().from(auditLogs).where(eq(auditLogs.action, 'member.delete'))
+    expect(audit).toHaveLength(1)
   })
 
   it('账号绑定保持独立且公开列表/详情完全读取数据库字段', async () => {

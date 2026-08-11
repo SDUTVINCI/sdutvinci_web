@@ -7,7 +7,6 @@ const schema = z.object({
     .default(CONTENT_REPOSITORY_ID),
   CONTENT_PR_IMPORT_API_URL: z.string().url().default('https://api.github.com'),
   CONTENT_PR_IMPORT_GITHUB_TOKEN: z.string().min(1).optional(),
-  CONTENT_PR_IMPORT_ROLE_CODES: z.string().default('content_importer'),
   CONTENT_PR_IMPORT_MAX_FILE_BYTES: z.coerce.number().int().min(1024).max(5_000_000)
     .default(1_048_576),
   CONTENT_PR_IMPORT_MAX_FILES: z.coerce.number().int().min(1).max(500).default(200),
@@ -15,10 +14,7 @@ const schema = z.object({
   CONTENT_PR_IMPORT_TEST_MODE: z.enum(['false', 'true']).default('false')
 })
 
-export type ContentImportConfig = z.infer<typeof schema> & {
-  authorizedRoles: string[]
-  testMode: boolean
-}
+export type ContentImportConfig = z.infer<typeof schema> & { testMode: boolean }
 
 let cached: ContentImportConfig | undefined
 
@@ -38,10 +34,7 @@ export const getContentImportConfig = (): ContentImportConfig => {
   if (url.username || url.password) {
     throw new Error('PR 导入 API URL 不得包含凭据')
   }
-  const authorizedRoles = [...new Set(
-    parsed.CONTENT_PR_IMPORT_ROLE_CODES.split(',').map(value => value.trim()).filter(Boolean)
-  )]
-  cached = { ...parsed, authorizedRoles, testMode }
+  cached = { ...parsed, testMode }
   return cached
 }
 

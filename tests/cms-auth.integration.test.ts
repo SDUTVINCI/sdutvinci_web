@@ -7,11 +7,14 @@ import {
   bootstrapCmsAdmin,
   changeCmsOwnPassword,
   CmsLastAdminError,
+  CmsCurrentUserDeletionError,
   countAdmins,
   createCmsSession,
   createCmsUser,
+  deleteCmsUser,
   getCmsSessionUser,
   getCmsUser,
+  listCmsUsers,
   updateCmsUser
 } from '../server/services/cms-auth'
 import {
@@ -26,7 +29,9 @@ import {
   auditLogs,
   members,
   rateLimitBuckets,
+  sessions,
   userMembers,
+  userRoles,
   users
 } from '../server/db/schema'
 import { configureCmsTestDatabase } from './helpers/cms-test-database'
@@ -53,7 +58,7 @@ integration('CMS 身份认证与数据库', () => {
     const result = await getDatabase().execute(sql`
       select code from roles order by code
     `)
-    expect(result.rows.map(row => row.code)).toEqual(['admin', 'content_importer', 'member'])
+    expect(result.rows.map(row => row.code)).toEqual(['admin', 'member'])
   })
 
   it('只允许首次引导创建一个管理员，并使用 Argon2id 保存密码', async () => {
@@ -195,6 +200,26 @@ integration('CMS 身份认证与数据库', () => {
     })
   })
 
+  it('服务层也只允许账号保留一个身份', async () => {
+    const admin = await bootstrapCmsAdmin({
+      account: 'roleadmin',
+      password: 'AdminPassword123'
+    })
+    await expect(createCmsUser({
+      account: 'multirole',
+      password: 'MemberPassword123',
+      roles: ['admin', 'member']
+    }, admin!.id)).rejects.toThrow('CMS_USER_ROLE_MUST_BE_SINGLE')
+    const member = await createCmsUser({
+      account: 'singlerole',
+      password: 'MemberPassword123',
+      roles: ['member']
+    }, admin!.id)
+    await expect(updateCmsUser(member!.id, {
+      roles: ['admin', 'member']
+    }, admin!.id)).rejects.toThrow('CMS_USER_ROLE_MUST_BE_SINGLE')
+  })
+
   it('记录管理员引导、用户创建、登录和用户更新审计事件', async () => {
     const admin = await bootstrapCmsAdmin({
       account: 'auditadmin',
@@ -219,6 +244,43 @@ integration('CMS 身份认证与数据库', () => {
       'user.update'
     ]))
     expect((await getCmsUser(member!.id))?.roles).toEqual(['member'])
+  })
+
+  it('管理员软删除其他账号，解除绑定、撤销会话并保留最后一名管理员', async () => {
+    const admin = await bootstrapCmsAdmin({
+      account: 'deleteadmin',
+      password: 'AdminPassword123'
+    })
+    const [profile] = await getDatabase().insert(members).values({
+      memberKey: 'deletemember',
+      name: '待删除账号成员',
+      sourcePath: 'active/deletemember.md'
+    }).returning({ id: members.id })
+    const target = await createCmsUser({
+      account: 'deletemember',
+      password: 'MemberPassword123',
+      roles: ['member']
+    }, admin!.id)
+    const targetSession = await createCmsSession(target!, 1, null, 'delete-test')
+
+    await expect(deleteCmsUser(admin!.id, admin!.id))
+      .rejects.toBeInstanceOf(CmsCurrentUserDeletionError)
+    await deleteCmsUser(target!.id, admin!.id)
+
+    expect(await getCmsUser(target!.id)).toBeNull()
+    expect((await listCmsUsers()).map(user => user.id)).not.toContain(target!.id)
+    expect(await authenticateCmsUser('deletemember', 'MemberPassword123')).toBeNull()
+    expect(await getCmsSessionUser(targetSession.token)).toBeNull()
+    expect(await getDatabase().select().from(userMembers).where(eq(userMembers.userId, target!.id))).toHaveLength(0)
+    expect(await getDatabase().select().from(userRoles).where(eq(userRoles.userId, target!.id))).toHaveLength(0)
+    const [stored] = await getDatabase().select().from(users).where(eq(users.id, target!.id))
+    expect(stored).toMatchObject({ status: 'disabled', deletedByUserId: admin!.id })
+    expect(stored?.deletedAt).toBeInstanceOf(Date)
+    const [storedSession] = await getDatabase().select().from(sessions).where(eq(sessions.userId, target!.id))
+    expect(storedSession?.revokedAt).toBeInstanceOf(Date)
+    const events = await getDatabase().select().from(auditLogs).where(eq(auditLogs.action, 'user.delete'))
+    expect(events).toHaveLength(1)
+    expect(profile).toBeTruthy()
   })
 
   it('用户改密会验证当前密码并仅保留当前会话，管理员重置会撤销目标全部会话', async () => {

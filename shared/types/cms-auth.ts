@@ -1,4 +1,4 @@
-export const cmsRoleCodes = ['admin', 'content_importer', 'member'] as const
+export const cmsRoleCodes = ['admin', 'member'] as const
 export const cmsAccountPattern = /^[a-z][a-z0-9]{2,31}$/
 export const cmsPasswordMinLength = 12
 

@@ -16,7 +16,7 @@ import {
 
 const updateUserSchema = z.object({
   status: z.enum(['active', 'disabled']).optional(),
-  roles: z.array(z.enum(cmsRoleCodes)).min(1).optional(),
+  roles: z.array(z.enum(cmsRoleCodes)).length(1).optional(),
   password: z.string().min(cmsPasswordMinLength).max(1024).optional()
 }).strict().refine(value => Object.keys(value).length > 0, '至少提交一个修改项')
 

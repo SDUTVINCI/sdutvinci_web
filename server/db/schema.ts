@@ -37,11 +37,14 @@ export const users = pgTable('users', {
   account: varchar('account', { length: 32 }).notNull(),
   passwordHash: text('password_hash').notNull(),
   status: userStatusEnum('status').default('active').notNull(),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  deletedByUserId: uuid('deleted_by_user_id'),
   ...timestamps
 }, table => [
   check('users_account_format_check', sql`${table.account} ~ '^[a-z][a-z0-9]{2,31}$'`),
   uniqueIndex('users_account_unique').on(table.account),
-  index('users_status_index').on(table.status)
+  index('users_status_index').on(table.status),
+  index('users_deleted_at_index').on(table.deletedAt)
 ])
 
 export const userRoles = pgTable('user_roles', {

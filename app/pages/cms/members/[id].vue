@@ -114,6 +114,28 @@ const saveBinding = async () => {
   } finally { submitting.value = false }
 }
 
+const deleteMember = async () => {
+  if (!isAdmin.value || !member.value) return
+  if (!confirm(`确定删除成员档案“${member.value.name}”？公开页面将不再展示，并生成内容仓库删除任务。`)) return
+  submitting.value = true
+  message.value = ''
+  errorMessage.value = ''
+  try {
+    await $fetch(`/api/cms/members/${id}`, {
+      method: 'DELETE',
+      headers: csrfHeaders(),
+      body: {
+        expectedVersion: member.value.version,
+        confirmation: 'DELETE_MEMBER'
+      }
+    })
+    await navigateTo('/cms/members')
+  } catch (error: any) {
+    errorMessage.value = error?.data?.message || '删除成员档案失败'
+    submitting.value = false
+  }
+}
+
 const restoreRevision = async (revisionId: string) => {
   if (!confirm('这会从旧版本创建一个新的不可变版本，确定继续吗？')) return
   submitting.value = true
@@ -176,7 +198,10 @@ const applyProposal = async (proposalId: string) => {
         </div>
       </details>
 
-      <footer v-if="isAdmin" class="member-application-actions"><button class="cms-button cms-button-primary" :disabled="submitting">{{ submitting ? '正在保存…' : '保存成员资料' }}</button></footer>
+      <footer v-if="isAdmin" class="member-application-actions">
+        <button class="cms-button cms-button-primary" :disabled="submitting">{{ submitting ? '正在保存…' : '保存成员资料' }}</button>
+        <button class="cms-button cms-button-danger" type="button" :disabled="submitting" @click="deleteMember">删除成员档案</button>
+      </footer>
     </form>
 
     <form v-if="isAdmin" class="cms-panel cms-form" @submit.prevent="saveBinding">

@@ -321,6 +321,53 @@ export const updateCmsMember = async (
   return getCmsMember(id)
 }
 
+export const deleteCmsMember = async (
+  id: string,
+  expectedVersion: number,
+  actorUserId: string
+) => {
+  await getDatabase().transaction(async (tx) => {
+    const [current] = await tx.select().from(members).where(eq(members.id, id)).limit(1).for('update')
+    if (!current || current.deletedAt) throw new Error('MEMBER_NOT_FOUND')
+    if (current.version !== expectedVersion) throw new CmsMemberVersionConflictError()
+    const profile = profileFromMemberRow(current)
+    const revisionNumber = (await tx.select({ value: sql<number>`coalesce(max(${memberRevisions.revisionNumber}), 0)::int` })
+      .from(memberRevisions).where(eq(memberRevisions.memberId, id)))[0]!.value + 1
+    const result = await appendRevisionAndOutbox(tx, {
+      memberId: id,
+      revisionNumber,
+      profile,
+      sourceKind: 'delete',
+      actorUserId,
+      operation: 'delete'
+    })
+    const now = new Date()
+    const [deleted] = await tx.update(members).set({
+      currentRevisionId: result.revisionId,
+      version: current.version + 1,
+      deletedAt: now,
+      deletedByUserId: actorUserId,
+      updatedAt: now
+    }).where(and(eq(members.id, id), eq(members.version, current.version)))
+      .returning({ id: members.id })
+    if (!deleted) throw new CmsMemberVersionConflictError()
+    await tx.delete(userMembers).where(eq(userMembers.memberId, id))
+    await tx.insert(auditLogs).values({
+      actorUserId,
+      action: 'member.delete',
+      targetType: 'member',
+      targetId: id,
+      metadata: {
+        memberKey: current.memberKey,
+        previousRevisionId: current.currentRevisionId,
+        revisionId: result.revisionId,
+        exportJobId: result.jobId
+      }
+    })
+  })
+  return getCmsMember(id)
+}
+
 export const bindCmsMemberAccount = async (
   memberId: string,
   userId: string | null,
