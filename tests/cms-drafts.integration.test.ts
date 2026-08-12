@@ -236,6 +236,27 @@ integration('CMS Markdown 编辑器与草稿系统', () => {
     )
   })
 
+  it('活动草稿列表和工作台数量排除已发布历史', async () => {
+    const activeDraft = await createCmsNewArticleDraft('news', '活动草稿', userId)
+    const publishedDraft = await createCmsNewArticleDraft('wiki', '已发布历史', userId)
+    await getDatabase().execute(sql`
+      update drafts set status = 'published' where id = ${publishedDraft.id}
+    `)
+
+    expect(await listCmsDrafts(userId, { active: true })).toMatchObject([
+      { id: activeDraft.id, status: 'draft' }
+    ])
+    expect(await listCmsDrafts(userId, { status: 'published' })).toMatchObject([
+      { id: publishedDraft.id, status: 'published' }
+    ])
+    expect(await getCmsDashboardStats(userId, false)).toMatchObject({
+      drafts: {
+        total: 1,
+        byStatus: { draft: 1, published: 1 }
+      }
+    })
+  })
+
   it('严格拒绝伪造系统 Frontmatter 字段', () => {
     const base = {
       title: '标题',

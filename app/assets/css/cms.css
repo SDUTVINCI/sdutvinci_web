@@ -2143,6 +2143,70 @@
   justify-content: start;
 }
 
+.cms-draft-view-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  max-width: 760px;
+  margin-bottom: 14px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--surface-soft) 88%, transparent);
+}
+
+.cms-draft-view-switch button {
+  display: grid;
+  gap: 3px;
+  padding: 13px 16px;
+  border: 1px solid transparent;
+  border-radius: 13px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cms-draft-view-switch button:hover {
+  color: var(--ink);
+}
+
+.cms-draft-view-switch button.is-active {
+  border-color: color-mix(in srgb, var(--cyan) 28%, var(--line));
+  background: var(--surface);
+  box-shadow: 0 7px 20px color-mix(in srgb, var(--ink) 8%, transparent);
+  color: var(--ink);
+}
+
+.cms-draft-view-switch strong {
+  font-size: 0.9rem;
+}
+
+.cms-draft-view-switch span {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.cms-drafts-toolbar {
+  grid-template-columns: minmax(220px, 360px) auto minmax(0, 1fr);
+}
+
+.cms-draft-history-copy {
+  align-self: center;
+  max-width: 600px;
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.cms-draft-batch-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .cms-checkbox-label {
   display: flex !important;
   flex-direction: row !important;
@@ -2265,6 +2329,29 @@
   padding: 32px;
   color: var(--muted);
   text-align: center;
+}
+
+.cms-published-draft-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 18px;
+  border-color: color-mix(in srgb, var(--cyan) 24%, var(--line));
+}
+
+.cms-published-draft-note h2,
+.cms-published-draft-note p {
+  margin: 0;
+}
+
+.cms-published-draft-note h2 {
+  margin-bottom: 6px;
+  font-size: 1.05rem;
+}
+
+.cms-published-draft-note > div > p:last-child {
+  color: var(--muted);
 }
 
 .cms-detail-grid {
@@ -4059,6 +4146,20 @@
   .cms-detail-grid,
   .cms-member-grid {
     grid-template-columns: 1fr;
+  }
+
+  .cms-draft-view-switch {
+    grid-template-columns: 1fr;
+  }
+
+  .cms-draft-batch-actions,
+  .cms-published-draft-note {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .cms-draft-batch-actions .cms-button {
+    width: 100%;
   }
 
   .cms-page-header-actions .cms-button {

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, or, sql } from 'drizzle-orm'
 import type { CmsArticleCollection } from '../../shared/types/cms-articles'
 import type {
   CmsDraft,
@@ -221,11 +221,12 @@ export const findCmsDraftForArticle = async (
 
 export const listCmsDrafts = async (
   ownerUserId: string,
-  input: { status?: CmsDraftStatus, deleted?: boolean } = {},
+  input: { status?: CmsDraftStatus, active?: boolean, deleted?: boolean } = {},
   allowAll = false
 ): Promise<CmsDraftSummary[]> => {
   const filters = allowAll ? [] : [eq(drafts.ownerUserId, ownerUserId)]
   filters.push(input.deleted ? isNotNull(drafts.deletedAt) : isNull(drafts.deletedAt))
+  if (input.active) filters.push(ne(drafts.status, 'published'))
   if (input.status) filters.push(eq(drafts.status, input.status))
   const rows = await getDatabase()
     .select({ draft: drafts, ownerAccount: users.account })

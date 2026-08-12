@@ -55,9 +55,11 @@ describe('CMS 批量工作流结果隔离', () => {
   })
 
   it('页面公开分类和状态计数筛选、明确高风险入口和三种批量操作', async () => {
-    const [importsPage, draftsPage, reviewsPage] = await Promise.all([
+    const [importsPage, draftsPage, draftDetailPage, draftsApi, reviewsPage] = await Promise.all([
       readFile('app/pages/cms/content-imports/index.vue', 'utf8'),
       readFile('app/pages/cms/drafts/index.vue', 'utf8'),
+      readFile('app/pages/cms/drafts/[id].vue', 'utf8'),
+      readFile('server/api/cms/drafts/index.get.ts', 'utf8'),
       readFile('app/pages/cms/reviews/index.vue', 'utf8')
     ])
     expect(importsPage).toContain('按风险分类筛选文件')
@@ -74,6 +76,13 @@ describe('CMS 批量工作流结果隔离', () => {
     expect(importsPage).toContain('classificationFilter')
     expect(draftsPage).toContain('全选可提交草稿')
     expect(draftsPage).toContain('批量提交审核')
+    expect(draftsPage).toContain('活动草稿')
+    expect(draftsPage).toContain('已发布历史')
+    expect(draftsPage).toContain("view: draftView.value === 'active'")
+    expect(draftsApi).toContain("view: z.enum(['active'])")
+    expect(draftDetailPage).toContain('这是已发布的历史记录')
+    expect(draftDetailPage).toContain('继续编辑正式文章')
+    expect(draftDetailPage).toContain("body: { kind: 'existing', articleId: initial.articleId }")
     expect(reviewsPage).toContain('全选待审核')
     expect(reviewsPage).toContain('全选待发布')
     expect(reviewsPage).toContain('批量审核通过')

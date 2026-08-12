@@ -6,8 +6,11 @@ import { requireCmsRequestAuth } from '../../../utils/cms-http'
 
 const schema = z.object({
   status: z.enum(cmsDraftStatuses).optional(),
+  view: z.enum(['active']).optional(),
   deleted: z.enum(['true', 'false']).transform(value => value === 'true').optional(),
   scope: z.enum(['mine', 'all']).optional()
+}).refine(input => !(input.view === 'active' && input.status === 'published'), {
+  message: '活动草稿视图不能筛选已发布历史'
 })
 
 export default defineEventHandler(async (event) => {
@@ -20,6 +23,7 @@ export default defineEventHandler(async (event) => {
   return {
     drafts: await listCmsDrafts(auth.user.id, {
       status: query.status,
+      active: query.view === 'active',
       deleted: query.deleted
     }, allowAll)
   }

@@ -100,6 +100,7 @@ const saveState = ref<'saved' | 'dirty' | 'saving' | 'error' | 'conflict'>('save
 const message = ref('')
 const mounted = ref(false)
 const workflowBusy = ref(false)
+const reopeningPublished = ref(false)
 const lockState = ref<'idle' | 'loading' | 'acquired' | 'blocked' | 'lost' | 'error'>('idle')
 const lockResponse = ref<CmsEditLockResponse | null>(null)
 const takeoverReason = ref('')
@@ -149,6 +150,11 @@ const canEdit = computed(() =>
 const canContinueEditing = computed(() =>
   ['rejected', 'withdrawn'].includes(status.value)
   && (isOwner.value || isAdmin.value)
+)
+const canReopenPublished = computed(() =>
+  status.value === 'published'
+  && Boolean(initial.articleId)
+  && isOwner.value
 )
 const latestRejection = computed(() =>
   reviewEvents.value.find(event => event.action === 'rejected')
@@ -780,6 +786,34 @@ const continueEditing = async () => {
   }
 }
 
+const reopenPublishedDraft = async () => {
+  if (!canReopenPublished.value || !initial.articleId || reopeningPublished.value) return
+  reopeningPublished.value = true
+  message.value = ''
+  try {
+    const result = await $fetch<{ draft: CmsDraft }>('/api/cms/drafts', {
+      method: 'POST',
+      headers: csrfHeaders(),
+      body: { kind: 'existing', articleId: initial.articleId }
+    })
+    status.value = result.draft.status
+    version.value = result.draft.version
+    baseContentHash.value = result.draft.baseContentHash
+    baseRevisionId.value = result.draft.baseRevisionId
+    lastSavedAt.value = result.draft.lastSavedAt
+    await Promise.all([refreshComparison(), refreshEvents()])
+    if (await acquireLock()) {
+      message.value = '已从当前正式文章开始新一轮编辑。'
+    } else if (!message.value) {
+      message.value = '草稿已重新打开，但未取得编辑锁，请查看锁状态。'
+    }
+  } catch (error: any) {
+    message.value = error?.data?.message || '重新打开文章编辑失败'
+  } finally {
+    reopeningPublished.value = false
+  }
+}
+
 const confirmResync = async () => {
   if (
     !canEdit.value
@@ -908,8 +942,32 @@ onBeforeUnmount(() => {
         >
           继续编辑
         </button>
+        <button
+          v-if="canReopenPublished"
+          class="cms-button cms-button-primary"
+          type="button"
+          :disabled="reopeningPublished"
+          @click="reopenPublishedDraft"
+        >
+          {{ reopeningPublished ? '正在重新打开…' : '继续编辑正式文章' }}
+        </button>
       </div>
     </header>
+
+    <section v-if="status === 'published'" class="cms-panel cms-published-draft-note">
+      <div>
+        <p class="cms-eyebrow">PUBLISHED HISTORY</p>
+        <h2>这是已发布的历史记录</h2>
+        <p>此页默认只读，避免直接改写已经发布的版本。需要更新内容时，请从当前正式文章开始新一轮草稿。</p>
+      </div>
+      <NuxtLink
+        v-if="initial.articleId && !isOwner"
+        class="cms-button cms-button-link cms-button-quiet"
+        :to="`/cms/articles/${initial.articleId}`"
+      >
+        查看当前正式文章
+      </NuxtLink>
+    </section>
 
     <p v-if="message" class="cms-alert" :class="{ 'cms-alert-error': saveState === 'error' || saveState === 'conflict' }">
       {{ message }}

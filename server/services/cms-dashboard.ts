@@ -64,7 +64,9 @@ export const getCmsDashboardStats = async (
       deleted: deletedRows[0]?.value || 0
     },
     drafts: {
-      total: Object.values(byStatus).reduce((sum, value) => sum + value, 0),
+      total: Object.entries(byStatus)
+        .filter(([status]) => status !== 'published')
+        .reduce((sum, [, value]) => sum + value, 0),
       byStatus,
       scope: isAdmin ? 'all' : 'mine'
     },

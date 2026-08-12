@@ -12,10 +12,16 @@ definePageMeta({ layout: 'cms', middleware: 'cms-auth' })
 useHead({ title: '我的草稿 · Vinci 内容管理后台' })
 const { session, csrfHeaders } = useCmsSession()
 const isAdmin = computed(() => session.value?.user.roles.includes('admin') ?? false)
-const selectedStatus = ref<'' | CmsDraftStatus>('')
+type ActiveDraftStatus = Exclude<CmsDraftStatus, 'published'>
+const activeDraftStatuses = cmsDraftStatuses.filter(
+  (item): item is ActiveDraftStatus => item !== 'published'
+)
+const draftView = ref<'active' | 'published'>('active')
+const selectedStatus = ref<'' | ActiveDraftStatus>('')
 const showDeleted = ref(false)
 const query = computed(() => ({
-  status: selectedStatus.value || undefined,
+  status: draftView.value === 'published' ? 'published' : selectedStatus.value || undefined,
+  view: draftView.value === 'active' && !selectedStatus.value ? 'active' : undefined,
   deleted: showDeleted.value || undefined,
   scope: isAdmin.value ? 'all' : 'mine'
 }))
@@ -34,6 +40,14 @@ const eligibleDrafts = computed(() => drafts.value.filter(draft =>
 ))
 const allEligibleSelected = computed(() => eligibleDrafts.value.length > 0
   && eligibleDrafts.value.every(draft => selectedDraftIds.value.includes(draft.id)))
+
+const setDraftView = (view: 'active' | 'published') => {
+  draftView.value = view
+  selectedStatus.value = ''
+  selectedDraftIds.value = []
+  batchMessage.value = ''
+  actionError.value = ''
+}
 
 watch(drafts, (items) => {
   const validIds = new Set(items.filter(item => !item.isDeleted && item.status === 'draft'
@@ -110,37 +124,63 @@ const statusLabels: Record<CmsDraftSummary['status'], string> = {
       <div>
         <p class="cms-eyebrow">MY DRAFTS</p>
         <h1>{{ isAdmin ? '草稿管理' : '我的草稿' }}</h1>
-        <p>{{ isAdmin ? '管理员可以查看、删除和恢复全部用户草稿。' : '重新打开后会恢复数据库中的最后保存版本。草稿不会改变前台文章。' }}</p>
+        <p>{{ isAdmin ? '管理员可以查看全部用户的活动草稿，并在独立视图中查阅已发布历史。' : '活动草稿不会改变前台文章；已发布记录保留在独立历史视图中。' }}</p>
       </div>
       <NuxtLink class="cms-button cms-button-primary cms-button-link" to="/cms/articles/new">
         新建文章草稿
       </NuxtLink>
     </header>
 
-    <div class="cms-toolbar cms-toolbar-compact">
-      <label>
-        <span>草稿状态</span>
+    <div class="cms-draft-view-switch" aria-label="草稿视图">
+      <button
+        type="button"
+        :class="{ 'is-active': draftView === 'active' }"
+        :aria-pressed="draftView === 'active'"
+        @click="setDraftView('active')"
+      >
+        <strong>活动草稿</strong>
+        <span>编辑、审核与待发布内容</span>
+      </button>
+      <button
+        type="button"
+        :class="{ 'is-active': draftView === 'published' }"
+        :aria-pressed="draftView === 'published'"
+        @click="setDraftView('published')"
+      >
+        <strong>已发布历史</strong>
+        <span>只读记录，可重新发起编辑</span>
+      </button>
+    </div>
+
+    <div class="cms-toolbar cms-drafts-toolbar">
+      <label v-if="draftView === 'active'">
+        <span>活动状态</span>
         <select v-model="selectedStatus">
-          <option value="">全部状态</option>
-          <option v-for="item in cmsDraftStatuses" :key="item" :value="item">{{ statusLabels[item] }}</option>
+          <option value="">全部活动状态</option>
+          <option v-for="item in activeDraftStatuses" :key="item" :value="item">{{ statusLabels[item] }}</option>
         </select>
       </label>
+      <p v-else class="cms-draft-history-copy">
+        已发布记录不会计入活动草稿数量。打开记录后可以从当前正式文章继续编辑。
+      </p>
       <label class="cms-checkbox-label">
         <input v-model="showDeleted" type="checkbox">
         <span>查看已删除草稿</span>
       </label>
-      <button
-        class="cms-button cms-button-quiet"
-        type="button"
-        :disabled="!eligibleDrafts.length || batchBusy"
-        @click="toggleAllEligible"
-      >{{ allEligibleSelected ? '取消全选可提交草稿' : '全选可提交草稿' }}</button>
-      <button
-        class="cms-button cms-button-primary"
-        type="button"
-        :disabled="!selectedDraftIds.length || batchBusy"
-        @click="batchSubmit"
-      >{{ batchBusy ? '正在逐篇提交…' : `批量提交审核（${selectedDraftIds.length}）` }}</button>
+      <div v-if="draftView === 'active'" class="cms-draft-batch-actions">
+        <button
+          class="cms-button cms-button-quiet"
+          type="button"
+          :disabled="!eligibleDrafts.length || batchBusy"
+          @click="toggleAllEligible"
+        >{{ allEligibleSelected ? '取消全选可提交草稿' : '全选可提交草稿' }}</button>
+        <button
+          class="cms-button cms-button-primary"
+          type="button"
+          :disabled="!selectedDraftIds.length || batchBusy"
+          @click="batchSubmit"
+        >{{ batchBusy ? '正在逐篇提交…' : `批量提交审核（${selectedDraftIds.length}）` }}</button>
+      </div>
     </div>
     <p v-if="batchMessage" class="cms-alert">{{ batchMessage }}</p>
     <p v-if="actionError" class="cms-alert cms-alert-error">{{ actionError }}</p>
@@ -151,7 +191,7 @@ const statusLabels: Record<CmsDraftSummary['status'], string> = {
       <table class="cms-table">
         <thead>
           <tr>
-            <th>选择</th>
+            <th v-if="draftView === 'active'">选择</th>
             <th>标题</th>
             <th>类型</th>
             <th v-if="isAdmin">创建者</th>
@@ -164,7 +204,7 @@ const statusLabels: Record<CmsDraftSummary['status'], string> = {
         </thead>
         <tbody>
           <tr v-for="draft in data?.drafts ?? []" :key="draft.id">
-            <td>
+            <td v-if="draftView === 'active'">
               <input
                 v-model="selectedDraftIds"
                 type="checkbox"
@@ -197,7 +237,9 @@ const statusLabels: Record<CmsDraftSummary['status'], string> = {
           </tr>
         </tbody>
       </table>
-      <p v-if="!data?.drafts.length" class="cms-empty">还没有草稿。</p>
+      <p v-if="!data?.drafts.length" class="cms-empty">
+        {{ draftView === 'published' ? '还没有已发布历史。' : '当前没有活动草稿。' }}
+      </p>
     </div>
   </section>
 </template>
