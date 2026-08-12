@@ -37,6 +37,8 @@ Outbox、评论/关闭确认或“绝不自动 Merge”的边界。
 - 文件规划使用固定最大并发 `10` 读取 commit-bound Base/Head 内容并执行分类；结果仍按 GitHub
   Diff 原 ordinal 排列，全部规划完成后才在单个事务中写 run/items。并发数不可随 PR 规模无限
   增长，避免把同步 Dry Run 串行放大为代理 524，也避免瞬时打满 GitHub API 和数据库连接池。
+- `/import` 的 `itemIds` 数量上限与 `CONTENT_PR_IMPORT_MAX_FILES` 使用同一配置（默认 `500`），
+  不再保留独立的 200 项硬编码限制；服务仍逐项事务导入并保持幂等，不在浏览器静默拆批。
 
 ## 3. Base、Current、Proposed
 
@@ -83,7 +85,7 @@ Dry Run 后导入每一项时，会在同一事务中锁定导入项和文章，
 | `path_conflict` | 否 | 显示重复路径/ID、路径占用、越界或非法移动 |
 | `invalid_file` | 否 | 显示不受管文件、内容/快照/Frontmatter 错误 |
 | `unknown_syntax` | 否 | 突出未知模板或扩展指令 |
-| `high_risk_syntax` | 否 | 突出原始 HTML、Vue/MDC、脚本/事件/危险 URL |
+| `high_risk_syntax` | 默认否；可人工强制 | 突出原始 HTML、Vue/MDC、脚本/事件/危险 URL；逐项勾选并准确输入“确认强制导入高风险内容”后只创建待审核草稿 |
 
 新文章发布前一直没有正式 Article 行；发布时才使用预分配 UUID 和已审计目标路径创建
 Article/Revision。移动发布保持同一 Article ID，写 `article_redirects`，旧公共路径仍能
@@ -102,8 +104,10 @@ NUL、`.`/`..`/`.git` 段、跨 collection 或跨目录移动、成员新增/重
 manifest 外文件、重复路径/vinciId、非法 UTF-8、二进制、符号链接、非 file API 类型、
 超限文件和超限 PR。新文章不得自带 vinciId；正式 ID 只能由数据库分配。
 
-原始 HTML、Vue/MDC、可执行标签、事件属性、`javascript:`/`data:` 和未知模板语法均
-fail closed。代码围栏和行内代码先被剔除，避免仅作为示例的片段被误当作可执行内容。
+新增文章会扫描全文；修改/重命名文章只比较 Base → Proposed 新增的语法特征。只有 PR 新增
+HTML/Vue 标签、MDC 指令、可执行标签、事件属性、`javascript:`/`data:` 或未知模板语法才
+产生相应风险警告；Base 已有且本次没有新增的同类结构不会因普通正文变化误报。代码围栏和
+行内代码先被剔除，避免仅作为示例的片段被误当作可执行内容。
 
 ## 7. 幂等、审计和失败取证
 
@@ -132,6 +136,11 @@ Migration `0016_flowery_war_machine.sql` 是 expand-only：只增加 PR run/item
 已经通过正常审核发布的 Revision 仍按现有 Revision restore/delete restore 流程处理，
 不能通过删除 PR run 回滚正式内容。评论/关闭属于 GitHub 外部状态，不随数据库事务
 回滚；关闭 PR 后如需恢复，只能由管理员在 GitHub/mock 独立重新打开，仍不得自动 Merge。
+
+高风险人工强制放行只适用于 `high_risk_syntax` 文章，不能覆盖未知扩展语法、内容冲突、非法
+路径、非法文件或成员敏感字段。服务端会复核所选 ID、分类、确认短语和实时 Current Revision，
+三方合并失败时仍阻止；成功时写 `content_pr_import.high_risk_forced` 审计。该动作不批准、不
+发布、不创建正式 Revision，也不改变 Markdown 渲染器现有的脚本和危险 URL 阻断策略。
 
 ## 9. 测试与本地人工验收
 

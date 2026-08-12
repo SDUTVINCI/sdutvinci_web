@@ -57,6 +57,7 @@ import {
   buildContentImportContext,
   buildContentImportDiff
 } from '../shared/utils/content-import-diff'
+import { CONTENT_IMPORT_HIGH_RISK_CONFIRMATION } from '../shared/types/cms-content-imports'
 import { configureCmsTestDatabase } from './helpers/cms-test-database'
 
 const enabled = configureCmsTestDatabase()
@@ -497,6 +498,64 @@ suite('V2 阶段 8 本地 Markdown PR 导入与三方冲突', () => {
       .where(eq(contentPrImportItems.classification, 'content_conflict')))[0]!.status).toBe('pending')
     expect((await getDatabase().select().from(auditLogs)
       .where(eq(auditLogs.action, 'content_pr_import.item_imported')))).toHaveLength(5)
+
+    const highRiskItem = run.items.find(item => item.classification === 'high_risk_syntax')!
+    expect((await importContentPrItems(run.id, [highRiskItem.id], actorUserId)).results[0])
+      .toMatchObject({ imported: false, blocked: true })
+    const conflictItem = run.items.find(item => item.classification === 'content_conflict')!
+    await expect(importContentPrItems(run.id, [conflictItem.id], actorUserId, {
+      forceHighRiskItemIds: [conflictItem.id],
+      highRiskConfirmation: CONTENT_IMPORT_HIGH_RISK_CONFIRMATION
+    })).rejects.toMatchObject({
+      code: 'IMPORT_HIGH_RISK_SELECTION_INVALID'
+    } satisfies Partial<ContentPrImportError>)
+    await expect(importContentPrItems(run.id, [highRiskItem.id], actorUserId, {
+      forceHighRiskItemIds: [highRiskItem.id], highRiskConfirmation: '确认'
+    })).rejects.toMatchObject({
+      code: 'IMPORT_HIGH_RISK_CONFIRMATION_REQUIRED'
+    } satisfies Partial<ContentPrImportError>)
+    const forced = await importContentPrItems(run.id, [highRiskItem.id], actorUserId, {
+      forceHighRiskItemIds: [highRiskItem.id],
+      highRiskConfirmation: CONTENT_IMPORT_HIGH_RISK_CONFIRMATION
+    })
+    expect(forced.results[0]).toMatchObject({ imported: true })
+    expect(forced.run).toMatchObject({ importedCount: 6, status: 'imported' })
+    expect((await getDatabase().select().from(drafts))).toHaveLength(6)
+    expect((await getDatabase().select().from(auditLogs)
+      .where(eq(auditLogs.action, 'content_pr_import.high_risk_forced')))).toHaveLength(1)
+  })
+
+  it('新增高风险文章确认后只创建带预分配 ID 的待审核草稿', async () => {
+    const metadata = buildContentRepositoryMetadata(
+      [], [], new Date('2026-01-01T00:00:00.000Z')
+    )
+    const fake = new FakeGitHub()
+    fake.contents.set(`${BASE}:.vinci/snapshot.json`, metadata.snapshotSource)
+    fake.contents.set(`${HEAD}:wiki/risky/new.md`, writeCmsMarkdown({
+      title: '人工确认的高风险新文章', authors: []
+    }, '<iframe src="https://example.com"></iframe>\n'))
+    fake.files = [{ filename: 'wiki/risky/new.md', status: 'added', changes: 4 }]
+
+    const run = (await dryRunContentPrImport(actorUserId, {
+      repository: 'SDUTVINCI/sdutvinci_content', pullRequestNumber: 8
+    }, fake as unknown as ContentImportGitHubClient))!
+    expect(run.items[0]).toMatchObject({
+      classification: 'high_risk_syntax', importable: false, proposedArticleId: null
+    })
+    const imported = await importContentPrItems(run.id, [run.items[0]!.id], actorUserId, {
+      forceHighRiskItemIds: [run.items[0]!.id],
+      highRiskConfirmation: CONTENT_IMPORT_HIGH_RISK_CONFIRMATION
+    })
+    expect(imported.results[0]).toMatchObject({ imported: true })
+    const [draft] = await getDatabase().select().from(drafts)
+    expect(draft).toMatchObject({
+      articleId: null,
+      proposedAction: 'edit',
+      proposedRelativePath: 'risky/new.md'
+    })
+    expect(draft!.proposedArticleId).toMatch(/^[0-9a-f-]{36}$/)
+    expect(await getDatabase().select().from(articles)).toEqual([])
+    expect(await getDatabase().select().from(articleRevisions)).toEqual([])
   })
 
   it('Dry Run 后数据库 Current 再变化会逐项阻止，绝不覆盖新 Revision', async () => {
@@ -854,7 +913,7 @@ suite('V2 阶段 8 本地 Markdown PR 导入与三方冲突', () => {
       readFile(resolve('server/api/cms/content-imports/[id]/close.post.ts'), 'utf8'),
       readFile(resolve('server/services/content-pr-import.ts'), 'utf8')
     ])
-    expect(page).toContain('只导入所选安全项目')
+    expect(page).toContain('导入所选项目')
     expect(page).toContain('不会批准、发布、Merge')
     expect(page).toContain('Base（开始修改时的原文）')
     expect(page).toContain('Current（数据库现在的正式内容）')

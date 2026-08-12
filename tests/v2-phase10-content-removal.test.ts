@@ -162,6 +162,8 @@ describe('V2 阶段 10 Nuxt Content 与代码仓库内容目录剔除', () => {
       ':data-kind="line.kind"',
       '这个 PR 提议删除整项内容。',
       '无法安全合并，因此不会创建合并草稿。',
+      'CONTENT_IMPORT_HIGH_RISK_CONFIRMATION',
+      '确实需要时可逐项勾选',
       '数据库中还没有这项正式内容。',
       '该内容因冲突或安全原因没有提供。'
     ]) expect(page).toContain(text)

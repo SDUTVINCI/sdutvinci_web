@@ -20,6 +20,8 @@ export const contentImportClassifications = [
 export type ContentImportClassification = typeof contentImportClassifications[number]
 export type ContentImportItemStatus = 'pending' | 'imported' | 'skipped' | 'blocked'
 
+export const CONTENT_IMPORT_HIGH_RISK_CONFIRMATION = '确认强制导入高风险内容'
+
 export interface CmsContentImportItem {
   id: string
   ordinal: number
@@ -27,6 +29,7 @@ export interface CmsContentImportItem {
   classification: ContentImportClassification
   targetType: 'article' | 'member'
   importable: boolean
+  highRiskForceEligible: boolean
   oldPath: string | null
   newPath: string | null
   articleId: string | null

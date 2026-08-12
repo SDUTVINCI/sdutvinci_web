@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import type {
-  CmsContentImportRun,
-  ContentImportClassification
-} from '../../../../shared/types/cms-content-imports'
+import {
+  CONTENT_IMPORT_HIGH_RISK_CONFIRMATION,
+  type CmsContentImportRun,
+  type ContentImportClassification
+} from '~~/shared/types/cms-content-imports'
 import {
   buildContentImportContext,
   buildContentImportDiff,
@@ -17,6 +18,7 @@ const repository = ref('SDUTVINCI/sdutvinci_content')
 const pullRequestNumber = ref<number | null>(null)
 const run = ref<CmsContentImportRun | null>(null)
 const selected = ref<string[]>([])
+const highRiskConfirmation = ref('')
 const busy = ref(false)
 const message = ref('')
 const failure = ref('')
@@ -57,7 +59,7 @@ const artifactLabels: Record<(typeof artifactKeys)[number], string> = {
 const runStatusLabels: Record<CmsContentImportRun['status'], string> = {
   dry_run: '检查完成，尚未导入',
   partially_imported: '已导入部分安全项目',
-  imported: '安全项目已全部导入',
+  imported: '默认安全项目已全部处理',
   failed: '检查失败'
 }
 const itemStatusLabels = {
@@ -75,7 +77,15 @@ const externalStatusLabels = {
   succeeded: '操作成功',
   failed: '操作失败'
 } as const
-const selectable = computed(() => run.value?.items.filter(item => item.importable && item.status === 'pending') || [])
+const selectedHighRiskIds = computed(() => run.value?.items
+  .filter(item => selected.value.includes(item.id) && item.classification === 'high_risk_syntax')
+  .map(item => item.id) || [])
+const highRiskConfirmed = computed(() => !selectedHighRiskIds.value.length
+  || highRiskConfirmation.value === CONTENT_IMPORT_HIGH_RISK_CONFIRMATION)
+const canForceHighRiskItem = (item: CmsContentImportRun['items'][number]) =>
+  item.highRiskForceEligible
+const canSelectItem = (item: CmsContentImportRun['items'][number]) => item.status === 'pending'
+  && (item.importable || canForceHighRiskItem(item))
 const categoryCounts = computed(() => Object.entries(
   (run.value?.items || []).reduce<Record<string, number>>((result, item) => {
     result[item.classification] = (result[item.classification] || 0) + 1
@@ -148,6 +158,7 @@ const dryRun = async () => {
       body: { repository: repository.value, pullRequestNumber: pullRequestNumber.value }
     })
     run.value = response.run
+    highRiskConfirmation.value = ''
     selected.value = response.run.items
       .filter(item => item.importable && item.status === 'pending')
       .map(item => item.id)
@@ -164,11 +175,21 @@ const importSelected = async () => {
   try {
     const response = await $fetch<{ run: CmsContentImportRun }>(
       `/api/cms/content-imports/${run.value.id}/import`,
-      { method: 'POST', headers: csrfHeaders(), body: { itemIds: selected.value } }
+      {
+        method: 'POST',
+        headers: csrfHeaders(),
+        body: {
+          itemIds: selected.value,
+          forceHighRiskItemIds: selectedHighRiskIds.value,
+          highRiskConfirmation: selectedHighRiskIds.value.length
+            ? highRiskConfirmation.value : undefined
+        }
+      }
     )
     run.value = response.run
     selected.value = []
-    message.value = '所选安全项目已创建为数据库草稿/提案；仍需提交审核、批准和明确发布。'
+    highRiskConfirmation.value = ''
+    message.value = '所选项目已创建为数据库草稿/提案；仍需提交审核、批准和明确发布。'
   } catch (error: any) {
     failure.value = error?.data?.message || error?.message || '导入失败'
   } finally { busy.value = false }
@@ -310,7 +331,7 @@ const externalAction = async (action: 'comment' | 'close') => {
         <div class="cms-import-stats">
           <article><strong>{{ run.itemCount }}</strong><span>变更文件</span></article>
           <article data-tone="success"><strong>{{ run.importableCount }}</strong><span>可以导入</span></article>
-          <article data-tone="danger"><strong>{{ run.conflictCount }}</strong><span>阻止 / 冲突</span></article>
+          <article data-tone="danger"><strong>{{ run.conflictCount }}</strong><span>默认阻止 / 冲突</span></article>
           <article data-tone="cyan"><strong>{{ run.importedCount }}</strong><span>已经导入</span></article>
         </div>
         <div class="cms-import-audit-line">
@@ -353,9 +374,19 @@ const externalAction = async (action: 'comment' | 'close') => {
           <article class="cms-import-operation" data-tone="primary">
             <span class="cms-import-operation-index">01</span>
             <h3>创建待审核内容</h3>
-            <p>只把勾选的安全项目创建为草稿或成员提案，不会直接发布。</p>
-            <button class="cms-button cms-import-operation-button" type="button" :disabled="busy || !selected.length" @click="importSelected">
-              只导入所选安全项目（{{ selected.length }}）
+            <p>安全项目直接创建草稿；高风险 HTML / Vue / MDC 必须逐项勾选并输入确认短语。都不会直接发布。</p>
+            <label v-if="selectedHighRiskIds.length" class="cms-import-force-confirmation">
+              <span>即将强制导入 {{ selectedHighRiskIds.length }} 个高风险项目。请输入：</span>
+              <code>{{ CONTENT_IMPORT_HIGH_RISK_CONFIRMATION }}</code>
+              <input
+                v-model="highRiskConfirmation"
+                class="cms-input"
+                autocomplete="off"
+                :placeholder="CONTENT_IMPORT_HIGH_RISK_CONFIRMATION"
+              >
+            </label>
+            <button class="cms-button cms-import-operation-button" type="button" :disabled="busy || !selected.length || !highRiskConfirmed" @click="importSelected">
+              导入所选项目（{{ selected.length }}）
             </button>
           </article>
           <article class="cms-import-operation" data-tone="comment">
@@ -377,7 +408,7 @@ const externalAction = async (action: 'comment' | 'close') => {
         <article v-for="item in run.items" :key="item.id" class="cms-card cms-import-item" :data-risk="!item.importable">
           <header class="cms-import-item-heading">
             <label class="cms-import-select">
-              <input v-model="selected" type="checkbox" :value="item.id" :disabled="!item.importable || item.status !== 'pending'">
+              <input v-model="selected" type="checkbox" :value="item.id" :disabled="!canSelectItem(item)">
               <span>
                 <small>{{ item.targetType === 'member' ? '成员资料' : '文章内容' }}</small>
                 <strong>{{ labels[item.classification] }}</strong>
@@ -391,6 +422,12 @@ const externalAction = async (action: 'comment' | 'close') => {
           <p v-if="item.draftId || item.memberProposalId" class="cms-import-item-reference"><template v-if="item.draftId">草稿 {{ item.draftId }}</template><template v-if="item.memberProposalId">成员提案 {{ item.memberProposalId }}</template></p>
           <p v-if="item.proposedArticleId">数据库预分配文章 ID：<code>{{ item.proposedArticleId }}</code></p>
           <p v-if="item.warningCodes.length" class="cms-alert cms-alert-warning">{{ item.warningCodes.join('、') }}</p>
+          <p v-if="canForceHighRiskItem(item) && item.status === 'pending'" class="cms-import-force-warning">
+            此项默认阻止。请先查看审计材料；确实需要时可逐项勾选，并在上方输入确认短语后强制创建待审核草稿。
+          </p>
+          <p v-else-if="item.classification === 'high_risk_syntax' && item.status === 'pending'" class="cms-import-force-warning">
+            此项还包含未知扩展语法或三方内容冲突，不能通过高风险人工确认覆盖，需先修改 PR。
+          </p>
           <details v-if="Object.keys(item.conflictDetails).length" class="cms-import-conflict">
             <summary>冲突 / 路径 / 引用审计详情</summary>
             <pre>{{ JSON.stringify(item.conflictDetails, null, 2) }}</pre>
@@ -618,6 +655,11 @@ const externalAction = async (action: 'comment' | 'close') => {
 .cms-import-operation p { margin-bottom: 15px; color: var(--muted); font-size: .78rem; line-height: 1.6; }
 .cms-import-operation-button { width: 100%; min-height: 44px; margin-top: auto; border-color: color-mix(in srgb, var(--cyan) 32%, var(--line)); background: var(--import-cyan-soft); color: color-mix(in srgb, var(--cyan) 88%, var(--ink)); }
 .cms-import-operation-button:hover { border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 17%, var(--surface)); transform: translateY(-1px); }
+.cms-import-force-confirmation { display: grid; gap: 7px; margin: 3px 0 10px; padding: 12px; border: 1px solid color-mix(in srgb, #d97706 45%, var(--line)); border-radius: 11px; background: color-mix(in srgb, #d97706 9%, var(--surface)); }
+.cms-import-force-confirmation span { color: var(--ink-soft); font-size: .75rem; line-height: 1.45; }
+.cms-import-force-confirmation code { color: #d97706; font-size: .73rem; font-weight: 850; }
+.cms-import-force-confirmation .cms-input { height: 40px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); font-size: .78rem; }
+.cms-import-force-warning { margin: 12px 0 0; padding: 11px 13px; border-left: 4px solid #d97706; background: color-mix(in srgb, #d97706 10%, var(--surface)); color: var(--ink-soft); font-size: .78rem; line-height: 1.55; }
 .cms-import-operation[data-tone="primary"] { border-color: color-mix(in srgb, var(--green) 26%, var(--line)); }
 .cms-import-operation[data-tone="primary"] .cms-import-operation-index { color: var(--green); }
 .cms-import-operation[data-tone="primary"] .cms-import-operation-button { border-color: color-mix(in srgb, var(--green) 32%, var(--line)); background: color-mix(in srgb, var(--green) 13%, var(--surface)); color: var(--green); }

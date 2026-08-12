@@ -34,6 +34,9 @@ export const throwContentImportHttpError = (error: unknown): never => {
         IMPORT_BASE_SNAPSHOT_DUPLICATE: 'PR Base Snapshot 存在重复 ID 或路径',
         IMPORT_RUN_NOT_FOUND: '导入运行不存在',
         IMPORT_ITEM_NOT_FOUND: '导入项目不存在',
+        IMPORT_ITEM_COUNT_INVALID: '所选导入项目数量不合法',
+        IMPORT_HIGH_RISK_SELECTION_INVALID: '只能强制导入已明确选择的高风险文章项目',
+        IMPORT_HIGH_RISK_CONFIRMATION_REQUIRED: '强制导入高风险内容需要输入指定确认短语',
         IMPORT_GITHUB_WRITE_NOT_CONFIGURED: '未配置 GitHub 外部写权限',
         IMPORT_PULL_REQUEST_CHANGED: 'PR Head 已变化，请重新 Dry Run'
       } as Record<string, string>)[error.code] || '外部内容导入被安全拒绝',

@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { dirname, extname } from 'node:path'
 import { and, asc, eq, ilike, inArray, isNull, ne, or, sql } from 'drizzle-orm'
 import { z } from 'zod'
@@ -7,6 +7,7 @@ import type {
   CmsContentImportRun,
   ContentImportClassification
 } from '../../shared/types/cms-content-imports'
+import { CONTENT_IMPORT_HIGH_RISK_CONFIRMATION } from '../../shared/types/cms-content-imports'
 import type { CmsArticleCollection } from '../../shared/types/cms-articles'
 import { getDatabase } from '../db/client'
 import {
@@ -41,6 +42,7 @@ import {
 import { CONTENT_REPOSITORY_ID } from '../utils/content-export-config'
 import { getContentImportConfig } from '../utils/content-import-config'
 import { mapContentImportConcurrently } from '../utils/content-import-concurrency'
+import { addedSyntaxWarnings } from '../utils/content-import-syntax'
 import { redactCmsSensitiveText } from '../utils/cms-sensitive-data'
 import { memberFieldDiff, memberProfileFromMarkdown, mergeMemberProfiles, profileFromRecord, profileRecord, serializeMemberProfile } from './member-profile'
 
@@ -135,25 +137,6 @@ const parseManagedPath = (path: string): ManagedPath => {
   const collection = segments.shift() as CmsArticleCollection
   const relativePath = segments.join('/')
   return { collection, relativePath, path: `${collection}/${relativePath}` }
-}
-
-const stripCode = (source: string) => source
-  .replace(/```[\s\S]*?```/g, '')
-  .replace(/~~~[\s\S]*?~~~/g, '')
-  .replace(/`[^`\n]*`/g, '')
-
-const syntaxWarnings = (source: string) => {
-  const visible = stripCode(source)
-  const warnings: string[] = []
-  if (/<\/?[A-Za-z][^>\n]*>/.test(visible)) warnings.push('RAW_HTML_OR_VUE')
-  if (/<(?:script|style|iframe|object|embed)\b/i.test(visible)
-    || /\son[a-z]+\s*=/i.test(visible)
-    || /(?:javascript|data)\s*:/i.test(visible)) warnings.push('EXECUTABLE_HTML')
-  if (/(^|\n)\s*:{2,}[A-Za-z]/.test(visible)) warnings.push('MDC_OR_VUE')
-  if (/\{[%{][\s\S]*?[%}]\}/.test(visible) || /(^|\n)\s*@[A-Za-z][\w-]*\b/.test(visible)) {
-    warnings.push('UNKNOWN_EXTENSION_SYNTAX')
-  }
-  return [...new Set(warnings)]
 }
 
 const highRisk = (warnings: string[]) =>
@@ -316,7 +299,7 @@ const planFile = async (
       .where(and(eq(articles.collection, newPath.collection), eq(articles.relativePath, newPath.relativePath)))
       .limit(1)
     if (pathConflict) return invalidPlan(ordinal, file, 'IMPORT_PATH_CONFLICT')
-    const warnings = syntaxWarnings(proposedSource)
+    const warnings: string[] = addedSyntaxWarnings('', proposedSource)
     const classification: ContentImportClassification = highRisk(warnings)
       ? 'high_risk_syntax'
       : unknownRisk(warnings) ? 'unknown_syntax' : 'new_article'
@@ -406,7 +389,7 @@ const planFile = async (
       .from(articleRedirects).where(eq(articleRedirects.fromPublicPath, targetPublicPath)).limit(1)
     if (pathConflict || redirectConflict) return invalidPlan(ordinal, file, 'IMPORT_PATH_CONFLICT')
   }
-  const warnings = syntaxWarnings(proposedSource)
+  const warnings: string[] = addedSyntaxWarnings(baseSource, proposedSource)
   let referenceCount = 0
   if (file.status === 'renamed') {
     const pattern = `%${current.publicPath.replaceAll('%', '\\%').replaceAll('_', '\\_')}%`
@@ -418,6 +401,7 @@ const planFile = async (
     if (referenceCount) warnings.push(`REFERENCES_FOUND:${referenceCount}`)
   }
   if (highRisk(warnings) || unknownRisk(warnings)) {
+    const merge = mergeMarkdownThreeWay(baseSource, currentSource, proposedSource)
     return {
       ordinal,
       changeType: file.status as 'modified' | 'renamed',
@@ -431,9 +415,12 @@ const planFile = async (
       baseSource,
       currentSource,
       proposedSource,
-      mergedSource: null,
-      warningCodes: warnings,
-      conflictDetails: {}
+      mergedSource: highRisk(warnings) && !unknownRisk(warnings) ? merge.merged : null,
+      warningCodes: [...new Set([
+        ...warnings,
+        ...(baseEqualsCurrent ? [] : ['CURRENT_CHANGED_SINCE_BASE'])
+      ])],
+      conflictDetails: merge.conflicts.length ? { conflicts: merge.conflicts } : {}
     }
   }
   const merge = mergeMarkdownThreeWay(baseSource, currentSource, proposedSource)
@@ -582,6 +569,22 @@ const planMemberFile = async (
   }
 }
 
+const highRiskForceEligible = (row: {
+  targetType: string
+  classification: string
+  proposedSource: string | null
+  warningCodes: string[]
+  articleId: string | null
+  baseSource: string | null
+  currentSource: string | null
+}) => {
+  if (row.targetType !== 'article' || row.classification !== 'high_risk_syntax'
+    || !row.proposedSource || row.warningCodes.includes('UNKNOWN_EXTENSION_SYNTAX')) return false
+  if (!row.articleId) return true
+  if (!row.baseSource || !row.currentSource) return false
+  return mergeMarkdownThreeWay(row.baseSource, row.currentSource, row.proposedSource).merged !== null
+}
+
 const itemResponse = (row: typeof contentPrImportItems.$inferSelect): CmsContentImportItem => ({
   id: row.id,
   ordinal: row.ordinal,
@@ -589,6 +592,7 @@ const itemResponse = (row: typeof contentPrImportItems.$inferSelect): CmsContent
   classification: row.classification as ContentImportClassification,
   targetType: row.targetType as 'article' | 'member',
   importable: row.importable,
+  highRiskForceEligible: highRiskForceEligible(row),
   oldPath: row.oldPath,
   newPath: row.newPath,
   articleId: row.articleId,
@@ -893,7 +897,12 @@ const draftDataFromSource = (
   }
 }
 
-const importOneItem = async (runId: string, itemId: string, actorUserId: string) => {
+const importOneItem = async (
+  runId: string,
+  itemId: string,
+  actorUserId: string,
+  allowHighRisk = false
+) => {
   return getDatabase().transaction(async (tx) => {
     const [item] = await tx.select().from(contentPrImportItems).where(and(
       eq(contentPrImportItems.id, itemId), eq(contentPrImportItems.runId, runId)
@@ -946,7 +955,9 @@ const importOneItem = async (runId: string, itemId: string, actorUserId: string)
       })
       return { itemId, draftId: null, proposalId: proposal!.id, imported: true }
     }
-    if (!item.importable || !item.mergedSource && item.classification !== 'deletion_proposal') {
+    const forcedHighRisk = allowHighRisk && item.classification === 'high_risk_syntax'
+    if ((!item.importable && !forcedHighRisk)
+      || (!item.mergedSource && item.classification !== 'deletion_proposal' && !forcedHighRisk)) {
       return { itemId, draftId: null, imported: false, blocked: true }
     }
     let current: Awaited<ReturnType<typeof currentArticle>> = null
@@ -984,7 +995,26 @@ const importOneItem = async (runId: string, itemId: string, actorUserId: string)
         return { itemId, draftId: null, imported: false, blocked: true }
       }
     }
-    const source = item.classification === 'deletion_proposal' ? item.currentSource : item.mergedSource
+    let forcedSource: string | null = null
+    if (forcedHighRisk) {
+      if (!item.proposedSource || item.warningCodes.includes('UNKNOWN_EXTENSION_SYNTAX')) {
+        return { itemId, draftId: null, imported: false, blocked: true }
+      }
+      forcedSource = item.articleId
+        ? item.baseSource && item.currentSource
+          ? mergeMarkdownThreeWay(item.baseSource, item.currentSource, item.proposedSource).merged
+          : null
+        : item.proposedSource
+      if (!forcedSource) {
+        await tx.update(contentPrImportItems).set({
+          status: 'blocked',
+          warningCodes: [...new Set([...item.warningCodes, 'HIGH_RISK_OVERRIDE_CONTENT_CONFLICT'])]
+        }).where(eq(contentPrImportItems.id, item.id))
+        return { itemId, draftId: null, imported: false, blocked: true }
+      }
+    }
+    const source = forcedSource
+      || (item.classification === 'deletion_proposal' ? item.currentSource : item.mergedSource)
     if (!source) throw new ContentPrImportError('IMPORT_ARTIFACT_MISSING')
     const data = draftDataFromSource(source, current?.frontmatter || null)
     const requestedCredits = [...new Set([...data.authorKeys, ...data.contributorKeys])]
@@ -1017,7 +1047,7 @@ const importOneItem = async (runId: string, itemId: string, actorUserId: string)
     }
     const [draft] = await tx.insert(drafts).values({
       articleId: item.articleId,
-      proposedArticleId: item.articleId ? null : item.proposedArticleId,
+      proposedArticleId: item.articleId ? null : item.proposedArticleId || randomUUID(),
       ownerUserId: actorUserId,
       collection,
       title: data.title,
@@ -1027,8 +1057,11 @@ const importOneItem = async (runId: string, itemId: string, actorUserId: string)
       baseContentHash: current?.contentHash || null,
       baseRevisionId: current?.revisionId || null,
       proposedAction: item.classification === 'deletion_proposal'
-        ? 'delete' : item.classification === 'move_or_rename' ? 'move' : 'edit',
+        ? 'delete'
+        : item.classification === 'move_or_rename'
+          || (forcedHighRisk && item.changeType === 'renamed') ? 'move' : 'edit',
       proposedRelativePath: ['move_or_rename', 'new_article'].includes(item.classification)
+        || (forcedHighRisk && (!item.articleId || item.changeType === 'renamed'))
         ? relativePath : null
     }).returning({ id: drafts.id })
     if (knownAuthorKeys.length) {
@@ -1055,9 +1088,24 @@ const importOneItem = async (runId: string, itemId: string, actorUserId: string)
         baseRevisionId: item.baseRevisionId,
         currentRevisionId: item.currentRevisionId,
         proposedSha256: item.proposedSha256,
-        mergedSha256: item.mergedSha256
+        mergedSha256: item.mergedSha256,
+        highRiskOverride: forcedHighRisk
       }
     })
+    if (forcedHighRisk) {
+      await tx.insert(auditLogs).values({
+        actorUserId,
+        action: 'content_pr_import.high_risk_forced',
+        targetType: 'content_pr_import_item',
+        targetId: item.id,
+        metadata: {
+          runId,
+          draftId: draft!.id,
+          warningCodes: item.warningCodes,
+          confirmationProvided: true
+        }
+      })
+    }
     return { itemId, draftId: draft!.id, imported: true }
   })
 }
@@ -1065,20 +1113,60 @@ const importOneItem = async (runId: string, itemId: string, actorUserId: string)
 export const importContentPrItems = async (
   runId: string,
   itemIds: string[],
-  actorUserId: string
+  actorUserId: string,
+  options: {
+    forceHighRiskItemIds?: string[]
+    highRiskConfirmation?: string
+  } = {}
 ) => {
   requireContentPrImportEnabled()
   const uniqueIds = [...new Set(itemIds)]
+  const forceHighRiskIds = [...new Set(options.forceHighRiskItemIds || [])]
+  if (!uniqueIds.length || uniqueIds.length > getContentImportConfig().CONTENT_PR_IMPORT_MAX_FILES) {
+    throw new ContentPrImportError('IMPORT_ITEM_COUNT_INVALID')
+  }
+  if (forceHighRiskIds.some(itemId => !uniqueIds.includes(itemId))) {
+    throw new ContentPrImportError('IMPORT_HIGH_RISK_SELECTION_INVALID')
+  }
+  if (forceHighRiskIds.length) {
+    if (options.highRiskConfirmation !== CONTENT_IMPORT_HIGH_RISK_CONFIRMATION) {
+      throw new ContentPrImportError('IMPORT_HIGH_RISK_CONFIRMATION_REQUIRED')
+    }
+    const forcedItems = await getDatabase().select({
+      id: contentPrImportItems.id,
+      classification: contentPrImportItems.classification,
+      targetType: contentPrImportItems.targetType,
+      warningCodes: contentPrImportItems.warningCodes,
+      articleId: contentPrImportItems.articleId,
+      baseSource: contentPrImportItems.baseSource,
+      currentSource: contentPrImportItems.currentSource,
+      proposedSource: contentPrImportItems.proposedSource
+    }).from(contentPrImportItems).where(and(
+      eq(contentPrImportItems.runId, runId),
+      inArray(contentPrImportItems.id, forceHighRiskIds)
+    ))
+    if (forcedItems.length !== forceHighRiskIds.length
+      || forcedItems.some(item => item.targetType !== 'article'
+        || item.classification !== 'high_risk_syntax'
+        || !highRiskForceEligible(item))) {
+      throw new ContentPrImportError('IMPORT_HIGH_RISK_SELECTION_INVALID')
+    }
+  }
+  const forceHighRiskSet = new Set(forceHighRiskIds)
   const results = []
-  for (const itemId of uniqueIds) results.push(await importOneItem(runId, itemId, actorUserId))
+  for (const itemId of uniqueIds) {
+    results.push(await importOneItem(runId, itemId, actorUserId, forceHighRiskSet.has(itemId)))
+  }
   const countRows = await getDatabase().select({
-    importedCount: sql<number>`count(*) filter (where ${contentPrImportItems.status} = 'imported')::int`
+    importedCount: sql<number>`count(*) filter (where ${contentPrImportItems.status} = 'imported')::int`,
+    importedSafeCount: sql<number>`count(*) filter (where ${contentPrImportItems.status} = 'imported' and ${contentPrImportItems.importable} = true)::int`
   }).from(contentPrImportItems).where(eq(contentPrImportItems.runId, runId))
   const importedCount = countRows[0]?.importedCount || 0
   const [run] = await getDatabase().select().from(contentPrImportRuns)
     .where(eq(contentPrImportRuns.id, runId)).limit(1)
   if (!run) throw new ContentPrImportError('IMPORT_RUN_NOT_FOUND', 404)
-  const status = importedCount === run.importableCount ? 'imported' : 'partially_imported'
+  const status = (countRows[0]?.importedSafeCount || 0) === run.importableCount
+    ? 'imported' : 'partially_imported'
   await getDatabase().transaction(async (tx) => {
     await tx.update(contentPrImportRuns).set({ importedCount, status, completedAt: new Date() })
       .where(eq(contentPrImportRuns.id, runId))
@@ -1087,7 +1175,12 @@ export const importContentPrItems = async (
       action: 'content_pr_import.items_selected',
       targetType: 'content_pr_import_run',
       targetId: runId,
-      metadata: { selectedCount: uniqueIds.length, importedCount, status }
+      metadata: {
+        selectedCount: uniqueIds.length,
+        forcedHighRiskCount: forceHighRiskIds.length,
+        importedCount,
+        status
+      }
     })
   })
   return { run: await getContentPrImportRun(runId), results }
