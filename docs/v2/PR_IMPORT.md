@@ -29,6 +29,11 @@ Outbox、评论/关闭确认或“绝不自动 Merge”的边界。
   独立 POST 入口，各自要求确认字符串；关闭还要求 `admin`。没有 Merge API。
 - `CONTENT_PR_IMPORT_GITHUB_TOKEN` 未配置时，Dry Run 仍可使用公开读取，但评论和关闭
   fail closed。Token、Authorization、远端 URL、私钥和绝对路径不进入响应或审计摘要。
+- PR 文件数超过 `CONTENT_PR_IMPORT_MAX_FILES` 时，页面明确显示“PR 文件数量超过服务器允许的
+  导入上限”并保留 `GITHUB_PULL_FILE_LIMIT_EXCEEDED` 错误码；这属于本地安全上限，不应误报为
+  GitHub API、Token 或网络故障。
+- 默认上限为 GitHub PR files API 可配置范围内的 `500`，足以处理结构化 Wiki 批量导入；超过
+  500 个文件的提案仍应拆分 PR，不通过移除上限规避资源保护。
 
 ## 3. Base、Current、Proposed
 

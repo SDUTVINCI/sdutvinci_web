@@ -41,6 +41,13 @@ export const throwContentImportHttpError = (error: unknown): never => {
     })
   }
   if (error instanceof ContentImportGitHubError) {
+    if (error.code === 'GITHUB_PULL_FILE_LIMIT_EXCEEDED') {
+      throw createError({
+        statusCode: error.status,
+        message: 'PR 文件数量超过服务器允许的导入上限',
+        data: { code: error.code }
+      })
+    }
     throw createError({
       statusCode: error.status,
       message: 'GitHub API 请求失败；已保留脱敏错误码',

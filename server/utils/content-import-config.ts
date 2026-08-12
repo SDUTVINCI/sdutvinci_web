@@ -9,7 +9,7 @@ const schema = z.object({
   CONTENT_PR_IMPORT_GITHUB_TOKEN: z.string().min(1).optional(),
   CONTENT_PR_IMPORT_MAX_FILE_BYTES: z.coerce.number().int().min(1024).max(5_000_000)
     .default(1_048_576),
-  CONTENT_PR_IMPORT_MAX_FILES: z.coerce.number().int().min(1).max(500).default(200),
+  CONTENT_PR_IMPORT_MAX_FILES: z.coerce.number().int().min(1).max(500).default(500),
   CONTENT_PR_IMPORT_RETRY_ATTEMPTS: z.coerce.number().int().min(1).max(5).default(3),
   CONTENT_PR_IMPORT_TEST_MODE: z.enum(['false', 'true']).default('false')
 })

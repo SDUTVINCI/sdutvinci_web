@@ -450,7 +450,7 @@ reset 或 Force Push。修复后重新从 `dry_run` 生成新报告和新令牌�
 | `CONTENT_PR_IMPORT_API_URL` | 固定 `https://api.github.com` | 正式环境只允许 GitHub 官方 HTTPS API，禁止内嵌凭据或改成 HTTP。 |
 | `CONTENT_PR_IMPORT_GITHUB_TOKEN` | 首次保守部署可留空；也可先写入已验证的 Fine-grained PAT，同时继续保持 mode 为 `disabled` | 预配置便于以后只切换 mode，但 Token 会提前存入宿主机和容器配置，必须按未来实际能力做最小授权。不得复用 SSH Deploy Key、GHCR Token、个人 classic PAT 或代码仓库凭据。 |
 | `CONTENT_PR_IMPORT_MAX_FILE_BYTES` | 默认 `1048576`（1 MiB） | 单文件上限，范围 `1024–5000000` 字节；超限拒绝整个相关动作。 |
-| `CONTENT_PR_IMPORT_MAX_FILES` | 默认 `200` | 单 PR 文件数量上限，范围 `1–500`。 |
+| `CONTENT_PR_IMPORT_MAX_FILES` | 默认 `500` | 单 PR 文件数量上限，范围 `1–500`；达到上限后仍 fail closed，避免无界读取。 |
 | `CONTENT_PR_IMPORT_RETRY_ATTEMPTS` | 默认 `3` | GitHub 网络、429 和 5xx 重试次数，范围 `1–5`；不是业务操作无限重试。 |
 | `CONTENT_PR_IMPORT_TEST_MODE` | 生产固定 `false` | `true` 只允许 `NODE_ENV=test`，用于回环 mock GitHub；生产启动会拒绝。 |
 
