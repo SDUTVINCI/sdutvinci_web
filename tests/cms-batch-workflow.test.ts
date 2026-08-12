@@ -23,13 +23,19 @@ describe('CMS 批量工作流结果隔离', () => {
     ])
   })
 
-  it('页面公开分类筛选、明确高风险入口和三种批量操作', async () => {
+  it('页面公开分类和状态计数筛选、明确高风险入口和三种批量操作', async () => {
     const [importsPage, draftsPage, reviewsPage] = await Promise.all([
       readFile('app/pages/cms/content-imports/index.vue', 'utf8'),
       readFile('app/pages/cms/drafts/index.vue', 'utf8'),
       readFile('app/pages/cms/reviews/index.vue', 'utf8')
     ])
     expect(importsPage).toContain('按风险分类筛选文件')
+    expect(importsPage).toContain('按处理状态筛选文件')
+    expect(importsPage).toContain('风险分类和处理状态可组合使用')
+    expect(importsPage).toContain('已导入草稿 / 提案')
+    expect(importsPage).toContain('statusFilter')
+    expect(importsPage).toContain('blockedReason(item)')
+    expect(importsPage).toContain('IMPORT_ACTIVE_DRAFT_EXISTS')
     expect(importsPage).toContain('强制导入此高风险项（仍需输入确认短语）')
     expect(importsPage).toContain('classificationFilter')
     expect(draftsPage).toContain('批量提交审核')

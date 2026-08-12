@@ -1041,7 +1041,10 @@ const importOneItem = async (
         )).limit(1)
       : []
     if (existingDraft) {
-      await tx.update(contentPrImportItems).set({ status: 'blocked' })
+      await tx.update(contentPrImportItems).set({
+        status: 'blocked',
+        warningCodes: [...new Set([...item.warningCodes, 'IMPORT_ACTIVE_DRAFT_EXISTS'])]
+      })
         .where(eq(contentPrImportItems.id, item.id))
       return { itemId, draftId: null, imported: false, blocked: true }
     }

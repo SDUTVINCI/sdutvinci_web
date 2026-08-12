@@ -2,7 +2,8 @@
 import {
   CONTENT_IMPORT_HIGH_RISK_CONFIRMATION,
   type CmsContentImportRun,
-  type ContentImportClassification
+  type ContentImportClassification,
+  type ContentImportItemStatus
 } from '~~/shared/types/cms-content-imports'
 import {
   buildContentImportContext,
@@ -19,6 +20,7 @@ const pullRequestNumber = ref<number | null>(null)
 const run = ref<CmsContentImportRun | null>(null)
 const selected = ref<string[]>([])
 const classificationFilter = ref<'all' | ContentImportClassification>('all')
+const statusFilter = ref<'all' | ContentImportItemStatus>('all')
 const highRiskConfirmation = ref('')
 const busy = ref(false)
 const message = ref('')
@@ -65,10 +67,16 @@ const runStatusLabels: Record<CmsContentImportRun['status'], string> = {
 }
 const itemStatusLabels = {
   pending: '等待处理',
-  imported: '已创建草稿或提案',
+  imported: '已导入草稿 / 提案',
   skipped: '已跳过',
   blocked: '已阻止'
 } as const
+const itemStatuses = Object.keys(itemStatusLabels) as ContentImportItemStatus[]
+const warningLabels: Record<string, string> = {
+  CURRENT_CHANGED_AFTER_DRY_RUN: 'Dry Run 后数据库正式内容已变化，需要重新检查后再处理。',
+  HIGH_RISK_OVERRIDE_CONTENT_CONFLICT: '强制导入时发现三方内容冲突，未创建草稿。',
+  IMPORT_ACTIVE_DRAFT_EXISTS: '当前账号已经有这篇文章的未删除草稿，为避免覆盖而阻止重复创建。'
+}
 const externalActionLabels = {
   comment: '在 PR 下留言检查结果',
   close: '关闭 PR'
@@ -93,9 +101,24 @@ const categoryCounts = computed(() => Object.entries(
     return result
   }, {})
 ))
-const filteredItems = computed(() => classificationFilter.value === 'all'
-  ? run.value?.items || []
-  : (run.value?.items || []).filter(item => item.classification === classificationFilter.value))
+const statusCounts = computed(() => itemStatuses.map(status => [
+  status,
+  (run.value?.items || []).filter(item => item.status === status).length
+] as const))
+const filteredItems = computed(() => (run.value?.items || []).filter(item =>
+  (classificationFilter.value === 'all' || item.classification === classificationFilter.value)
+  && (statusFilter.value === 'all' || item.status === statusFilter.value)
+))
+const warningText = (code: string) => warningLabels[code] || code
+const blockedReason = (item: CmsContentImportRun['items'][number]) => {
+  if (item.status !== 'blocked') return null
+  const knownReasons = item.warningCodes
+    .map(code => warningLabels[code])
+    .filter((reason): reason is string => Boolean(reason))
+  return knownReasons.length
+    ? knownReasons.join(' ')
+    : '该项在执行导入时未能创建草稿或提案；这条旧记录没有保存更具体的阻止原因。'
+}
 const artifactItem = computed(() => run.value?.items.find(item => item.id === artifact.value?.id) || null)
 const deletionArtifact = computed(() => ['deletion_proposal', 'member_deletion_proposal']
   .includes(artifactItem.value?.classification || ''))
@@ -163,6 +186,7 @@ const dryRun = async () => {
     })
     run.value = response.run
     classificationFilter.value = 'all'
+    statusFilter.value = 'all'
     highRiskConfirmation.value = ''
     selected.value = response.run.items
       .filter(item => item.importable && item.status === 'pending')
@@ -343,24 +367,58 @@ const externalAction = async (action: 'comment' | 'close') => {
           <span><i aria-hidden="true" />Dry Run 已写入审计记录</span>
           <span>PR 外部操作 {{ run.externalActions.length }} 条</span>
         </div>
-        <div class="cms-import-category-filters" role="group" aria-label="按风险分类筛选文件">
-          <button
-            type="button"
-            :aria-pressed="classificationFilter === 'all'"
-            @click="classificationFilter = 'all'"
-          >
-            <span>全部分类</span><strong>{{ run.itemCount }}</strong>
-          </button>
-          <button
-            v-for="[classification, itemCount] in categoryCounts"
-            :key="classification"
-            type="button"
-            :aria-pressed="classificationFilter === classification"
-            @click="classificationFilter = classification as ContentImportClassification"
-          >
-            <span>{{ labels[classification as ContentImportClassification] }}</span><strong>{{ itemCount }}</strong>
-          </button>
-        </div>
+        <section class="cms-import-filter-panel" aria-label="导入结果筛选">
+          <header>
+            <div>
+              <strong>结果筛选</strong>
+              <span>风险分类和处理状态可组合使用</span>
+            </div>
+            <span>显示 {{ filteredItems.length }} / {{ run.itemCount }} 项</span>
+          </header>
+          <div class="cms-import-filter-row">
+            <span>风险分类</span>
+            <div class="cms-import-category-filters" role="group" aria-label="按风险分类筛选文件">
+              <button
+                type="button"
+                :aria-pressed="classificationFilter === 'all'"
+                @click="classificationFilter = 'all'"
+              >
+                <span>全部分类</span><strong>{{ run.itemCount }}</strong>
+              </button>
+              <button
+                v-for="[classification, itemCount] in categoryCounts"
+                :key="classification"
+                type="button"
+                :aria-pressed="classificationFilter === classification"
+                @click="classificationFilter = classification as ContentImportClassification"
+              >
+                <span>{{ labels[classification as ContentImportClassification] }}</span><strong>{{ itemCount }}</strong>
+              </button>
+            </div>
+          </div>
+          <div class="cms-import-filter-row">
+            <span>处理状态</span>
+            <div class="cms-import-category-filters cms-import-status-filters" role="group" aria-label="按处理状态筛选文件">
+              <button
+                type="button"
+                :aria-pressed="statusFilter === 'all'"
+                @click="statusFilter = 'all'"
+              >
+                <span>全部状态</span><strong>{{ run.itemCount }}</strong>
+              </button>
+              <button
+                v-for="[status, itemCount] in statusCounts"
+                :key="status"
+                type="button"
+                :data-status="status"
+                :aria-pressed="statusFilter === status"
+                @click="statusFilter = status"
+              >
+                <span>{{ itemStatusLabels[status] }}</span><strong>{{ itemCount }}</strong>
+              </button>
+            </div>
+          </div>
+        </section>
         <section v-if="run.externalActions.length" class="cms-import-actions" aria-label="PR 外部操作记录">
           <article
             v-for="action in run.externalActions"
@@ -441,7 +499,10 @@ const externalAction = async (action: 'comment' | 'close') => {
           </div>
           <p v-if="item.draftId || item.memberProposalId" class="cms-import-item-reference"><template v-if="item.draftId">草稿 {{ item.draftId }}</template><template v-if="item.memberProposalId">成员提案 {{ item.memberProposalId }}</template></p>
           <p v-if="item.proposedArticleId">数据库预分配文章 ID：<code>{{ item.proposedArticleId }}</code></p>
-          <p v-if="item.warningCodes.length" class="cms-alert cms-alert-warning">{{ item.warningCodes.join('、') }}</p>
+          <p v-if="item.warningCodes.length" class="cms-alert cms-alert-warning">{{ item.warningCodes.map(warningText).join(' ') }}</p>
+          <p v-if="blockedReason(item)" class="cms-import-blocked-reason">
+            <strong>阻止原因：</strong>{{ blockedReason(item) }}
+          </p>
           <p v-if="canForceHighRiskItem(item) && item.status === 'pending'" class="cms-import-force-warning">
             此项默认阻止。请先查看审计材料；确实需要时可逐项勾选，并在上方输入确认短语后强制创建待审核草稿。
           </p>
@@ -737,8 +798,17 @@ const externalAction = async (action: 'comment' | 'close') => {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 18px;
+  margin-top: 0;
 }
+
+.cms-import-filter-panel { display: grid; gap: 15px; padding: 17px 18px; border: 1px solid var(--import-line); border-radius: 14px; background: color-mix(in srgb, var(--paper) 38%, var(--surface)); }
+.cms-import-filter-panel > header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.cms-import-filter-panel > header > div { display: grid; gap: 3px; }
+.cms-import-filter-panel > header strong { color: var(--ink); font-size: .88rem; }
+.cms-import-filter-panel > header span { color: var(--muted); font-size: .72rem; }
+.cms-import-filter-panel > header > span { flex: 0 0 auto; padding: 5px 9px; border-radius: 999px; background: var(--import-cyan-soft); color: var(--cyan); font-weight: 800; }
+.cms-import-filter-row { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 12px; align-items: start; }
+.cms-import-filter-row > span { padding-top: 9px; color: var(--muted); font-size: .7rem; font-weight: 800; letter-spacing: .05em; }
 
 .cms-import-category-filters button {
   display: inline-flex;
@@ -771,6 +841,12 @@ const externalAction = async (action: 'comment' | 'close') => {
   text-align: center;
 }
 
+.cms-import-status-filters button[data-status="imported"] strong { color: var(--green); }
+.cms-import-status-filters button[data-status="blocked"] strong { color: var(--red); }
+.cms-import-status-filters button[data-status="skipped"] strong { color: #d97706; }
+.cms-import-blocked-reason { padding: 11px 13px; border-left: 4px solid var(--red); background: color-mix(in srgb, var(--red) 9%, var(--surface)); color: var(--ink-soft) !important; line-height: 1.55; }
+.cms-import-blocked-reason strong { color: var(--red); }
+
 .cms-import-select em {
   display: block;
   margin-top: 4px;
@@ -800,6 +876,9 @@ const externalAction = async (action: 'comment' | 'close') => {
   .cms-import-field-heading small { display: none; }
   .cms-import-summary { padding: 20px 17px; }
   .cms-import-summary-heading { align-items: flex-start; flex-direction: column; }
+  .cms-import-filter-panel > header { align-items: flex-start; flex-direction: column; }
+  .cms-import-filter-row { grid-template-columns: 1fr; gap: 5px; }
+  .cms-import-filter-row > span { padding-top: 0; }
   .cms-import-commits { grid-template-columns: 1fr; }
   .cms-import-commit-arrow { transform: rotate(90deg); justify-self: center; }
   .cms-import-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }

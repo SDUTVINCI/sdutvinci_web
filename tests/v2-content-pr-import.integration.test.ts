@@ -499,6 +499,22 @@ suite('V2 阶段 8 本地 Markdown PR 导入与三方冲突', () => {
     expect((await getDatabase().select().from(auditLogs)
       .where(eq(auditLogs.action, 'content_pr_import.item_imported')))).toHaveLength(5)
 
+    const safeItem = run.items.find(item => item.classification === 'safe_change')!
+    const importedSafeItem = (await getDatabase().select().from(contentPrImportItems)
+      .where(eq(contentPrImportItems.id, safeItem.id)))[0]!
+    await getDatabase().update(contentPrImportItems).set({ status: 'pending', draftId: null })
+      .where(eq(contentPrImportItems.id, safeItem.id))
+    expect((await importContentPrItems(run.id, [safeItem.id], actorUserId)).results[0])
+      .toMatchObject({ imported: false, blocked: true })
+    const blockedExistingDraft = (await getDatabase().select().from(contentPrImportItems)
+      .where(eq(contentPrImportItems.id, safeItem.id)))[0]!
+    expect(blockedExistingDraft.status).toBe('blocked')
+    expect(blockedExistingDraft.warningCodes).toContain('IMPORT_ACTIVE_DRAFT_EXISTS')
+    await getDatabase().update(contentPrImportItems).set({
+      status: 'imported', draftId: importedSafeItem.draftId,
+      warningCodes: blockedExistingDraft.warningCodes.filter(code => code !== 'IMPORT_ACTIVE_DRAFT_EXISTS')
+    }).where(eq(contentPrImportItems.id, safeItem.id))
+
     const highRiskItem = run.items.find(item => item.classification === 'high_risk_syntax')!
     expect((await importContentPrItems(run.id, [highRiskItem.id], actorUserId)).results[0])
       .toMatchObject({ imported: false, blocked: true })
