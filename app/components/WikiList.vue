@@ -14,6 +14,7 @@ interface WikiListItem {
   docTitle?: string
   isWikiDoc?: boolean
   isWikiIndex?: boolean
+  requiresAuth?: boolean
   wikiDepth?: number
 }
 
@@ -34,8 +35,8 @@ const props = withDefaults(defineProps<{
 
 const { data: wikis, pending } = await usePublicContentQuery<WikiListItem[]>({
   key: 'wiki-list-meta',
-  database: async () => (
-    await $fetch<{ items: WikiListItem[] }>('/api/v2/content/wiki')
+  database: async requestFetch => (
+    await requestFetch<{ items: WikiListItem[] }>('/api/v2/content/wiki')
   ).items
 })
 
@@ -57,7 +58,7 @@ const docGroups = computed<WikiDocGroup[]>(() => {
         groups.set(key, {
           key,
           title: wiki.docTitle || wiki.title || 'Wiki 文档',
-          path: wiki.docRoot || wiki.path,
+          path: wiki.isWikiIndex ? (wiki.docRoot || wiki.path) : wiki.path,
           date: wiki.date,
           index: null,
           chapters: []
@@ -132,6 +133,14 @@ function isDocExpanded(doc: WikiDocGroup) {
   return Boolean(searchQuery.value.trim()) || expandedDocs.value.has(doc.key)
 }
 
+function articleCount(doc: WikiDocGroup) {
+  return doc.chapters.length + (doc.index ? 1 : 0)
+}
+
+function hasRestrictedArticles(doc: WikiDocGroup) {
+  return Boolean(doc.index?.requiresAuth || doc.chapters.some(item => item.requiresAuth))
+}
+
 function toggleDoc(key: string) {
   const next = new Set(expandedDocs.value)
 
@@ -177,7 +186,8 @@ function matchesQuery(wiki: WikiListItem, query: string) {
             </NuxtLink>
             <div class="wiki-doc-meta">
               <span>{{ doc.date || '未标注日期' }}</span>
-              <span>{{ doc.chapters.length }} 个章节</span>
+              <span>{{ articleCount(doc) }} 篇文章</span>
+              <span v-if="hasRestrictedArticles(doc)" class="content-access-label">含需登录文章</span>
             </div>
           </div>
 

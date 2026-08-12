@@ -22,6 +22,7 @@ interface WikiPage {
   docTitle?: string
   isWikiDoc?: boolean
   isWikiIndex?: boolean
+  requiresAuth?: boolean
   body?: unknown
   [key: string]: unknown
 }
@@ -39,8 +40,8 @@ const candidateSlug = computed(() =>
 
 const { data: page, pending } = await usePublicContentQuery<WikiPage | null>({
   key: computed(() => `wiki-page-${cleanPath.value}`),
-  database: async () => (
-    await $fetch<{ item: WikiPage }>(
+  database: async requestFetch => (
+    await requestFetch<{ item: WikiPage }>(
       `/api/v2/content/wiki/${candidateSlug.value}`
     )
   ).item,
@@ -59,8 +60,8 @@ const pageDocKey = computed(() => page.value?.docKey || '')
 
 const { data: allWikiItems } = await usePublicContentQuery<WikiPage[]>({
   key: 'wiki-navigation-items',
-  database: async () => (
-    await $fetch<{ items: WikiPage[] }>('/api/v2/content/wiki')
+  database: async requestFetch => (
+    await requestFetch<{ items: WikiPage[] }>('/api/v2/content/wiki')
   ).items
 })
 
@@ -681,6 +682,7 @@ function normalizePath(path: string) {
             <div v-if="currentChapter" class="chapter-kicker">
               第 {{ currentChapter }} 节
             </div>
+            <span v-if="page.requiresAuth" class="content-access-label">队内登录可见</span>
             <h1>{{ page.title }}</h1>
             <ArticleCredits
               :authors="articleFrontmatter.authors"

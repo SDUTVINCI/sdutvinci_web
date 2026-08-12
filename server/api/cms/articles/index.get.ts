@@ -7,6 +7,7 @@ const schema = z.object({
   q: z.string().trim().max(100).optional(),
   collection: z.enum(['news', 'wiki']).optional(),
   directory: z.string().trim().max(500).optional(),
+  access: z.enum(['public', 'restricted']).optional(),
   status: z.enum(['published', 'deleted', 'all']).optional()
 })
 
@@ -21,6 +22,7 @@ export default defineEventHandler(async (event) => {
     query: query.q,
     collection: query.collection,
     directory: query.directory,
+    access: query.access,
     status: query.status,
     includeDeleted: isAdmin && query.status === 'all'
   })

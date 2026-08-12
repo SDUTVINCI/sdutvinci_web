@@ -60,6 +60,26 @@ video {
   text-transform: uppercase;
 }
 
+.content-access-label {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border: 1px solid color-mix(in srgb, var(--red) 24%, var(--line));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--red) 9%, var(--surface));
+  color: var(--red-dark);
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+}
+
+.content-access-label::before {
+  content: "●";
+  font-size: 0.52rem;
+}
+
 .home-hero .eyebrow,
 .page-hero .eyebrow {
   color: var(--hero-accent);

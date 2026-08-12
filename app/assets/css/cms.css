@@ -2143,6 +2143,87 @@
   justify-content: start;
 }
 
+.cms-articles-toolbar {
+  grid-template-columns: minmax(220px, 2fr) repeat(4, minmax(135px, 0.8fr)) auto;
+}
+
+.cms-article-access-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22px;
+  margin: -10px 0 22px;
+  padding: 18px 20px;
+  border: 1px solid color-mix(in srgb, var(--cyan) 22%, var(--line));
+  border-radius: 16px;
+  background:
+    linear-gradient(105deg, color-mix(in srgb, var(--cyan) 7%, var(--surface)), var(--surface));
+  box-shadow: var(--shadow-card);
+}
+
+.cms-article-access-panel > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.cms-article-access-panel .cms-eyebrow {
+  margin: 0;
+  font-size: 0.66rem;
+}
+
+.cms-article-access-panel strong {
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+.cms-article-access-panel span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.cms-article-access-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
+.cms-visibility-toggle {
+  display: inline-grid;
+  grid-template-columns: repeat(2, auto);
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+}
+
+.cms-visibility-toggle:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.cms-visibility-toggle span {
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.cms-visibility-toggle span.is-active {
+  background: var(--surface);
+  color: var(--cyan);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--ink) 10%, transparent);
+}
+
+.cms-visibility-toggle[aria-pressed="true"] span.is-active {
+  color: var(--red);
+}
+
 .cms-draft-view-switch {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -4153,12 +4234,22 @@
   }
 
   .cms-draft-batch-actions,
+  .cms-article-access-panel,
   .cms-published-draft-note {
     align-items: stretch;
     flex-direction: column;
   }
 
   .cms-draft-batch-actions .cms-button {
+    width: 100%;
+  }
+
+  .cms-article-access-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .cms-article-access-actions .cms-button {
     width: 100%;
   }
 

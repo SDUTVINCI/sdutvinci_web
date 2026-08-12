@@ -36,6 +36,7 @@ const articleSelection = {
   relativePath: articles.relativePath,
   publicPath: articles.publicPath,
   articleTitle: articles.title,
+  requiresAuth: articles.requiresAuth,
   revisionId: articleRevisions.id,
   revisionNumber: articleRevisions.revisionNumber,
   markdownSource: articleRevisions.markdownSource,
@@ -51,6 +52,7 @@ type PublishedArticleRow = {
   relativePath: string
   publicPath: string
   articleTitle: string
+  requiresAuth: boolean
   revisionId: string
   revisionNumber: number
   markdownSource: string
@@ -116,19 +118,29 @@ const toPublicArticle = (row: PublishedArticleRow): PublicArticle => {
     revisionId: row.revisionId,
     revisionNumber: row.revisionNumber,
     contentHash: row.contentHash,
+    requiresAuth: row.requiresAuth,
     cacheKey,
     updatedAt: row.revisionCreatedAt.toISOString()
   }
 }
 
-const publishedArticleFilters = (collection?: PublicArticleCollection) => and(
+interface PublicArticleAccessOptions {
+  includeRestricted?: boolean
+}
+
+const publishedArticleFilters = (
+  collection?: PublicArticleCollection,
+  options: PublicArticleAccessOptions = {}
+) => and(
   eq(articles.isPresent, 'true'),
   isNull(articles.deletedAt),
+  ...(!options.includeRestricted ? [eq(articles.requiresAuth, false)] : []),
   ...(collection ? [eq(articles.collection, collection)] : [])
 )
 
 export const listPublicArticlesFromDatabase = async (
-  collection: PublicArticleCollection
+  collection: PublicArticleCollection,
+  options: PublicArticleAccessOptions = {}
 ): Promise<PublicArticle[]> => {
   const rows = await getDatabase()
     .select(articleSelection)
@@ -137,7 +149,7 @@ export const listPublicArticlesFromDatabase = async (
       articleRevisions,
       eq(articles.currentRevisionId, articleRevisions.id)
     )
-    .where(publishedArticleFilters(collection))
+    .where(publishedArticleFilters(collection, options))
     .orderBy(
       collection === 'news'
         ? desc(articleRevisions.createdAt)
@@ -149,7 +161,8 @@ export const listPublicArticlesFromDatabase = async (
 
 export const getPublicArticleFromDatabase = async (
   collection: PublicArticleCollection,
-  publicPath: string
+  publicPath: string,
+  options: PublicArticleAccessOptions = {}
 ): Promise<PublicArticle | null> => {
   const normalizedPath = `/${publicPath.trim().replace(/^\/+|\/+$/g, '')}`
   let [row] = await getDatabase()
@@ -160,7 +173,7 @@ export const getPublicArticleFromDatabase = async (
       eq(articles.currentRevisionId, articleRevisions.id)
     )
     .where(and(
-      publishedArticleFilters(collection),
+      publishedArticleFilters(collection, options),
       eq(articles.publicPath, normalizedPath)
     ))
     .limit(1)
@@ -176,7 +189,7 @@ export const getPublicArticleFromDatabase = async (
       .from(articles)
       .innerJoin(articleRevisions, eq(articles.currentRevisionId, articleRevisions.id))
       .where(and(
-        publishedArticleFilters(collection),
+        publishedArticleFilters(collection, options),
         eq(articles.id, redirect.articleId)
       ))
       .limit(1)
@@ -201,7 +214,8 @@ export const getPublicArticleFromDatabase = async (
 
 export const searchPublicArticlesFromDatabase = async (
   query: string,
-  collection?: PublicArticleCollection
+  collection?: PublicArticleCollection,
+  options: PublicArticleAccessOptions = {}
 ): Promise<PublicContentSearchResult[]> => {
   const normalizedQuery = query.trim()
   if (!normalizedQuery) return []
@@ -216,7 +230,7 @@ export const searchPublicArticlesFromDatabase = async (
       eq(articles.currentRevisionId, articleRevisions.id)
     )
     .where(and(
-      publishedArticleFilters(collection),
+      publishedArticleFilters(collection, options),
       or(
         ilike(articles.title, pattern),
         ilike(articles.relativePath, pattern),

@@ -9,7 +9,8 @@ import { articles } from '../server/db/schema'
 import {
   getCmsArticle,
   listCmsArticles,
-  synchronizeCmsArticles
+  synchronizeCmsArticles,
+  updateCmsArticleVisibility
 } from '../server/services/cms-articles'
 import {
   createCmsMember,
@@ -143,7 +144,22 @@ integration('CMS 成员与文章只读管理', () => {
     expect((await listCmsArticles({ directory: 'wiki/guide' })).total).toBe(1)
 
     const news = all.articles.find(article => article.collection === 'news')!
+    const wiki = all.articles.find(article => article.collection === 'wiki')!
     expect((await getCmsArticle(news.id))?.frontmatter.tags).toEqual(['比赛'])
+    expect(wiki.requiresAuth).toBe(false)
+    const admin = await bootstrapCmsAdmin({
+      account: 'visibilityadmin',
+      password: 'AdminPassword123'
+    })
+    expect(await updateCmsArticleVisibility([wiki.id], true, admin!.id)).toEqual({
+      requiresAuth: true,
+      updatedIds: [wiki.id],
+      unchangedIds: []
+    })
+    expect((await listCmsArticles({ access: 'restricted' })).articles)
+      .toMatchObject([{ id: wiki.id, requiresAuth: true }])
+    expect((await listCmsArticles({ access: 'public' })).articles)
+      .toMatchObject([{ id: news.id, requiresAuth: false }])
     await writeFile(
       join(contentRoot, 'news', 'hello.md'),
       markdown('title: 修改后的标题', '机器人比赛正文')

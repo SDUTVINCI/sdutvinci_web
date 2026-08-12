@@ -1,15 +1,16 @@
 import { createHash } from 'node:crypto'
 import { basename, dirname, extname } from 'node:path'
-import { and, asc, eq, ilike, isNotNull, isNull, or } from 'drizzle-orm'
+import { and, asc, eq, ilike, inArray, isNotNull, isNull, or } from 'drizzle-orm'
 import type {
   CmsArticleCollection,
   CmsArticleDetail,
   CmsArticleListResponse,
-  CmsArticleSummary
+  CmsArticleSummary,
+  CmsArticleVisibilityUpdateResult
 } from '../../shared/types/cms-articles'
 import { getWikiContentMeta } from '../../utils/wiki-content-meta'
 import { getDatabase } from '../db/client'
-import { articleRevisions, articles } from '../db/schema'
+import { articleRevisions, articles, auditLogs } from '../db/schema'
 import { listMarkdownFiles, readContentFile } from '../utils/cms-content-path'
 import { parseCmsMarkdown } from '../utils/cms-frontmatter'
 import {
@@ -18,6 +19,7 @@ import {
 } from '../utils/cms-v2-flags'
 import { readCmsGitArticle } from './cms-git-worktree'
 import { getCmsArticleExportStatus } from './cms-export-status'
+import { invalidatePublicContentCache } from './public-content-cache'
 
 const collections: CmsArticleCollection[] = ['news', 'wiki']
 
@@ -133,6 +135,7 @@ const toSummary = (row: typeof articles.$inferSelect): CmsArticleSummary => ({
   title: row.title,
   frontmatter: row.frontmatter,
   contentHash: row.contentHash,
+  requiresAuth: row.requiresAuth,
   isDeleted: Boolean(row.deletedAt),
   isPresent: row.isPresent === 'true',
   updatedAt: row.updatedAt.toISOString()
@@ -143,6 +146,7 @@ export interface ListCmsArticlesInput {
   collection?: CmsArticleCollection
   directory?: string
   status?: 'published' | 'deleted' | 'all'
+  access?: 'public' | 'restricted'
   includeDeleted?: boolean
 }
 
@@ -164,6 +168,8 @@ export const listCmsArticles = async (
   }
   if (input.collection) filters.push(eq(articles.collection, input.collection))
   if (input.directory) filters.push(eq(articles.directory, input.directory))
+  if (input.access === 'public') filters.push(eq(articles.requiresAuth, false))
+  if (input.access === 'restricted') filters.push(eq(articles.requiresAuth, true))
   if (input.query?.trim()) {
     const query = `%${input.query.trim().replaceAll('%', '\\%').replaceAll('_', '\\_')}%`
     filters.push(or(ilike(articles.title, query), ilike(articles.searchText, query))!)
@@ -196,6 +202,65 @@ export const listCmsArticles = async (
           .where(isNotNull(articles.deletedAt))).length
       : undefined
   }
+}
+
+export class CmsArticleVisibilityStateError extends Error {
+  constructor() {
+    super('部分文章不存在、已删除或不再可操作，请刷新后重试')
+    this.name = 'CmsArticleVisibilityStateError'
+  }
+}
+
+export const updateCmsArticleVisibility = async (
+  articleIds: string[],
+  requiresAuth: boolean,
+  actorUserId: string
+): Promise<CmsArticleVisibilityUpdateResult> => {
+  const ids = [...new Set(articleIds)]
+  if (!ids.length) throw new CmsArticleVisibilityStateError()
+  const result = await getDatabase().transaction(async (tx) => {
+    const rows = await tx
+      .select({ id: articles.id, requiresAuth: articles.requiresAuth })
+      .from(articles)
+      .where(and(
+        inArray(articles.id, ids),
+        eq(articles.isPresent, 'true'),
+        isNull(articles.deletedAt)
+      ))
+      .for('update')
+
+    if (rows.length !== ids.length) {
+      throw new CmsArticleVisibilityStateError()
+    }
+
+    const currentById = new Map(rows.map(row => [row.id, row.requiresAuth]))
+    const updatedIds = ids.filter(id => currentById.get(id) !== requiresAuth)
+    const unchangedIds = ids.filter(id => currentById.get(id) === requiresAuth)
+
+    if (updatedIds.length) {
+      await tx
+        .update(articles)
+        .set({ requiresAuth, updatedAt: new Date() })
+        .where(inArray(articles.id, updatedIds))
+      await tx.insert(auditLogs).values({
+        actorUserId,
+        action: 'article.visibility.update',
+        targetType: 'article_batch',
+        metadata: {
+          articleIds: updatedIds,
+          requiresAuth,
+          updatedCount: updatedIds.length
+        }
+      })
+    }
+
+    return { requiresAuth, updatedIds, unchangedIds }
+  })
+
+  result.updatedIds.forEach(articleId => {
+    invalidatePublicContentCache({ articleId })
+  })
+  return result
 }
 
 export const getCmsArticle = async (

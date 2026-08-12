@@ -11,7 +11,9 @@ export default defineEventHandler(async (event) => {
   if (!path.startsWith('/wiki/') || path.includes('\\') || path.includes('\0')) {
     throw createError({ statusCode: 400, message: 'Wiki 路径无效' })
   }
-  const article = await getPublicArticleFromDatabase('wiki', path)
+  const article = await getPublicArticleFromDatabase('wiki', path, {
+    includeRestricted: true
+  })
   if (!article) throw createError({ statusCode: 404, message: 'Wiki 页面不存在' })
   try {
     const pdf = await createWikiPdf(article.title, String(article.body || ''))

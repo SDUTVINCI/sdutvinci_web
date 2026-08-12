@@ -213,6 +213,7 @@ export const articles = pgTable('articles', {
   contentHash: varchar('content_hash', { length: 64 }).notNull(),
   currentRevisionId: uuid('current_revision_id')
     .references((): AnyPgColumn => articleRevisions.id, { onDelete: 'restrict' }),
+  requiresAuth: boolean('requires_auth').default(false).notNull(),
   isPresent: varchar('is_present', { length: 5 }).default('true').notNull(),
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
   deletedByUserId: uuid('deleted_by_user_id')
@@ -225,6 +226,7 @@ export const articles = pgTable('articles', {
   uniqueIndex('articles_source_unique').on(table.collection, table.relativePath),
   index('articles_collection_index').on(table.collection),
   index('articles_directory_index').on(table.directory),
+  index('articles_requires_auth_index').on(table.requiresAuth),
   index('articles_present_index').on(table.isPresent),
   index('articles_deleted_at_index').on(table.deletedAt)
 ])

@@ -9,6 +9,7 @@ export interface CmsArticleSummary {
   title: string
   frontmatter: Record<string, unknown>
   contentHash: string
+  requiresAuth: boolean
   isDeleted: boolean
   isPresent: boolean
   updatedAt: string
@@ -48,4 +49,12 @@ export interface CmsArticleListResponse {
   directories: string[]
   total: number
   deletedTotal?: number
+}
+
+export const CMS_ARTICLE_VISIBILITY_MAX_ITEMS = 500
+
+export interface CmsArticleVisibilityUpdateResult {
+  requiresAuth: boolean
+  updatedIds: string[]
+  unchangedIds: string[]
 }

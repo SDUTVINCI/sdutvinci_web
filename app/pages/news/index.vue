@@ -3,8 +3,8 @@ type NewsItem = Record<string, any>
 
 const { data: rawNews } = await usePublicContentQuery<NewsItem[]>({
   key: 'news:list',
-  database: async () => (
-    await $fetch<{ items: NewsItem[] }>('/api/v2/content/news')
+  database: async requestFetch => (
+    await requestFetch<{ items: NewsItem[] }>('/api/v2/content/news')
   ).items
 })
 
@@ -65,6 +65,7 @@ const stats = computed(() => [
             </span>
             <span class="news-card-copy">
               <span class="news-date">{{ formatDate(item.date) }}</span>
+              <span v-if="item.requiresAuth" class="content-access-label">需登录</span>
               <h3>{{ item.title }}</h3>
               <span class="news-card-summary">{{ item.summary || item.description || '查看完整新闻内容。' }}</span>
             </span>

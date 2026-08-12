@@ -8,8 +8,8 @@ interface WikiMetaItem {
 
 const { data: wikiMeta } = await usePublicContentQuery<WikiMetaItem[]>({
   key: 'wiki:index-stats',
-  database: async () => (
-    await $fetch<{ items: WikiMetaItem[] }>('/api/v2/content/wiki')
+  database: async requestFetch => (
+    await requestFetch<{ items: WikiMetaItem[] }>('/api/v2/content/wiki')
   ).items
 })
 

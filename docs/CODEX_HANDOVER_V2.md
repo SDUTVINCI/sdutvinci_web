@@ -1966,3 +1966,19 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
   同一记录重新打开为可编辑草稿；管理员查看其他账号历史时只能前往当前正式文章。
 - 无数据库结构变化，不创建 Migration；未修改独立内容仓库、Wiki 拼音/章节模块、生产数据或
   生产服务。
+
+## 2026-08-12：Wiki index 计数与文章访问权限
+
+- Wiki 目录卡片改为显示文章总数，`index.md` 首页计为 1 篇；只有 index 的目录不再显示 0。
+  匿名视图若目录首页受限但仍有公开章节，卡片会链接第一篇公开章节，不改变拼音路径和章节排序。
+- 新增 expand-only Migration `0021`：`articles.requires_auth boolean not null default false` 及索引。
+  现有文章和新文章均默认未登录可见，不会因 Migration 自动变为受限。
+- CMS 文章页新增权限筛选、全选当前结果、批量设为公开/需登录和逐篇切换；写接口仅允许管理员，
+  校验同源与 CSRF，在事务中锁定目标并写审计，单次最多 500 篇。
+- 匿名新闻/Wiki 列表、详情、搜索、Sitemap 和 RSS 排除需登录文章；有效 CMS 会话可以读取，并在
+  前台显示权限标识。权限字段不进入 Frontmatter、Revision 或独立内容仓库 Markdown 导出。
+- 使用独立临时数据库 `vinci_article_access_test` 验证后已删除；3 个相关测试文件共 17 项通过，
+  `npm run typecheck`、`npm run build` 和浏览器登录/匿名流程通过。人工测试库最终保持 313 篇文章、
+  0 篇受限，环境继续运行。
+- 使用与边界见 `docs/ARTICLE_ACCESS_CONTROL.md`。未修改独立内容仓库、正式 Markdown、Wiki 路径
+  工具或生产资源；没有 Push、部署或 SSH。

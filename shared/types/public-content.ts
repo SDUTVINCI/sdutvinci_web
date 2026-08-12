@@ -25,6 +25,7 @@ export interface PublicArticle {
   revisionId: string
   revisionNumber: number
   contentHash: string
+  requiresAuth: boolean
   cacheKey: string
   updatedAt: string
   [key: string]: unknown

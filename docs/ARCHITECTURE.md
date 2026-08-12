@@ -32,6 +32,11 @@
 标题 ID、Wiki 标题编号和目录逻辑。公开页面不调用 `queryCollection` 或 `ContentRenderer`。Wiki 公共路径、
 目录和顺序由普通应用模块从数据库字段派生；发布、恢复和导出使用同一算法。
 
+文章访问权限由 `articles.requires_auth` 保存，默认 `false`（未登录可见）。匿名新闻/Wiki 列表、
+详情、搜索、Sitemap 和 RSS 统一排除需登录文章；有效 CMS 会话可读取。权限是文章投影层策略，
+不进入 Frontmatter、Revision 或 Markdown 导出，也不改变 PostgreSQL 的内容权威边界。管理员在
+CMS 文章列表中按筛选结果逐篇或批量调整，写接口继续要求管理员角色、同源和 CSRF。
+
 文章编辑器有两个显式模式：富文本使用 Milkdown/Crepe 单栏画布；源码在桌面端同时显示
 CodeMirror 和正式渲染预览，移动端在保持两个面板状态的前提下切换。源码与预览由最近主动
 滚动的一侧按文档进度双向驱动；程序滚动事件会被抑制，正文更新后按原进度恢复，避免循环和

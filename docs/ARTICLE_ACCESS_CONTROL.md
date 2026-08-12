@@ -1,0 +1,65 @@
+# 文章访问权限管理
+
+## 1. 使用方式
+
+文章默认是“未登录可见”。管理员登录 CMS 后进入 `/cms/articles`，可使用“访问权限”筛选：
+
+- `未登录可见`：访客和已登录成员都能看到；现有文章和新文章默认使用此状态。
+- `需登录`：只向持有有效 CMS 会话的成员显示。
+
+管理员可以点击文章行内的“公开 / 需登录”切换单篇文章，也可以先搜索、选择集合、目录或权限，
+再点击“全选当前结果”，批量设为未登录可见或需登录。一次请求最多 500 篇。已删除文章不能调整。
+非管理员可以查看当前权限标识，但不能修改。
+
+Wiki 目录卡片中的文章数包含 `index.md` 首页。因此只含一个 `index.md` 的目录显示“1 篇文章”，
+非 index 文件仍作为可展开章节处理；Wiki 拼音路径和章节排序规则没有变化。
+
+## 2. 前台行为
+
+匿名请求不会从以下入口获得需登录文章：
+
+- 新闻和 Wiki 列表；
+- 新闻和 Wiki 详情 API（按不存在返回 404）；
+- 内容搜索；
+- Sitemap 和 RSS。
+
+成员登录后，浏览器会把同一 CMS 会话传给公开内容 API，列表和详情随即包含需登录文章，并显示
+“需登录”标识。Wiki PDF 原本就要求登录，仍可导出登录后可见的受限 Wiki。
+
+访问权限是网站展示和 API 访问控制，不会改写文章 Markdown、当前 Revision 或独立内容仓库导出。
+如果独立内容仓库允许不受信任的用户直接读取，它不能作为机密内容存储；真正的机密资料还需同时
+限制内容仓库访问权限。
+
+## 3. 数据与安全边界
+
+- Migration `0021_superb_cammi.sql` 新增 `articles.requires_auth boolean not null default false`
+  及查询索引；Migration 不会把任何现有文章自动设为需登录。
+- 权限更新只允许管理员，要求有效会话、同源和 CSRF，并写入 `audit_logs`。
+- 批量更新在单个数据库事务中锁定并核对全部目标；任一目标已删除或不存在时整体拒绝，避免静默
+  跳过。更新后精确失效受影响文章的公开 Revision 缓存。
+- 权限字段不属于内容正文，不随发布、恢复或异步 Markdown 导出改变。
+
+## 4. 本地验收
+
+人工环境只使用 `scripts/cms-local-test.sh`，并确认服务监听 `127.0.0.1:3300`：
+
+1. 登录 `http://127.0.0.1:3300/cms/login`，进入“文章与草稿”。
+2. 筛选少量测试文章，验证单篇切换、全选当前结果和两种批量操作。
+3. 把一篇测试文章设为需登录，记录其前台路径；登录状态应可见并带标识。
+4. 使用无会话浏览器确认该文章不在列表、搜索、Sitemap/RSS 中，直接详情返回 404。
+5. 将测试文章恢复为未登录可见，避免改变人工测试数据的长期状态。
+
+破坏性集成测试必须使用数据库名明确包含 `test`、且不同于 `vinci_cms_local_test` 的临时数据库。
+推荐定向验证：
+
+```bash
+npx vitest run tests/cms-article-visibility.test.ts
+TEST_DATABASE_URL=postgresql://.../vinci_article_access_test \
+  npx vitest run tests/cms-content.integration.test.ts tests/v2-public-content-shadow.integration.test.ts
+npm run typecheck
+npm run build
+git diff --check
+```
+
+本功能不恢复代码仓库 `content/`，不引入 Nuxt Content，不修改 Wiki 路径工具，也不需要或允许
+SSH、Push、部署及生产数据库/S3/COS 操作。

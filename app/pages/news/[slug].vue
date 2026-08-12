@@ -7,8 +7,8 @@ const newsPath = `/news/${slug}`
 
 const { data: page } = await usePublicContentQuery<NewsItem | null>({
   key: `news:${slug}`,
-  database: async () => (
-    await $fetch<{ item: NewsItem }>(
+  database: async requestFetch => (
+    await requestFetch<{ item: NewsItem }>(
       `/api/v2/content/news/${encodeURIComponent(slug)}`
     )
   ).item
@@ -51,6 +51,7 @@ const bilibiliSrc = computed(() => {
     <section class="page-hero news-hero">
       <div>
         <p class="eyebrow">{{ formatDate(page.date) }}</p>
+        <span v-if="page.requiresAuth" class="content-access-label">队内登录可见</span>
         <h1>{{ page.title }}</h1>
         <p v-if="page.summary">{{ page.summary }}</p>
       </div>

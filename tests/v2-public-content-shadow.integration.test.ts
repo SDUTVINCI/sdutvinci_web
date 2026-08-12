@@ -288,6 +288,52 @@ databaseSuite('V2 阶段 4 正式内容查询、缓存与候选 Feed', () => {
     expect(rss).not.toContain('已删除候选')
   })
 
+  it('默认隐藏需登录文章，登录访问选项可读取且不会进入公开 Feed', async () => {
+    await getDatabase().update(articles)
+      .set({ requiresAuth: true })
+      .where(eq(articles.id, articleIds.news!))
+    invalidatePublicContentCache({ articleId: articleIds.news })
+
+    try {
+      expect(await listPublicArticlesFromDatabase('news')).toEqual([])
+      expect(await getPublicArticleFromDatabase(
+        'news',
+        '/news/phase4-test-news'
+      )).toBeNull()
+      expect(await searchPublicArticlesFromDatabase('机器人')).toEqual([])
+
+      const authenticated = await getPublicArticleFromDatabase(
+        'news',
+        '/news/phase4-test-news',
+        { includeRestricted: true }
+      )
+      expect(authenticated).toMatchObject({
+        id: articleIds.news,
+        requiresAuth: true
+      })
+      expect(await listPublicArticlesFromDatabase('news', {
+        includeRestricted: true
+      })).toHaveLength(1)
+      expect(await searchPublicArticlesFromDatabase(
+        '机器人',
+        undefined,
+        { includeRestricted: true }
+      )).toHaveLength(1)
+
+      const [sitemap, rss] = await Promise.all([
+        buildPublicDatabaseSitemap(),
+        buildPublicDatabaseRss()
+      ])
+      expect(sitemap).not.toContain('phase4-test-news')
+      expect(rss).not.toContain('阶段四数据库新闻')
+    } finally {
+      await getDatabase().update(articles)
+        .set({ requiresAuth: false })
+        .where(eq(articles.id, articleIds.news!))
+      invalidatePublicContentCache({ articleId: articleIds.news })
+    }
+  })
+
   it('缓存可按集合、文章与 Revision 精确失效且有容量和 TTL 上限', async () => {
     invalidatePublicContentCache()
     await getPublicArticleFromDatabase('news', '/news/phase4-test-news')
@@ -327,6 +373,6 @@ databaseSuite('V2 阶段 4 正式内容查询、缓存与候选 Feed', () => {
     expect(publicContentComposable).not.toContain('Promise.allSettled')
     expect(publicContentComposable).not.toContain('nuxt_content')
     expect(publicContentComposable).not.toContain('legacy')
-    expect(publicContentComposable).toContain('options.database()')
+    expect(publicContentComposable).toContain('options.database(requestFetch)')
   })
 })
