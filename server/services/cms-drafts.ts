@@ -40,6 +40,8 @@ export class CmsDraftStateError extends Error {
 }
 
 const editableFrontmatterKeys = new Set(['title', 'description', 'authors'])
+export const CMS_UPDATED_AT_OVERRIDE_KEY = '_vinciUpdatedAtOverride'
+export const CMS_PUBLISHED_AT_OVERRIDE_KEY = '_vinciPublishedAtOverride'
 
 const preserveFrontmatter = (frontmatter: Record<string, unknown>) =>
   Object.fromEntries(
@@ -58,7 +60,9 @@ const optionalString = (value: unknown) =>
 const systemFrontmatterFrom = (frontmatter: Record<string, unknown>) => ({
   contributors: stringArray(frontmatter.contributors),
   updatedAt: optionalString(frontmatter.updatedAt),
-  publishedAt: optionalString(frontmatter.publishedAt)
+  updatedAtOverride: optionalString(frontmatter[CMS_UPDATED_AT_OVERRIDE_KEY]),
+  publishedAt: optionalString(frontmatter.publishedAt),
+  publishedAtOverride: optionalString(frontmatter[CMS_PUBLISHED_AT_OVERRIDE_KEY])
 })
 
 const loadDraftAuthors = async (draftIds: string[]) => {
@@ -472,16 +476,28 @@ export const saveCmsDraft = async (
     throw new CmsDraftNotFoundError()
   }
   const authorKeys = [...new Set(input.authorKeys)]
+  const contributorKeys = [...new Set(input.contributorKeys)].filter(key => !authorKeys.includes(key))
   await resolveAuthorMembers(authorKeys)
+  await resolveAuthorMembers(contributorKeys)
 
   const updated = await getDatabase().transaction(async (tx) => {
     await assertCmsDraftEditLease(tx, draftId, requesterUserId, input.lockLeaseId)
+    const [currentDraft] = await tx.select({ preservedFrontmatter: drafts.preservedFrontmatter })
+      .from(drafts).where(eq(drafts.id, draftId)).limit(1)
+    const preservedFrontmatter = { ...(currentDraft?.preservedFrontmatter || {}) }
+    if (contributorKeys.length) preservedFrontmatter.contributors = contributorKeys
+    else delete preservedFrontmatter.contributors
+    if (input.updatedAtOverride) preservedFrontmatter[CMS_UPDATED_AT_OVERRIDE_KEY] = input.updatedAtOverride
+    else delete preservedFrontmatter[CMS_UPDATED_AT_OVERRIDE_KEY]
+    if (input.publishedAtOverride) preservedFrontmatter[CMS_PUBLISHED_AT_OVERRIDE_KEY] = input.publishedAtOverride
+    else delete preservedFrontmatter[CMS_PUBLISHED_AT_OVERRIDE_KEY]
     const [row] = await tx
       .update(drafts)
       .set({
         title: input.title.trim(),
         description: input.description.trim(),
         body: input.body,
+        preservedFrontmatter,
         version: sql`${drafts.version} + 1`,
         lastSavedAt: new Date(),
         updatedAt: new Date()

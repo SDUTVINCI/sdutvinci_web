@@ -67,6 +67,16 @@ const title = ref(initial.title)
 const description = ref(initial.description)
 const body = ref(initial.body)
 const authorKeys = ref(initial.authors.map(author => author.memberKey))
+const contributorKeys = ref([...initial.systemFrontmatter.contributors])
+const toDateTimeLocal = (value: string | null) => {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
+  return local.toISOString().slice(0, 16)
+}
+const updatedAtOverride = ref(toDateTimeLocal(initial.systemFrontmatter.updatedAtOverride))
+const publishedAtOverride = ref(toDateTimeLocal(initial.systemFrontmatter.publishedAtOverride))
 const status = ref<CmsDraftStatus>(initial.status)
 const version = ref(initial.version)
 const baseContentHash = ref(initial.baseContentHash)
@@ -281,6 +291,13 @@ const snapshot = () => ({
   description: description.value,
   body: body.value,
   authorKeys: [...authorKeys.value],
+  contributorKeys: [...contributorKeys.value],
+  updatedAtOverride: updatedAtOverride.value
+    ? new Date(updatedAtOverride.value).toISOString()
+    : null,
+  publishedAtOverride: publishedAtOverride.value
+    ? new Date(publishedAtOverride.value).toISOString()
+    : null,
   version: version.value,
   lockLeaseId: leaseId.value || ''
 })
@@ -290,6 +307,13 @@ const sameAsSnapshot = (value: ReturnType<typeof snapshot>) =>
   && description.value === value.description
   && body.value === value.body
   && authorKeys.value.join('\0') === value.authorKeys.join('\0')
+  && contributorKeys.value.join('\0') === value.contributorKeys.join('\0')
+  && (updatedAtOverride.value
+    ? new Date(updatedAtOverride.value).toISOString()
+    : null) === value.updatedAtOverride
+  && (publishedAtOverride.value
+    ? new Date(publishedAtOverride.value).toISOString()
+    : null) === value.publishedAtOverride
 
 const save = async (manual = false) => {
   if (!canEdit.value) return false
@@ -343,7 +367,10 @@ const scheduleSave = () => {
   saveTimer = setTimeout(() => save(false), 1200)
 }
 
-watch([title, description, body, authorKeys], scheduleSave, { deep: true })
+watch([title, description, body, authorKeys, contributorKeys, updatedAtOverride, publishedAtOverride], scheduleSave, { deep: true })
+watch(authorKeys, keys => {
+  contributorKeys.value = contributorKeys.value.filter(key => !keys.includes(key))
+}, { deep: true })
 
 const componentOccurrences = computed(() => findVinciContentComponents(body.value))
 
@@ -963,28 +990,47 @@ onBeforeUnmount(() => {
           <textarea v-model="description" maxlength="2000" rows="5" :disabled="!canEdit" placeholder="留空时将在正式发布阶段自动生成" />
         </label>
         <label>
-          <span>authors</span>
-          <select v-model="authorKeys" multiple size="9" :disabled="!canEdit">
-            <option v-for="member in memberData?.members ?? []" :key="member.memberKey" :value="member.memberKey">
-              {{ member.name }} · {{ member.memberKey }}
-            </option>
-          </select>
-          <small>按 Ctrl / Command 可多选；文章最终只保存成员稳定 ID。</small>
+          <span>authors（作者）</span>
+          <CmsMemberPicker
+            v-model="authorKeys"
+            :members="memberData?.members ?? []"
+            :disabled="!canEdit"
+            empty-label="点击选择一名作者"
+          />
+          <small>作者为单选；展开后选择成员，收起时只显示当前作者。</small>
         </label>
 
-        <h3>系统维护字段（只读）</h3>
-        <dl class="cms-system-fields">
-          <dt>contributors</dt>
-          <dd>
-            {{ initial.systemFrontmatter.contributors.length
-              ? initial.systemFrontmatter.contributors.join('、')
-              : '暂无（非作者成功发布修改后自动记录）' }}
-          </dd>
-          <dt>updatedAt</dt>
-          <dd>{{ formatSystemDate(initial.systemFrontmatter.updatedAt) }}</dd>
-          <dt>publishedAt</dt>
-          <dd>{{ formatSystemDate(initial.systemFrontmatter.publishedAt) }}</dd>
-        </dl>
+        <label>
+          <span>contributors（协作者）</span>
+          <CmsMemberPicker
+            v-model="contributorKeys"
+            :members="memberData?.members ?? []"
+            multiple
+            :disabled="!canEdit"
+            empty-label="点击添加协作者"
+          />
+          <small>可手动增删；正式发布时，非作者的发布者仍会自动加入协作者。</small>
+        </label>
+
+        <label>
+          <span>updatedAt（更新时间）</span>
+          <input v-model="updatedAtOverride" type="datetime-local" :disabled="!canEdit">
+          <small>
+            留空则在正式发布时自动使用当前时间；填写后使用指定时间。
+            当前正式值：{{ formatSystemDate(initial.systemFrontmatter.updatedAt) }}
+          </small>
+        </label>
+
+        <label>
+          <span>publishedAt（首次发布日期）</span>
+          <input v-model="publishedAtOverride" type="datetime-local" :disabled="!canEdit">
+          <small>
+            留空则首次发布时自动生成，后续发布保持原值；填写后使用指定时间。
+            当前正式值：{{ formatSystemDate(initial.systemFrontmatter.publishedAt) }}
+          </small>
+        </label>
+
+        <small>publishedAt 记录文章第一次正式发布的时间；updatedAt 记录文章最近一次更新的时间。</small>
 
         <details>
           <summary>其他保留 Frontmatter</summary>

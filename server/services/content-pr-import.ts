@@ -32,6 +32,7 @@ import {
 import { mergeMarkdownThreeWay } from './content-import-merge'
 import { serializeContentRevision, sha256ContentBytes } from './content-export-serialization'
 import { parseCmsMarkdown } from '../utils/cms-frontmatter'
+import { CMS_PUBLISHED_AT_OVERRIDE_KEY, CMS_UPDATED_AT_OVERRIDE_KEY } from './cms-drafts'
 import { CONTENT_REPOSITORY_ID } from '../utils/content-export-config'
 import { getContentImportConfig } from '../utils/content-import-config'
 import { redactCmsSensitiveText } from '../utils/cms-sensitive-data'
@@ -842,10 +843,32 @@ export const dryRunContentPrImport = async (
   return getContentPrImportRun(run.id)
 }
 
-const draftDataFromSource = (source: string) => {
+const draftDataFromSource = (
+  source: string,
+  currentFrontmatter: Record<string, unknown> | null
+) => {
   const parsed = parseCmsMarkdown(source)
   const title = typeof parsed.frontmatter.title === 'string' ? parsed.frontmatter.title.trim() : ''
   if (!title) throw new ContentPrImportError('IMPORT_TITLE_REQUIRED')
+  const preserved = preservedFrontmatter(parsed.frontmatter)
+  const proposedUpdatedAt = typeof parsed.frontmatter.updatedAt === 'string'
+    ? parsed.frontmatter.updatedAt.trim()
+    : ''
+  const currentUpdatedAt = typeof currentFrontmatter?.updatedAt === 'string'
+    ? currentFrontmatter.updatedAt.trim()
+    : ''
+  if (proposedUpdatedAt && proposedUpdatedAt !== currentUpdatedAt) {
+    preserved[CMS_UPDATED_AT_OVERRIDE_KEY] = proposedUpdatedAt
+  }
+  const proposedPublishedAt = typeof parsed.frontmatter.publishedAt === 'string'
+    ? parsed.frontmatter.publishedAt.trim()
+    : ''
+  const currentPublishedAt = typeof currentFrontmatter?.publishedAt === 'string'
+    ? currentFrontmatter.publishedAt.trim()
+    : ''
+  if (proposedPublishedAt && proposedPublishedAt !== currentPublishedAt) {
+    preserved[CMS_PUBLISHED_AT_OVERRIDE_KEY] = proposedPublishedAt
+  }
   return {
     title,
     description: typeof parsed.frontmatter.description === 'string'
@@ -854,7 +877,7 @@ const draftDataFromSource = (source: string) => {
       ? parsed.frontmatter.authors.filter((value): value is string => typeof value === 'string')
       : [],
     body: parsed.body,
-    preservedFrontmatter: preservedFrontmatter(parsed.frontmatter)
+    preservedFrontmatter: preserved
   }
 }
 
@@ -951,7 +974,7 @@ const importOneItem = async (runId: string, itemId: string, actorUserId: string)
     }
     const source = item.classification === 'deletion_proposal' ? item.currentSource : item.mergedSource
     if (!source) throw new ContentPrImportError('IMPORT_ARTIFACT_MISSING')
-    const data = draftDataFromSource(source)
+    const data = draftDataFromSource(source, current?.frontmatter || null)
     const collection = (item.newPath || item.oldPath)!.split('/')[0] as CmsArticleCollection
     const relativePath = (item.newPath || item.oldPath)!.split('/').slice(1).join('/')
     const [existingDraft] = item.articleId

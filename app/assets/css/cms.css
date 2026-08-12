@@ -2831,6 +2831,140 @@
   line-height: 1.5;
 }
 
+.cms-member-picker {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+
+.cms-member-picker summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.cms-member-picker summary::-webkit-details-marker {
+  display: none;
+}
+
+.cms-member-picker-selected,
+.cms-member-picker-person {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.cms-member-picker-selected {
+  flex-wrap: wrap;
+}
+
+.cms-member-picker-person img,
+.cms-member-picker-menu button > img {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.cms-member-picker-chevron {
+  flex: 0 0 auto;
+  color: var(--muted);
+  transition: transform 160ms ease;
+}
+
+.cms-member-picker[open] .cms-member-picker-chevron {
+  transform: rotate(180deg);
+}
+
+.cms-member-picker-menu {
+  display: grid;
+  max-height: 280px;
+  overflow-y: auto;
+  border-top: 1px solid var(--line);
+  padding: 6px;
+}
+
+.cms-member-picker-search {
+  position: sticky;
+  z-index: 1;
+  top: -6px;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  margin: -6px -6px 5px;
+  padding: 8px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-soft);
+  color: var(--muted);
+}
+
+.cms-draft-fields .cms-member-picker-search input {
+  min-width: 0;
+  padding: 7px 9px;
+  border-radius: 8px;
+  font-size: 0.84rem;
+}
+
+.cms-member-picker-menu button {
+  display: grid;
+  grid-template-columns: 18px 30px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  padding: 7px 8px;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.cms-member-picker-menu button:hover,
+.cms-member-picker-menu button.is-selected {
+  background: color-mix(in srgb, var(--cyan) 12%, transparent);
+}
+
+.cms-member-picker-menu button > span:last-child {
+  display: grid;
+  min-width: 0;
+}
+
+.cms-member-picker-menu small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cms-member-picker-indicator {
+  color: var(--cyan);
+  font-weight: 900;
+  text-align: center;
+}
+
+.cms-member-picker-empty {
+  margin: 0;
+  padding: 18px 10px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  text-align: center;
+}
+
+.cms-member-picker.is-disabled {
+  opacity: 0.62;
+  pointer-events: none;
+}
+
 .cms-system-fields {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);

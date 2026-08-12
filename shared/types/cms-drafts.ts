@@ -31,7 +31,9 @@ export interface CmsDraft {
   systemFrontmatter: {
     contributors: string[]
     updatedAt: string | null
+    updatedAtOverride: string | null
     publishedAt: string | null
+    publishedAtOverride: string | null
   }
   baseContentHash: string | null
   baseRevisionId: string | null
@@ -72,6 +74,9 @@ export interface CmsDraftSaveInput {
   description: string
   body: string
   authorKeys: string[]
+  contributorKeys: string[]
+  updatedAtOverride: string | null
+  publishedAtOverride: string | null
   version: number
   lockLeaseId: string
 }

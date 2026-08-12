@@ -108,6 +108,9 @@ integration('CMS Markdown 编辑器与草稿系统', () => {
       description: '摘要',
       body,
       authorKeys: ['dongjiahui'],
+      contributorKeys: [],
+      updatedAtOverride: null,
+      publishedAtOverride: null,
       version: draft.version,
       lockLeaseId
     })
@@ -133,7 +136,9 @@ integration('CMS Markdown 编辑器与草稿系统', () => {
     expect(draft.systemFrontmatter).toEqual({
       contributors: ['system'],
       updatedAt: '2026-01-01',
-      publishedAt: '2025-01-01'
+      updatedAtOverride: null,
+      publishedAt: '2025-01-01',
+      publishedAtOverride: null
     })
     const lockLeaseId = await acquireLease(draft.id)
     await saveCmsDraft(draft.id, userId, {
@@ -141,8 +146,15 @@ integration('CMS Markdown 编辑器与草稿系统', () => {
       description: '草稿摘要',
       body: '草稿正文',
       authorKeys: ['dongjiahui'],
+      contributorKeys: [],
+      updatedAtOverride: '2026-08-12T03:04:05.000Z',
+      publishedAtOverride: '2026-08-01T01:02:03.000Z',
       version: draft.version,
       lockLeaseId
+    })
+    expect((await getCmsDraft(draft.id, userId))?.systemFrontmatter).toMatchObject({
+      updatedAtOverride: '2026-08-12T03:04:05.000Z',
+      publishedAtOverride: '2026-08-01T01:02:03.000Z'
     })
     expect(await readFile(articlePath, 'utf8')).toBe(source)
     expect((await listCmsArticles()).articles[0]).toMatchObject({
@@ -159,6 +171,9 @@ integration('CMS Markdown 编辑器与草稿系统', () => {
       description: '',
       body: '较新内容',
       authorKeys: ['dongjiahui'],
+      contributorKeys: [],
+      updatedAtOverride: null,
+      publishedAtOverride: null,
       version: 1,
       lockLeaseId
     })
@@ -167,6 +182,9 @@ integration('CMS Markdown 编辑器与草稿系统', () => {
       description: '',
       body: '旧页面内容',
       authorKeys: ['dongjiahui'],
+      contributorKeys: [],
+      updatedAtOverride: null,
+      publishedAtOverride: null,
       version: 1,
       lockLeaseId
     })).rejects.toBeInstanceOf(CmsDraftConflictError)
@@ -186,6 +204,9 @@ integration('CMS Markdown 编辑器与草稿系统', () => {
       description: '',
       body: '越权正文',
       authorKeys: [],
+      contributorKeys: [],
+      updatedAtOverride: null,
+      publishedAtOverride: null,
       version: 1,
       lockLeaseId: randomUUID()
     })).rejects.toBeInstanceOf(CmsDraftNotFoundError)
@@ -221,12 +242,20 @@ integration('CMS Markdown 编辑器与草稿系统', () => {
       description: '',
       body: '正文',
       authorKeys: ['dongjiahui'],
+      contributorKeys: [],
+      updatedAtOverride: null,
+      publishedAtOverride: null,
       version: 1,
       lockLeaseId: randomUUID()
     }
     for (const field of ['contributors', 'updatedAt', 'publishedAt']) {
       expect(cmsDraftSaveSchema.safeParse({ ...base, [field]: 'forged' }).success).toBe(false)
     }
+    expect(cmsDraftSaveSchema.safeParse({
+      ...base,
+      updatedAtOverride: '2026-08-12T01:02:03.000Z',
+      publishedAtOverride: '2026-08-01T01:02:03.000Z'
+    }).success).toBe(true)
   })
 
   it('支持标准 Markdown 元素，并阻止扩展语法进入可视化模式', () => {

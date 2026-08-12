@@ -14,6 +14,7 @@ import {
   reviewEvents,
   userMembers
 } from '../db/schema'
+import { CMS_PUBLISHED_AT_OVERRIDE_KEY, CMS_UPDATED_AT_OVERRIDE_KEY } from './cms-drafts'
 import { parseCmsMarkdown, writeCmsMarkdown } from '../utils/cms-frontmatter'
 import { getCmsGitConfig } from '../utils/cms-git-config'
 import { describeCmsFailure } from '../utils/cms-sensitive-data'
@@ -130,23 +131,35 @@ export const buildPublishedSource = (input: {
   now: Date
 }) => {
   const existing = input.preservedFrontmatter
+  const updatedAtOverride = typeof existing[CMS_UPDATED_AT_OVERRIDE_KEY] === 'string'
+    ? existing[CMS_UPDATED_AT_OVERRIDE_KEY] as string
+    : ''
+  const publishedAtOverride = typeof existing[CMS_PUBLISHED_AT_OVERRIDE_KEY] === 'string'
+    ? existing[CMS_PUBLISHED_AT_OVERRIDE_KEY] as string
+    : ''
+  const publicExisting = Object.fromEntries(
+    Object.entries(existing).filter(([key]) => ![
+      CMS_UPDATED_AT_OVERRIDE_KEY,
+      CMS_PUBLISHED_AT_OVERRIDE_KEY
+    ].includes(key))
+  )
   const authors = [...new Set(input.authorKeys)]
   const contributors = [...new Set([
     ...stringArray(existing.contributors),
     ...(input.ownerMemberKey && !authors.includes(input.ownerMemberKey)
       ? [input.ownerMemberKey]
       : [])
-  ])]
+  ])].filter(memberKey => !authors.includes(memberKey))
   const frontmatter: Record<string, unknown> = {
-    ...existing,
+    ...publicExisting,
     title: input.title.trim(),
     description: input.description.trim() || descriptionFromBody(input.body),
     authors,
     ...(contributors.length ? { contributors } : {}),
-    publishedAt: typeof existing.publishedAt === 'string' && existing.publishedAt
+    publishedAt: publishedAtOverride || (typeof existing.publishedAt === 'string' && existing.publishedAt
       ? existing.publishedAt
-      : input.now.toISOString(),
-    updatedAt: input.now.toISOString()
+      : input.now.toISOString()),
+    updatedAt: updatedAtOverride || input.now.toISOString()
   }
   const source = writeCmsMarkdown(frontmatter, input.body)
   if (Buffer.byteLength(source) > 2 * 1024 * 1024) {

@@ -144,6 +144,9 @@ integration('CMS 阶段 4 审核、编辑锁与版本冲突', () => {
       description: '待审核摘要',
       body: '待审核正文\n',
       authorKeys: ['memberone'],
+      contributorKeys: [],
+      updatedAtOverride: null,
+      publishedAtOverride: null,
       version: draft.version,
       lockLeaseId
     })
@@ -172,6 +175,9 @@ integration('CMS 阶段 4 审核、编辑锁与版本冲突', () => {
       description: draft.description,
       body: '按撤回意见修改后的正文\n',
       authorKeys: ['memberone'],
+      contributorKeys: [],
+      updatedAtOverride: null,
+      publishedAtOverride: null,
       version: draft.version,
       lockLeaseId
     })
@@ -288,6 +294,9 @@ integration('CMS 阶段 4 审核、编辑锁与版本冲突', () => {
       description: draft.description,
       body: editedBody,
       authorKeys: ['memberone'],
+      contributorKeys: [],
+      updatedAtOverride: null,
+      publishedAtOverride: null,
       version: draft.version,
       lockLeaseId
     })
