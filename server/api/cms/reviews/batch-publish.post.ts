@@ -1,11 +1,15 @@
 import { readValidatedBody } from 'h3'
 import { z } from 'zod'
-import { CMS_BATCH_PUBLISH_CONFIRMATION } from '../../../../shared/types/cms-drafts'
+import {
+  CMS_BATCH_PUBLISH_CONFIRMATION,
+  CMS_BATCH_WORKFLOW_MAX_ITEMS
+} from '../../../../shared/types/cms-drafts'
 import { batchPublishCmsDrafts } from '../../../services/cms-batch-workflow'
 import { requireCmsCsrf, requireCmsRequestAuth } from '../../../utils/cms-http'
 
 const schema = z.object({
-  items: z.array(z.object({ id: z.string().uuid(), version: z.number().int().positive() }).strict()).min(1).max(100),
+  items: z.array(z.object({ id: z.string().uuid(), version: z.number().int().positive() }).strict())
+    .min(1).max(CMS_BATCH_WORKFLOW_MAX_ITEMS),
   confirm: z.literal(CMS_BATCH_PUBLISH_CONFIRMATION)
 }).strict()
 

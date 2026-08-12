@@ -30,6 +30,8 @@ import {
 } from './cms-drafts'
 import { CmsV2ConfigurationError } from '../utils/cms-v2-flags'
 
+export const CMS_BATCH_WORKFLOW_CONCURRENCY = 10
+
 const getCmsBatchWorkflowErrorMessage = (error: unknown) => {
   if (error instanceof CmsEditLockLostError
     || (error instanceof Error && error.message === 'EDIT_LOCK_LOST')) {
@@ -57,14 +59,23 @@ export const runCmsBatchAction = async (
   items: CmsBatchDraftItem[],
   operation: (item: CmsBatchDraftItem) => Promise<string>
 ): Promise<CmsBatchActionResult[]> => {
-  const results: CmsBatchActionResult[] = []
-  for (const item of items) {
-    try {
-      results.push({ id: item.id, ok: true, message: await operation(item) })
-    } catch (error) {
-      results.push({ id: item.id, ok: false, message: getCmsBatchWorkflowErrorMessage(error) })
+  const results = new Array<CmsBatchActionResult>(items.length)
+  let nextIndex = 0
+  const workerCount = Math.min(CMS_BATCH_WORKFLOW_CONCURRENCY, items.length)
+  const workers = Array.from({ length: workerCount }, async () => {
+    while (true) {
+      const index = nextIndex
+      nextIndex += 1
+      if (index >= items.length) return
+      const item = items[index]!
+      try {
+        results[index] = { id: item.id, ok: true, message: await operation(item) }
+      } catch (error) {
+        results[index] = { id: item.id, ok: false, message: getCmsBatchWorkflowErrorMessage(error) }
+      }
     }
-  }
+  })
+  await Promise.all(workers)
   return results
 }
 

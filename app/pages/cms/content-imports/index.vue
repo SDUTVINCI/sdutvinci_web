@@ -109,6 +109,15 @@ const filteredItems = computed(() => (run.value?.items || []).filter(item =>
   (classificationFilter.value === 'all' || item.classification === classificationFilter.value)
   && (statusFilter.value === 'all' || item.status === statusFilter.value)
 ))
+const filteredSelectableItems = computed(() => filteredItems.value.filter(canSelectItem))
+const allFilteredSelectableSelected = computed(() => filteredSelectableItems.value.length > 0
+  && filteredSelectableItems.value.every(item => selected.value.includes(item.id)))
+const toggleAllFilteredSelectable = () => {
+  const visibleIds = new Set(filteredSelectableItems.value.map(item => item.id))
+  selected.value = allFilteredSelectableSelected.value
+    ? selected.value.filter(id => !visibleIds.has(id))
+    : [...new Set([...selected.value, ...visibleIds])]
+}
 const warningText = (code: string) => warningLabels[code] || code
 const blockedReason = (item: CmsContentImportRun['items'][number]) => {
   if (item.status !== 'blocked') return null
@@ -444,7 +453,19 @@ const externalAction = async (action: 'comment' | 'close') => {
             <p class="cms-import-kicker">下一步操作</p>
             <h2>确认检查结果后再继续</h2>
           </div>
-          <span>{{ selected.length }} 项已选择</span>
+          <div class="cms-import-selection-actions">
+            <span>{{ selected.length }} 项已选择</span>
+            <button
+              class="cms-button cms-button-quiet"
+              type="button"
+              :disabled="!filteredSelectableItems.length || busy"
+              @click="toggleAllFilteredSelectable"
+            >
+              {{ allFilteredSelectableSelected
+                ? `取消全选当前结果（${filteredSelectableItems.length}）`
+                : `全选当前可导入结果（${filteredSelectableItems.length}）` }}
+            </button>
+          </div>
         </header>
         <div class="cms-import-toolbar">
           <article class="cms-import-operation" data-tone="primary">
@@ -727,7 +748,9 @@ const externalAction = async (action: 'comment' | 'close') => {
 .cms-import-operations { display: grid; gap: 14px; padding-top: 8px; }
 .cms-import-operations > header { display: flex; align-items: end; justify-content: space-between; gap: 18px; }
 .cms-import-operations > header h2 { margin-bottom: 0; font-size: 1.35rem; letter-spacing: -.025em; }
-.cms-import-operations > header > span { padding: 6px 10px; border-radius: 999px; background: var(--import-cyan-soft); color: var(--cyan); font-size: .72rem; font-weight: 850; }
+.cms-import-selection-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 9px; }
+.cms-import-selection-actions > span { padding: 6px 10px; border-radius: 999px; background: var(--import-cyan-soft); color: var(--cyan); font-size: .72rem; font-weight: 850; }
+.cms-import-selection-actions .cms-button { min-height: 36px; padding: 7px 11px; font-size: .75rem; }
 .cms-import-toolbar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .cms-import-operation { position: relative; display: flex; min-height: 205px; flex-direction: column; gap: 7px; padding: 18px; overflow: hidden; border: 1px solid var(--import-line); border-radius: 16px; background: color-mix(in srgb, var(--surface) 96%, var(--cyan) 4%); box-shadow: 0 12px 30px color-mix(in srgb, #000 8%, transparent); }
 .cms-import-operation::after { position: absolute; top: -35px; right: -35px; width: 92px; height: 92px; border: 1px solid color-mix(in srgb, var(--cyan) 12%, transparent); border-radius: 50%; content: ""; }
@@ -885,6 +908,7 @@ const externalAction = async (action: 'comment' | 'close') => {
   .cms-import-stats article:nth-child(2) { border-right: 0; }
   .cms-import-stats article:nth-child(-n+2) { border-bottom: 1px solid var(--import-line); }
   .cms-import-operations > header { align-items: flex-start; flex-direction: column; }
+  .cms-import-selection-actions { width: 100%; justify-content: flex-start; }
   .cms-import-item { padding: 18px 16px; }
   .cms-import-item-heading { align-items: flex-start; }
   .cms-import-path { grid-template-columns: 1fr; }

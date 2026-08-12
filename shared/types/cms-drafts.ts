@@ -14,6 +14,7 @@ export type CmsDraftStatus = typeof cmsDraftStatuses[number]
 export const CMS_BATCH_SUBMIT_CONFIRMATION = 'BATCH_SUBMIT_FOR_REVIEW'
 export const CMS_BATCH_APPROVE_CONFIRMATION = 'BATCH_APPROVE_DRAFTS'
 export const CMS_BATCH_PUBLISH_CONFIRMATION = 'BATCH_PUBLISH_DRAFTS'
+export const CMS_BATCH_WORKFLOW_MAX_ITEMS = 500
 
 export interface CmsBatchDraftItem {
   id: string
