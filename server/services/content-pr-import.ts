@@ -32,7 +32,12 @@ import {
 import { mergeMarkdownThreeWay } from './content-import-merge'
 import { serializeContentRevision, sha256ContentBytes } from './content-export-serialization'
 import { parseCmsMarkdown } from '../utils/cms-frontmatter'
-import { CMS_PUBLISHED_AT_OVERRIDE_KEY, CMS_UPDATED_AT_OVERRIDE_KEY } from './cms-drafts'
+import {
+  CMS_PUBLISHED_AT_OVERRIDE_KEY,
+  CMS_UNMATCHED_AUTHORS_KEY,
+  CMS_UNMATCHED_CONTRIBUTORS_KEY,
+  CMS_UPDATED_AT_OVERRIDE_KEY
+} from './cms-drafts'
 import { CONTENT_REPOSITORY_ID } from '../utils/content-export-config'
 import { getContentImportConfig } from '../utils/content-import-config'
 import { redactCmsSensitiveText } from '../utils/cms-sensitive-data'
@@ -851,6 +856,8 @@ const draftDataFromSource = (
   const title = typeof parsed.frontmatter.title === 'string' ? parsed.frontmatter.title.trim() : ''
   if (!title) throw new ContentPrImportError('IMPORT_TITLE_REQUIRED')
   const preserved = preservedFrontmatter(parsed.frontmatter)
+  delete preserved[CMS_UNMATCHED_AUTHORS_KEY]
+  delete preserved[CMS_UNMATCHED_CONTRIBUTORS_KEY]
   const proposedUpdatedAt = typeof parsed.frontmatter.updatedAt === 'string'
     ? parsed.frontmatter.updatedAt.trim()
     : ''
@@ -874,7 +881,14 @@ const draftDataFromSource = (
     description: typeof parsed.frontmatter.description === 'string'
       ? parsed.frontmatter.description.trim() : '',
     authorKeys: Array.isArray(parsed.frontmatter.authors)
-      ? parsed.frontmatter.authors.filter((value): value is string => typeof value === 'string')
+      ? parsed.frontmatter.authors
+          .filter((value): value is string => typeof value === 'string' && Boolean(value.trim()))
+          .map(value => value.trim())
+      : [],
+    contributorKeys: Array.isArray(parsed.frontmatter.contributors)
+      ? parsed.frontmatter.contributors
+          .filter((value): value is string => typeof value === 'string' && Boolean(value.trim()))
+          .map(value => value.trim())
       : [],
     body: parsed.body,
     preservedFrontmatter: preserved
@@ -975,6 +989,22 @@ const importOneItem = async (runId: string, itemId: string, actorUserId: string)
     const source = item.classification === 'deletion_proposal' ? item.currentSource : item.mergedSource
     if (!source) throw new ContentPrImportError('IMPORT_ARTIFACT_MISSING')
     const data = draftDataFromSource(source, current?.frontmatter || null)
+    const requestedCredits = [...new Set([...data.authorKeys, ...data.contributorKeys])]
+    const creditRows = requestedCredits.length
+      ? await tx.select({ id: members.id, key: members.memberKey }).from(members)
+          .where(inArray(members.memberKey, requestedCredits))
+      : []
+    const memberIdByKey = new Map(creditRows.map(row => [row.key, row.id]))
+    const knownAuthorKeys = [...new Set(data.authorKeys)].filter(key => memberIdByKey.has(key))
+    const unmatchedAuthors = [...new Set(data.authorKeys)].filter(key => !memberIdByKey.has(key))
+    const knownContributorKeys = [...new Set(data.contributorKeys)].filter(key => memberIdByKey.has(key))
+    const unmatchedContributors = [...new Set(data.contributorKeys)].filter(key => !memberIdByKey.has(key))
+    if (knownContributorKeys.length) data.preservedFrontmatter.contributors = knownContributorKeys
+    else delete data.preservedFrontmatter.contributors
+    if (unmatchedAuthors.length) data.preservedFrontmatter[CMS_UNMATCHED_AUTHORS_KEY] = unmatchedAuthors
+    if (unmatchedContributors.length) {
+      data.preservedFrontmatter[CMS_UNMATCHED_CONTRIBUTORS_KEY] = unmatchedContributors
+    }
     const collection = (item.newPath || item.oldPath)!.split('/')[0] as CmsArticleCollection
     const relativePath = (item.newPath || item.oldPath)!.split('/').slice(1).join('/')
     const [existingDraft] = item.articleId
@@ -1003,16 +1033,10 @@ const importOneItem = async (runId: string, itemId: string, actorUserId: string)
       proposedRelativePath: ['move_or_rename', 'new_article'].includes(item.classification)
         ? relativePath : null
     }).returning({ id: drafts.id })
-    if (data.authorKeys.length) {
-      const authorRows = await tx.select({ id: members.id, key: members.memberKey }).from(members)
-        .where(inArray(members.memberKey, [...new Set(data.authorKeys)]))
-      if (authorRows.length !== new Set(data.authorKeys).size) {
-        throw new ContentPrImportError('IMPORT_AUTHOR_UNKNOWN')
-      }
-      const byKey = new Map(authorRows.map(row => [row.key, row.id]))
-      await tx.insert(draftAuthors).values(data.authorKeys.map((key, position) => ({
+    if (knownAuthorKeys.length) {
+      await tx.insert(draftAuthors).values(knownAuthorKeys.map((key, position) => ({
         draftId: draft!.id,
-        memberId: byKey.get(key)!,
+        memberId: memberIdByKey.get(key)!,
         position
       })))
     }

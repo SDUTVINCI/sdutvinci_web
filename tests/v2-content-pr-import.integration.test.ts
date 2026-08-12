@@ -15,6 +15,7 @@ import {
   contentPrExternalActions,
   contentPrImportItems,
   contentPrImportRuns,
+  draftAuthors,
   drafts,
   memberProposals,
   memberRevisions,
@@ -38,6 +39,11 @@ import {
 } from '../server/services/content-import-github'
 import { mergeMarkdownThreeWay } from '../server/services/content-import-merge'
 import { publishCmsDraftDatabase } from '../server/services/cms-publishing-database'
+import { buildPublishedSource } from '../server/services/cms-publishing-legacy'
+import {
+  CMS_UNMATCHED_AUTHORS_KEY,
+  CMS_UNMATCHED_CONTRIBUTORS_KEY
+} from '../server/services/cms-drafts'
 import { getPublicArticleFromDatabase } from '../server/services/public-content'
 import { applyMemberProposal } from '../server/services/cms-members'
 import { memberProfileFromMarkdown, profileRecord, serializeMemberProfile } from '../server/services/member-profile'
@@ -341,6 +347,56 @@ suite('V2 阶段 8 本地 Markdown PR 导入与三方冲突', () => {
       { kind: 'added', prefix: '+', text: '新内容', oldLine: null, newLine: 2 },
       { kind: 'added', prefix: '+', text: '新增行', oldLine: null, newLine: 3 }
     ])
+  })
+
+  it('无法匹配的作者和贡献者仍随 PR 草稿保留，并在发布 Markdown 中恢复', async () => {
+    const creditMembers = await getDatabase().insert(members).values([
+      { memberKey: 'known-author', name: 'Known Author' },
+      { memberKey: 'known-contributor', name: 'Known Contributor' }
+    ]).returning({ id: members.id, memberKey: members.memberKey })
+    const metadata = buildContentRepositoryMetadata(
+      [], [], new Date('2026-01-01T00:00:00.000Z')
+    )
+    const fake = new FakeGitHub()
+    fake.contents.set(`${BASE}:.vinci/snapshot.json`, metadata.snapshotSource)
+    fake.contents.set(`${HEAD}:wiki/credits/new.md`, writeCmsMarkdown({
+      title: '保留无法匹配署名',
+      authors: ['known-author', '外部作者'],
+      contributors: ['known-contributor', '外部编辑']
+    }, '正文。\n'))
+    fake.files = [{ filename: 'wiki/credits/new.md', status: 'added', changes: 8 }]
+
+    const run = (await dryRunContentPrImport(
+      actorUserId,
+      { repository: 'SDUTVINCI/sdutvinci_content', pullRequestNumber: 8 },
+      fake as unknown as ContentImportGitHubClient
+    ))!
+    const result = await importContentPrItems(run.id, [run.items[0]!.id], actorUserId)
+    const draftId = result.results[0]!.draftId!
+    const [draft] = await getDatabase().select().from(drafts).where(eq(drafts.id, draftId))
+    expect(draft!.preservedFrontmatter).toMatchObject({
+      contributors: ['known-contributor'],
+      [CMS_UNMATCHED_AUTHORS_KEY]: ['外部作者'],
+      [CMS_UNMATCHED_CONTRIBUTORS_KEY]: ['外部编辑']
+    })
+    const storedAuthors = await getDatabase().select().from(draftAuthors)
+      .where(eq(draftAuthors.draftId, draftId))
+    expect(storedAuthors.map(row => row.memberId)).toEqual([
+      creditMembers.find(member => member.memberKey === 'known-author')!.id
+    ])
+
+    const built = buildPublishedSource({
+      preservedFrontmatter: draft!.preservedFrontmatter,
+      title: draft!.title,
+      description: draft!.description,
+      authorKeys: ['known-author'],
+      body: draft!.body,
+      now: new Date('2026-08-12T00:00:00.000Z')
+    })
+    expect(built.frontmatter.authors).toEqual(['known-author', '外部作者'])
+    expect(built.frontmatter.contributors).toEqual(['known-contributor', '外部编辑'])
+    expect(built.source).not.toContain(CMS_UNMATCHED_AUTHORS_KEY)
+    expect(built.source).not.toContain(CMS_UNMATCHED_CONTRIBUTORS_KEY)
   })
 
   it('完整 Dry Run 分类安全/合并/冲突/新增/移动/删除/非法/高风险，并只导入所选安全项且幂等', async () => {

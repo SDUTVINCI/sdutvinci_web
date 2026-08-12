@@ -82,6 +82,10 @@ Article/Revision。移动发布保持同一 Article ID，写 `article_redirects`
 解析到同一文章。删除提案只有在正常提交、另一位审核者批准和管理员明确发布后才标记
 Article 删除并创建 export outbox；导入本身不会删除任何正式内容。
 
+文章 `authors`/`contributors` 中能匹配成员稳定 ID 的值继续进入成员关联；暂时没有成员档案
+的原始人名也会保存在草稿内部，并在正式发布时恢复到同名标准 Frontmatter 字段。内部保存键
+不会出现在公开 Markdown 中，导入不再因单个署名无法匹配而阻止整篇文章。
+
 ## 6. 文件安全
 
 文章受管路径只能是 NFC 编码的 `news/**/*.md` 或 `wiki/**/*.md`；阶段 9 另允许已在 Base

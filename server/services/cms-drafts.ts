@@ -42,6 +42,8 @@ export class CmsDraftStateError extends Error {
 const editableFrontmatterKeys = new Set(['title', 'description', 'authors'])
 export const CMS_UPDATED_AT_OVERRIDE_KEY = '_vinciUpdatedAtOverride'
 export const CMS_PUBLISHED_AT_OVERRIDE_KEY = '_vinciPublishedAtOverride'
+export const CMS_UNMATCHED_AUTHORS_KEY = '_vinciUnmatchedAuthors'
+export const CMS_UNMATCHED_CONTRIBUTORS_KEY = '_vinciUnmatchedContributors'
 
 const preserveFrontmatter = (frontmatter: Record<string, unknown>) =>
   Object.fromEntries(

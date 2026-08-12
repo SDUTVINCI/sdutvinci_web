@@ -14,7 +14,12 @@ import {
   reviewEvents,
   userMembers
 } from '../db/schema'
-import { CMS_PUBLISHED_AT_OVERRIDE_KEY, CMS_UPDATED_AT_OVERRIDE_KEY } from './cms-drafts'
+import {
+  CMS_PUBLISHED_AT_OVERRIDE_KEY,
+  CMS_UNMATCHED_AUTHORS_KEY,
+  CMS_UNMATCHED_CONTRIBUTORS_KEY,
+  CMS_UPDATED_AT_OVERRIDE_KEY
+} from './cms-drafts'
 import { parseCmsMarkdown, writeCmsMarkdown } from '../utils/cms-frontmatter'
 import { getCmsGitConfig } from '../utils/cms-git-config'
 import { describeCmsFailure } from '../utils/cms-sensitive-data'
@@ -140,12 +145,18 @@ export const buildPublishedSource = (input: {
   const publicExisting = Object.fromEntries(
     Object.entries(existing).filter(([key]) => ![
       CMS_UPDATED_AT_OVERRIDE_KEY,
-      CMS_PUBLISHED_AT_OVERRIDE_KEY
+      CMS_PUBLISHED_AT_OVERRIDE_KEY,
+      CMS_UNMATCHED_AUTHORS_KEY,
+      CMS_UNMATCHED_CONTRIBUTORS_KEY
     ].includes(key))
   )
-  const authors = [...new Set(input.authorKeys)]
+  const authors = [...new Set([
+    ...input.authorKeys,
+    ...stringArray(existing[CMS_UNMATCHED_AUTHORS_KEY])
+  ])]
   const contributors = [...new Set([
     ...stringArray(existing.contributors),
+    ...stringArray(existing[CMS_UNMATCHED_CONTRIBUTORS_KEY]),
     ...(input.ownerMemberKey && !authors.includes(input.ownerMemberKey)
       ? [input.ownerMemberKey]
       : [])
