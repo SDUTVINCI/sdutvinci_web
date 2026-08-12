@@ -18,6 +18,7 @@ const repository = ref('SDUTVINCI/sdutvinci_content')
 const pullRequestNumber = ref<number | null>(null)
 const run = ref<CmsContentImportRun | null>(null)
 const selected = ref<string[]>([])
+const classificationFilter = ref<'all' | ContentImportClassification>('all')
 const highRiskConfirmation = ref('')
 const busy = ref(false)
 const message = ref('')
@@ -92,6 +93,9 @@ const categoryCounts = computed(() => Object.entries(
     return result
   }, {})
 ))
+const filteredItems = computed(() => classificationFilter.value === 'all'
+  ? run.value?.items || []
+  : (run.value?.items || []).filter(item => item.classification === classificationFilter.value))
 const artifactItem = computed(() => run.value?.items.find(item => item.id === artifact.value?.id) || null)
 const deletionArtifact = computed(() => ['deletion_proposal', 'member_deletion_proposal']
   .includes(artifactItem.value?.classification || ''))
@@ -158,6 +162,7 @@ const dryRun = async () => {
       body: { repository: repository.value, pullRequestNumber: pullRequestNumber.value }
     })
     run.value = response.run
+    classificationFilter.value = 'all'
     highRiskConfirmation.value = ''
     selected.value = response.run.items
       .filter(item => item.importable && item.status === 'pending')
@@ -338,11 +343,24 @@ const externalAction = async (action: 'comment' | 'close') => {
           <span><i aria-hidden="true" />Dry Run 已写入审计记录</span>
           <span>PR 外部操作 {{ run.externalActions.length }} 条</span>
         </div>
-        <ul class="cms-import-categories">
-          <li v-for="[classification, itemCount] in categoryCounts" :key="classification">
+        <div class="cms-import-category-filters" role="group" aria-label="按风险分类筛选文件">
+          <button
+            type="button"
+            :aria-pressed="classificationFilter === 'all'"
+            @click="classificationFilter = 'all'"
+          >
+            <span>全部分类</span><strong>{{ run.itemCount }}</strong>
+          </button>
+          <button
+            v-for="[classification, itemCount] in categoryCounts"
+            :key="classification"
+            type="button"
+            :aria-pressed="classificationFilter === classification"
+            @click="classificationFilter = classification as ContentImportClassification"
+          >
             <span>{{ labels[classification as ContentImportClassification] }}</span><strong>{{ itemCount }}</strong>
-          </li>
-        </ul>
+          </button>
+        </div>
         <section v-if="run.externalActions.length" class="cms-import-actions" aria-label="PR 外部操作记录">
           <article
             v-for="action in run.externalActions"
@@ -405,13 +423,15 @@ const externalAction = async (action: 'comment' | 'close') => {
       </section>
 
       <div class="cms-import-list">
-        <article v-for="item in run.items" :key="item.id" class="cms-card cms-import-item" :data-risk="!item.importable">
+        <article v-for="item in filteredItems" :key="item.id" class="cms-card cms-import-item" :data-risk="!item.importable">
           <header class="cms-import-item-heading">
             <label class="cms-import-select">
               <input v-model="selected" type="checkbox" :value="item.id" :disabled="!canSelectItem(item)">
               <span>
                 <small>{{ item.targetType === 'member' ? '成员资料' : '文章内容' }}</small>
                 <strong>{{ labels[item.classification] }}</strong>
+                <em v-if="canForceHighRiskItem(item) && item.status === 'pending'">强制导入此高风险项（仍需输入确认短语）</em>
+                <em v-else-if="canSelectItem(item)">选择导入此项</em>
               </span>
             </label>
             <span class="cms-import-item-status" :data-status="item.status">{{ itemStatusLabels[item.status] }}</span>
@@ -712,6 +732,57 @@ const externalAction = async (action: 'comment' | 'close') => {
 .cms-import-diff-line[data-kind="added"] .cms-import-diff-prefix { color: #4ade80; }
 .cms-import-diff-line[data-kind="removed"] .cms-import-diff-prefix { color: #f87171; }
 .cms-import-diff-empty { margin: 0; padding: 14px 15px; border-left: 4px solid #d97706; background: rgba(245, 158, 11, .1); color: var(--ink-soft); font-size: .8rem; }
+
+.cms-import-category-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.cms-import-category-filters button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 11px;
+  border: 1px solid var(--import-line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  color: var(--ink-soft);
+  cursor: pointer;
+  font: inherit;
+  font-size: .76rem;
+  font-weight: 750;
+}
+
+.cms-import-category-filters button[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--cyan) 62%, var(--line));
+  background: var(--import-cyan-soft);
+  color: var(--ink);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--cyan) 10%, transparent);
+}
+
+.cms-import-category-filters strong {
+  min-width: 1.5rem;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--cyan) 12%, transparent);
+  color: var(--cyan);
+  text-align: center;
+}
+
+.cms-import-select em {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: .7rem;
+  font-style: normal;
+  font-weight: 650;
+}
+
+.cms-import-item[data-risk="true"] .cms-import-select em {
+  color: var(--red);
+}
 
 @media (max-width: 1080px) {
   .cms-import-form-fields { grid-template-columns: minmax(260px, 1fr) 180px; }

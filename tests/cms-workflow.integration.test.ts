@@ -18,6 +18,8 @@ import {
 } from '../server/services/cms-edit-locks'
 import {
   createCmsDraftForArticle,
+  createCmsNewArticleDraft,
+  getCmsDraftForReview,
   saveCmsDraft
 } from '../server/services/cms-drafts'
 import { synchronizeCmsMembers } from '../server/services/cms-members'
@@ -36,6 +38,10 @@ import {
 } from '../server/services/cms-reviews'
 import { configureCmsTestDatabase } from './helpers/cms-test-database'
 import { resetCmsV2FlagsForTests } from '../server/utils/cms-v2-flags'
+import {
+  batchApproveCmsDrafts,
+  batchSubmitCmsDraftsForReview
+} from '../server/services/cms-batch-workflow'
 
 const integration = configureCmsTestDatabase() ? describe : describe.skip
 let contentRoot = ''
@@ -345,5 +351,31 @@ integration('CMS 阶段 4 审核、编辑锁与版本冲突', () => {
     expect(row?.status).toBe('pending_review')
     comparison = await getCmsDraftComparison(draft.id)
     expect(comparison.hasVersionConflict).toBe(true)
+  })
+
+  it('批量提交和批量审核逐项复用版本、编辑锁及基线校验', async () => {
+    const first = await createCmsNewArticleDraft('news', '批量草稿一', memberOneUserId)
+    const second = await createCmsNewArticleDraft('news', '批量草稿二', memberOneUserId)
+
+    const submitted = await batchSubmitCmsDraftsForReview([
+      { id: first.id, version: first.version },
+      { id: second.id, version: second.version + 1 }
+    ], memberOneUserId)
+    expect(submitted).toMatchObject([
+      { id: first.id, ok: true },
+      { id: second.id, ok: false }
+    ])
+    expect((await getCmsDraftForReview(first.id))?.status).toBe('pending_review')
+    expect((await getCmsDraftForReview(second.id))?.status).toBe('draft')
+    const approved = await batchApproveCmsDrafts([
+      { id: first.id, version: (await getCmsDraftForReview(first.id))!.version },
+      { id: second.id, version: second.version }
+    ], adminUserId)
+    expect(approved).toMatchObject([
+      { id: first.id, ok: true },
+      { id: second.id, ok: false }
+    ])
+    expect((await getCmsDraftForReview(first.id))?.status).toBe('approved')
+    expect((await getCmsDraftForReview(second.id))?.status).toBe('draft')
   })
 })

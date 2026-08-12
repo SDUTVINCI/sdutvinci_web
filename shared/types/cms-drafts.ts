@@ -11,6 +11,21 @@ export const cmsDraftStatuses = [
 
 export type CmsDraftStatus = typeof cmsDraftStatuses[number]
 
+export const CMS_BATCH_SUBMIT_CONFIRMATION = 'BATCH_SUBMIT_FOR_REVIEW'
+export const CMS_BATCH_APPROVE_CONFIRMATION = 'BATCH_APPROVE_DRAFTS'
+export const CMS_BATCH_PUBLISH_CONFIRMATION = 'BATCH_PUBLISH_DRAFTS'
+
+export interface CmsBatchDraftItem {
+  id: string
+  version: number
+}
+
+export interface CmsBatchActionResult {
+  id: string
+  ok: boolean
+  message: string
+}
+
 export interface CmsDraftAuthor {
   memberId: string
   memberKey: string

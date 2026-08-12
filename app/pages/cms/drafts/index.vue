@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import {
   cmsDraftStatuses,
+  type CmsBatchActionResult,
   type CmsDraftStatus,
   type CmsDraftSummary
 } from '~~/shared/types/cms-drafts'
+
+const BATCH_SUBMIT_CONFIRMATION = 'BATCH_SUBMIT_FOR_REVIEW'
 
 definePageMeta({ layout: 'cms', middleware: 'cms-auth' })
 useHead({ title: '我的草稿 · Vinci 内容管理后台' })
@@ -22,6 +25,50 @@ const { data, status: loadStatus, error, refresh } = await useFetch<{ drafts: Cm
 )
 const actionBusyId = ref('')
 const actionError = ref('')
+const batchMessage = ref('')
+const selectedDraftIds = ref<string[]>([])
+const batchBusy = ref(false)
+const drafts = computed(() => data.value?.drafts ?? [])
+const eligibleDrafts = computed(() => drafts.value.filter(draft =>
+  !draft.isDeleted && draft.status === 'draft' && draft.ownerUserId === session.value?.user.id
+))
+const allEligibleSelected = computed(() => eligibleDrafts.value.length > 0
+  && eligibleDrafts.value.every(draft => selectedDraftIds.value.includes(draft.id)))
+
+watch(drafts, (items) => {
+  const validIds = new Set(items.filter(item => !item.isDeleted && item.status === 'draft'
+    && item.ownerUserId === session.value?.user.id).map(item => item.id))
+  selectedDraftIds.value = selectedDraftIds.value.filter(id => validIds.has(id))
+})
+
+const toggleAllEligible = () => {
+  selectedDraftIds.value = allEligibleSelected.value
+    ? []
+    : eligibleDrafts.value.map(draft => draft.id)
+}
+
+const batchSubmit = async () => {
+  const items = eligibleDrafts.value
+    .filter(draft => selectedDraftIds.value.includes(draft.id))
+    .map(draft => ({ id: draft.id, version: draft.version }))
+  if (!items.length || !window.confirm(`确定批量提交 ${items.length} 篇草稿审核吗？系统会逐篇检查版本与编辑锁。`)) return
+  batchBusy.value = true
+  actionError.value = ''
+  batchMessage.value = ''
+  try {
+    const response = await $fetch<{ results: CmsBatchActionResult[] }>('/api/cms/drafts/batch-submit', {
+      method: 'POST', headers: csrfHeaders(), body: { items, confirm: BATCH_SUBMIT_CONFIRMATION }
+    })
+    const succeeded = response.results.filter(item => item.ok).length
+    const failures = response.results.filter(item => !item.ok)
+    batchMessage.value = `批量提交完成：成功 ${succeeded} 篇，失败 ${failures.length} 篇。`
+    actionError.value = failures.length ? failures.map(item => item.message).join('；') : ''
+    selectedDraftIds.value = []
+    await refresh()
+  } catch (error: any) {
+    actionError.value = error?.data?.message || '批量提交审核失败'
+  } finally { batchBusy.value = false }
+}
 
 const changeDeletionState = async (draft: CmsDraftSummary) => {
   if (!draft.isDeleted && !window.confirm('确定将这个草稿移入已删除吗？正式文章不会受影响。')) return
@@ -82,7 +129,20 @@ const statusLabels: Record<CmsDraftSummary['status'], string> = {
         <input v-model="showDeleted" type="checkbox">
         <span>查看已删除草稿</span>
       </label>
+      <button
+        class="cms-button cms-button-quiet"
+        type="button"
+        :disabled="!eligibleDrafts.length || batchBusy"
+        @click="toggleAllEligible"
+      >{{ allEligibleSelected ? '取消全选可提交草稿' : '全选可提交草稿' }}</button>
+      <button
+        class="cms-button cms-button-primary"
+        type="button"
+        :disabled="!selectedDraftIds.length || batchBusy"
+        @click="batchSubmit"
+      >{{ batchBusy ? '正在逐篇提交…' : `批量提交审核（${selectedDraftIds.length}）` }}</button>
     </div>
+    <p v-if="batchMessage" class="cms-alert">{{ batchMessage }}</p>
     <p v-if="actionError" class="cms-alert cms-alert-error">{{ actionError }}</p>
     <p v-if="loadStatus === 'pending'" class="cms-muted">正在加载草稿…</p>
     <p v-else-if="error" class="cms-alert cms-alert-error">{{ error.message || '草稿加载失败' }}</p>
@@ -91,6 +151,7 @@ const statusLabels: Record<CmsDraftSummary['status'], string> = {
       <table class="cms-table">
         <thead>
           <tr>
+            <th>选择</th>
             <th>标题</th>
             <th>类型</th>
             <th v-if="isAdmin">创建者</th>
@@ -103,6 +164,15 @@ const statusLabels: Record<CmsDraftSummary['status'], string> = {
         </thead>
         <tbody>
           <tr v-for="draft in data?.drafts ?? []" :key="draft.id">
+            <td>
+              <input
+                v-model="selectedDraftIds"
+                type="checkbox"
+                :value="draft.id"
+                :aria-label="`选择草稿：${draft.title}`"
+                :disabled="draft.isDeleted || draft.status !== 'draft' || draft.ownerUserId !== session?.user.id"
+              >
+            </td>
             <td>
               <NuxtLink v-if="!draft.isDeleted" :to="`/cms/drafts/${draft.id}`">{{ draft.title }}</NuxtLink>
               <span v-else>{{ draft.title }}</span>

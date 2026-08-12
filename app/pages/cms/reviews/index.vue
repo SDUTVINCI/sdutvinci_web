@@ -1,5 +1,9 @@
 <script setup lang="ts">
 import type { CmsReviewSummary } from '../../../../shared/types/cms-reviews'
+import type { CmsBatchActionResult } from '../../../../shared/types/cms-drafts'
+
+const BATCH_APPROVE_CONFIRMATION = 'BATCH_APPROVE_DRAFTS'
+const BATCH_PUBLISH_CONFIRMATION = 'BATCH_PUBLISH_DRAFTS'
 
 definePageMeta({ layout: 'cms', middleware: ['cms-auth', 'cms-admin'] })
 useHead({ title: '待审核内容 · Vinci 内容管理后台' })
@@ -9,15 +13,66 @@ const { data, status, error, refresh } = await useAsyncData(
   'cms:reviews',
   async () => {
     const [articleReviews, memberReviews] = await Promise.all([
-      requestFetch<{ reviews: CmsReviewSummary[] }>('/api/cms/reviews'),
+      requestFetch<{ reviews: CmsReviewSummary[], approved: CmsReviewSummary[] }>('/api/cms/reviews'),
       requestFetch<{ applications: any[] }>('/api/cms/member-applications')
     ])
-    return { reviews: articleReviews.reviews, applications: memberReviews.applications }
+    return {
+      reviews: articleReviews.reviews,
+      approved: articleReviews.approved || [],
+      applications: memberReviews.applications
+    }
   }
 )
 const note = ref('')
 const message = ref('')
 const errorMessage = ref('')
+const selectedPendingIds = ref<string[]>([])
+const selectedApprovedIds = ref<string[]>([])
+const batchBusy = ref(false)
+
+const toggleAll = (kind: 'pending' | 'approved') => {
+  const source = kind === 'pending' ? data.value?.reviews || [] : data.value?.approved || []
+  const selected = kind === 'pending' ? selectedPendingIds : selectedApprovedIds
+  selected.value = selected.value.length === source.length ? [] : source.map(item => item.id)
+}
+
+const runBatch = async (action: 'approve' | 'publish') => {
+  const source = action === 'approve' ? data.value?.reviews || [] : data.value?.approved || []
+  const selected = action === 'approve' ? selectedPendingIds.value : selectedApprovedIds.value
+  const items = source.filter(item => selected.includes(item.id)).map(item => ({ id: item.id, version: item.version }))
+  if (!items.length) return
+  const prompt = action === 'approve'
+    ? `确定批量审核通过 ${items.length} 篇草稿吗？系统会逐篇检查版本和正式内容基线。`
+    : `确定把 ${items.length} 篇已通过草稿正式发布吗？发布会逐篇创建正式 Revision 和导出任务。`
+  if (!window.confirm(prompt)) return
+  batchBusy.value = true
+  message.value = ''
+  errorMessage.value = ''
+  try {
+    const response = await $fetch<{ results: CmsBatchActionResult[] }>(
+      `/api/cms/reviews/batch-${action}`,
+      {
+        method: 'POST',
+        headers: csrfHeaders(),
+        body: {
+          items,
+          confirm: action === 'approve'
+            ? BATCH_APPROVE_CONFIRMATION
+            : BATCH_PUBLISH_CONFIRMATION
+        }
+      }
+    )
+    const succeeded = response.results.filter(item => item.ok).length
+    const failures = response.results.filter(item => !item.ok)
+    message.value = `${action === 'approve' ? '批量审核' : '批量发布'}完成：成功 ${succeeded} 篇，失败 ${failures.length} 篇。`
+    errorMessage.value = failures.length ? failures.map(item => item.message).join('；') : ''
+    selectedPendingIds.value = []
+    selectedApprovedIds.value = []
+    await refresh()
+  } catch (error: any) {
+    errorMessage.value = error?.data?.message || `${action === 'approve' ? '批量审核' : '批量发布'}失败`
+  } finally { batchBusy.value = false }
+}
 const reviewMember = async (id: string, action: 'approve' | 'reject') => {
   if (!confirm(action === 'approve' ? '审核通过后将立即创建正式成员并上线，确定吗？' : '拒绝后将删除临时头像，确定吗？')) return
   try {
@@ -51,9 +106,18 @@ const reviewMember = async (id: string, action: 'approve' | 'reject') => {
     <p v-if="status === 'pending'" class="cms-muted">正在加载待审核内容…</p>
     <p v-else-if="error" class="cms-alert cms-alert-error">加载失败，请稍后重试。</p>
     <div v-else class="cms-table-wrap">
+      <div class="cms-toolbar cms-toolbar-compact">
+        <button class="cms-button cms-button-quiet" type="button" :disabled="!data?.reviews.length || batchBusy" @click="toggleAll('pending')">
+          {{ selectedPendingIds.length === data?.reviews.length && data?.reviews.length ? '取消全选待审核' : '全选待审核' }}
+        </button>
+        <button class="cms-button cms-button-primary" type="button" :disabled="!selectedPendingIds.length || batchBusy" @click="runBatch('approve')">
+          {{ batchBusy ? '正在逐篇处理…' : `批量审核通过（${selectedPendingIds.length}）` }}
+        </button>
+      </div>
       <table class="cms-table">
         <thead>
           <tr>
+            <th>选择</th>
             <th>标题</th>
             <th>提交者</th>
             <th>集合</th>
@@ -62,6 +126,7 @@ const reviewMember = async (id: string, action: 'approve' | 'reject') => {
         </thead>
         <tbody>
           <tr v-for="review in data?.reviews ?? []" :key="review.id">
+            <td><input v-model="selectedPendingIds" type="checkbox" :value="review.id" :aria-label="`选择待审核：${review.title}`"></td>
             <td><NuxtLink :to="`/cms/reviews/${review.id}`">{{ review.title }}</NuxtLink></td>
             <td>{{ review.owner.memberName || `@${review.owner.account}` }}</td>
             <td><span class="cms-badge">{{ review.collection }}</span></td>
@@ -71,6 +136,35 @@ const reviewMember = async (id: string, action: 'approve' | 'reject') => {
       </table>
       <p v-if="!data?.reviews.length" class="cms-empty">目前没有待审核内容。</p>
     </div>
+
+    <section v-if="status !== 'pending' && !error" class="cms-review-section">
+      <header class="cms-section-heading">
+        <div><p class="cms-eyebrow">APPROVED / READY TO PUBLISH</p><h2>已通过，等待发布</h2></div>
+        <div class="cms-toolbar cms-toolbar-compact">
+          <button class="cms-button cms-button-quiet" type="button" :disabled="!data?.approved.length || batchBusy" @click="toggleAll('approved')">
+            {{ selectedApprovedIds.length === data?.approved.length && data?.approved.length ? '取消全选待发布' : '全选待发布' }}
+          </button>
+          <button class="cms-button cms-button-primary" type="button" :disabled="!selectedApprovedIds.length || batchBusy" @click="runBatch('publish')">
+            {{ batchBusy ? '正在逐篇发布…' : `批量正式发布（${selectedApprovedIds.length}）` }}
+          </button>
+        </div>
+      </header>
+      <div class="cms-table-wrap">
+        <table class="cms-table">
+          <thead><tr><th>选择</th><th>标题</th><th>提交者</th><th>集合</th><th>最后更新</th></tr></thead>
+          <tbody>
+            <tr v-for="review in data?.approved ?? []" :key="review.id">
+              <td><input v-model="selectedApprovedIds" type="checkbox" :value="review.id" :aria-label="`选择待发布：${review.title}`"></td>
+              <td><NuxtLink :to="`/cms/reviews/${review.id}`">{{ review.title }}</NuxtLink></td>
+              <td>{{ review.owner.memberName || `@${review.owner.account}` }}</td>
+              <td><span class="cms-badge">{{ review.collection }}</span></td>
+              <td>{{ new Date(review.updatedAt).toLocaleString('zh-CN') }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <p v-if="!data?.approved.length" class="cms-empty">目前没有等待发布的文章。</p>
+      </div>
+    </section>
 
     <section v-if="status !== 'pending' && !error" class="cms-review-section">
       <header class="cms-section-heading">

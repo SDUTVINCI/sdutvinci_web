@@ -37,6 +37,7 @@ export interface CmsReviewSummary {
   collection: CmsDraft['collection']
   title: string
   status: CmsDraftStatus
+  version: number
   owner: CmsReviewOwner
   submittedAt: string
   updatedAt: string

@@ -1,5 +1,5 @@
 import { diffLines } from 'diff'
-import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
 import type {
   CmsDraftStatus
 } from '../../shared/types/cms-drafts'
@@ -146,7 +146,9 @@ const loadOwner = async (ownerUserId: string) => {
   return owner
 }
 
-export const listCmsPendingReviews = async (): Promise<CmsReviewSummary[]> => {
+export const listCmsReviewsByStatus = async (
+  statuses: Array<'pending_review' | 'approved'>
+): Promise<CmsReviewSummary[]> => {
   const rows = await getDatabase()
     .select({
       id: drafts.id,
@@ -154,6 +156,7 @@ export const listCmsPendingReviews = async (): Promise<CmsReviewSummary[]> => {
       collection: drafts.collection,
       title: drafts.title,
       status: drafts.status,
+      version: drafts.version,
       ownerUserId: users.id,
       account: users.account,
       memberName: members.name,
@@ -164,7 +167,7 @@ export const listCmsPendingReviews = async (): Promise<CmsReviewSummary[]> => {
     .innerJoin(users, eq(drafts.ownerUserId, users.id))
     .leftJoin(userMembers, eq(users.id, userMembers.userId))
     .leftJoin(members, eq(userMembers.memberId, members.id))
-    .where(and(eq(drafts.status, 'pending_review'), isNull(drafts.deletedAt)))
+    .where(and(inArray(drafts.status, statuses), isNull(drafts.deletedAt)))
     .orderBy(asc(drafts.updatedAt))
   return rows.map(row => ({
     id: row.id,
@@ -172,6 +175,7 @@ export const listCmsPendingReviews = async (): Promise<CmsReviewSummary[]> => {
     collection: row.collection as CmsReviewSummary['collection'],
     title: row.title,
     status: row.status as CmsDraftStatus,
+    version: row.version,
     owner: {
       userId: row.ownerUserId,
       account: row.account,
@@ -181,6 +185,12 @@ export const listCmsPendingReviews = async (): Promise<CmsReviewSummary[]> => {
     updatedAt: row.updatedAt.toISOString()
   }))
 }
+
+export const listCmsPendingReviews = async () =>
+  listCmsReviewsByStatus(['pending_review'])
+
+export const listCmsApprovedReviews = async () =>
+  listCmsReviewsByStatus(['approved'])
 
 export const getCmsReviewDetail = async (draftId: string): Promise<CmsReviewDetail> => {
   const draft = await getCmsDraftForReview(draftId)
