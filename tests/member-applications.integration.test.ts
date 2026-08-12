@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { eq, sql } from 'drizzle-orm'
+import { HeadObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import sharp from 'sharp'
 import { closeDatabase, getDatabase } from '../server/db/client'
 import { runMigrations } from '../server/db/migrate'
@@ -8,7 +9,8 @@ import {
   listSubmittedMemberApplications,
   reviewMemberApplication,
   startMemberApplication,
-  submitMemberApplication
+  submitMemberApplication,
+  uploadMemberApplicationAvatar
 } from '../server/services/member-applications'
 import { memberApplications, members } from '../server/db/schema'
 import { uploadCmsMemberAvatar } from '../server/services/cms-member-avatar'
@@ -27,6 +29,17 @@ integration('公开成员申请审核', () => {
   it('匿名提交不会上线，管理员明确通过后才创建正式成员和 Revision', async () => {
     const admin = await bootstrapCmsAdmin({ account: 'reviewadmin', password: 'ReviewAdminPassword123!' })
     const application = await startMemberApplication()
+    const image = await sharp({
+      create: { width: 32, height: 32, channels: 3, background: '#167d8b' }
+    }).png().toBuffer()
+    const uploaded = await uploadMemberApplicationAvatar({
+      id: application.id,
+      token: application.token,
+      name: '测试成员',
+      data: image,
+      mimeType: 'image/png'
+    })
+    expect(uploaded.url).toContain('/member-applications/')
     await expect(submitMemberApplication(application.id, 'wrong-token', {})).rejects.toThrow('MEMBER_APPLICATION_NOT_FOUND')
     await submitMemberApplication(application.id, application.token, {
       name: '测试成员', grade: '2025', groupName: '软件算法组', positions: ['成员'], seasons: ['24', '25'],
@@ -43,7 +56,28 @@ integration('公开成员申请审核', () => {
     const online = await getDatabase().select().from(members)
     expect(online).toHaveLength(1)
     expect(online[0]).toMatchObject({ memberKey: 'ceshichengyuan', name: '测试成员', groupName: '软件算法组', memberType: '软件算法组', positions: ['成员'], seasons: ['24', '25'], links: { 'home-page': 'https://example.com/profile' } })
-    expect((await getDatabase().select().from(memberApplications))[0]?.status).toBe('approved')
+    expect(decodeURIComponent(online[0]?.avatarUrl || '')).toContain('/site-assets/images/member_photo/测试成员-')
+    const reviewed = (await getDatabase().select().from(memberApplications))[0]!
+    expect(reviewed).toMatchObject({ status: 'approved', avatarPublicUrl: online[0]?.avatarUrl })
+    expect(reviewed.avatarObjectKey).toMatch(/^site-assets\/images\/member_photo\/测试成员-[0-9a-f]{8}\.webp$/)
+    const config = {
+      endpoint: process.env.S3_ENDPOINT,
+      region: process.env.S3_REGION,
+      forcePathStyle: process.env.S3_FORCE_PATH_STYLE === 'true',
+      credentials: {
+        accessKeyId: process.env.S3_ACCESS_KEY_ID!,
+        secretAccessKey: process.env.S3_SECRET_ACCESS_KEY!
+      }
+    }
+    const client = new S3Client(config)
+    await expect(client.send(new HeadObjectCommand({
+      Bucket: process.env.S3_BUCKET,
+      Key: reviewed.avatarObjectKey!
+    }))).resolves.toBeTruthy()
+    await expect(client.send(new HeadObjectCommand({
+      Bucket: process.env.S3_BUCKET,
+      Key: `member-applications/${new Date().getUTCFullYear()}/${uploaded.filename}`
+    }))).rejects.toBeTruthy()
   })
 
   it('拒绝不存在或未提交申请，且服务端拒绝年度外组别', async () => {

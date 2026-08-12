@@ -8,7 +8,12 @@ import { getCmsMediaConfig } from '../utils/cms-media-config'
 import { createCmsMember } from './cms-members'
 import { deriveMemberRole, deriveMemberType, normalizeMemberPositions } from './member-profile'
 import { MEMBER_COLLEGE_OPTIONS } from '../../shared/constants/member-colleges'
-import { prepareMemberAvatar, uploadMemberAvatarObject } from './member-avatar-storage'
+import {
+  deleteMemberAvatarObject,
+  prepareMemberAvatar,
+  promoteMemberApplicationAvatar,
+  uploadMemberAvatarObject
+} from './member-avatar-storage'
 
 const tokenHash = (token: string) => createHash('sha256').update(token).digest('hex')
 const storage = () => {
@@ -143,7 +148,40 @@ export const reviewMemberApplication = async (id: string, action: 'approve' | 'r
   }
   const profile = application.profile as any
   profile.links = normalizeApplicationLinks(profile.links)
-  const member = await createCmsMember({ ...profile, memberKey: await memberKeyFor(profile.name), sourcePath: `applications/${id}.md`, role: deriveMemberRole(profile.positions, profile.groupName), memberType: deriveMemberType(profile.positions, profile.groupName) }, actorUserId)
-  await getDatabase().update(memberApplications).set({ status: 'approved', approvedMemberId: member!.id, reviewNote: note, reviewedAt: new Date(), reviewedByUserId: actorUserId, updatedAt: new Date() }).where(eq(memberApplications.id, id))
+  const memberKey = await memberKeyFor(profile.name)
+  let promotedAvatar: Awaited<ReturnType<typeof promoteMemberApplicationAvatar>> | null = null
+  if (application.avatarObjectKey) {
+    promotedAvatar = await promoteMemberApplicationAvatar({
+      sourceKey: application.avatarObjectKey,
+      applicationId: application.id
+    })
+    profile.avatarUrl = promotedAvatar.url
+  }
+  let member
+  try {
+    member = await createCmsMember({
+      ...profile,
+      memberKey,
+      sourcePath: `applications/${id}.md`,
+      role: deriveMemberRole(profile.positions, profile.groupName),
+      memberType: deriveMemberType(profile.positions, profile.groupName)
+    }, actorUserId)
+  } catch (error) {
+    if (promotedAvatar) await deleteMemberAvatarObject(promotedAvatar.key).catch(() => undefined)
+    throw error
+  }
+  await getDatabase().update(memberApplications).set({
+    status: 'approved',
+    approvedMemberId: member!.id,
+    avatarObjectKey: promotedAvatar?.key || application.avatarObjectKey,
+    avatarPublicUrl: promotedAvatar?.url || application.avatarPublicUrl,
+    reviewNote: note,
+    reviewedAt: new Date(),
+    reviewedByUserId: actorUserId,
+    updatedAt: new Date()
+  }).where(eq(memberApplications.id, id))
+  if (promotedAvatar && application.avatarObjectKey) {
+    await deleteMemberAvatarObject(application.avatarObjectKey).catch(() => undefined)
+  }
   return { status: 'approved', member }
 }

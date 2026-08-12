@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { DeleteObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
+import { CopyObjectCommand, DeleteObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import sharp from 'sharp'
 import { getCmsMediaConfig } from '../utils/cms-media-config'
 
@@ -68,4 +68,26 @@ export const uploadMemberAvatarObject = async (input: {
 export const deleteMemberAvatarObject = async (key: string) => {
   const { config, client } = storage()
   await client.send(new DeleteObjectCommand({ Bucket: config.S3_BUCKET, Key: key }))
+}
+
+export const promoteMemberApplicationAvatar = async (input: {
+  sourceKey: string
+  applicationId: string
+}) => {
+  if (!/^member-applications\/\d{4}\/[^\u0000/\\]+-[0-9a-f]{8}\.webp$/u.test(input.sourceKey)) {
+    throw new Error('MEMBER_APPLICATION_AVATAR_KEY_INVALID')
+  }
+  const filename = input.sourceKey.split('/').at(-1)!
+  const key = `site-assets/images/member_photo/${filename}`
+  const { config, client } = storage()
+  await client.send(new CopyObjectCommand({
+    Bucket: config.S3_BUCKET,
+    Key: key,
+    CopySource: encodeURIComponent(`${config.S3_BUCKET}/${input.sourceKey}`).replace(/%2F/g, '/'),
+    ContentType: 'image/webp',
+    CacheControl: 'public, max-age=31536000, immutable',
+    MetadataDirective: 'REPLACE',
+    Metadata: { 'member-application-id': input.applicationId }
+  }))
+  return { key, url: publicUrl(config.S3_PUBLIC_BASE_URL, key) }
 }
