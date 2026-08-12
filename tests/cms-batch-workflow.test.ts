@@ -79,6 +79,13 @@ describe('CMS 批量工作流结果隔离', () => {
     expect(reviewsPage).toContain('批量审核通过')
     expect(reviewsPage).toContain('批量正式发布')
     expect(reviewsPage).toContain('已通过，等待发布')
+    expect(reviewsPage).toContain('cms-review-workspace')
+    expect(reviewsPage).toContain('data-stage="pending"')
+    expect(reviewsPage).toContain('data-stage="approved"')
+    expect(reviewsPage).toContain('data-stage="members"')
+    expect(reviewsPage).toContain('审核队列已清空')
+    expect(reviewsPage).toContain('暂无待发布文章')
+    expect(reviewsPage).toContain('暂无成员申请')
   })
 
   it('三个批量 API 共用 500 项请求上限', async () => {
