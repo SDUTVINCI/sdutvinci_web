@@ -636,7 +636,7 @@ unset current_deployment_sha
 | `S3_SECRET_ACCESS_KEY` | 与上面 ID 配对的 secret | 只存密码库和 `.env`，轮换时两项一起更新并复验，不打印到日志。 |
 | `S3_PUBLIC_BASE_URL` | 浏览器访问图片的 HTTPS 基址，例如 `https://img.example.com` | 不含 object key；程序会自动追加 `/<encoded-key>` 并去掉末尾 `/`。已有数据库 URL 必须与该基址一致。 |
 | `S3_FORCE_PATH_STYLE` | AWS/COS 通常按供应商要求填 `false`；MinIO 等可能要求 `true` | `false` 使用 virtual-hosted 风格，`true` 使用 path-style。填错通常表现为签名、DNS 或 Bucket 404。 |
-| `S3_KEY_PREFIX` | 默认 `tungwebsite/assets/images`，对象继续追加 `<collection>/<文章创建年>/<月>/<日>/<文件名>` | 不能以 `/` 开头/结尾；每段只允许字母、数字、`_`、`-`，禁止空段、`.`、`..`。上线后修改不会迁移旧对象。 |
+| `S3_KEY_PREFIX` | 默认 `site-assets/images`，对象继续追加 `<collection>/<文章创建年>/<月>/<日>/<文件名>` | 不能以 `/` 开头/结尾；每段只允许字母、数字、`_`、`-`，禁止空段、`.`、`..`。上线后修改不会迁移旧对象。 |
 | `S3_DOCTOR_MAX_OBJECTS` | 默认 `10000`，应不小于数据库媒体记录总数 | 范围 `1–100000`。doctor 超过该数量会 fail closed，避免一次无界 HeadObject；扩容前评估执行时间和 API 成本。 |
 | `CMS_IMAGE_MAX_BYTES` | 默认 `10485760`（10 MiB） | 原始上传大小上限，范围 `1024–52428800` 字节。反向代理请求体上限还必须大于它。 |
 | `CMS_IMAGE_MAX_WIDTH` | 默认 `2560` | WebP 输出最大宽度，范围 `320–8192` 像素；图片按比例缩小，不盲目放大。 |

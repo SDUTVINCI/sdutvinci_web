@@ -26,7 +26,7 @@ const mediaConfig: CmsMediaConfig = {
   S3_SECRET_ACCESS_KEY: 'test-secret-key',
   S3_PUBLIC_BASE_URL: 'https://images.test.example/assets',
   S3_FORCE_PATH_STYLE: true,
-  S3_KEY_PREFIX: 'tungwebsite/assets/images',
+  S3_KEY_PREFIX: 'site-assets/images',
   CMS_IMAGE_MAX_BYTES: 1024 * 1024,
   CMS_IMAGE_MAX_WIDTH: 800,
   CMS_IMAGE_MAX_HEIGHT: 800,
@@ -106,7 +106,7 @@ integration('CMS 图片处理与 S3 兼容对象存储', () => {
       CacheControl: 'public, max-age=31536000, immutable'
     })
     expect(put.Key).toMatch(
-      /^tungwebsite\/assets\/images\/wiki\/2025\/02\/07\/\d{13}-[0-9a-f]{8}\.webp$/
+      /^site-assets\/images\/wiki\/2025\/02\/07\/\d{13}-[0-9a-f]{8}\.webp$/
     )
     expect(put.Key).not.toContain('截图')
     const output = Buffer.from(put.Body as Uint8Array)
@@ -129,7 +129,7 @@ integration('CMS 图片处理与 S3 兼容对象存储', () => {
       byteSize: output.length
     })
     expect(result.asset.url).toMatch(
-      /^https:\/\/images\.test\.example\/assets\/tungwebsite\/assets\/images\/wiki\/2025\/02\/07\//
+      /^https:\/\/images\.test\.example\/assets\/site-assets\/images\/wiki\/2025\/02\/07\//
     )
     expect(JSON.stringify(result)).not.toContain(mediaConfig.S3_ACCESS_KEY_ID)
     expect(JSON.stringify(result)).not.toContain(mediaConfig.S3_SECRET_ACCESS_KEY)

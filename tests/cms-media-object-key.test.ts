@@ -14,13 +14,13 @@ describe('CMS 图片对象 key', () => {
 
     expect(createCmsMediaContentHash(output)).toBe(expectedHash)
     expect(createCmsMediaObjectKey(
-      'tungwebsite/assets/images',
+      'site-assets/images',
       'wiki',
       ['2025', '02', '07'],
       output,
       now
     )).toBe(
-      `tungwebsite/assets/images/wiki/2025/02/07/${now.getTime()}-${expectedHash.slice(0, 8)}.webp`
+      `site-assets/images/wiki/2025/02/07/${now.getTime()}-${expectedHash.slice(0, 8)}.webp`
     )
   })
 

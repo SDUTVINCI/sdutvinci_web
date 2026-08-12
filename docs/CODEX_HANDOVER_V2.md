@@ -1917,7 +1917,8 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
 - CMS 图片对象目录改为 `<S3_KEY_PREFIX>/<collection>/<文章创建年>/<月>/<日>/`；已有文章
   优先读取文章相对路径日期，尚无路径时使用 `publishedAt`（明确覆盖值优先），最后回退草稿
   创建日。文件名继续使用 Unix 毫秒与最终 WebP 内容哈希，不新增 Migration。
-- 默认 `S3_KEY_PREFIX` 为 `tungwebsite/assets/images`；不迁移或重命名历史对象。
+- 默认 `S3_KEY_PREFIX` 为 `site-assets/images`；公开基址仍由部署环境的
+  `S3_PUBLIC_BASE_URL` 提供，不迁移或重命名历史对象。
 - 飞书 Wiki 本地待上传媒体使用相同的 `wiki/YYYY/MM/DD/` 路径；图片转 WebP 且保留现有生成
   文件名，非图片附件保持原名原格式，并同步修改待导入 Markdown。内容仓库全部 Wiki 的
   `publishedAt` 按目录日期统一为 `YYYY-MM-DDT00:00:00.000Z`。
