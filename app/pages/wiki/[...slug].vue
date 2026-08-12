@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import mediumZoom from 'medium-zoom'
+import type { PublicMember } from '~~/shared/types/public-content'
 import { compareWikiChapters, numberWikiChapters } from '~~/utils/wiki-chapters'
 import {
   applyWikiHeadingNumbers,
@@ -105,6 +106,22 @@ const pageTitle = computed(() => {
   if (!page.value) return '加载中...'
   return currentChapter.value ? `${currentChapter.value} ${page.value.title}` : page.value.title
 })
+
+const articleFrontmatter = computed<Record<string, unknown>>(() =>
+  page.value?.frontmatter && typeof page.value.frontmatter === 'object'
+    ? page.value.frontmatter as Record<string, unknown>
+    : {}
+)
+const hasArticleCredits = computed(() => ['authors', 'contributors'].some(key =>
+  Array.isArray(articleFrontmatter.value[key]) && articleFrontmatter.value[key].length > 0
+))
+const { data: publicMembers } = await useAsyncData(
+  'wiki-article-credit-members',
+  async () => hasArticleCredits.value
+    ? (await $fetch<{ items: PublicMember[] }>('/api/v2/content/members')).items
+    : [],
+  { watch: [hasArticleCredits], default: () => [] }
+)
 
 useContentSeo({
   title: () => `${pageTitle.value} | Vinci Wiki`,
@@ -665,6 +682,13 @@ function normalizePath(path: string) {
               第 {{ currentChapter }} 节
             </div>
             <h1>{{ page.title }}</h1>
+            <ArticleCredits
+              :authors="articleFrontmatter.authors"
+              :contributors="articleFrontmatter.contributors"
+              :published-at="articleFrontmatter.publishedAt"
+              :updated-at="articleFrontmatter.updatedAt"
+              :members="publicMembers || []"
+            />
             <CmsArticleEditButton :public-path="cleanPath" allow-pdf />
           </header>
 
