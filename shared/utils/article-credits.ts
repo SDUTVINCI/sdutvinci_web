@@ -1,4 +1,4 @@
-import type { PublicMember } from '../types/public-content'
+import type { PublicArticleCreditIdentity } from '../types/article-credit-identities'
 
 export interface ArticleCredit {
   memberKey: string
@@ -14,20 +14,20 @@ const stringList = (value: unknown) => Array.isArray(value)
 export const resolveArticleCredits = (
   authorsValue: unknown,
   contributorsValue: unknown,
-  members: readonly PublicMember[]
+  identities: readonly PublicArticleCreditIdentity[]
 ) => {
-  const memberByKey = new Map(members.map(member => [member.memberKey, member]))
+  const identityByKey = new Map(identities.map(identity => [identity.memberKey, identity]))
   const authorKeys = [...new Set(stringList(authorsValue))]
   const authorSet = new Set(authorKeys)
   const collaboratorKeys = [...new Set(stringList(contributorsValue))]
     .filter(memberKey => !authorSet.has(memberKey))
   const resolve = (memberKey: string): ArticleCredit => {
-    const member = memberByKey.get(memberKey)
+    const identity = identityByKey.get(memberKey)
     return {
       memberKey,
-      name: member?.name || memberKey,
-      image: typeof member?.image === 'string' ? member.image : null,
-      path: member?.path || null
+      name: identity?.name || memberKey,
+      image: typeof identity?.image === 'string' ? identity.image : null,
+      path: identity?.path || null
     }
   }
 

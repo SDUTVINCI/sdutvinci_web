@@ -4,7 +4,13 @@ import { and, asc, eq, inArray, isNotNull } from 'drizzle-orm'
 import { z } from 'zod'
 import type { CmsArticleCollection } from '../../shared/types/cms-articles'
 import { getDatabase } from '../db/client'
-import { articleRevisions, articles, memberRevisions, members } from '../db/schema'
+import {
+  articleCreditIdentities,
+  articleRevisions,
+  articles,
+  memberRevisions,
+  members
+} from '../db/schema'
 import {
   buildContentRepositoryMetadata,
   CONTENT_REPOSITORY_README,
@@ -12,6 +18,7 @@ import {
   serializeContentRevision,
   sha256ContentBytes,
   type ContentSnapshotFile,
+  type ContentSnapshotCreditIdentity,
   type ContentSnapshotMember,
   type ContentSnapshotTombstone,
   type SerializedContentRevision
@@ -43,6 +50,11 @@ const snapshotSchema = z.object({
     path: z.string().min(1),
     sha256: z.string().regex(/^[0-9a-f]{64}$/),
     bytes: z.number().int().nonnegative()
+  })).default([]),
+  creditIdentities: z.array(z.object({
+    creditKey: z.string().regex(/^[a-z][a-z0-9]{2,31}$/),
+    displayName: z.string().trim().min(1).max(100),
+    memberId: z.string().uuid().nullable()
   })).default([]),
   tombstones: z.array(z.object({
     articleId: z.string().uuid(),
@@ -76,6 +88,7 @@ export interface DatabaseContentExportSnapshot {
   memberItems: DatabaseMemberExportItem[]
   activeMemberItems: DatabaseMemberExportItem[]
   memberFiles: ContentSnapshotMember[]
+  creditIdentities: ContentSnapshotCreditIdentity[]
   maximumRevisionCreatedAt: Date | null
   metadata: ReturnType<typeof buildContentRepositoryMetadata>
 }
@@ -130,6 +143,13 @@ export const loadDatabaseContentExportSnapshot = async (
     revisionCreatedAt: memberRevisions.createdAt
   }).from(members).innerJoin(memberRevisions, eq(members.currentRevisionId, memberRevisions.id))
     .where(isNotNull(members.currentRevisionId)).orderBy(asc(members.memberKey))
+
+  const creditIdentityRows = await database.select({
+    creditKey: articleCreditIdentities.creditKey,
+    displayName: articleCreditIdentities.displayName,
+    memberId: articleCreditIdentities.memberId,
+    updatedAt: articleCreditIdentities.updatedAt
+  }).from(articleCreditIdentities).orderBy(asc(articleCreditIdentities.creditKey))
 
   const items: DatabaseContentExportItem[] = rows.map((row) => {
     const collection = row.collection as CmsArticleCollection
@@ -194,10 +214,20 @@ export const loadDatabaseContentExportSnapshot = async (
     sha256: item.serialized.sha256,
     bytes: item.serialized.bytes
   }))
-  const maximumRevisionCreatedAt = [...items, ...memberItems].reduce<Date | null>(
+  const activeMemberIds = new Set(activeMemberItems.map(item => item.memberId))
+  const creditIdentities: ContentSnapshotCreditIdentity[] = creditIdentityRows.map(row => ({
+    creditKey: row.creditKey,
+    displayName: row.displayName,
+    memberId: row.memberId && activeMemberIds.has(row.memberId) ? row.memberId : null
+  }))
+  const maximumRevisionCreatedAt = [
+    ...items.map(item => item.revisionCreatedAt),
+    ...memberItems.map(item => item.revisionCreatedAt),
+    ...creditIdentityRows.map(item => item.updatedAt)
+  ].reduce<Date | null>(
     (maximum, item) =>
-      !maximum || item.revisionCreatedAt > maximum
-        ? item.revisionCreatedAt
+      !maximum || item > maximum
+        ? item
         : maximum,
     null
   )
@@ -210,12 +240,14 @@ export const loadDatabaseContentExportSnapshot = async (
     memberItems,
     activeMemberItems,
     memberFiles,
+    creditIdentities,
     maximumRevisionCreatedAt,
     metadata: buildContentRepositoryMetadata(
       files,
       tombstones,
       maximumRevisionCreatedAt,
-      memberFiles
+      memberFiles,
+      creditIdentities
     )
   }
 }

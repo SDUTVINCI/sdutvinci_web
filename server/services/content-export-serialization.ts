@@ -157,6 +157,12 @@ export interface ContentSnapshotMember {
   bytes: number
 }
 
+export interface ContentSnapshotCreditIdentity {
+  creditKey: string
+  displayName: string
+  memberId: string | null
+}
+
 export interface ContentRepositoryMetadata {
   snapshotSource: string
   snapshotSha256: string
@@ -171,7 +177,8 @@ export const buildContentRepositoryMetadata = (
   files: ContentSnapshotFile[],
   tombstones: ContentSnapshotTombstone[],
   maximumRevisionCreatedAt: Date | null,
-  members: ContentSnapshotMember[] = []
+  members: ContentSnapshotMember[] = [],
+  creditIdentities: ContentSnapshotCreditIdentity[] = []
 ): ContentRepositoryMetadata => {
   const sortedFiles = [...files].sort((left, right) =>
     compareCodePoints(left.path, right.path)
@@ -180,6 +187,9 @@ export const buildContentRepositoryMetadata = (
     compareCodePoints(left.articleId, right.articleId)
   )
   const sortedMembers = [...members].sort((left, right) => compareCodePoints(left.path, right.path))
+  const sortedCreditIdentities = [...creditIdentities].sort((left, right) =>
+    compareCodePoints(left.creditKey, right.creditKey)
+  )
   const generatedAt = maximumRevisionCreatedAt?.toISOString() || null
   const snapshotSource = deterministicJson({
     formatVersion: CONTENT_EXPORT_FORMAT_VERSION,
@@ -197,6 +207,7 @@ export const buildContentRepositoryMetadata = (
       bytes: file.bytes
     })),
     members: sortedMembers,
+    creditIdentities: sortedCreditIdentities,
     tombstones: sortedTombstones
   })
   const snapshotSha256 = sha256ContentBytes(snapshotSource)
@@ -232,7 +243,8 @@ PostgreSQL content authority.
 - Do not merge proposal branches into \`main\` as a publishing mechanism.
 - Local changes belong on \`proposal/*\` branches and are not live content.
 - GitHub or export failures never roll back an already published database revision.
-- \`.vinci/snapshot.json\` and \`manifest.json\` describe exported revisions and hashes.
+- \`.vinci/snapshot.json\` and \`manifest.json\` describe exported revisions,
+  article-credit display identities, and hashes.
 
 The website does not read this repository at runtime.
 `

@@ -15,6 +15,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { closeDatabase, getDatabase, getDatabasePool } from '../server/db/client'
 import { runMigrations } from '../server/db/migrate'
 import {
+  articleCreditIdentities,
   articles,
   articleRevisions,
   auditLogs,
@@ -82,10 +83,13 @@ suite('V2 阶段 7 全量对账、空库初始化和灾难恢复', () => {
     resetContentRecoveryConfigForTests()
   }
 
-  const seedArticle = async (relativePath = 'phase7.md') => {
+  const seedArticle = async (
+    relativePath = 'phase7.md',
+    extraFrontmatter: Record<string, unknown> = {}
+  ) => {
     const articleId = randomUUID()
     const revisionId = randomUUID()
-    const frontmatter = { title: '阶段 7 测试' }
+    const frontmatter = { title: '阶段 7 测试', ...extraFrontmatter }
     const body = '数据库权威正文\n'
     const createdAt = new Date('2026-07-30T18:00:00.000Z')
     const serialized = serializeContentRevision({
@@ -150,7 +154,18 @@ suite('V2 阶段 7 全量对账、空库初始化和灾难恢复', () => {
       sha256: item.serialized.sha256,
       bytes: item.serialized.bytes
     }))
-    const metadata = buildContentRepositoryMetadata(files, [], items[0]?.createdAt || null)
+    const creditIdentities = await getDatabase().select({
+      creditKey: articleCreditIdentities.creditKey,
+      displayName: articleCreditIdentities.displayName,
+      memberId: articleCreditIdentities.memberId
+    }).from(articleCreditIdentities)
+    const metadata = buildContentRepositoryMetadata(
+      files,
+      [],
+      items[0]?.createdAt || null,
+      [],
+      creditIdentities
+    )
     for (const item of items) {
       const target = join(seed, item.serialized.path)
       await mkdir(dirname(target), { recursive: true })
@@ -181,7 +196,7 @@ suite('V2 阶段 7 全量对账、空库初始化和灾难恢复', () => {
     content_import_runs, content_reconciliation_requests, content_reconciliation_runs, content_export_jobs,
     content_export_runs, article_deletion_events, publish_records, edit_locks,
     review_events, audit_logs, sessions, draft_authors, article_revisions,
-    drafts, user_members, user_roles, articles, members, users
+    drafts, user_members, user_roles, articles, article_credit_identities, members, users
     restart identity cascade
   `)
 
@@ -393,6 +408,43 @@ suite('V2 阶段 7 全量对账、空库初始化和灾难恢复', () => {
       'disaster_recovery',
       'phase7-test-maintainer'
     )).rejects.toThrow('CONTENT_RECOVERY_DATABASE_NOT_EMPTY')
+  })
+
+  it('署名身份随快照导出并允许拼音引用在空库恢复后继续显示中文名', async () => {
+    await getDatabase().insert(articleCreditIdentities).values({
+      creditKey: 'historiccredit',
+      displayName: '历史贡献者'
+    })
+    const item = await seedArticle('historic-credit.md', {
+      authors: ['historiccredit'],
+      contributors: ['历史贡献者']
+    })
+    await seedRepository([item])
+    const source = await cloneRecoverySource()
+    await truncate()
+
+    const report = await dryRunContentRecovery(
+      source,
+      'empty_database_initialization',
+      'phase7-test-maintainer'
+    )
+    expect(report.creditIdentityCount).toBe(1)
+    expect(report.references).toEqual(['historiccredit', '历史贡献者'])
+
+    const applied = await applyContentRecovery(
+      source,
+      'empty_database_initialization',
+      'phase7-test-maintainer',
+      report.requiredConfirmation
+    )
+    expect(applied.status).toBe('succeeded')
+    expect(await getDatabase().select().from(articleCreditIdentities)).toEqual([
+      expect.objectContaining({
+        creditKey: 'historiccredit',
+        displayName: '历史贡献者',
+        memberId: null
+      })
+    ])
   })
 
   it('错误 manifest 格式和 Markdown 哈希均 fail closed', async () => {

@@ -4,6 +4,7 @@ import { basename, isAbsolute, relative, resolve, sep } from 'node:path'
 import { sql } from 'drizzle-orm'
 import { getDatabase } from '../db/client'
 import {
+  articleCreditIdentities,
   articles,
   articleRevisions,
   auditLogs,
@@ -54,6 +55,12 @@ interface ValidatedMember {
   profile: MemberProfileSnapshot
 }
 
+interface ValidatedCreditIdentity {
+  creditKey: string
+  displayName: string
+  memberId: string | null
+}
+
 export interface ContentRecoveryReport {
   formatVersion: 1
   mode: RecoveryMode
@@ -64,6 +71,7 @@ export interface ContentRecoveryReport {
   itemCount: number
   tombstoneCount: number
   memberCount: number
+  creditIdentityCount: number
   references: string[]
   reportSha256: string
   requiredConfirmation: string
@@ -197,6 +205,22 @@ const loadAndValidate = async (
     })
   }
   const memberKeys = new Set(membersToImport.map(item => item.memberKey))
+  const memberIds = new Set(membersToImport.map(item => item.memberId))
+  const creditIdentityKeys = new Set<string>()
+  const creditIdentityReferenceKeys = new Set<string>()
+  const creditIdentities: ValidatedCreditIdentity[] = []
+  for (const identity of snapshot.creditIdentities) {
+    if (creditIdentityKeys.has(identity.creditKey)) {
+      throw new Error(`CONTENT_RECOVERY_CREDIT_IDENTITY_DUPLICATE:${identity.creditKey}`)
+    }
+    if (identity.memberId && !memberIds.has(identity.memberId)) {
+      throw new Error(`CONTENT_RECOVERY_CREDIT_IDENTITY_MEMBER_MISSING:${identity.creditKey}`)
+    }
+    creditIdentityKeys.add(identity.creditKey)
+    creditIdentityReferenceKeys.add(identity.creditKey)
+    creditIdentityReferenceKeys.add(identity.displayName)
+    creditIdentities.push(identity)
+  }
   const managedPaths = [
     ...await walkMarkdown(root, 'news'),
     ...await walkMarkdown(root, 'wiki'),
@@ -298,7 +322,7 @@ const loadAndValidate = async (
     paths.add(tombstone.path)
   }
   for (const reference of references) {
-    if (!memberKeys.has(reference)) {
+    if (!memberKeys.has(reference) && !creditIdentityReferenceKeys.has(reference)) {
       throw new Error(`CONTENT_RECOVERY_REFERENCE_MISSING:${reference}`)
     }
   }
@@ -317,6 +341,7 @@ const loadAndValidate = async (
     itemCount: items.length,
     tombstoneCount: snapshot.tombstones.length,
     memberCount: membersToImport.length,
+    creditIdentityCount: creditIdentities.length,
     references: [...references].sort()
   }
   const reportSha256 = sha256(`${JSON.stringify(base, null, 2)}\n`)
@@ -327,6 +352,7 @@ const loadAndValidate = async (
     snapshot,
     items,
     members: membersToImport,
+    creditIdentities,
     report: { ...base, reportSha256, requiredConfirmation }
   }
 }
@@ -427,6 +453,22 @@ export const applyContentRecovery = async (
           update members set current_revision_id = ${item.revisionId}::uuid where id = ${item.memberId}::uuid
         `)
       }
+      if (validated.creditIdentities.length) {
+        await tx.insert(articleCreditIdentities).values(
+          validated.creditIdentities.map(identity => ({
+            creditKey: identity.creditKey,
+            displayName: identity.displayName,
+            memberId: identity.memberId
+          }))
+        ).onConflictDoUpdate({
+          target: articleCreditIdentities.creditKey,
+          set: {
+            displayName: sql`excluded.display_name`,
+            memberId: sql`excluded.member_id`,
+            updatedAt: new Date()
+          }
+        })
+      }
       for (const [index, item] of validated.items.entries()) {
         const title = item.frontmatter.title
         if (typeof title !== 'string' || !title.trim()) {
@@ -489,7 +531,8 @@ export const applyContentRecovery = async (
           actorLabel: actorLabel.trim(),
           snapshotSha256: validated.report.snapshotSha256,
           reportSha256: validated.report.reportSha256,
-          itemCount: validated.items.length
+          itemCount: validated.items.length,
+          creditIdentityCount: validated.creditIdentities.length
         }
       })
       await tx.execute(sql`

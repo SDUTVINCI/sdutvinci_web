@@ -7,6 +7,8 @@
 
 - PostgreSQL 是新闻、Wiki、成员公开资料及其当前版本的线上唯一权威。
 - `article_revisions`、`member_revisions` 保存不可变正式版本；发布事务更新当前指针并写审计。
+- `article_credit_identities` 保存文章署名稳定 ID 到网页显示姓名的投影；Markdown 的
+  `authors`/`contributors` 继续只保存拼音 ID，不因显示名调整而改写正式正文。
 - 独立内容仓库是数据库确定性导出的可读快照，也是 PostgreSQL 完整备份不可用时的受控
   灾难恢复材料。它不是代码镜像输入，也不是绕过审核的发布入口。
 - S3/COS 是图片二进制权威；数据库和 Markdown 只保存受控 URL 与元数据。
@@ -151,3 +153,13 @@ docs/v2/                     需求、阶段验收与运行手册
 `member_applications`，审核通过后才复用正式成员 Revision/Outbox 事务。临时头像由 S3/COS
 承载并带 24 小时过期清理边界。Wiki PDF 是登录保护的按需 Pandoc 导出，不成为新的内容权威。
 完整操作与验收见 `docs/MEMBER_APPLICATION_AND_WIKI_PDF.md`。
+
+## 10. 文章署名身份（2026-08）
+
+Wiki 署名解析按“同 ID 的有效正式成员 → 署名身份登记 → 原 ID 回退”的顺序执行。独立署名
+只显示维护的姓名；关联正式成员后复用成员姓名、头像和主页。管理员在 CMS“成员管理”的
+“文章署名身份”区登记、搜索和修改，稳定 ID 创建后不可改名，避免历史 Markdown 引用失效。
+
+署名身份是 PostgreSQL 权威数据的一部分。新增或修改会写审计并合并排队一次全量内容对账；
+`.vinci/snapshot.json` 包含 `creditIdentities`，空库初始化和灾难恢复会一并校验和恢复。旧的
+version 1 快照没有该字段时按空数组读取，保持向后兼容。

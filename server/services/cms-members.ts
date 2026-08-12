@@ -4,6 +4,7 @@ import type { CmsMember, CmsMemberInput } from '../../shared/types/cms-members'
 import { getDatabase } from '../db/client'
 import {
   auditLogs,
+  articleCreditIdentities,
   contentExportJobs,
   memberProposals,
   memberRevisions,
@@ -223,6 +224,11 @@ export const createCmsMember = async (
   const memberId = randomUUID()
   await getDatabase().transaction(async (tx) => {
     await tx.insert(members).values({ id: memberId, ...memberValues(profile) })
+    await tx.update(articleCreditIdentities).set({
+      memberId,
+      version: sql`${articleCreditIdentities.version} + 1`,
+      updatedAt: new Date()
+    }).where(eq(articleCreditIdentities.creditKey, profile.memberKey))
     const result = await appendRevisionAndOutbox(tx, {
       memberId,
       revisionNumber: 1,

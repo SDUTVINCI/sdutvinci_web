@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { PublicMember } from '~~/shared/types/public-content'
+import type { PublicArticleCreditIdentity } from '~~/shared/types/article-credit-identities'
 import {
   formatArticleCreditDate,
   resolveArticleCredits
@@ -11,13 +11,13 @@ const props = defineProps<{
   contributors?: unknown
   publishedAt?: unknown
   updatedAt?: unknown
-  members: PublicMember[]
+  identities: PublicArticleCreditIdentity[]
 }>()
 
 const credits = computed(() => resolveArticleCredits(
   props.authors,
   props.contributors,
-  props.members
+  props.identities
 ))
 const publishedDate = computed(() => formatArticleCreditDate(props.publishedAt))
 const updatedDate = computed(() => formatArticleCreditDate(props.updatedAt))

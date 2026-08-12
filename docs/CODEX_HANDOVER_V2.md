@@ -1982,3 +1982,18 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
   0 篇受限，环境继续运行。
 - 使用与边界见 `docs/ARTICLE_ACCESS_CONTROL.md`。未修改独立内容仓库、正式 Markdown、Wiki 路径
   工具或生产资源；没有 Push、部署或 SSH。
+
+## 2026-08-12：文章署名稳定 ID 与中文显示名分离
+
+- 新增 `article_credit_identities`：文章 Markdown 的 `authors`/`contributors` 继续保存稳定拼音
+  ID，前台通过公开批量解析接口显示中文名；同 ID 的有效正式成员优先，独立署名可选关联正式
+  成员并复用其姓名、头像与主页，未知 ID 保持原样显示。
+- CMS“成员管理”增加“文章署名身份”区，支持搜索、自动生成拼音 ID、登记中文显示名、关联
+  正式成员和乐观版本更新。稳定 ID 创建后不可改；每次实质修改写审计并合并排队全量对账。
+- expand-only Migration `0022` 创建署名身份表，并仅在现有 Wiki 当前 Revision 实际引用对应
+  拼音 ID 或原中文姓名时初始化 18 个已确认映射；不会改写正式 Markdown 或文章 Revision。
+- 内容快照新增向后兼容的 `creditIdentities` 字段；空库初始化/灾难恢复同时验证关联、允许文章
+  引用署名 ID 并在事务内恢复。旧 version 1 快照缺少该字段时按空数组读取。
+- 使用与恢复边界已补充到 `docs/ARCHITECTURE.md`、`docs/v2/OPERATIONS.md` 和
+  `docs/v2/BACKUP_AND_RECOVERY.md`。实现仅在本地隔离环境验证，不修改独立内容仓库正式
+  Markdown，不 SSH、Push、部署或写生产数据库。

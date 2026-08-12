@@ -155,6 +155,13 @@
       "when": 1786541084217,
       "tag": "0021_superb_cammi",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1786546832251,
+      "tag": "0022_great_rockslide",
+      "breakpoints": true
     }
   ]
 }

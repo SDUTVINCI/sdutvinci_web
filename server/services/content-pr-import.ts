@@ -66,6 +66,11 @@ const snapshotSchema = z.object({
     revisionNumber: z.number().int().positive(), sourcePath: z.string().min(1), path: z.string().min(1),
     sha256: z.string().regex(/^[0-9a-f]{64}$/), bytes: z.number().int().nonnegative()
   })).default([]),
+  creditIdentities: z.array(z.object({
+    creditKey: z.string().regex(/^[a-z][a-z0-9]{2,31}$/),
+    displayName: z.string().trim().min(1).max(100),
+    memberId: z.string().uuid().nullable()
+  })).default([]),
   tombstones: z.array(z.object({
     articleId: z.string().uuid(),
     revisionId: z.string().uuid(),
@@ -694,6 +699,7 @@ export const dryRunContentPrImport = async (
   const snapshotPaths = new Set<string>()
   const snapshotIds = new Set<string>()
   const snapshotMemberKeys = new Set<string>()
+  const snapshotMemberIdsByKey = new Map<string, string>()
   for (const item of snapshot.files) {
     const path = parseManagedPath(item.path)
     if (path.collection !== item.collection || path.relativePath !== item.relativePath
@@ -721,6 +727,15 @@ export const dryRunContentPrImport = async (
     snapshotPaths.add(item.path)
     snapshotIds.add(item.memberId)
     snapshotMemberKeys.add(item.memberKey)
+    snapshotMemberIdsByKey.set(item.memberKey, item.memberId)
+  }
+  for (const identity of snapshot.creditIdentities) {
+    if (
+      snapshotMemberKeys.has(identity.creditKey)
+      && snapshotMemberIdsByKey.get(identity.creditKey) !== identity.memberId
+    ) {
+      throw new ContentPrImportError('IMPORT_BASE_SNAPSHOT_DUPLICATE')
+    }
   }
 
   const files = await client.listPullFiles(repositoryId, pull.number)

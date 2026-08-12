@@ -231,7 +231,10 @@ npm run v2:content:recover -- \
 - 每个文件路径、字节数、SHA-256 和 manifest 条目；
 - UUID `vinciId`、article/revision 唯一性和路径唯一性；
 - Markdown 重新确定性序列化后字节完全一致；
-- `authors`/`contributors` 只引用快照中的稳定 member key；
+- `authors`/`contributors` 只引用快照中的稳定 member key 或
+  `creditIdentities[].creditKey`；Markdown 始终保存拼音 ID，网页中文显示名由该快照字段恢复；
+- 为保证迁移前历史快照仍可恢复，恢复器也接受与 `creditIdentities[].displayName` 精确相同的旧
+  中文引用；这只是向后兼容边界，新写入和后续导出仍应使用稳定拼音 ID；
 - 可选 source Commit 为 40 位 Git SHA。
 
 输出只列即将新增的 article、member、tombstone 数量、哈希、报告 SHA 和精确确认令牌：
@@ -255,7 +258,7 @@ npm run v2:content:recover -- \
   --confirm='INITIALIZE:...'
 ```
 
-member、article、current Revision、import item、import run 和 audit log 在一个数据库事务
+member、文章署名身份、article、current Revision、import item、import run 和 audit log 在一个数据库事务
 内写入。任意一项失败全部回滚，不留下半篇文章、半个指针或虚假成功记录。成功报告保存
 令牌哈希，不保存原始令牌。
 

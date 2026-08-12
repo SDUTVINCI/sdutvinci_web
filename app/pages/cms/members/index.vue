@@ -38,6 +38,7 @@ const created = async () => {
         <p>共识别 {{ data?.members.length ?? 0 }} 份成员档案；成员 ID 与账号 ID 可一一对应。</p>
       </div>
       <div v-if="isAdmin" class="cms-button-row cms-member-header-actions">
+        <a class="cms-button cms-button-quiet" href="#article-credit-identities">文章署名</a>
         <NuxtLink class="cms-button cms-button-quiet" to="/cms/member-options">成员选项</NuxtLink>
         <button class="cms-button cms-button-primary" type="button" @click="showCreate = !showCreate">
           {{ showCreate ? '取消' : '创建成员' }}
@@ -81,5 +82,10 @@ const created = async () => {
     <p v-else-if="status !== 'pending' && !error" class="cms-empty">
       {{ search ? '没有符合条件的成员。' : '暂无成员档案。' }}
     </p>
+
+    <CmsArticleCreditIdentityManager
+      v-if="isAdmin && status !== 'pending' && !error"
+      :members="data?.members || []"
+    />
   </section>
 </template>

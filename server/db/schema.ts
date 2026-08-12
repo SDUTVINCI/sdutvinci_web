@@ -94,6 +94,27 @@ export const members = pgTable('members', {
   index('members_sort_index').on(table.sortOrder, table.memberKey)
 ])
 
+export const articleCreditIdentities = pgTable('article_credit_identities', {
+  creditKey: varchar('credit_key', { length: 32 }).primaryKey(),
+  displayName: varchar('display_name', { length: 100 }).notNull(),
+  memberId: uuid('member_id')
+    .references(() => members.id, { onDelete: 'set null' }),
+  version: integer('version').default(1).notNull(),
+  ...timestamps
+}, table => [
+  check(
+    'article_credit_identities_key_format_check',
+    sql`${table.creditKey} ~ '^[a-z][a-z0-9]{2,31}$'`
+  ),
+  check(
+    'article_credit_identities_display_name_check',
+    sql`length(btrim(${table.displayName})) between 1 and 100`
+  ),
+  check('article_credit_identities_version_check', sql`${table.version} >= 1`),
+  index('article_credit_identities_member_id_index').on(table.memberId),
+  index('article_credit_identities_display_name_index').on(table.displayName)
+])
+
 export const memberRevisions = pgTable('member_revisions', {
   id: uuid('id').defaultRandom().primaryKey(),
   memberId: uuid('member_id')
@@ -924,6 +945,7 @@ export type Role = typeof roles.$inferSelect
 export type Session = typeof sessions.$inferSelect
 export type RateLimitBucket = typeof rateLimitBuckets.$inferSelect
 export type Member = typeof members.$inferSelect
+export type ArticleCreditIdentity = typeof articleCreditIdentities.$inferSelect
 export type MemberRevision = typeof memberRevisions.$inferSelect
 export type MemberProposal = typeof memberProposals.$inferSelect
 export type MemberCohort = typeof memberCohorts.$inferSelect

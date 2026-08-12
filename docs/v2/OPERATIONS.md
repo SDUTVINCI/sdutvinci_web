@@ -616,6 +616,12 @@ logrotate 的 `su` 规则无法读取。`./vinci install --systemd-only` 会保�
 页面会轮询显示排队、执行和最终结果。该入口与 `./vinci reconcile` 使用相同的全量对账、
 互斥锁、空数据库保护和差异报告逻辑。
 
+文章 Frontmatter 的 `authors`/`contributors` 使用稳定拼音 ID。需要让网页显示中文名时，管理员
+进入 CMS“成员管理”，在页面下方“文章署名身份”区搜索或登记：填写网页显示姓名，稳定 ID 可
+留空自动生成拼音；有正式成员档案时可关联，以复用成员姓名、头像和主页。保存会写审计并合并
+排队一次全量对账，把映射写入 `.vinci/snapshot.json` 的 `creditIdentities`，不会改写文章 Markdown。
+稳定 ID 创建后不可修改；如姓名变化只改显示姓名，避免历史引用失效。
+
 `reconcile` 会写独立内容仓库，运行前确认凭据、远端和 workspace 都是目标环境；失败 Outbox 在
 CMS 中逐项明确手动重试。`--scheduled` 只供 03:00 timer 使用，人工命令不需要填写。
 

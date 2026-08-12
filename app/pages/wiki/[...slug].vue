@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import mediumZoom from 'medium-zoom'
-import type { PublicMember } from '~~/shared/types/public-content'
+import { cmsAccountPattern } from '~~/shared/types/cms-auth'
+import type { PublicArticleCreditIdentity } from '~~/shared/types/article-credit-identities'
 import { compareWikiChapters, numberWikiChapters } from '~~/utils/wiki-chapters'
 import {
   applyWikiHeadingNumbers,
@@ -113,15 +114,24 @@ const articleFrontmatter = computed<Record<string, unknown>>(() =>
     ? page.value.frontmatter as Record<string, unknown>
     : {}
 )
-const hasArticleCredits = computed(() => ['authors', 'contributors'].some(key =>
-  Array.isArray(articleFrontmatter.value[key]) && articleFrontmatter.value[key].length > 0
-))
-const { data: publicMembers } = await useAsyncData(
-  'wiki-article-credit-members',
-  async () => hasArticleCredits.value
-    ? (await $fetch<{ items: PublicMember[] }>('/api/v2/content/members')).items
+const articleCreditKeys = computed(() => [...new Set(
+  ['authors', 'contributors'].flatMap((field) => {
+    const value = articleFrontmatter.value[field]
+    return Array.isArray(value)
+      ? value.filter((item): item is string =>
+          typeof item === 'string' && cmsAccountPattern.test(item.trim())
+        )
+      : []
+  })
+)])
+const { data: articleCreditIdentities } = await useAsyncData(
+  'wiki-article-credit-identities',
+  async () => articleCreditKeys.value.length
+    ? (await $fetch<{ items: PublicArticleCreditIdentity[] }>('/api/v2/content/article-credits', {
+        query: { keys: articleCreditKeys.value.join(',') }
+      })).items
     : [],
-  { watch: [hasArticleCredits], default: () => [] }
+  { watch: [articleCreditKeys], default: () => [] }
 )
 
 useContentSeo({
@@ -689,7 +699,7 @@ function normalizePath(path: string) {
               :contributors="articleFrontmatter.contributors"
               :published-at="articleFrontmatter.publishedAt"
               :updated-at="articleFrontmatter.updatedAt"
-              :members="publicMembers || []"
+              :identities="articleCreditIdentities || []"
             />
             <CmsArticleEditButton :public-path="cleanPath" allow-pdf />
           </header>

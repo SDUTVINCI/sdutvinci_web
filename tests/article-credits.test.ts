@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { PublicMember } from '../shared/types/public-content'
+import type { PublicArticleCreditIdentity } from '../shared/types/article-credit-identities'
 import {
   formatArticleCreditDate,
   resolveArticleCredits
@@ -7,14 +7,14 @@ import {
 
 const members = [
   {
-    id: 'dongjiahui', vinciId: '1', memberKey: 'dongjiahui', path: '/team/dongjiahui',
-    name: '董佳辉', image: '/avatars/dongjiahui.webp', body: '', metadata: {}, cacheKey: '1', updatedAt: '2026-08-12'
+    memberKey: 'dongjiahui', path: '/team/dongjiahui',
+    name: '董佳辉', image: '/avatars/dongjiahui.webp'
   },
   {
-    id: 'fangzihao', vinciId: '2', memberKey: 'fangzihao', path: '/team/fangzihao',
-    name: '房子豪', image: '/avatars/fangzihao.webp', body: '', metadata: {}, cacheKey: '2', updatedAt: '2026-08-12'
+    memberKey: 'fangzihao', path: '/team/fangzihao',
+    name: '房子豪', image: '/avatars/fangzihao.webp'
   }
-] satisfies PublicMember[]
+] satisfies PublicArticleCreditIdentity[]
 
 describe('文章署名信息', () => {
   it('按稳定 ID 解析姓名头像，去重并排除作者中已有的协作者', () => {
@@ -37,5 +37,19 @@ describe('文章署名信息', () => {
     expect(resolveArticleCredits('dongjiahui', null, members)).toEqual({ authors: [], collaborators: [] })
     expect(formatArticleCreditDate('2026-08-12T03:05:07.365Z')).toBe('2026/08/12')
     expect(formatArticleCreditDate('invalid')).toBe('')
+  })
+
+  it('非正式成员可用稳定拼音 ID 显示登记的中文署名且不生成成员链接', () => {
+    expect(resolveArticleCredits(
+      ['cuitonghui'],
+      ['sunjianghui'],
+      [
+        { memberKey: 'cuitonghui', name: '崔桐汇', image: null, path: null },
+        { memberKey: 'sunjianghui', name: '孙江辉', image: null, path: null }
+      ]
+    )).toEqual({
+      authors: [{ memberKey: 'cuitonghui', name: '崔桐汇', image: null, path: null }],
+      collaborators: [{ memberKey: 'sunjianghui', name: '孙江辉', image: null, path: null }]
+    })
   })
 })
