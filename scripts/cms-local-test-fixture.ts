@@ -47,8 +47,8 @@ const importArticles = async (contentRoot: string) => {
       })
     }
   }
-  if (fixtures.length !== 228) {
-    throw new Error(`内容快照应有 228 篇文章，实际为 ${fixtures.length}`)
+  if (!fixtures.length) {
+    throw new Error('独立内容仓库没有可导入的新闻或 Wiki Markdown')
   }
 
   const pool = new Pool({ connectionString: process.env.DATABASE_URL })

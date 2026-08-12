@@ -4,7 +4,7 @@ import sharp from 'sharp'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { closeDatabase, getDatabase } from '../server/db/client'
 import { runMigrations } from '../server/db/migrate'
-import { editLocks, mediaAssets } from '../server/db/schema'
+import { drafts, editLocks, mediaAssets } from '../server/db/schema'
 import { bootstrapCmsAdmin } from '../server/services/cms-auth'
 import { createCmsNewArticleDraft } from '../server/services/cms-drafts'
 import { acquireCmsDraftEditLock, CmsEditLockLostError } from '../server/services/cms-edit-locks'
@@ -26,7 +26,7 @@ const mediaConfig: CmsMediaConfig = {
   S3_SECRET_ACCESS_KEY: 'test-secret-key',
   S3_PUBLIC_BASE_URL: 'https://images.test.example/assets',
   S3_FORCE_PATH_STYLE: true,
-  S3_KEY_PREFIX: 'articles/images',
+  S3_KEY_PREFIX: 'tungwebsite/assets/images',
   CMS_IMAGE_MAX_BYTES: 1024 * 1024,
   CMS_IMAGE_MAX_WIDTH: 800,
   CMS_IMAGE_MAX_HEIGHT: 800,
@@ -65,7 +65,10 @@ integration('CMS 图片处理与 S3 兼容对象存储', () => {
     await closeDatabase()
   })
 
-  it('校验真实格式、限制尺寸、转换为 WebP、按 Unix 毫秒和内容哈希命名并记录媒体元数据', async () => {
+  it('校验真实格式、限制尺寸、转换为 WebP、按文章创建日期归档并记录媒体元数据', async () => {
+    await getDatabase().update(drafts).set({
+      preservedFrontmatter: { publishedAt: '2025-02-07T08:00:00.000+08:00' }
+    }).where(eq(drafts.id, draftId))
     const source = await sharp({
       create: {
         width: 1600,
@@ -103,7 +106,7 @@ integration('CMS 图片处理与 S3 兼容对象存储', () => {
       CacheControl: 'public, max-age=31536000, immutable'
     })
     expect(put.Key).toMatch(
-      new RegExp(`^articles/images/\\d{4}/\\d{2}/${draftId}/\\d{13}-[0-9a-f]{8}\\.webp$`)
+      /^tungwebsite\/assets\/images\/wiki\/2025\/02\/07\/\d{13}-[0-9a-f]{8}\.webp$/
     )
     expect(put.Key).not.toContain('截图')
     const output = Buffer.from(put.Body as Uint8Array)
@@ -126,7 +129,7 @@ integration('CMS 图片处理与 S3 兼容对象存储', () => {
       byteSize: output.length
     })
     expect(result.asset.url).toMatch(
-      new RegExp(`^https://images\\.test\\.example/assets/articles/images/\\d{4}/\\d{2}/${draftId}/`)
+      /^https:\/\/images\.test\.example\/assets\/tungwebsite\/assets\/images\/wiki\/2025\/02\/07\//
     )
     expect(JSON.stringify(result)).not.toContain(mediaConfig.S3_ACCESS_KEY_ID)
     expect(JSON.stringify(result)).not.toContain(mediaConfig.S3_SECRET_ACCESS_KEY)

@@ -1911,3 +1911,18 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
 - 本地人工环境增加仅回环的 MinIO 测试图床和带 Pandoc/XeLaTeX 的 test runtime 镜像。
 - 本功能未修改独立内容仓库、Wiki 拼音模块或生产数据；使用与验收见
   `docs/MEMBER_APPLICATION_AND_WIKI_PDF.md`。
+
+## 2026-08-12：CMS 文章媒体按创建日期归档
+
+- CMS 图片对象目录改为 `<S3_KEY_PREFIX>/<collection>/<文章创建年>/<月>/<日>/`；已有文章
+  优先读取文章相对路径日期，尚无路径时使用 `publishedAt`（明确覆盖值优先），最后回退草稿
+  创建日。文件名继续使用 Unix 毫秒与最终 WebP 内容哈希，不新增 Migration。
+- 默认 `S3_KEY_PREFIX` 为 `tungwebsite/assets/images`；不迁移或重命名历史对象。
+- 飞书 Wiki 本地待上传媒体使用相同的 `wiki/YYYY/MM/DD/` 路径；图片转 WebP 且保留现有生成
+  文件名，非图片附件保持原名原格式，并同步修改待导入 Markdown。内容仓库全部 Wiki 的
+  `publishedAt` 按目录日期统一为 `YYYY-MM-DDT00:00:00.000Z`。
+- 没有恢复代码仓库 `content/`，没有引入 Nuxt Content，没有修改 Wiki 拼音路径模块，没有
+  Push、部署、SSH 或生产数据/对象存储操作。使用与验收见 `docs/CMS_ARTICLE_MEDIA_PATHS.md`。
+- 本地人工测试夹具不再硬编码旧的 228 篇文章；它从干净的独立内容仓库动态导入全部受管
+  Markdown，并继续在空的 `vinci_cms_local_test` 中执行。容器入口在已使用 node UID 时不再
+  重复降权；root 启动的生产容器仍通过 `gosu node` 降权。

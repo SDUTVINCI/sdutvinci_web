@@ -30,8 +30,9 @@ npm run dev
 - 前台立即从数据库读取；异步 Worker 确定性导出独立内容仓库，失败可重试。
 - 成员资料数据库权威，账号绑定/角色/密码不能通过 Markdown PR 修改。
 - 图片经服务端 Sharp 校验并转 WebP 后进入 S3/COS，浏览器拿不到对象存储密钥。
-- 图片对象按 `<prefix>/<UTC年>/<UTC月>/<draftId>/<Unix毫秒>-<内容哈希前8位>.webp`
-  命名；仓库静态媒体使用独立 `site-assets/`，详见 `docs/STATIC_MEDIA_MIGRATION.md`。
+- 图片对象按 `<prefix>/<collection>/<文章创建年>/<月>/<日>/<Unix毫秒>-<内容哈希前8位>.webp`
+  命名；已有文章优先取文章路径日期，尚无路径时取 `publishedAt`，再回退草稿创建日。仓库静态媒体使用独立
+  `site-assets/`，详见 `docs/STATIC_MEDIA_MIGRATION.md`。
 - CMS 最终预览和正式前台共用 `VinciMarkdownRenderer`/Comark。
 - 富文本单栏、源码双栏滚动同步、移动切换和登记内容组件的使用及扩展方法见
   `docs/CMS_EDITOR_GUIDE.md`。

@@ -12,13 +12,17 @@ import type {
 } from '../../shared/types/cms-media'
 import { cmsAcceptedImageTypes } from '../../shared/types/cms-media'
 import { getDatabase } from '../db/client'
-import { drafts, mediaAssets } from '../db/schema'
+import { articles, drafts, mediaAssets } from '../db/schema'
 import {
   assertCmsDraftEditLease,
   CmsEditLockLostError
 } from './cms-edit-locks'
 import { getCmsMediaConfig, type CmsMediaConfig } from '../utils/cms-media-config'
-import { createCmsMediaObjectKey } from '../utils/cms-media-object-key'
+import {
+  createCmsMediaObjectKey,
+  resolveCmsMediaArticleDate
+} from '../utils/cms-media-object-key'
+import type { CmsArticleCollection } from '../../shared/types/cms-articles'
 
 type CmsTransaction = Parameters<
   Parameters<ReturnType<typeof getDatabase>['transaction']>[0]
@@ -125,9 +129,15 @@ const validateDraftLease = async (
   const [draft] = await tx
     .select({
       ownerUserId: drafts.ownerUserId,
-      status: drafts.status
+      status: drafts.status,
+      collection: drafts.collection,
+      preservedFrontmatter: drafts.preservedFrontmatter,
+      createdAt: drafts.createdAt,
+      proposedRelativePath: drafts.proposedRelativePath,
+      articleRelativePath: articles.relativePath
     })
     .from(drafts)
+    .leftJoin(articles, eq(drafts.articleId, articles.id))
     .where(and(
       eq(drafts.id, draftId),
       isNull(drafts.deletedAt),
@@ -138,6 +148,7 @@ const validateDraftLease = async (
   if (!draft) throw new CmsMediaDraftError('DRAFT_NOT_FOUND')
   if (draft.status !== 'draft') throw new CmsMediaDraftError('DRAFT_STATE_INVALID')
   await assertCmsDraftEditLease(tx, draftId, uploaderUserId, lockLeaseId)
+  return draft
 }
 
 const transformImage = async (
@@ -224,7 +235,7 @@ export const uploadCmsImage = async (
   const storageClient = dependencies.storageClient || createStorageClient(config)
   const filename = sanitizeOriginalFilename(input.filename)
 
-  await getDatabase().transaction(tx =>
+  const draft = await getDatabase().transaction(tx =>
     validateDraftLease(
       tx,
       input.draftId,
@@ -237,7 +248,12 @@ export const uploadCmsImage = async (
   const transformed = await transformImage(input.data, input.mimeType, config)
   const objectKey = createCmsMediaObjectKey(
     config.S3_KEY_PREFIX,
-    input.draftId,
+    draft.collection as CmsArticleCollection,
+    resolveCmsMediaArticleDate(
+      draft.preservedFrontmatter,
+      draft.createdAt,
+      draft.proposedRelativePath || draft.articleRelativePath
+    ),
     transformed.output
   )
   const publicUrl = createPublicUrl(config.S3_PUBLIC_BASE_URL, objectKey)

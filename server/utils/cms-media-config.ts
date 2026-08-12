@@ -12,7 +12,7 @@ const mediaConfigSchema = z.object({
   S3_SECRET_ACCESS_KEY: z.string().min(1, 'S3_SECRET_ACCESS_KEY 不能为空'),
   S3_PUBLIC_BASE_URL: z.string().url('S3_PUBLIC_BASE_URL 必须是有效 URL'),
   S3_FORCE_PATH_STYLE: booleanString.default(false),
-  S3_KEY_PREFIX: z.string().trim().default('images'),
+  S3_KEY_PREFIX: z.string().trim().default('tungwebsite/assets/images'),
   CMS_IMAGE_MAX_BYTES: z.coerce
     .number()
     .int()

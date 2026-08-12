@@ -9,7 +9,9 @@
 写独立内容仓库。正式发布仍创建数据库 Revision 和导出 Outbox。
 
 粘贴、拖入或选择的图片会转换为 WebP，并按
-`<prefix>/<UTC年>/<UTC月>/<draftId>/<Unix毫秒>-<内容哈希前8位>.webp` 上传。仓库静态
+`<prefix>/<collection>/<文章创建年>/<月>/<日>/<Unix毫秒>-<内容哈希前8位>.webp` 上传。
+已有文章优先取文章路径开头的创建日期；尚无路径时取 `publishedAt`（明确覆盖值优先），再回退
+草稿创建日。后续编辑不会改变日期目录，文件名仍使用 Unix 毫秒与最终 WebP 内容哈希。仓库静态
 图片和视频不使用该草稿目录；其转换与手动上传流程见 `docs/STATIC_MEDIA_MIGRATION.md`。
 
 ## 2. 富文本模式

@@ -3,7 +3,8 @@
 ## 1. 用途与安全边界
 
 该脚本为浏览器人工测试创建一次性 CMS：独立 PostgreSQL 17、回环 MinIO 测试图床、完整 Migration、独立内容仓库中的
-2 篇新闻、226 篇 Wiki、32 名成员及一个测试管理员。数据库、图床和网页只监听 `127.0.0.1`，不读取或
+2 篇新闻、311 篇 Wiki、48 名成员及一个测试管理员。文章数从当前干净内容仓库动态读取，不使用会随
+内容提案过时的硬编码总数。数据库、图床和网页只监听 `127.0.0.1`，不读取或
 修改项目 `.env`，不连接生产服务，也不写 `sdutvinci_content`。
 
 默认要求两个仓库互为同级目录：
@@ -48,7 +49,8 @@ CMS_LOCAL_TEST_CONTENT_ROOT=/绝对路径/sdutvinci_content \
 ./scripts/cms-local-test.sh restart
 ```
 
-`status` 应显示 `articles=228,members=32`。`restart` 会先删除旧隔离数据库，再从当前内容仓库重新
+当前内容提案下，`status` 应显示 `articles=313,members=48`。后续文章增减时，应与当前内容仓库中
+`news/` 和 `wiki/` 的 Markdown 总数一致。`restart` 会先删除旧隔离数据库，再从当前内容仓库重新
 创建，旧测试草稿和修改不可恢复。查看 Nuxt 日志：
 
 ```bash

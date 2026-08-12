@@ -5,10 +5,13 @@
 CMS 编辑器粘贴、拖入或选择的图片由服务端转换并登记到 `media_assets`，对象 key 为：
 
 ```text
-<S3_KEY_PREFIX>/<UTC年>/<UTC月>/<draftId>/<Unix毫秒>-<最终WebP的SHA-256前8位>.webp
+<S3_KEY_PREFIX>/<collection>/<文章创建年>/<月>/<日>/<Unix毫秒>-<最终WebP的SHA-256前8位>.webp
 ```
 
-默认 `S3_KEY_PREFIX=images`。这里的图片与草稿、上传者、编辑锁和数据库记录关联；不要手动
+默认 `S3_KEY_PREFIX=tungwebsite/assets/images`，例如 Wiki 图片对象为
+`tungwebsite/assets/images/wiki/2025/02/07/1700000000000-a3f91c2e.webp`。已有文章取稳定的
+文章目录或新闻文件名开头的日期，尚无路径时取 `publishedAt`（明确覆盖值优先），最后回退到
+草稿创建日。文件名规则不变。这里的图片仍与草稿、上传者、编辑锁和数据库记录关联；不要手动
 把站点静态素材塞进该目录。
 
 代码仓库原有图片和首页视频使用独立、可人工管理的目录：
