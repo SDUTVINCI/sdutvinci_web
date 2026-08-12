@@ -40,6 +40,7 @@ import {
 } from './cms-drafts'
 import { CONTENT_REPOSITORY_ID } from '../utils/content-export-config'
 import { getContentImportConfig } from '../utils/content-import-config'
+import { mapContentImportConcurrently } from '../utils/content-import-concurrency'
 import { redactCmsSensitiveText } from '../utils/cms-sensitive-data'
 import { memberFieldDiff, memberProfileFromMarkdown, mergeMemberProfiles, profileFromRecord, profileRecord, serializeMemberProfile } from './member-profile'
 
@@ -722,17 +723,14 @@ export const dryRunContentPrImport = async (
   if (!files.length || files.length > getContentImportConfig().CONTENT_PR_IMPORT_MAX_FILES) {
     throw new ContentPrImportError('IMPORT_PULL_FILE_COUNT_INVALID')
   }
-  const planned: PlannedItem[] = []
-  for (const [ordinal, file] of files.entries()) {
+  const planned = await mapContentImportConcurrently(files, async (file, ordinal): Promise<PlannedItem> => {
     if (file.filename.startsWith('members/')) {
-      planned.push(await planMemberFile(client, repositoryId, pull.base.sha, pull.head.sha, snapshot, file, ordinal))
-      continue
+      return planMemberFile(client, repositoryId, pull.base.sha, pull.head.sha, snapshot, file, ordinal)
     }
     if (['.vinci/snapshot.json', 'manifest.json', 'README.md'].includes(file.filename)) {
-      planned.push(invalidPlan(ordinal, file, 'IMPORT_FILE_OUTSIDE_MANIFEST'))
-      continue
+      return invalidPlan(ordinal, file, 'IMPORT_FILE_OUTSIDE_MANIFEST')
     }
-    planned.push(await planFile(
+    return planFile(
       client,
       repositoryId,
       pull.base.sha,
@@ -740,8 +738,8 @@ export const dryRunContentPrImport = async (
       snapshot,
       file,
       ordinal
-    ))
-  }
+    )
+  })
 
   const pathOwners = new Map<string, PlannedItem[]>()
   const idOwners = new Map<string, PlannedItem[]>()

@@ -34,6 +34,9 @@ Outbox、评论/关闭确认或“绝不自动 Merge”的边界。
   GitHub API、Token 或网络故障。
 - 默认上限为 GitHub PR files API 可配置范围内的 `500`，足以处理结构化 Wiki 批量导入；超过
   500 个文件的提案仍应拆分 PR，不通过移除上限规避资源保护。
+- 文件规划使用固定最大并发 `10` 读取 commit-bound Base/Head 内容并执行分类；结果仍按 GitHub
+  Diff 原 ordinal 排列，全部规划完成后才在单个事务中写 run/items。并发数不可随 PR 规模无限
+  增长，避免把同步 Dry Run 串行放大为代理 524，也避免瞬时打满 GitHub API 和数据库连接池。
 
 ## 3. Base、Current、Proposed
 
