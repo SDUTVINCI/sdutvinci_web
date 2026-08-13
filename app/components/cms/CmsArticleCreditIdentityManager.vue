@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { CmsArticleCreditIdentity } from '~~/shared/types/article-credit-identities'
 import type { CmsMember } from '~~/shared/types/cms-members'
+import { resolveStaticMediaUrl } from '~~/shared/utils/static-media'
 
 const props = defineProps<{ members: CmsMember[] }>()
 const { csrfHeaders } = useCmsSession()
@@ -19,6 +20,11 @@ const message = ref('')
 const actionError = ref('')
 
 const availableMembers = computed(() => props.members.filter(member => !member.deletedAt))
+const memberById = computed(() => new Map(availableMembers.value.map(member => [member.id, member])))
+const totalUsage = computed(() => (data.value?.items || [])
+  .reduce((total, item) => total + item.usageCount, 0))
+const linkedCount = computed(() => (data.value?.items || [])
+  .filter(item => item.memberId).length)
 const syncDrafts = () => {
   for (const item of data.value?.items || []) {
     drafts[item.creditKey] = {
@@ -96,19 +102,30 @@ const saveIdentity = async (item: CmsArticleCreditIdentity) => {
     savingKey.value = ''
   }
 }
+
+const linkedMember = (item: CmsArticleCreditIdentity) => (
+  item.memberId ? memberById.value.get(item.memberId) || null : null
+)
 </script>
 
 <template>
   <section id="article-credit-identities" class="cms-credit-manager" aria-labelledby="credit-manager-title">
-    <header class="cms-section-heading cms-credit-manager-heading">
-      <div>
+    <header class="cms-credit-manager-heading">
+      <div class="cms-credit-heading-copy">
         <p class="cms-eyebrow">ARTICLE CREDITS</p>
         <h2 id="credit-manager-title">文章署名身份</h2>
         <p>Markdown 保留稳定拼音 ID；这里维护网页显示姓名，也可以关联到正式成员头像和主页。</p>
       </div>
-      <button class="cms-button cms-button-primary" type="button" @click="showCreate = !showCreate">
-        {{ showCreate ? '取消登记' : '登记署名' }}
-      </button>
+      <div class="cms-credit-heading-side">
+        <dl class="cms-credit-overview" aria-label="署名身份概览">
+          <div><dt>署名身份</dt><dd>{{ data?.items.length ?? 0 }}</dd></div>
+          <div><dt>文章引用</dt><dd>{{ totalUsage }}</dd></div>
+          <div><dt>已关联成员</dt><dd>{{ linkedCount }}</dd></div>
+        </dl>
+        <button class="cms-button cms-button-primary cms-credit-create-toggle" type="button" @click="showCreate = !showCreate">
+          <span aria-hidden="true">{{ showCreate ? '×' : '+' }}</span>{{ showCreate ? '取消登记' : '登记新署名' }}
+        </button>
+      </div>
     </header>
 
     <p v-if="message" class="cms-alert">{{ message }}</p>
@@ -137,56 +154,63 @@ const saveIdentity = async (item: CmsArticleCreditIdentity) => {
       </button>
     </form>
 
-    <div class="cms-toolbar cms-toolbar-compact cms-credit-toolbar">
-      <label>
-        <span>搜索署名</span>
-        <input v-model.trim="search" type="search" placeholder="中文名、拼音 ID 或关联成员">
-      </label>
-      <p>{{ filteredItems.length }} / {{ data?.items.length ?? 0 }} 个署名</p>
-    </div>
+    <div class="cms-credit-content">
+      <div class="cms-credit-toolbar">
+        <label>
+          <span class="cms-credit-search-label">搜索署名</span>
+          <span class="cms-credit-search-input"><span aria-hidden="true">⌕</span><input v-model.trim="search" type="search" placeholder="搜索中文名、拼音 ID 或关联成员"></span>
+        </label>
+        <p><strong>{{ filteredItems.length }}</strong><span>/ {{ data?.items.length ?? 0 }} 个署名</span></p>
+      </div>
 
-    <p v-if="status === 'pending'" class="cms-muted">正在加载署名身份…</p>
-    <p v-else-if="error" class="cms-alert cms-alert-error">{{ error.message || '署名身份加载失败' }}</p>
-    <div v-else-if="filteredItems.length" class="cms-table-wrap cms-credit-table-wrap">
-      <table class="cms-table cms-credit-table">
-        <thead>
-          <tr>
-            <th>稳定 ID</th>
-            <th>网页显示姓名</th>
-            <th>正式成员关联</th>
-            <th>引用文章</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="item in filteredItems" :key="item.creditKey">
-            <td><code>{{ item.creditKey }}</code></td>
-            <td>
-              <input v-model.trim="drafts[item.creditKey]!.displayName" maxlength="100" :aria-label="`${item.creditKey} 的网页显示姓名`">
-            </td>
-            <td>
-              <select v-model="drafts[item.creditKey]!.memberId" :aria-label="`${item.creditKey} 的正式成员关联`">
-                <option value="">仅显示姓名</option>
-                <option v-for="member in availableMembers" :key="member.id" :value="member.id">
-                  {{ member.name }} · {{ member.memberKey }}
-                </option>
-              </select>
-            </td>
-            <td><span class="cms-credit-usage">{{ item.usageCount }} 篇</span></td>
-            <td>
-              <button
-                class="cms-button cms-button-quiet"
-                type="button"
-                :disabled="savingKey === item.creditKey"
-                @click="saveIdentity(item)"
-              >
-                {{ savingKey === item.creditKey ? '保存中…' : '保存' }}
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <p v-if="status === 'pending'" class="cms-muted cms-credit-loading">正在加载署名身份…</p>
+      <p v-else-if="error" class="cms-alert cms-alert-error">{{ error.message || '署名身份加载失败' }}</p>
+      <div v-else-if="filteredItems.length" class="cms-credit-list">
+        <article v-for="item in filteredItems" :key="item.creditKey" class="cms-credit-card">
+          <div class="cms-credit-card-identity">
+            <img
+              v-if="linkedMember(item)?.avatarUrl"
+              :src="resolveStaticMediaUrl(linkedMember(item)!.avatarUrl || '/images/logo.png')"
+              alt=""
+              loading="lazy"
+            >
+            <span v-else class="cms-credit-id-mark" aria-hidden="true">ID</span>
+            <div><small>STABLE ID</small><code>{{ item.creditKey }}</code></div>
+          </div>
+
+          <label class="cms-credit-field">
+            <span>网页显示姓名</span>
+            <input v-model.trim="drafts[item.creditKey]!.displayName" maxlength="100" :aria-label="`${item.creditKey} 的网页显示姓名`">
+          </label>
+
+          <label class="cms-credit-field cms-credit-member-field">
+            <span>正式成员关联</span>
+            <select v-model="drafts[item.creditKey]!.memberId" :aria-label="`${item.creditKey} 的正式成员关联`">
+              <option value="">仅显示姓名，不链接主页</option>
+              <option v-for="member in availableMembers" :key="member.id" :value="member.id">
+                {{ member.name }} · {{ member.memberKey }}
+              </option>
+            </select>
+            <small>{{ item.memberId ? `当前关联：${item.linkedMemberName || item.linkedMemberKey}` : '未关联成员资料' }}</small>
+          </label>
+
+          <div class="cms-credit-card-usage">
+            <small>引用文章</small>
+            <strong>{{ item.usageCount }}</strong>
+            <span>篇</span>
+          </div>
+
+          <button
+            class="cms-button cms-button-quiet cms-credit-save"
+            type="button"
+            :disabled="savingKey === item.creditKey"
+            @click="saveIdentity(item)"
+          >
+            <span>{{ savingKey === item.creditKey ? '保存中…' : '保存修改' }}</span><span aria-hidden="true">{{ savingKey === item.creditKey ? '···' : '↗' }}</span>
+          </button>
+        </article>
+      </div>
+      <p v-else class="cms-empty">{{ search ? '没有符合条件的署名身份。' : '暂无文章署名身份。' }}</p>
     </div>
-    <p v-else class="cms-empty">{{ search ? '没有符合条件的署名身份。' : '暂无文章署名身份。' }}</p>
   </section>
 </template>

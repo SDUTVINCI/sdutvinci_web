@@ -40,12 +40,14 @@ describe('成员选项、自动归类与 Markdown 图床', () => {
   })
 
   it('公开申请与 CMS 创建复用成员资料表单，并区分参赛和指导届次', async () => {
-    const [form, fields, avatar, cmsMembers, cmsMemberEdit, team, avatarRoute, optionService] = await Promise.all([
+    const [form, fields, avatar, cmsMembers, cmsMemberEdit, creditManager, cmsStyles, team, avatarRoute, optionService] = await Promise.all([
       readFile('app/components/MemberProfileApplicationForm.vue', 'utf8'),
       readFile('app/components/MemberProfileFields.vue', 'utf8'),
       readFile('app/components/MemberAvatarUpload.vue', 'utf8'),
       readFile('app/pages/cms/members/index.vue', 'utf8'),
       readFile('app/pages/cms/members/[id].vue', 'utf8'),
+      readFile('app/components/cms/CmsArticleCreditIdentityManager.vue', 'utf8'),
+      readFile('app/assets/css/cms.css', 'utf8'),
       readFile('app/pages/team/index.vue', 'utf8'),
       readFile('server/api/cms/members/[id]/avatar.post.ts', 'utf8'),
       readFile('server/services/member-options.ts', 'utf8')
@@ -64,6 +66,10 @@ describe('成员选项、自动归类与 Markdown 图床', () => {
     expect(cmsMemberEdit).toContain('MemberProfileFields')
     expect(cmsMemberEdit).toContain('MemberAvatarUpload')
     expect(cmsMemberEdit).not.toContain('头像路径或 URL')
+    expect(creditManager).toContain('class="cms-credit-overview"')
+    expect(creditManager).toContain('class="cms-credit-list"')
+    expect(creditManager).not.toContain('cms-credit-table')
+    expect(cmsStyles).toMatch(/@media \(max-width: 640px\)[\s\S]*\.cms-credit-card\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) 76px;/)
     expect(avatarRoute).toContain("requireCmsRequestAuth(event, 'admin')")
     expect(avatarRoute).toContain('requireCmsCsrf(event, auth)')
     expect(optionService).toContain("filter(position => position !== '顾问')")
