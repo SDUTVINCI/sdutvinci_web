@@ -245,9 +245,23 @@
   }
 
   .footer-partner-group-heading {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 2px;
+    gap: 3px;
+  }
+
+  .footer-partner-group {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    padding: 4px 0;
+  }
+
+  .footer-partner-group-heading {
+    grid-template-columns: auto 1fr;
+    align-items: baseline;
+    gap: 10px;
+  }
+
+  .footer-partner-group-heading h3 {
+    font-size: 1.05rem;
   }
 
   .footer-partner-grid {
@@ -302,11 +316,11 @@
   }
 
   .footer-partner-group-school .footer-partner-card {
-    min-height: 146px;
+    min-height: 124px;
   }
 
   .footer-partner-group-school .footer-partner-logo {
-    height: 72px;
+    height: 68px;
   }
 
   .footer-partner-group-school .footer-partner-logo-school {
@@ -315,11 +329,11 @@
   }
 
   .footer-partner-group-organizations .footer-partner-card {
-    min-height: 174px;
+    min-height: 154px;
   }
 
   .footer-partner-group-organizations .footer-partner-logo {
-    height: 88px;
+    height: 78px;
   }
 
   .footer-partner-group-organizations .footer-partner-logo-symbol {

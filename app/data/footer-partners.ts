@@ -8,7 +8,6 @@ export interface FooterPartner {
 
 export interface FooterPartnerGroup {
   id: string
-  eyebrow: string
   title: string
   items: FooterPartner[]
 }
@@ -19,7 +18,6 @@ const sponsorAsset = (filename: string) =>
 export const footerPartnerGroups: FooterPartnerGroup[] = [
   {
     id: 'school',
-    eyebrow: 'HOST INSTITUTION',
     title: '指导与依托',
     items: [
       {
@@ -33,7 +31,6 @@ export const footerPartnerGroups: FooterPartnerGroup[] = [
   },
   {
     id: 'organizations',
-    eyebrow: 'ORGANIZATIONS & PLATFORM',
     title: '组织与实践平台',
     items: [
       {
@@ -54,7 +51,6 @@ export const footerPartnerGroups: FooterPartnerGroup[] = [
   },
   {
     id: 'partners',
-    eyebrow: 'COMPETITION & PARTNERS',
     title: '赛事与合作支持',
     items: [
       {

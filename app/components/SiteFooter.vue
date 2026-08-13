@@ -34,13 +34,13 @@ import { footerPartnerGroups } from '~/data/footer-partners'
 
         <div class="footer-partner-groups">
           <section
-            v-for="group in footerPartnerGroups"
+            v-for="(group, groupIndex) in footerPartnerGroups"
             :key="group.id"
             :class="['footer-partner-group', `footer-partner-group-${group.id}`]"
             :aria-labelledby="`footer-partner-${group.id}`"
           >
             <header class="footer-partner-group-heading">
-              <p>{{ group.eyebrow }}</p>
+              <span aria-hidden="true">{{ String(groupIndex + 1).padStart(2, '0') }}</span>
               <h3 :id="`footer-partner-${group.id}`">{{ group.title }}</h3>
             </header>
             <div class="footer-partner-grid" role="list">
