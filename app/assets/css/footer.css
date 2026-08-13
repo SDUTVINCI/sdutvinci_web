@@ -65,8 +65,8 @@
 
 .footer-partners {
   display: grid;
-  gap: 20px;
-  padding: 2px 0 26px;
+  gap: 16px;
+  padding: 2px 0 22px;
 }
 
 .footer-partners-heading {
@@ -100,78 +100,64 @@
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 7px;
-  padding: 5px 0;
+  gap: 9px;
+  padding: 7px 1px 6px;
+  border-bottom: 1px solid color-mix(in srgb, var(--cyan) 40%, transparent);
   color: var(--ink-soft);
-  font-size: 0.78rem;
+  font-size: 0.9rem;
   font-weight: 800;
   text-decoration: none;
+  transition: border-color 160ms ease, color 160ms ease;
 }
 
 .footer-partners-contact:hover {
+  border-color: var(--cyan);
   color: var(--cyan);
 }
 
-.footer-partner-groups {
-  display: grid;
-  gap: 12px;
+.footer-partners-contact:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 4px;
 }
 
-.footer-partner-group {
-  display: grid;
-  min-width: 0;
-  grid-template-columns: 190px minmax(0, 1fr);
-  align-items: center;
-  gap: 22px;
-  padding: 4px 0;
+.footer-partner-marquee {
+  position: relative;
+  overflow: hidden;
+  padding: 5px 0 3px;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
 }
 
-.footer-partner-group-heading {
-  display: grid;
-  align-content: center;
-  gap: 5px;
+.footer-partner-track {
+  display: flex;
+  width: max-content;
+  animation: footer-partner-scroll 36s linear infinite;
+  will-change: transform;
 }
 
-.footer-partner-group-heading span,
-.footer-partner-group-heading h3 {
-  margin: 0;
+.footer-partner-set {
+  display: flex;
+  align-items: stretch;
+  gap: 24px;
+  padding-right: 24px;
 }
 
-.footer-partner-group-heading span {
-  color: var(--cyan);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-}
-
-.footer-partner-group-heading h3 {
-  color: var(--ink);
-  font-size: 1.3rem;
-  line-height: 1.2;
-}
-
-.footer-partner-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.footer-partner-group-school .footer-partner-grid {
-  grid-template-columns: 1fr;
-}
-
-.footer-partner-group-organizations .footer-partner-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.footer-partner-marquee:hover .footer-partner-track,
+.footer-partner-marquee:focus-within .footer-partner-track {
+  animation-play-state: paused;
 }
 
 .footer-partner-card {
   position: relative;
   display: grid;
-  min-width: 0;
-  min-height: 140px;
+  width: fit-content;
+  min-width: 112px;
+  max-width: 342px;
+  min-height: 138px;
+  flex: 0 0 auto;
   align-content: start;
   justify-items: center;
-  gap: 6px;
+  gap: 8px;
   padding: 6px;
   color: var(--ink);
   text-align: center;
@@ -179,8 +165,8 @@
   transition: color 160ms ease;
 }
 
-.footer-partner-group-school .footer-partner-card {
-  min-height: 116px;
+.footer-partner-card-organizations {
+  min-height: 154px;
 }
 
 .footer-partner-card:hover,
@@ -196,15 +182,18 @@
 
 .footer-partner-logo {
   display: grid;
-  width: 100%;
-  height: 88px;
+  width: fit-content;
+  max-width: 100%;
+  height: 82px;
+  justify-self: center;
   place-items: center;
   padding: 6px 4px;
 }
 
 .footer-partner-logo img {
   display: block;
-  width: 100%;
+  width: auto;
+  max-width: 100%;
   height: 100%;
   object-fit: contain;
   opacity: 0.9;
@@ -222,13 +211,9 @@
   max-height: 72px;
 }
 
-.footer-partner-group-school .footer-partner-logo {
-  height: 82px;
-}
-
-.footer-partner-group-school .footer-partner-logo-school {
-  max-width: 360px;
-  max-height: 82px;
+.footer-partner-card-school .footer-partner-logo-school {
+  max-width: 330px;
+  max-height: 78px;
 }
 
 .footer-partner-logo .footer-partner-logo-symbol {
@@ -248,8 +233,14 @@
 
 .footer-partner-copy {
   display: grid;
+  width: fit-content;
+  max-width: 100%;
   gap: 3px;
   justify-items: center;
+}
+
+.footer-partner-card-organizations .footer-partner-copy {
+  margin-top: 8px;
 }
 
 .footer-partner-copy strong {
@@ -281,6 +272,24 @@
 .footer-partner-card:hover .footer-partner-arrow,
 .footer-partner-card:focus-visible .footer-partner-arrow {
   opacity: 1;
+}
+
+@keyframes footer-partner-scroll {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .footer-partner-track {
+    animation: none;
+  }
+
+  .footer-partner-card,
+  .footer-partner-logo img,
+  .footer-partner-arrow {
+    transition: none;
+  }
 }
 
 :root[data-theme="dark"] .footer-partner-logo .footer-partner-logo-school,

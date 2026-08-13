@@ -1,5 +1,9 @@
 <script setup lang="ts">
 import { footerPartnerGroups } from '~/data/footer-partners'
+
+const footerPartners = footerPartnerGroups.flatMap(group =>
+  group.items.map(item => ({ ...item, groupId: group.id }))
+)
 </script>
 
 <template>
@@ -32,23 +36,24 @@ import { footerPartnerGroups } from '~/data/footer-partners'
           <NuxtLink class="footer-partners-contact" to="/contact">合作洽谈 <span aria-hidden="true">→</span></NuxtLink>
         </header>
 
-        <div class="footer-partner-groups">
-          <section
-            v-for="(group, groupIndex) in footerPartnerGroups"
-            :key="group.id"
-            :class="['footer-partner-group', `footer-partner-group-${group.id}`]"
-            :aria-labelledby="`footer-partner-${group.id}`"
-          >
-            <header class="footer-partner-group-heading">
-              <span aria-hidden="true">{{ String(groupIndex + 1).padStart(2, '0') }}</span>
-              <h3 :id="`footer-partner-${group.id}`">{{ group.title }}</h3>
-            </header>
-            <div class="footer-partner-grid" role="list">
+        <div
+          class="footer-partner-marquee"
+          aria-label="合作单位与合作伙伴"
+        >
+          <div class="footer-partner-track">
+            <div
+              v-for="copyIndex in 2"
+              :key="copyIndex"
+              class="footer-partner-set"
+              :role="copyIndex === 1 ? 'list' : undefined"
+              :aria-hidden="copyIndex === 2 ? 'true' : undefined"
+            >
               <a
-                v-for="item in group.items"
+                v-for="item in footerPartners"
                 :key="item.name"
-                class="footer-partner-card"
-                role="listitem"
+                :class="['footer-partner-card', `footer-partner-card-${item.groupId}`]"
+                :role="copyIndex === 1 ? 'listitem' : undefined"
+                :tabindex="copyIndex === 2 ? -1 : undefined"
                 :href="item.href"
                 target="_blank"
                 rel="noopener noreferrer"
@@ -64,7 +69,7 @@ import { footerPartnerGroups } from '~/data/footer-partners'
                 <span class="footer-partner-arrow" aria-hidden="true">↗</span>
               </a>
             </div>
-          </section>
+          </div>
         </div>
       </section>
 
