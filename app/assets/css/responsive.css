@@ -259,13 +259,36 @@
 
   .footer-partner-card {
     min-height: 145px;
+    gap: 8px;
+    padding-top: 12px;
     padding-right: 6px;
+    padding-bottom: 10px;
     padding-left: 6px;
   }
 
   .footer-partner-logo {
     height: 62px;
     padding: 7px 4px;
+  }
+
+  .footer-partner-logo .footer-partner-logo-wide {
+    max-width: 108px;
+    max-height: 48px;
+  }
+
+  .footer-partner-logo .footer-partner-logo-symbol {
+    max-width: 56px;
+    max-height: 56px;
+  }
+
+  .footer-partner-logo .footer-partner-logo-lab {
+    max-width: 82px;
+    max-height: 58px;
+  }
+
+  .footer-partner-logo .footer-partner-logo-wordmark {
+    max-width: 104px;
+    max-height: 46px;
   }
 
   .footer-partner-copy strong {

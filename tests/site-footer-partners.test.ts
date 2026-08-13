@@ -35,6 +35,8 @@ describe('网站 Footer 合作与支持', () => {
     expect(footerStyles).not.toMatch(/\.footer-partner-logo\s*\{[^}]*background/)
     expect(footerStyles).not.toContain('.footer-partner-card + .footer-partner-card')
     expect(footerStyles).toContain(':root[data-theme="dark"] .footer-partner-logo .footer-partner-logo-wordmark')
+    expect(footerStyles).toMatch(/\.footer-partner-logo\s*\{[^}]*height:\s*104px;/)
+    expect(footerStyles).toMatch(/\.footer-partner-logo \.footer-partner-logo-lab\s*\{[^}]*max-width:\s*120px;/)
     expect(footerStyles).toContain('.footer-partner-card:focus-visible')
     expect(responsiveStyles).toMatch(/@media \(max-width: 620px\)[\s\S]*\.footer-partner-grid\s*\{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);/)
   })
