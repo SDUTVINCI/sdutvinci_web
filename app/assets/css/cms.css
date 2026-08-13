@@ -660,15 +660,34 @@
 }
 
 .cms-registration-help {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
   margin: -5px 0 0;
   color: rgba(255, 255, 255, 0.48);
   font-size: 0.75rem;
   line-height: 1.55;
 }
 
-.cms-registration-help a {
+.cms-registration-profile-link {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px;
+  border: 1px solid rgba(139, 233, 240, 0.42);
+  border-radius: 8px;
+  background: rgba(139, 233, 240, 0.1);
   color: #8be9f0;
   font-weight: 800;
+  line-height: 1.25;
+  text-decoration: none;
+}
+
+.cms-registration-profile-link:hover {
+  border-color: rgba(139, 233, 240, 0.78);
+  background: rgba(139, 233, 240, 0.17);
 }
 
 .cms-login-input-readonly {
@@ -2035,6 +2054,17 @@
   color: var(--ink);
 }
 
+:root[data-theme="light"] .cms-login-input-readonly {
+  border-color: color-mix(in srgb, var(--cyan) 24%, #aabbb6);
+  background: color-mix(in srgb, var(--cyan) 7%, #e1e9e6);
+}
+
+:root[data-theme="light"] .cms-login-input-readonly input {
+  color: color-mix(in srgb, var(--ink) 82%, var(--cyan)) !important;
+  font-weight: 750;
+  -webkit-text-fill-color: color-mix(in srgb, var(--ink) 82%, var(--cyan));
+}
+
 :root[data-theme="light"] .cms-login-input input::placeholder {
   color: color-mix(in srgb, var(--muted) 78%, transparent);
 }
@@ -2069,8 +2099,16 @@
   color: rgba(27, 54, 60, 0.62);
 }
 
-:root[data-theme="light"] .cms-registration-help a {
-  color: #087c89;
+:root[data-theme="light"] .cms-registration-profile-link {
+  border-color: #168d99;
+  background: #e1f5f5;
+  color: #075f69;
+  box-shadow: 0 2px 7px rgba(12, 104, 114, 0.1);
+}
+
+:root[data-theme="light"] .cms-registration-profile-link:hover {
+  border-color: #087681;
+  background: #d1eeee;
 }
 
 :root[data-theme="light"] .cms-registration-member-picker {
@@ -2087,6 +2125,27 @@
 :root[data-theme="light"] .cms-registration-member-menu small,
 :root[data-theme="light"] .cms-registration-member-placeholder {
   color: rgba(27, 54, 60, 0.52);
+}
+
+:root[data-theme="light"] .cms-registration-member-selected em,
+:root[data-theme="light"] .cms-registration-member-menu em {
+  border: 1px solid #8fcfac;
+  background: #dff5e8;
+  color: #145b38;
+}
+
+:root[data-theme="light"] .cms-registration-member-selected em[data-status="pending"],
+:root[data-theme="light"] .cms-registration-member-menu em[data-status="pending"] {
+  border-color: #dfbd68;
+  background: #fff1c9;
+  color: #704b00;
+}
+
+:root[data-theme="light"] .cms-registration-member-selected em[data-status="registered"],
+:root[data-theme="light"] .cms-registration-member-menu em[data-status="registered"] {
+  border-color: #dda0a0;
+  background: #fde4e4;
+  color: #8c2929;
 }
 
 :root[data-theme="light"] .cms-registration-member-menu,

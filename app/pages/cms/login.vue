@@ -34,6 +34,11 @@ const selectedRegistrationMember = computed(() => (
   registrationMembers.value.find(member => member.id === registrationMemberId.value) || null
 ))
 
+watch(registrationMemberId, () => {
+  registrationError.value = ''
+  registrationSuccess.value = ''
+})
+
 const safeRedirect = computed(() => {
   const value = typeof route.query.redirect === 'string' ? route.query.redirect : ''
   return value.startsWith('/') && !value.startsWith('//') && !value.includes('\\')
@@ -51,6 +56,7 @@ const switchMode = async (nextMode: 'login' | 'register') => {
   mode.value = nextMode
   errorMessage.value = ''
   registrationError.value = ''
+  registrationSuccess.value = ''
   if (nextMode === 'register' && !registrationMembers.value.length) {
     await refreshRegistrationMembers()
   }
@@ -163,13 +169,17 @@ const submitRegistration = async () => {
             <CmsAccountRegistrationMemberPicker v-model="registrationMemberId" :members="registrationMembers" :loading="registrationStatus === 'pending'" />
           </label>
           <p v-if="registrationLoadError" class="cms-alert cms-alert-error" role="alert">成员信息加载失败，请稍后重试。</p>
-          <p class="cms-registration-help">找不到自己？<NuxtLink to="/team/apply">先填写成员信息</NuxtLink>，待资料审核上线后再回来注册。</p>
+          <p class="cms-registration-help">
+            <span>找不到自己？</span>
+            <NuxtLink class="cms-registration-profile-link" to="/team/apply"><span>先填写成员信息</span><span aria-hidden="true">↗</span></NuxtLink>
+            <span>资料审核上线后再回来注册。</span>
+          </p>
           <label class="cms-login-field">
             <span class="cms-login-field-label"><span>稳定账号 ID</span><small>READ ONLY</small></span>
             <span class="cms-login-input cms-login-input-readonly"><span class="cms-login-field-index" aria-hidden="true">ID</span><input :value="selectedRegistrationMember?.account || ''" type="text" readonly tabindex="-1" placeholder="选择成员后自动生成"></span>
           </label>
           <p v-if="selectedRegistrationMember?.registrationStatus === 'registered'" class="cms-alert cms-alert-error" role="alert">该成员已经注册账号；如需找回密码，请联系 Vinci 机器人队管理员。</p>
-          <p v-else-if="selectedRegistrationMember?.registrationStatus === 'pending'" class="cms-alert" role="status">该成员已有待审核的注册申请，请等待管理员处理。</p>
+          <p v-else-if="selectedRegistrationMember?.registrationStatus === 'pending' && !registrationSuccess" class="cms-alert" role="status">该成员已有待审核的注册申请，请等待管理员处理。</p>
           <label class="cms-login-field">
             <span class="cms-login-field-label"><span>密码</span><small>MIN {{ cmsPasswordMinLength }}</small></span>
             <span class="cms-login-input"><span class="cms-login-field-index" aria-hidden="true">02</span><input v-model="registrationPassword" type="password" autocomplete="new-password" :minlength="cmsPasswordMinLength" maxlength="1024" placeholder="至少 12 个字符" required></span>
