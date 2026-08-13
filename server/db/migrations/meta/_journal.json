@@ -162,6 +162,13 @@
       "when": 1786546832251,
       "tag": "0022_great_rockslide",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1786603300129,
+      "tag": "0023_dusty_hellion",
+      "breakpoints": true
     }
   ]
 }

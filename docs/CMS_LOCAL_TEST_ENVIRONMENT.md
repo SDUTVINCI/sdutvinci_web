@@ -87,3 +87,10 @@ CMS_LOCAL_TEST_DATABASE_PORT=55449 CMS_LOCAL_TEST_APP_PORT=3310 \
 - 不把测试账号或密码写入生产配置、数据库 Migration 或项目 `.env`。
 - 不 Push、不部署、不修改生产数据库和独立内容仓库。
 - 正式自动化验证仍应运行 `npm run test:cms`、`npm run typecheck` 和 `npm run build`。
+
+## 6. 注册申请人工测试
+
+本地环境应用 Migration `0023` 后，未登录访问 `/cms/login` 并切换“申请注册”，可从正式成员资料中
+搜索本人、查看只读稳定账号 ID 并提交申请。使用 `testadmin` 登录后，在 `/cms/users` 顶部的“注册
+申请审核”中通过或拒绝。通过后新账号默认为普通成员；完整边界见
+`docs/ACCOUNT_REGISTRATION.md`。

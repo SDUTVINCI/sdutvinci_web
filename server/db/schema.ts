@@ -222,6 +222,46 @@ export const memberApplications = pgTable('member_applications', {
   index('member_applications_expires_at_index').on(table.expiresAt)
 ])
 
+export const accountRegistrationApplications = pgTable('account_registration_applications', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  memberId: uuid('member_id')
+    .notNull()
+    .references(() => members.id, { onDelete: 'restrict' }),
+  account: varchar('account', { length: 32 }).notNull(),
+  passwordHash: text('password_hash'),
+  status: varchar('status', { length: 16 }).default('pending').notNull(),
+  submittedAt: timestamp('submitted_at', { withTimezone: true }).defaultNow().notNull(),
+  reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+  reviewedByUserId: uuid('reviewed_by_user_id')
+    .references(() => users.id, { onDelete: 'set null' }),
+  reviewNote: text('review_note'),
+  approvedUserId: uuid('approved_user_id')
+    .references(() => users.id, { onDelete: 'restrict' }),
+  ...timestamps
+}, table => [
+  check(
+    'account_registration_applications_account_format_check',
+    sql`${table.account} ~ '^[a-z][a-z0-9]{2,31}$'`
+  ),
+  check(
+    'account_registration_applications_status_check',
+    sql`${table.status} in ('pending', 'approved', 'rejected')`
+  ),
+  check(
+    'account_registration_applications_password_state_check',
+    sql`(${table.status} = 'pending' and ${table.passwordHash} is not null) or (${table.status} in ('approved', 'rejected') and ${table.passwordHash} is null)`
+  ),
+  uniqueIndex('account_registration_applications_pending_member_unique')
+    .on(table.memberId)
+    .where(sql`${table.status} = 'pending'`),
+  uniqueIndex('account_registration_applications_pending_account_unique')
+    .on(table.account)
+    .where(sql`${table.status} = 'pending'`),
+  index('account_registration_applications_status_created_index')
+    .on(table.status, table.createdAt),
+  index('account_registration_applications_member_index').on(table.memberId)
+])
+
 export const articles = pgTable('articles', {
   id: uuid('id').defaultRandom().primaryKey(),
   collection: varchar('collection', { length: 32 }).notNull(),
@@ -950,6 +990,7 @@ export type MemberRevision = typeof memberRevisions.$inferSelect
 export type MemberProposal = typeof memberProposals.$inferSelect
 export type MemberCohort = typeof memberCohorts.$inferSelect
 export type MemberApplication = typeof memberApplications.$inferSelect
+export type AccountRegistrationApplication = typeof accountRegistrationApplications.$inferSelect
 export type Article = typeof articles.$inferSelect
 export type ArticleRevision = typeof articleRevisions.$inferSelect
 export type Draft = typeof drafts.$inferSelect

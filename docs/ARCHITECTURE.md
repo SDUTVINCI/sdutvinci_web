@@ -163,3 +163,13 @@ Wiki 署名解析按“同 ID 的有效正式成员 → 署名身份登记 → �
 署名身份是 PostgreSQL 权威数据的一部分。新增或修改会写审计并合并排队一次全量内容对账；
 `.vinci/snapshot.json` 包含 `creditIdentities`，空库初始化和灾难恢复会一并校验和恢复。旧的
 version 1 快照没有该字段时按空数组读取，保持向后兼容。
+
+## 11. 成员账号注册审核（2026-08）
+
+未登录成员可在 `/cms/login` 从已上线正式成员中认领本人资料并提交账号注册申请；没有成员资料时先去
+`/team/apply`。稳定账号 ID 由服务端按成员 ID 及最小数字后缀确定，浏览器只读展示。申请不会直接
+创建账号，管理员在 CMS“账号管理”审核通过后，事务内创建普通 `member` 用户并写入唯一成员绑定。
+
+`account_registration_applications` 仅在 pending 阶段保存 Argon2id 密码哈希，通过或拒绝后清除；
+`user_members` 继续保证一名成员只能绑定一个账号。同源、IP 限流、管理员角色、CSRF 和审计边界保持
+不变。具体流程与测试见 `docs/ACCOUNT_REGISTRATION.md`。

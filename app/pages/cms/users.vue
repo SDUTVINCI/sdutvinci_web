@@ -8,6 +8,7 @@ import type {
   CmsManagedUser,
   CmsRoleCode
 } from '~~/shared/types/cms-auth'
+import type { CmsAccountRegistrationApplication } from '~~/shared/types/account-registration'
 import { resolveStaticMediaUrl } from '~~/shared/utils/static-media'
 
 definePageMeta({
@@ -47,6 +48,22 @@ const {
   return requestFetch<{ users: CmsManagedUser[] }>('/api/cms/admin/users')
 })
 const users = computed(() => data.value?.users ?? [])
+const {
+  data: registrationData,
+  status: registrationStatus,
+  error: registrationLoadError,
+  refresh: refreshRegistrations
+} = await useAsyncData('cms:account-registration-applications', async () => {
+  if (!isAdmin.value) return { applications: [] as CmsAccountRegistrationApplication[] }
+  return requestFetch<{ applications: CmsAccountRegistrationApplication[] }>(
+    '/api/cms/account-registration-applications'
+  )
+})
+const registrationApplications = computed(() => registrationData.value?.applications ?? [])
+const registrationNote = ref('')
+const registrationReviewingId = ref('')
+const registrationMessage = ref('')
+const registrationError = ref('')
 const userForms = reactive<Record<string, UserEditForm>>({})
 const savingUserId = ref('')
 const accountMessage = ref('')
@@ -88,6 +105,37 @@ const errorMessage = (error: any, fallback: string) =>
   error?.data?.message
   ?? error?.data?.statusMessage
   ?? fallback
+
+const reviewRegistration = async (
+  application: CmsAccountRegistrationApplication,
+  action: 'approve' | 'reject'
+) => {
+  const prompt = action === 'approve'
+    ? `确定通过 ${application.member.name} 的账号 @${application.account} 注册申请吗？通过后将创建普通成员账号。`
+    : `确定拒绝 ${application.member.name} 的注册申请吗？申请中的密码哈希会被清除。`
+  if (!confirm(prompt)) return
+  registrationReviewingId.value = application.id
+  registrationMessage.value = ''
+  registrationError.value = ''
+  try {
+    const result = await $fetch<{ account?: string }>(
+      `/api/cms/account-registration-applications/${application.id}/review`,
+      {
+        method: 'POST',
+        headers: csrfHeaders(),
+        body: { action, note: registrationNote.value }
+      }
+    )
+    registrationMessage.value = action === 'approve'
+      ? `账号 @${result.account || application.account} 已审核通过，身份为普通成员。`
+      : `${application.member.name} 的注册申请已拒绝。`
+    await Promise.all([refreshRegistrations(), refresh()])
+  } catch (error: any) {
+    registrationError.value = errorMessage(error, '注册申请审核失败')
+  } finally {
+    registrationReviewingId.value = ''
+  }
+}
 
 const createUser = async () => {
   creating.value = true
@@ -295,6 +343,43 @@ const changeOwnPassword = async () => {
       </section>
 
       <section v-if="isAdmin" class="cms-account-admin">
+        <section class="cms-account-list-section cms-registration-review-section">
+          <div class="cms-account-list-heading">
+            <div>
+              <p class="cms-eyebrow">REGISTRATION REVIEW</p>
+              <h2>注册申请审核 <span class="cms-review-count">{{ registrationApplications.length }} 项</span></h2>
+              <p class="cms-muted">核对成员身份后创建普通成员账号；注册申请不能直接获得管理员权限。</p>
+            </div>
+            <button class="cms-button cms-button-quiet" type="button" :disabled="registrationStatus === 'pending'" @click="refreshRegistrations()">刷新申请</button>
+          </div>
+          <label v-if="registrationApplications.length" class="cms-form cms-registration-review-note">
+            <span>本次审核备注</span>
+            <textarea v-model="registrationNote" rows="2" maxlength="1000" placeholder="可选，不会显示密码等敏感信息" />
+          </label>
+          <p v-if="registrationMessage" class="cms-alert" role="status">{{ registrationMessage }}</p>
+          <p v-if="registrationError" class="cms-alert cms-alert-error" role="alert">{{ registrationError }}</p>
+          <p v-if="registrationStatus === 'pending'" class="cms-muted">正在加载注册申请…</p>
+          <p v-else-if="registrationLoadError" class="cms-alert cms-alert-error" role="alert">注册申请加载失败，请稍后重试。</p>
+          <div v-else-if="registrationApplications.length" class="cms-registration-review-list">
+            <article v-for="application in registrationApplications" :key="application.id" class="cms-panel cms-registration-review-card">
+              <img :src="resolveStaticMediaUrl(application.member.avatarUrl || '/images/logo.png')" alt="" loading="lazy">
+              <div>
+                <h3>{{ application.member.name }}</h3>
+                <p>@{{ application.account }} · 成员 ID：{{ application.member.memberKey }}</p>
+                <small>提交于 {{ new Date(application.submittedAt).toLocaleString('zh-CN') }}</small>
+              </div>
+              <div class="cms-button-row">
+                <button class="cms-button cms-button-primary" type="button" :disabled="registrationReviewingId === application.id" @click="reviewRegistration(application, 'approve')">通过并创建普通成员账号</button>
+                <button class="cms-button" type="button" :disabled="registrationReviewingId === application.id" @click="reviewRegistration(application, 'reject')">拒绝</button>
+              </div>
+            </article>
+          </div>
+          <div v-else class="cms-review-empty">
+            <span aria-hidden="true">✓</span>
+            <div><strong>暂无注册申请</strong><p>成员从登录页提交申请后会显示在这里。</p></div>
+          </div>
+        </section>
+
         <form class="cms-panel cms-form cms-account-create" @submit.prevent="createUser">
           <div>
             <p class="cms-eyebrow">NEW ACCOUNT</p>

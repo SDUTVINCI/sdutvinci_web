@@ -17,6 +17,7 @@ import {
   hashSessionToken,
   verifyCmsPassword
 } from '../utils/cms-security'
+import { assertAccountNotReserved } from './account-registrations'
 
 export interface CreateCmsUserInput {
   account: string
@@ -186,6 +187,7 @@ export const createCmsUser = async (
   const passwordHash = await hashCmsPassword(input.password)
 
   const userId = await db.transaction(async (tx) => {
+    await assertAccountNotReserved(tx, normalizeAccount(input.account))
     const [created] = await tx
       .insert(users)
       .values({

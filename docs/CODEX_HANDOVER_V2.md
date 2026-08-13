@@ -1997,3 +1997,15 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
 - 使用与恢复边界已补充到 `docs/ARCHITECTURE.md`、`docs/v2/OPERATIONS.md` 和
   `docs/v2/BACKUP_AND_RECOVERY.md`。实现仅在本地隔离环境验证，不修改独立内容仓库正式
   Markdown，不 SSH、Push、部署或写生产数据库。
+
+## 2026-08-13：CMS 成员账号注册与审核
+
+- `/cms/login` 新增注册模式，先用可搜索选择器认领已上线成员资料；没有资料时进入 `/team/apply`。
+  稳定账号 ID 只读显示，冲突时按 `base1`、`base2` 的最小可用数字顺序分配；已注册成员明确提示
+  联系 Vinci 管理员找回密码。
+- 注册申请经管理员在“账号管理”审核后才创建账号，默认且仅创建普通 `member` 身份。成员唯一绑定、
+  账号保留、审核创建和审计在事务及 advisory lock 下执行。
+- expand-only Migration `0023` 新增 `account_registration_applications`。pending 只保存 Argon2id
+  密码哈希，通过或拒绝后立即清除；公开提交要求同源并受 IP 限流，审核要求管理员、同源和 CSRF。
+- 使用和测试见 `docs/ACCOUNT_REGISTRATION.md`。本功能不修改独立内容仓库、正式 Markdown、文章/
+  成员 Revision、Wiki 拼音/章节模块、S3/COS 或生产环境。

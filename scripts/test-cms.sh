@@ -8,6 +8,8 @@ set -Eeuo pipefail
 
 exec ./node_modules/.bin/vitest run \
   tests/cms-auth.integration.test.ts \
+  tests/account-registrations.integration.test.ts \
+  tests/account-registration-ui.test.ts \
   tests/cms-content.integration.test.ts \
   tests/cms-drafts.integration.test.ts \
   tests/cms-workflow.integration.test.ts \

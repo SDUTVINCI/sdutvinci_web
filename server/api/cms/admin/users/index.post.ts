@@ -6,6 +6,7 @@ import {
   cmsRoleCodes
 } from '../../../../../shared/types/cms-auth'
 import { createCmsUser } from '../../../../services/cms-auth'
+import { AccountRegistrationPendingError } from '../../../../services/account-registrations'
 import {
   requireCmsCsrf,
   requireCmsRequestAuth
@@ -26,6 +27,9 @@ export default defineEventHandler(async (event) => {
     const user = await createCmsUser(input, auth.user.id)
     return { user }
   } catch (error) {
+    if (error instanceof AccountRegistrationPendingError) {
+      throw createError({ statusCode: 409, message: '该账号 ID 已被待审核的注册申请占用' })
+    }
     if (
       typeof error === 'object'
       && error !== null
