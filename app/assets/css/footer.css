@@ -66,7 +66,6 @@
 .footer-partners {
   display: grid;
   gap: 20px;
-  border-bottom: 1px solid var(--footer-line);
   padding: 2px 0 26px;
 }
 
@@ -103,7 +102,6 @@
   align-items: center;
   gap: 7px;
   padding: 5px 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--cyan) 50%, transparent);
   color: var(--ink-soft);
   font-size: 0.78rem;
   font-weight: 800;
@@ -111,7 +109,6 @@
 }
 
 .footer-partners-contact:hover {
-  border-color: var(--cyan);
   color: var(--cyan);
 }
 
@@ -155,9 +152,6 @@
 .footer-partner-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  overflow: hidden;
-  border-top: 1px solid var(--footer-line);
-  border-bottom: 1px solid var(--footer-line);
 }
 
 .footer-partner-card {
@@ -172,16 +166,11 @@
   color: var(--ink);
   text-align: center;
   text-decoration: none;
-  transition: background 160ms ease, color 160ms ease;
-}
-
-.footer-partner-card + .footer-partner-card {
-  border-left: 1px solid var(--footer-line);
+  transition: color 160ms ease;
 }
 
 .footer-partner-card:hover,
 .footer-partner-card:focus-visible {
-  background: color-mix(in srgb, var(--surface) 36%, transparent);
   color: var(--cyan);
 }
 
@@ -197,8 +186,6 @@
   height: 70px;
   place-items: center;
   padding: 8px 6px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.92);
 }
 
 .footer-partner-logo img {
@@ -271,6 +258,26 @@
 .footer-partner-card:hover .footer-partner-arrow,
 .footer-partner-card:focus-visible .footer-partner-arrow {
   opacity: 1;
+}
+
+:root[data-theme="dark"] .footer-partner-logo .footer-partner-logo-school,
+:root[data-theme="dark"] .footer-partner-logo .footer-partner-logo-lab {
+  filter: brightness(1.75) saturate(0.82);
+}
+
+:root[data-theme="dark"] .footer-partner-logo .footer-partner-logo-wordmark {
+  filter: invert(1) grayscale(1) brightness(1.16);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .footer-partner-logo .footer-partner-logo-school,
+  :root:not([data-theme="light"]) .footer-partner-logo .footer-partner-logo-lab {
+    filter: brightness(1.75) saturate(0.82);
+  }
+
+  :root:not([data-theme="light"]) .footer-partner-logo .footer-partner-logo-wordmark {
+    filter: invert(1) grayscale(1) brightness(1.16);
+  }
 }
 
 .footer-records {

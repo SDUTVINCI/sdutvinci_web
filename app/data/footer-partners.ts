@@ -27,7 +27,7 @@ export const footerPartnerGroups: FooterPartnerGroup[] = [
         role: '所属高校',
         logo: sponsorAsset('sdut-logo-blue.webp'),
         href: 'https://www.sdut.edu.cn/',
-        logoClass: 'footer-partner-logo-wide'
+        logoClass: 'footer-partner-logo-wide footer-partner-logo-school'
       },
       {
         name: '机电创新学会',
@@ -39,7 +39,7 @@ export const footerPartnerGroups: FooterPartnerGroup[] = [
       {
         name: '智能机器人创新实践基地',
         role: '实践平台',
-        logo: sponsorAsset('IRI_Lab.webp'),
+        logo: `${sponsorAsset('IRI_Lab.webp')}?v=20260813-transparent`,
         href: 'https://mecenter.sdut.edu.cn/2023/0619/c11252a489230/page.htm',
         logoClass: 'footer-partner-logo-lab'
       }
@@ -55,7 +55,7 @@ export const footerPartnerGroups: FooterPartnerGroup[] = [
         role: '核心赛事',
         logo: sponsorAsset('robocon-logo.webp'),
         href: 'https://www.robocon.org.cn/',
-        logoClass: 'footer-partner-logo-wide'
+        logoClass: 'footer-partner-logo-wide footer-partner-logo-competition'
       },
       {
         name: '宇树科技',
