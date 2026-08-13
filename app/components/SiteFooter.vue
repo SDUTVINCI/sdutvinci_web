@@ -1,3 +1,7 @@
+<script setup lang="ts">
+import { footerPartnerGroups } from '~/data/footer-partners'
+</script>
+
 <template>
   <footer class="site-footer">
     <div class="footer-inner">
@@ -17,6 +21,47 @@
           <a href="https://mp.weixin.qq.com/s/AAPWX2zOhJjA-s2MA-g2Ew" target="_blank" rel="noopener noreferrer">微信公众号</a>
         </div>
       </div>
+
+      <section class="footer-partners" aria-labelledby="footer-partners-title">
+        <header class="footer-partners-heading">
+          <div>
+            <p class="eyebrow">PARTNERS & SUPPORT</p>
+            <h2 id="footer-partners-title">合作与支持</h2>
+            <p>感谢学校、赛事平台与合作伙伴对 Vinci 机器人队发展的支持。</p>
+          </div>
+          <NuxtLink class="footer-partners-contact" to="/contact">合作洽谈 <span aria-hidden="true">→</span></NuxtLink>
+        </header>
+
+        <div class="footer-partner-groups">
+          <section v-for="group in footerPartnerGroups" :key="group.id" class="footer-partner-group" :aria-labelledby="`footer-partner-${group.id}`">
+            <header class="footer-partner-group-heading">
+              <p>{{ group.eyebrow }}</p>
+              <h3 :id="`footer-partner-${group.id}`">{{ group.title }}</h3>
+            </header>
+            <div class="footer-partner-grid" role="list">
+              <a
+                v-for="item in group.items"
+                :key="item.name"
+                class="footer-partner-card"
+                role="listitem"
+                :href="item.href"
+                target="_blank"
+                rel="noopener noreferrer"
+                :aria-label="`访问${item.name}官网`"
+              >
+                <span class="footer-partner-logo">
+                  <img :class="item.logoClass" :src="item.logo" :alt="`${item.name} Logo`" loading="lazy" decoding="async">
+                </span>
+                <span class="footer-partner-copy">
+                  <strong>{{ item.name }}</strong>
+                  <small>{{ item.role }}</small>
+                </span>
+                <span class="footer-partner-arrow" aria-hidden="true">↗</span>
+              </a>
+            </div>
+          </section>
+        </div>
+      </section>
 
       <div class="footer-records">
         <span class="footer-copyright">© 2026 山东理工大学 Vinci 机器人队</span>

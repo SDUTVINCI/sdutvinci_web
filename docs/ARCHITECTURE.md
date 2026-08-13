@@ -173,3 +173,10 @@ version 1 快照没有该字段时按空数组读取，保持向后兼容。
 `account_registration_applications` 仅在 pending 阶段保存 Argon2id 密码哈希，通过或拒绝后清除；
 `user_members` 继续保证一名成员只能绑定一个账号。同源、IP 限流、管理员角色、CSRF 和审计边界保持
 不变。具体流程与测试见 `docs/ACCOUNT_REGISTRATION.md`。
+
+## 12. Footer 组织与合作信息（2026-08）
+
+公开站 Footer 的机构 Logo 墙由 `app/data/footer-partners.ts` 集中维护，分为“组织与平台”和
+“赛事与合作支持”，避免将所属高校、所属社团、实践平台或核心赛事误标为赞助商。
+每项同时展示 Logo、中文名称和身份，整项跳转对应官方页面。Logo 使用
+`cdn.sdutvincirobot.top/site-assets/images/sponsors/` 下的 WebP，布局与浅深色适配仍由代码仓库管理。
