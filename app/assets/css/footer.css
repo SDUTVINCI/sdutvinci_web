@@ -114,7 +114,6 @@
 
 .footer-partner-groups {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 34px;
 }
 
@@ -154,6 +153,14 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.footer-partner-group-school .footer-partner-grid {
+  grid-template-columns: 1fr;
+}
+
+.footer-partner-group-organizations .footer-partner-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .footer-partner-card {
   position: relative;
   display: grid;
@@ -167,6 +174,11 @@
   text-align: center;
   text-decoration: none;
   transition: color 160ms ease;
+}
+
+.footer-partner-group-school .footer-partner-card {
+  min-height: 172px;
+  padding-top: 8px;
 }
 
 .footer-partner-card:hover,
@@ -208,19 +220,28 @@
   max-height: 72px;
 }
 
+.footer-partner-group-school .footer-partner-logo {
+  height: 112px;
+}
+
+.footer-partner-group-school .footer-partner-logo-school {
+  max-width: 390px;
+  max-height: 96px;
+}
+
 .footer-partner-logo .footer-partner-logo-symbol {
-  max-width: 88px;
-  max-height: 88px;
+  max-width: 116px;
+  max-height: 116px;
 }
 
 .footer-partner-logo .footer-partner-logo-lab {
-  max-width: 120px;
-  max-height: 90px;
+  max-width: 176px;
+  max-height: 104px;
 }
 
 .footer-partner-logo .footer-partner-logo-wordmark {
-  max-width: 166px;
-  max-height: 64px;
+  max-width: 230px;
+  max-height: 78px;
 }
 
 .footer-partner-copy {

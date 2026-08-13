@@ -95,9 +95,6 @@
     justify-content: flex-start;
   }
 
-  .footer-partner-groups {
-    grid-template-columns: 1fr;
-  }
 }
 
 @media (max-width: 1180px) {
@@ -257,6 +254,19 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .footer-partner-group-school .footer-partner-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .footer-partner-group-organizations .footer-partner-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .footer-partner-group-partners .footer-partner-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
   .footer-partner-card {
     min-height: 145px;
     gap: 8px;
@@ -289,6 +299,71 @@
   .footer-partner-logo .footer-partner-logo-wordmark {
     max-width: 104px;
     max-height: 46px;
+  }
+
+  .footer-partner-group-school .footer-partner-card {
+    min-height: 146px;
+  }
+
+  .footer-partner-group-school .footer-partner-logo {
+    height: 72px;
+  }
+
+  .footer-partner-group-school .footer-partner-logo-school {
+    max-width: 280px;
+    max-height: 64px;
+  }
+
+  .footer-partner-group-organizations .footer-partner-card {
+    min-height: 174px;
+  }
+
+  .footer-partner-group-organizations .footer-partner-logo {
+    height: 88px;
+  }
+
+  .footer-partner-group-organizations .footer-partner-logo-symbol {
+    max-width: 82px;
+    max-height: 82px;
+  }
+
+  .footer-partner-group-organizations .footer-partner-logo-lab {
+    max-width: 128px;
+    max-height: 84px;
+  }
+
+  .footer-partner-group-partners .footer-partner-card {
+    min-height: 96px;
+    grid-template-columns: 138px minmax(0, 1fr);
+    align-items: center;
+    justify-items: start;
+    gap: 16px;
+    padding: 8px 14px;
+    text-align: left;
+  }
+
+  .footer-partner-group-partners .footer-partner-logo {
+    width: 138px;
+    height: 78px;
+    padding: 4px;
+  }
+
+  .footer-partner-group-partners .footer-partner-logo-wide,
+  .footer-partner-group-partners .footer-partner-logo-wordmark {
+    max-width: 132px;
+    max-height: 64px;
+  }
+
+  .footer-partner-group-partners .footer-partner-copy {
+    justify-items: start;
+  }
+
+  .footer-partner-group-partners .footer-partner-copy strong {
+    font-size: 0.78rem;
+  }
+
+  .footer-partner-group-partners .footer-partner-copy small {
+    font-size: 0.66rem;
   }
 
   .footer-partner-copy strong {

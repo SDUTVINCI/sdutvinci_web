@@ -18,9 +18,9 @@ const sponsorAsset = (filename: string) =>
 
 export const footerPartnerGroups: FooterPartnerGroup[] = [
   {
-    id: 'organizations',
-    eyebrow: 'ORGANIZATIONS & PLATFORM',
-    title: '组织与平台',
+    id: 'school',
+    eyebrow: 'HOST INSTITUTION',
+    title: '指导与依托',
     items: [
       {
         name: '山东理工大学',
@@ -28,7 +28,14 @@ export const footerPartnerGroups: FooterPartnerGroup[] = [
         logo: sponsorAsset('sdut-logo-blue.webp'),
         href: 'https://www.sdut.edu.cn/',
         logoClass: 'footer-partner-logo-wide footer-partner-logo-school'
-      },
+      }
+    ]
+  },
+  {
+    id: 'organizations',
+    eyebrow: 'ORGANIZATIONS & PLATFORM',
+    title: '组织与实践平台',
+    items: [
       {
         name: '机电创新学会',
         role: '所属社团',

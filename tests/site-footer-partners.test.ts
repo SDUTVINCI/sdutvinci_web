@@ -4,7 +4,8 @@ import { footerPartnerGroups } from '../app/data/footer-partners'
 
 describe('网站 Footer 合作与支持', () => {
   it('区分组织平台、核心赛事和合作伙伴，并链接官方页面', () => {
-    expect(footerPartnerGroups).toHaveLength(2)
+    expect(footerPartnerGroups).toHaveLength(3)
+    expect(footerPartnerGroups.map(group => group.id)).toEqual(['school', 'organizations', 'partners'])
     expect(footerPartnerGroups.flatMap(group => group.items)).toEqual(expect.arrayContaining([
       expect.objectContaining({ name: '山东理工大学', role: '所属高校', href: 'https://www.sdut.edu.cn/' }),
       expect.objectContaining({ name: '机电创新学会', role: '所属社团' }),
@@ -36,8 +37,9 @@ describe('网站 Footer 合作与支持', () => {
     expect(footerStyles).not.toContain('.footer-partner-card + .footer-partner-card')
     expect(footerStyles).toContain(':root[data-theme="dark"] .footer-partner-logo .footer-partner-logo-wordmark')
     expect(footerStyles).toMatch(/\.footer-partner-logo\s*\{[^}]*height:\s*104px;/)
-    expect(footerStyles).toMatch(/\.footer-partner-logo \.footer-partner-logo-lab\s*\{[^}]*max-width:\s*120px;/)
+    expect(footerStyles).toMatch(/\.footer-partner-group-school \.footer-partner-logo-school\s*\{[^}]*max-width:\s*390px;/)
+    expect(footerStyles).toMatch(/\.footer-partner-group-organizations \.footer-partner-grid\s*\{[^}]*repeat\(2,/)
     expect(footerStyles).toContain('.footer-partner-card:focus-visible')
-    expect(responsiveStyles).toMatch(/@media \(max-width: 620px\)[\s\S]*\.footer-partner-grid\s*\{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);/)
+    expect(responsiveStyles).toMatch(/@media \(max-width: 620px\)[\s\S]*\.footer-partner-group-partners \.footer-partner-grid\s*\{[^}]*grid-template-columns:\s*1fr;/)
   })
 })

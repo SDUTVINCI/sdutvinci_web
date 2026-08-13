@@ -33,7 +33,12 @@ import { footerPartnerGroups } from '~/data/footer-partners'
         </header>
 
         <div class="footer-partner-groups">
-          <section v-for="group in footerPartnerGroups" :key="group.id" class="footer-partner-group" :aria-labelledby="`footer-partner-${group.id}`">
+          <section
+            v-for="group in footerPartnerGroups"
+            :key="group.id"
+            :class="['footer-partner-group', `footer-partner-group-${group.id}`]"
+            :aria-labelledby="`footer-partner-${group.id}`"
+          >
             <header class="footer-partner-group-heading">
               <p>{{ group.eyebrow }}</p>
               <h3 :id="`footer-partner-${group.id}`">{{ group.title }}</h3>

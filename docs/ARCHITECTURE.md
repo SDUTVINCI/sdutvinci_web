@@ -176,8 +176,8 @@ version 1 快照没有该字段时按空数组读取，保持向后兼容。
 
 ## 12. Footer 组织与合作信息（2026-08）
 
-公开站 Footer 的机构 Logo 墙由 `app/data/footer-partners.ts` 集中维护，分为“组织与平台”和
-“赛事与合作支持”，避免将所属高校、所属社团、实践平台或核心赛事误标为赞助商。
+公开站 Footer 的机构 Logo 墙由 `app/data/footer-partners.ts` 集中维护，分为“指导与依托”、
+“组织与实践平台”和“赛事与合作支持”，避免将所属高校、所属社团、实践平台或核心赛事误标为赞助商。
 每项同时展示 Logo、中文名称和身份，整项跳转对应官方页面。Logo 使用
 `cdn.sdutvincirobot.top/site-assets/images/sponsors/` 下的透明 WebP，并直接叠放在 Footer 背景上；
 布局与浅深色适配仍由代码仓库管理。
