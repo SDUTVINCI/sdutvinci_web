@@ -256,23 +256,19 @@
   }
 
   .footer-partner-set {
-    gap: 22px;
-    padding-right: 22px;
+    gap: clamp(12px, 3vw, 18px);
+    padding-right: clamp(12px, 3vw, 18px);
   }
 
-  .footer-partner-card,
-  .footer-partner-card-partners {
-    width: 210px;
+  .footer-partner-card {
+    width: fit-content;
+    min-width: 104px;
+    max-width: 290px;
     min-height: 134px;
   }
 
   .footer-partner-card-organizations {
-    width: 210px;
     min-height: 146px;
-  }
-
-  .footer-partner-card-school {
-    width: 290px;
   }
 
   .footer-partner-logo {
