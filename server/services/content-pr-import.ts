@@ -1050,49 +1050,110 @@ const importOneItem = async (
     }
     const collection = (item.newPath || item.oldPath)!.split('/')[0] as CmsArticleCollection
     const relativePath = (item.newPath || item.oldPath)!.split('/').slice(1).join('/')
+    const proposedAction: 'edit' | 'move' | 'delete' = item.classification === 'deletion_proposal'
+      ? 'delete'
+      : item.classification === 'move_or_rename'
+        || (forcedHighRisk && item.changeType === 'renamed') ? 'move' : 'edit'
+    const proposedRelativePath = ['move_or_rename', 'new_article'].includes(item.classification)
+      || (forcedHighRisk && (!item.articleId || item.changeType === 'renamed'))
+      ? relativePath : null
     const [existingDraft] = item.articleId
-      ? await tx.select({ id: drafts.id }).from(drafts).where(and(
-          eq(drafts.articleId, item.articleId), eq(drafts.ownerUserId, actorUserId), isNull(drafts.deletedAt)
-        )).limit(1)
+      ? await tx.select({ id: drafts.id, status: drafts.status }).from(drafts).where(and(
+          eq(drafts.articleId, item.articleId),
+          eq(drafts.ownerUserId, actorUserId),
+          isNull(drafts.deletedAt)
+        )).limit(1).for('update')
       : []
-    if (existingDraft) {
+    if (existingDraft && existingDraft.status !== 'published') {
       await tx.update(contentPrImportItems).set({
         status: 'blocked',
-        warningCodes: [...new Set([...item.warningCodes, 'IMPORT_ACTIVE_DRAFT_EXISTS'])]
+        warningCodes: [...new Set([...item.warningCodes, 'IMPORT_ACTIVE_DRAFT_EXISTS'])],
+        conflictDetails: {
+          ...item.conflictDetails,
+          activeDraft: {
+            draftId: existingDraft.id,
+            status: existingDraft.status
+          }
+        }
       })
         .where(eq(contentPrImportItems.id, item.id))
       return { itemId, draftId: null, imported: false, blocked: true }
     }
-    const [draft] = await tx.insert(drafts).values({
-      articleId: item.articleId,
-      proposedArticleId: item.articleId ? null : item.proposedArticleId || randomUUID(),
-      ownerUserId: actorUserId,
-      collection,
-      title: data.title,
-      description: data.description,
-      body: data.body,
-      preservedFrontmatter: data.preservedFrontmatter,
-      baseContentHash: current?.contentHash || null,
-      baseRevisionId: current?.revisionId || null,
-      proposedAction: item.classification === 'deletion_proposal'
-        ? 'delete'
-        : item.classification === 'move_or_rename'
-          || (forcedHighRisk && item.changeType === 'renamed') ? 'move' : 'edit',
-      proposedRelativePath: ['move_or_rename', 'new_article'].includes(item.classification)
-        || (forcedHighRisk && (!item.articleId || item.changeType === 'renamed'))
-        ? relativePath : null
-    }).returning({ id: drafts.id })
+    const now = new Date()
+    let draft: { id: string }
+    const reusedPublishedDraft = Boolean(existingDraft)
+    if (existingDraft) {
+      const [reopened] = await tx.update(drafts).set({
+        collection,
+        title: data.title,
+        description: data.description,
+        body: data.body,
+        preservedFrontmatter: data.preservedFrontmatter,
+        baseContentHash: current?.contentHash || null,
+        baseRevisionId: current?.revisionId || null,
+        proposedAction,
+        proposedRelativePath,
+        proposedArticleId: null,
+        status: 'draft',
+        version: sql`${drafts.version} + 1`,
+        lastSavedAt: now,
+        updatedAt: now
+      }).where(and(
+        eq(drafts.id, existingDraft.id),
+        eq(drafts.status, 'published'),
+        isNull(drafts.deletedAt)
+      )).returning({ id: drafts.id })
+      if (!reopened) throw new ContentPrImportError('IMPORT_DRAFT_REOPEN_CONFLICT', 409)
+      draft = reopened
+    } else {
+      const [created] = await tx.insert(drafts).values({
+        articleId: item.articleId,
+        proposedArticleId: item.articleId ? null : item.proposedArticleId || randomUUID(),
+        ownerUserId: actorUserId,
+        collection,
+        title: data.title,
+        description: data.description,
+        body: data.body,
+        preservedFrontmatter: data.preservedFrontmatter,
+        baseContentHash: current?.contentHash || null,
+        baseRevisionId: current?.revisionId || null,
+        proposedAction,
+        proposedRelativePath
+      }).returning({ id: drafts.id })
+      draft = created!
+    }
+    await tx.delete(draftAuthors).where(eq(draftAuthors.draftId, draft.id))
     if (knownAuthorKeys.length) {
       await tx.insert(draftAuthors).values(knownAuthorKeys.map((key, position) => ({
-        draftId: draft!.id,
+        draftId: draft.id,
         memberId: memberIdByKey.get(key)!,
         position
       })))
     }
-    const now = new Date()
+    const warningCodes = item.warningCodes.filter(code => code !== 'IMPORT_ACTIVE_DRAFT_EXISTS')
+    const conflictDetails = { ...item.conflictDetails }
+    delete conflictDetails.activeDraft
     await tx.update(contentPrImportItems).set({
-      status: 'imported', draftId: draft!.id, importedAt: now
+      status: 'imported',
+      draftId: draft.id,
+      importedAt: now,
+      warningCodes,
+      conflictDetails
     }).where(eq(contentPrImportItems.id, item.id))
+    if (reusedPublishedDraft) {
+      await tx.insert(auditLogs).values({
+        actorUserId,
+        action: 'content_pr_import.published_draft_reopened',
+        targetType: 'draft',
+        targetId: draft.id,
+        metadata: {
+          runId,
+          itemId: item.id,
+          articleId: item.articleId,
+          previousStatus: 'published'
+        }
+      })
+    }
     await tx.insert(auditLogs).values({
       actorUserId,
       action: 'content_pr_import.item_imported',
@@ -1102,12 +1163,13 @@ const importOneItem = async (
         runId,
         classification: item.classification,
         articleId: item.articleId,
-        draftId: draft!.id,
+        draftId: draft.id,
         baseRevisionId: item.baseRevisionId,
         currentRevisionId: item.currentRevisionId,
         proposedSha256: item.proposedSha256,
         mergedSha256: item.mergedSha256,
-        highRiskOverride: forcedHighRisk
+        highRiskOverride: forcedHighRisk,
+        reusedPublishedDraft
       }
     })
     if (forcedHighRisk) {
@@ -1118,13 +1180,13 @@ const importOneItem = async (
         targetId: item.id,
         metadata: {
           runId,
-          draftId: draft!.id,
-          warningCodes: item.warningCodes,
+          draftId: draft.id,
+          warningCodes,
           confirmationProvided: true
         }
       })
     }
-    return { itemId, draftId: draft!.id, imported: true }
+    return { itemId, draftId: draft.id, imported: true }
   })
 }
 

@@ -400,6 +400,79 @@ suite('V2 阶段 8 本地 Markdown PR 导入与三方冲突', () => {
     expect(built.source).not.toContain(CMS_UNMATCHED_CONTRIBUTORS_KEY)
   })
 
+  it('复用已发布历史导入 PR，仅在真正活动草稿存在时阻止并允许原项目重试', async () => {
+    const article = await seedArticle('topic/published-history.md', '历史正文。\n')
+    const metadata = buildContentRepositoryMetadata(
+      [article.snapshotFile], [], new Date('2026-01-01T00:00:00.000Z')
+    )
+    const fake = new FakeGitHub()
+    const proposedSource = article.baseSource.replace('历史正文。', 'PR 新正文。')
+    fake.contents.set(`${BASE}:.vinci/snapshot.json`, metadata.snapshotSource)
+    fake.contents.set(`${BASE}:${article.path}`, article.baseSource)
+    fake.contents.set(`${HEAD}:${article.path}`, proposedSource)
+    fake.files = [{ filename: article.path, status: 'modified', changes: 2 }]
+
+    const [publishedHistory] = await getDatabase().insert(drafts).values({
+      articleId: article.articleId,
+      ownerUserId: actorUserId,
+      collection: 'wiki',
+      title: '旧的已发布记录',
+      body: '旧草稿正文',
+      baseContentHash: '0'.repeat(64),
+      baseRevisionId: article.currentRevisionId,
+      status: 'published',
+      version: 7
+    }).returning({ id: drafts.id })
+    const run = (await dryRunContentPrImport(
+      actorUserId,
+      { repository: 'SDUTVINCI/sdutvinci_content', pullRequestNumber: 8 },
+      fake as unknown as ContentImportGitHubClient
+    ))!
+    const itemId = run.items[0]!.id
+
+    const imported = await importContentPrItems(run.id, [itemId], actorUserId)
+    expect(imported.results[0]).toMatchObject({
+      imported: true,
+      draftId: publishedHistory!.id
+    })
+    expect(await getDatabase().select().from(drafts)).toHaveLength(1)
+    expect((await getDatabase().select().from(drafts))[0]).toMatchObject({
+      id: publishedHistory!.id,
+      status: 'draft',
+      body: 'PR 新正文。\n',
+      baseRevisionId: article.currentRevisionId,
+      version: 8
+    })
+    expect((await getDatabase().select().from(auditLogs)
+      .where(eq(auditLogs.action, 'content_pr_import.published_draft_reopened')))).toHaveLength(1)
+
+    await getDatabase().update(contentPrImportItems).set({
+      status: 'pending',
+      draftId: null,
+      importedAt: null
+    }).where(eq(contentPrImportItems.id, itemId))
+    const blocked = await importContentPrItems(run.id, [itemId], actorUserId)
+    expect(blocked.results[0]).toMatchObject({ imported: false, blocked: true })
+    const [blockedItem] = await getDatabase().select().from(contentPrImportItems)
+      .where(eq(contentPrImportItems.id, itemId))
+    expect(blockedItem!.warningCodes).toContain('IMPORT_ACTIVE_DRAFT_EXISTS')
+    expect(blockedItem!.conflictDetails).toMatchObject({
+      activeDraft: { draftId: publishedHistory!.id, status: 'draft' }
+    })
+
+    await getDatabase().update(drafts).set({ status: 'published' })
+      .where(eq(drafts.id, publishedHistory!.id))
+    const retried = await importContentPrItems(run.id, [itemId], actorUserId)
+    expect(retried.results[0]).toMatchObject({
+      imported: true,
+      draftId: publishedHistory!.id
+    })
+    const [retriedItem] = await getDatabase().select().from(contentPrImportItems)
+      .where(eq(contentPrImportItems.id, itemId))
+    expect(retriedItem!.warningCodes).not.toContain('IMPORT_ACTIVE_DRAFT_EXISTS')
+    expect(retriedItem!.conflictDetails).not.toHaveProperty('activeDraft')
+  })
+
   it('完整 Dry Run 分类安全/合并/冲突/新增/移动/删除/非法/高风险，并只导入所选安全项且幂等', async () => {
     const safe = await seedArticle('topic/safe.md', '安全原文。\n')
     const merge = await seedArticle(

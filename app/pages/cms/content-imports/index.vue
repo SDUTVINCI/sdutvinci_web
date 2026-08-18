@@ -75,7 +75,7 @@ const itemStatuses = Object.keys(itemStatusLabels) as ContentImportItemStatus[]
 const warningLabels: Record<string, string> = {
   CURRENT_CHANGED_AFTER_DRY_RUN: 'Dry Run 后数据库正式内容已变化，需要重新检查后再处理。',
   HIGH_RISK_OVERRIDE_CONTENT_CONFLICT: '强制导入时发现三方内容冲突，未创建草稿。',
-  IMPORT_ACTIVE_DRAFT_EXISTS: '当前账号已经有这篇文章的未删除草稿，为避免覆盖而阻止重复创建。'
+  IMPORT_ACTIVE_DRAFT_EXISTS: '当前账号存在这篇文章的活动草稿（草稿、待审核、已驳回、已通过或已撤回），请先处理该草稿后重试；已发布历史不会触发此阻止。'
 }
 const externalActionLabels = {
   comment: '在 PR 下留言检查结果',
@@ -93,8 +93,20 @@ const highRiskConfirmed = computed(() => !selectedHighRiskIds.value.length
   || highRiskConfirmation.value === CONTENT_IMPORT_HIGH_RISK_CONFIRMATION)
 const canForceHighRiskItem = (item: CmsContentImportRun['items'][number]) =>
   item.highRiskForceEligible
-const canSelectItem = (item: CmsContentImportRun['items'][number]) => item.status === 'pending'
+const canRetryActiveDraftBlock = (item: CmsContentImportRun['items'][number]) =>
+  item.status === 'blocked' && item.warningCodes.includes('IMPORT_ACTIVE_DRAFT_EXISTS')
+const canSelectItem = (item: CmsContentImportRun['items'][number]) =>
+  (item.status === 'pending' || canRetryActiveDraftBlock(item))
   && (item.importable || canForceHighRiskItem(item))
+const activeDraftConflict = (item: CmsContentImportRun['items'][number]) => {
+  const value = item.conflictDetails.activeDraft
+  if (!value || typeof value !== 'object') return null
+  const draftId = 'draftId' in value ? value.draftId : null
+  const status = 'status' in value ? value.status : null
+  return typeof draftId === 'string' && typeof status === 'string'
+    ? { draftId, status }
+    : null
+}
 const categoryCounts = computed(() => Object.entries(
   (run.value?.items || []).reduce<Record<string, number>>((result, item) => {
     result[item.classification] = (result[item.classification] || 0) + 1
@@ -509,7 +521,9 @@ const externalAction = async (action: 'comment' | 'close') => {
               <span>
                 <small>{{ item.targetType === 'member' ? '成员资料' : '文章内容' }}</small>
                 <strong>{{ labels[item.classification] }}</strong>
-                <em v-if="canForceHighRiskItem(item) && item.status === 'pending'">强制导入此高风险项（仍需输入确认短语）</em>
+                <em v-if="canForceHighRiskItem(item) && canRetryActiveDraftBlock(item)">重新尝试强制导入（仍需输入确认短语）</em>
+                <em v-else-if="canForceHighRiskItem(item) && item.status === 'pending'">强制导入此高风险项（仍需输入确认短语）</em>
+                <em v-else-if="canRetryActiveDraftBlock(item)">重新尝试导入此项</em>
                 <em v-else-if="canSelectItem(item)">选择导入此项</em>
               </span>
             </label>
@@ -523,6 +537,12 @@ const externalAction = async (action: 'comment' | 'close') => {
           <p v-if="item.warningCodes.length" class="cms-alert cms-alert-warning">{{ item.warningCodes.map(warningText).join(' ') }}</p>
           <p v-if="blockedReason(item)" class="cms-import-blocked-reason">
             <strong>阻止原因：</strong>{{ blockedReason(item) }}
+          </p>
+          <p v-if="activeDraftConflict(item)" class="cms-import-item-reference">
+            <NuxtLink :to="`/cms/drafts/${activeDraftConflict(item)!.draftId}`">打开冲突草稿并处理</NuxtLink>
+          </p>
+          <p v-else-if="canRetryActiveDraftBlock(item)" class="cms-import-item-reference">
+            这是旧的可重试阻止记录；勾选后系统会重新检查当前是否仍有活动草稿。
           </p>
           <p v-if="canForceHighRiskItem(item) && item.status === 'pending'" class="cms-import-force-warning">
             此项默认阻止。请先查看审计材料；确实需要时可逐项勾选，并在上方输入确认短语后强制创建待审核草稿。
