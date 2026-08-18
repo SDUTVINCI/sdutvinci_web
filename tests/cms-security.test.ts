@@ -15,7 +15,8 @@ const originalEnvironment = {
   CMS_AUTH_SECRET: process.env.CMS_AUTH_SECRET,
   DATABASE_URL: process.env.DATABASE_URL,
   S3_ACCESS_KEY_ID: process.env.S3_ACCESS_KEY_ID,
-  S3_SECRET_ACCESS_KEY: process.env.S3_SECRET_ACCESS_KEY
+  S3_SECRET_ACCESS_KEY: process.env.S3_SECRET_ACCESS_KEY,
+  CONTENT_PR_BRANCH_CLEANUP_GITHUB_TOKEN: process.env.CONTENT_PR_BRANCH_CLEANUP_GITHUB_TOKEN
 }
 
 const restoreEnvironmentValue = (
@@ -71,6 +72,7 @@ describe('CMS 通用安全边界', () => {
     process.env.DATABASE_URL = 'postgresql://cms:super-secret@postgres:5432/cms'
     process.env.S3_ACCESS_KEY_ID = 'phase9-test-access-key'
     process.env.S3_SECRET_ACCESS_KEY = 's3-secret-value'
+    process.env.CONTENT_PR_BRANCH_CLEANUP_GITHUB_TOKEN = 'github_pat_cleanup-secret-test-value'
     const privateKey = [
       '-----BEGIN OPENSSH PRIVATE KEY-----',
       'private-material',
@@ -80,6 +82,7 @@ describe('CMS 通用安全边界', () => {
       process.env.DATABASE_URL,
       process.env.S3_ACCESS_KEY_ID,
       process.env.S3_SECRET_ACCESS_KEY,
+      process.env.CONTENT_PR_BRANCH_CLEANUP_GITHUB_TOKEN,
       'Authorization: Bearer ghp_abcdefghijklmnopqrstuvwxyz123456',
       'github_pat_abcdefghijklmnopqrstuvwxyz123456',
       'ASIAABCDEFGHIJKLMNOP',
@@ -89,6 +92,7 @@ describe('CMS 通用安全边界', () => {
     expect(redacted).not.toContain('super-secret')
     expect(redacted).not.toContain('phase9-test-access-key')
     expect(redacted).not.toContain('s3-secret-value')
+    expect(redacted).not.toContain('cleanup-secret-test-value')
     expect(redacted).not.toContain('abcdefghijklmnopqrstuvwxyz')
     expect(redacted).not.toContain('ASIAABCDEFGHIJKLMNOP')
     expect(redacted).not.toContain('private-material')

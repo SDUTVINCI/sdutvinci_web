@@ -7,6 +7,7 @@ const schema = z.object({
     .default(CONTENT_REPOSITORY_ID),
   CONTENT_PR_IMPORT_API_URL: z.string().url().default('https://api.github.com'),
   CONTENT_PR_IMPORT_GITHUB_TOKEN: z.string().min(1).optional(),
+  CONTENT_PR_BRANCH_CLEANUP_GITHUB_TOKEN: z.string().min(1).optional(),
   CONTENT_PR_IMPORT_MAX_FILE_BYTES: z.coerce.number().int().min(1024).max(5_000_000)
     .default(1_048_576),
   CONTENT_PR_IMPORT_MAX_FILES: z.coerce.number().int().min(1).max(500).default(500),

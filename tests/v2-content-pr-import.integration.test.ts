@@ -28,6 +28,7 @@ import {
   ContentPrImportError,
   dryRunContentPrImport,
   executeContentPrExternalAction,
+  getContentPrImportRun,
   getContentPrImportArtifact,
   importContentPrItems
 } from '../server/services/content-pr-import'
@@ -105,12 +106,14 @@ class FakeGitHub {
     state: 'open',
     user: { login: 'phase8-proposer' },
     base: { sha: BASE, ref: 'main', repo: { full_name: 'SDUTVINCI/sdutvinci_content' } },
-    head: { sha: HEAD, repo: { full_name: 'SDUTVINCI/sdutvinci_content' } }
+    head: { sha: HEAD, ref: 'phase8-content-change', repo: { full_name: 'SDUTVINCI/sdutvinci_content' } }
   }
   files: GitHubPullFile[] = []
   contents = new Map<string, string>()
   comments: string[] = []
   closed = 0
+  branchSha = HEAD
+  deletedBranches: string[] = []
   getPullRequest = async () => this.pull
   listPullFiles = async () => this.files
   readFile = async (_repository: string, path: string, commit: string) => {
@@ -124,7 +127,16 @@ class FakeGitHub {
   }
   close = async () => {
     this.closed += 1
+    this.pull = { ...this.pull, state: 'closed' }
     return { state: 'closed' }
+  }
+  getBranchReference = async (_repository: string, branch: string) => ({
+    ref: `refs/heads/${branch}`,
+    object: { sha: this.branchSha, type: 'commit' }
+  })
+  deleteBranch = async (_repository: string, branch: string) => {
+    this.deletedBranches.push(branch)
+    return { deleted: true as const }
   }
 }
 
@@ -152,6 +164,7 @@ suite('V2 阶段 8 本地 Markdown PR 导入与三方冲突', () => {
     process.env.CONTENT_PR_IMPORT_MAX_FILES = '200'
     process.env.CONTENT_PR_IMPORT_RETRY_ATTEMPTS = '3'
     delete process.env.CONTENT_PR_IMPORT_GITHUB_TOKEN
+    delete process.env.CONTENT_PR_BRANCH_CLEANUP_GITHUB_TOKEN
     resetContentImportConfigForTests()
   }
 
@@ -821,7 +834,7 @@ suite('V2 阶段 8 本地 Markdown PR 导入与三方冲突', () => {
     expect(deletedRow.isPresent).toBe('false')
   })
 
-  it('仓库和角色边界、外部评论/关闭均显式且只写 mock', async () => {
+  it('外部留言、关闭和同仓库源分支清理有顺序约束且重复请求幂等', async () => {
     expect(canUseContentPrImport(['admin'])).toBe(true)
     expect(canUseContentPrImport(['content_importer'])).toBe(false)
     expect(canUseContentPrImport(['member'])).toBe(true)
@@ -851,20 +864,52 @@ suite('V2 阶段 8 本地 Markdown PR 导入与三方冲突', () => {
       fake as unknown as ContentImportGitHubClient
     ))!
     process.env.CONTENT_PR_IMPORT_GITHUB_TOKEN = 'github_pat_phase8_test_only_1234567890'
+    process.env.CONTENT_PR_BRANCH_CLEANUP_GITHUB_TOKEN = 'github_pat_phase8_cleanup_test_only_1234567890'
     resetContentImportConfigForTests()
     await executeContentPrExternalAction(run.id, actorUserId, 'comment', fake as unknown as ContentImportGitHubClient)
+    fake.comment = async () => { throw new ContentImportGitHubError('DUPLICATE_COMMENT_SHOULD_NOT_RUN', 500) }
+    expect(await executeContentPrExternalAction(
+      run.id, actorUserId, 'comment', fake as unknown as ContentImportGitHubClient
+    )).toMatchObject({ succeeded: true, alreadyCompleted: true })
+    await expect(executeContentPrExternalAction(
+      run.id, actorUserId, 'delete_branch', fake as unknown as ContentImportGitHubClient,
+      { confirmedBranch: 'phase8-content-change' }
+    )).rejects.toMatchObject({ code: 'IMPORT_BRANCH_CLEANUP_REQUIRES_CLOSED_PR' })
     await executeContentPrExternalAction(run.id, actorUserId, 'close', fake as unknown as ContentImportGitHubClient)
+    expect(await executeContentPrExternalAction(
+      run.id, actorUserId, 'close', fake as unknown as ContentImportGitHubClient
+    )).toMatchObject({ succeeded: true, alreadyCompleted: true })
     expect(fake.comments).toHaveLength(1)
     expect(fake.comments[0]).not.toContain('基线。')
     expect(fake.comments[0]).toContain('不代表审核、发布或 Merge')
     expect(fake.closed).toBe(1)
-    fake.comment = async () => { throw new ContentImportGitHubError('GITHUB_API_FAILED', 503) }
+
+    fake.branchSha = '3'.repeat(40)
     await expect(executeContentPrExternalAction(
-      run.id, actorUserId, 'comment', fake as unknown as ContentImportGitHubClient
-    )).rejects.toMatchObject({ code: 'GITHUB_API_FAILED' })
+      run.id, actorUserId, 'delete_branch', fake as unknown as ContentImportGitHubClient,
+      { confirmedBranch: 'phase8-content-change' }
+    )).rejects.toMatchObject({ code: 'IMPORT_PULL_REQUEST_CHANGED' })
+    fake.branchSha = HEAD
+    await executeContentPrExternalAction(
+      run.id, actorUserId, 'delete_branch', fake as unknown as ContentImportGitHubClient,
+      { confirmedBranch: 'phase8-content-change' }
+    )
+    expect(await executeContentPrExternalAction(
+      run.id, actorUserId, 'delete_branch', fake as unknown as ContentImportGitHubClient,
+      { confirmedBranch: 'phase8-content-change' }
+    )).toMatchObject({ succeeded: true, alreadyCompleted: true })
+    expect(fake.deletedBranches).toEqual(['phase8-content-change'])
+
     const actions = await getDatabase().select().from(contentPrExternalActions)
-    expect(actions).toHaveLength(3)
-    expect(actions.find(action => action.status === 'failed')?.errorCode).toBe('GITHUB_API_FAILED')
+    expect(actions).toHaveLength(5)
+    expect(actions.filter(action => action.status === 'failed').map(action => action.errorCode))
+      .toEqual(expect.arrayContaining([
+        'IMPORT_BRANCH_CLEANUP_REQUIRES_CLOSED_PR',
+        'IMPORT_PULL_REQUEST_CHANGED'
+      ]))
+    const refreshed = await getContentPrImportRun(run.id)
+    expect(refreshed?.headRef).toBe('phase8-content-change')
+    expect(refreshed?.branchCleanup.status).toBe('available')
   })
 
   it('异常重复路径 Diff 被逐项标记为路径冲突，Dry Run 仍完整可审计', async () => {
@@ -906,6 +951,12 @@ suite('V2 阶段 8 本地 Markdown PR 导入与三方冲突', () => {
       if (url.includes('/files?') && page === '2') return Response.json(files.slice(100))
       if (url.includes('/issues/') && init?.method === 'POST') return Response.json({ id: 8 })
       if (url.includes('/pulls/') && init?.method === 'PATCH') return Response.json({ state: 'closed' })
+      if (url.includes('/git/ref/heads/') && (!init?.method || init.method === 'GET')) {
+        return Response.json({ ref: 'refs/heads/phase8-content-change', object: { sha: HEAD, type: 'commit' } })
+      }
+      if (url.includes('/git/refs/heads/') && init?.method === 'DELETE') {
+        return new Response(null, { status: 204 })
+      }
       return new Response('{}', { status: 404 })
     }
     const client = new ContentImportGitHubClient({
@@ -922,6 +973,10 @@ suite('V2 阶段 8 本地 Markdown PR 导入与三方冲突', () => {
     expect(await client.listPullFiles('SDUTVINCI/sdutvinci_content', 8)).toHaveLength(101)
     await client.comment('SDUTVINCI/sdutvinci_content', 8, 'safe summary')
     await client.close('SDUTVINCI/sdutvinci_content', 8)
+    expect(await client.getBranchReference(
+      'SDUTVINCI/sdutvinci_content', 'phase8-content-change'
+    )).toMatchObject({ object: { sha: HEAD, type: 'commit' } })
+    await client.deleteBranch('SDUTVINCI/sdutvinci_content', 'phase8-content-change')
     expect(pageOneAttempts).toBe(2)
     expect(calls.some(call => call.includes('/merges'))).toBe(false)
   })
@@ -997,9 +1052,10 @@ suite('V2 阶段 8 本地 Markdown PR 导入与三方冲突', () => {
   })
 
   it('CMS 入口、关闭权限和审计材料保持脱敏', async () => {
-    const [page, closeApi, artifactApi] = await Promise.all([
+    const [page, closeApi, deleteBranchApi, artifactApi] = await Promise.all([
       readFile(resolve('app/pages/cms/content-imports/index.vue'), 'utf8'),
       readFile(resolve('server/api/cms/content-imports/[id]/close.post.ts'), 'utf8'),
+      readFile(resolve('server/api/cms/content-imports/[id]/delete-branch.post.ts'), 'utf8'),
       readFile(resolve('server/services/content-pr-import.ts'), 'utf8')
     ])
     expect(page).toContain('导入所选项目')
@@ -1010,6 +1066,7 @@ suite('V2 阶段 8 本地 Markdown PR 导入与三方冲突', () => {
     expect(page).toContain('Merge（导入后将进入草稿的内容）')
     expect(page).toContain('把检查结果留言到 PR')
     expect(page).toContain('关闭这个 PR（仅管理员）')
+    expect(page).toContain('删除源分支（输入分支名确认）')
     expect(page).toContain('cms-import-input-shell')
     expect(page).toContain('READ-ONLY CHECK')
     expect(page).toContain('cms-import-stats')
@@ -1019,6 +1076,8 @@ suite('V2 阶段 8 本地 Markdown PR 导入与三方冲突', () => {
     expect(page).toContain("artifact?.id === item.id")
     expect(page).toContain('收起三方审计材料')
     expect(closeApi).toContain("roles.includes('admin')")
+    expect(deleteBranchApi).toContain("roles.includes('admin')")
+    expect(deleteBranchApi).toContain('DELETE_PULL_REQUEST_BRANCH')
     expect(artifactApi).toContain('redactCmsSensitiveText')
     expect(artifactApi).not.toContain('mergePullRequest')
   })

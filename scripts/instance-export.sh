@@ -113,7 +113,7 @@ fi
   printf '# No secret values are stored in this instance package.\n'
   for key in DATABASE_URL POSTGRES_PASSWORD CMS_AUTH_SECRET S3_ACCESS_KEY_ID \
     S3_SECRET_ACCESS_KEY CONTENT_EXPORT_SSH_KEY_FILE \
-    CONTENT_PR_IMPORT_GITHUB_TOKEN; do
+    CONTENT_PR_IMPORT_GITHUB_TOKEN CONTENT_PR_BRANCH_CLEANUP_GITHUB_TOKEN; do
     if [ -n "$(ops_compose_env "$key")" ]; then
       printf '%s=set\n' "$key"
     else

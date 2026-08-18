@@ -3,7 +3,8 @@ import {
   CONTENT_IMPORT_HIGH_RISK_CONFIRMATION,
   type CmsContentImportRun,
   type ContentImportClassification,
-  type ContentImportItemStatus
+  type ContentImportItemStatus,
+  type ContentPrExternalAction
 } from '~~/shared/types/cms-content-imports'
 import {
   buildContentImportContext,
@@ -23,6 +24,7 @@ const classificationFilter = ref<'all' | ContentImportClassification>('all')
 const statusFilter = ref<'all' | ContentImportItemStatus>('all')
 const highRiskConfirmation = ref('')
 const busy = ref(false)
+const externalBusyAction = ref<ContentPrExternalAction | null>(null)
 const message = ref('')
 const failure = ref('')
 const artifact = ref<null | {
@@ -79,13 +81,40 @@ const warningLabels: Record<string, string> = {
 }
 const externalActionLabels = {
   comment: '在 PR 下留言检查结果',
-  close: '关闭 PR'
+  close: '关闭 PR',
+  delete_branch: '删除 PR 源分支'
 } as const
 const externalStatusLabels = {
   processing: '正在执行',
   succeeded: '操作成功',
   failed: '操作失败'
 } as const
+const externalActionState = (action: ContentPrExternalAction) => {
+  const actions = (run.value?.externalActions || []).filter(item => item.action === action)
+  if (actions.some(item => item.status === 'succeeded')) return 'succeeded' as const
+  if (actions.some(item => item.status === 'processing')) return 'processing' as const
+  return actions.some(item => item.status === 'failed') ? 'failed' as const : 'idle' as const
+}
+const commentState = computed(() => externalActionState('comment'))
+const closeState = computed(() => externalActionState('close'))
+const branchDeleteState = computed(() => externalActionState('delete_branch'))
+const externalButtonLabel = (action: 'comment' | 'close') => {
+  const state = externalActionState(action)
+  if (state === 'succeeded') return action === 'comment' ? '✓ 已留言' : '✓ PR 已关闭'
+  if (externalBusyAction.value === action || state === 'processing') {
+    return action === 'comment' ? '正在留言…' : '正在关闭…'
+  }
+  if (state === 'failed') return action === 'comment' ? '留言失败，点击重试' : '关闭失败，点击重试'
+  return action === 'comment' ? '把检查结果留言到 PR' : '关闭这个 PR（仅管理员）'
+}
+const branchDeleteButtonLabel = computed(() => {
+  if (branchDeleteState.value === 'succeeded') return '✓ 源分支已删除'
+  if (externalBusyAction.value === 'delete_branch' || branchDeleteState.value === 'processing') {
+    return '正在删除源分支…'
+  }
+  if (branchDeleteState.value === 'failed') return '删除失败，核对后重试'
+  return '删除源分支（输入分支名确认）'
+})
 const selectedHighRiskIds = computed(() => run.value?.items
   .filter(item => selected.value.includes(item.id) && item.classification === 'high_risk_syntax')
   .map(item => item.id) || [])
@@ -267,11 +296,13 @@ const refreshRun = async () => {
 
 const externalAction = async (action: 'comment' | 'close') => {
   if (!run.value) return
+  if (externalActionState(action) === 'succeeded' || externalActionState(action) === 'processing') return
   const prompt = action === 'comment'
     ? '确定要在这个 PR 下留言吗？系统只会发送不含正文和敏感信息的检查摘要；不会合并 PR、批准草稿或发布内容。'
     : '确定要关闭这个 PR 吗？关闭表示不再继续处理这个提案，但不会合并 PR、发布内容，也不会删除已经创建的草稿或成员提案。'
   if (!window.confirm(prompt)) return
   busy.value = true
+  externalBusyAction.value = action
   failure.value = ''
   try {
     await $fetch(`/api/cms/content-imports/${run.value.id}/${action}`, {
@@ -285,7 +316,42 @@ const externalAction = async (action: 'comment' | 'close') => {
       : 'PR 已关闭；没有合并或发布任何内容，已创建的草稿/提案仍然保留。'
   } catch (error: any) {
     failure.value = error?.data?.message || error?.message || 'GitHub 外部操作失败'
-  } finally { busy.value = false }
+  } finally {
+    externalBusyAction.value = null
+    busy.value = false
+  }
+}
+
+const deleteSourceBranch = async () => {
+  if (!run.value?.headRef || run.value.branchCleanup.status !== 'available') return
+  if (closeState.value !== 'succeeded' || branchDeleteState.value === 'succeeded'
+    || branchDeleteState.value === 'processing') return
+  const branch = run.value.headRef
+  const confirmation = window.prompt(
+    `删除源分支属于不可逆清理操作。请输入完整分支名“${branch}”确认；草稿、提案和审计记录不会被删除。`
+  )
+  if (confirmation === null) return
+  if (confirmation !== branch) {
+    failure.value = '分支名输入不一致，未执行删除。'
+    return
+  }
+  busy.value = true
+  externalBusyAction.value = 'delete_branch'
+  failure.value = ''
+  try {
+    await $fetch(`/api/cms/content-imports/${run.value.id}/delete-branch`, {
+      method: 'POST',
+      headers: csrfHeaders(),
+      body: { confirm: 'DELETE_PULL_REQUEST_BRANCH', branch }
+    })
+    await refreshRun()
+    message.value = `源分支 ${branch} 已删除；导入草稿、提案和审计记录仍然保留。`
+  } catch (error: any) {
+    failure.value = error?.data?.message || error?.message || '删除 PR 源分支失败'
+  } finally {
+    externalBusyAction.value = null
+    busy.value = false
+  }
 }
 </script>
 
@@ -502,13 +568,46 @@ const externalAction = async (action: 'comment' | 'close') => {
             <span class="cms-import-operation-index">02</span>
             <h3>通知 PR 提交者</h3>
             <p>在 PR 下发送一条脱敏摘要，说明哪些项目可导入、哪些被阻止；不会合并或发布。</p>
-            <button class="cms-button cms-import-operation-button" type="button" :disabled="busy" @click="externalAction('comment')">把检查结果留言到 PR</button>
+            <button
+              class="cms-button cms-import-operation-button"
+              type="button"
+              :data-state="commentState"
+              :disabled="busy || commentState === 'succeeded' || commentState === 'processing'"
+              @click="externalAction('comment')"
+            >
+              {{ externalButtonLabel('comment') }}
+            </button>
           </article>
           <article v-if="isAdmin" class="cms-import-operation" data-tone="danger">
             <span class="cms-import-operation-index">03</span>
-            <h3>停止处理这个提案</h3>
-            <p>关闭 PR 只表示不再继续；不会合并或发布，也不会删除已创建的草稿或成员提案。</p>
-            <button class="cms-button cms-import-operation-button" type="button" :disabled="busy" @click="externalAction('close')">关闭这个 PR（仅管理员）</button>
+            <h3>结束并清理这个提案</h3>
+            <p>先关闭 PR；如源分支位于官方内容仓库，再单独确认删除。草稿、成员提案和审计记录始终保留。</p>
+            <button
+              class="cms-button cms-import-operation-button"
+              type="button"
+              :data-state="closeState"
+              :disabled="busy || closeState === 'succeeded' || closeState === 'processing'"
+              @click="externalAction('close')"
+            >
+              {{ externalButtonLabel('close') }}
+            </button>
+            <section v-if="run.headRef" class="cms-import-branch-cleanup" :data-status="run.branchCleanup.status">
+              <div>
+                <span>关闭后的可选清理</span>
+                <code>{{ run.headRepositoryId }}:{{ run.headRef }}</code>
+              </div>
+              <p>{{ run.branchCleanup.reason }}</p>
+              <button
+                v-if="run.branchCleanup.status === 'available'"
+                class="cms-button cms-import-branch-delete-button"
+                type="button"
+                :data-state="branchDeleteState"
+                :disabled="busy || closeState !== 'succeeded' || branchDeleteState === 'succeeded' || branchDeleteState === 'processing'"
+                @click="deleteSourceBranch"
+              >
+                {{ closeState === 'succeeded' ? branchDeleteButtonLabel : '请先关闭 PR' }}
+              </button>
+            </section>
           </article>
         </div>
       </section>
@@ -779,6 +878,15 @@ const externalAction = async (action: 'comment' | 'close') => {
 .cms-import-operation p { margin-bottom: 15px; color: var(--muted); font-size: .78rem; line-height: 1.6; }
 .cms-import-operation-button { width: 100%; min-height: 44px; margin-top: auto; border-color: color-mix(in srgb, var(--cyan) 32%, var(--line)); background: var(--import-cyan-soft); color: color-mix(in srgb, var(--cyan) 88%, var(--ink)); }
 .cms-import-operation-button:hover { border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 17%, var(--surface)); transform: translateY(-1px); }
+.cms-import-operation-button[data-state="succeeded"],
+.cms-import-operation-button[data-state="succeeded"]:hover {
+  border-color: color-mix(in srgb, var(--green) 42%, var(--line));
+  background: color-mix(in srgb, var(--green) 13%, var(--surface));
+  color: var(--green);
+  cursor: default;
+  opacity: 1;
+  transform: none;
+}
 .cms-import-force-confirmation { display: grid; gap: 7px; margin: 3px 0 10px; padding: 12px; border: 1px solid color-mix(in srgb, #d97706 45%, var(--line)); border-radius: 11px; background: color-mix(in srgb, #d97706 9%, var(--surface)); }
 .cms-import-force-confirmation span { color: var(--ink-soft); font-size: .75rem; line-height: 1.45; }
 .cms-import-force-confirmation code { color: #d97706; font-size: .73rem; font-weight: 850; }
@@ -792,6 +900,21 @@ const externalAction = async (action: 'comment' | 'close') => {
 .cms-import-operation[data-tone="danger"] .cms-import-operation-index { color: var(--red); }
 .cms-import-operation[data-tone="danger"] .cms-import-operation-button { border-color: color-mix(in srgb, var(--red) 30%, var(--line)); background: transparent; color: var(--red); }
 .cms-import-operation[data-tone="danger"] .cms-import-operation-button:hover { border-color: var(--red); background: color-mix(in srgb, var(--red) 10%, var(--surface)); }
+.cms-import-operation[data-tone="danger"] .cms-import-operation-button[data-state="succeeded"],
+.cms-import-operation[data-tone="danger"] .cms-import-operation-button[data-state="succeeded"]:hover {
+  border-color: color-mix(in srgb, var(--green) 42%, var(--line));
+  background: color-mix(in srgb, var(--green) 13%, var(--surface));
+  color: var(--green);
+}
+.cms-import-branch-cleanup { display: grid; gap: 7px; margin-top: 9px; padding-top: 12px; border-top: 1px dashed color-mix(in srgb, var(--red) 24%, var(--line)); }
+.cms-import-branch-cleanup > div { display: grid; gap: 4px; }
+.cms-import-branch-cleanup span { color: var(--ink-soft); font-size: .69rem; font-weight: 850; letter-spacing: .04em; }
+.cms-import-branch-cleanup code { overflow: hidden; color: var(--muted); font-size: .68rem; text-overflow: ellipsis; white-space: nowrap; }
+.cms-import-branch-cleanup p { margin: 0; font-size: .7rem; line-height: 1.5; }
+.cms-import-branch-delete-button { width: 100%; min-height: 38px; border-color: color-mix(in srgb, var(--red) 32%, var(--line)); background: color-mix(in srgb, var(--red) 7%, var(--surface)); color: var(--red); font-size: .73rem; }
+.cms-import-branch-delete-button:hover { border-color: var(--red); background: color-mix(in srgb, var(--red) 12%, var(--surface)); }
+.cms-import-branch-delete-button[data-state="succeeded"],
+.cms-import-branch-delete-button[data-state="succeeded"]:hover { border-color: color-mix(in srgb, var(--green) 42%, var(--line)); background: color-mix(in srgb, var(--green) 13%, var(--surface)); color: var(--green); cursor: default; opacity: 1; }
 
 .cms-import-list { display: grid; gap: 12px; padding-top: 4px; }
 .cms-import-item { min-height: 0; gap: 14px; padding: 21px 22px; overflow: visible; }

@@ -7,7 +7,7 @@ export interface GitHubPullRequest {
   state: string
   user: { login: string }
   base: { sha: string, ref: string, repo: { full_name: string } }
-  head: { sha: string, repo: { full_name: string } | null }
+  head: { sha: string, ref: string, repo: { full_name: string } | null }
 }
 
 export interface GitHubPullFile {
@@ -28,6 +28,7 @@ const pullRequestSchema = z.object({
   }),
   head: z.object({
     sha: z.string(),
+    ref: z.string().min(1),
     repo: z.object({ full_name: z.string() }).nullable()
   })
 })
@@ -46,6 +47,10 @@ const contentSchema = z.object({
 })
 const commentSchema = z.object({ id: z.number().int().positive() })
 const closeSchema = z.object({ state: z.literal('closed') })
+const referenceSchema = z.object({
+  ref: z.string(),
+  object: z.object({ sha: z.string(), type: z.string() })
+})
 
 export class ContentImportGitHubError extends Error {
   constructor(public readonly code: string, public readonly status = 502) {
@@ -58,7 +63,8 @@ const pathForApi = (value: string) => value.split('/').map(encodeURIComponent).j
 export class ContentImportGitHubClient {
   constructor(
     private readonly config: ContentImportConfig = getContentImportConfig(),
-    private readonly requestFetch: typeof fetch = fetch
+    private readonly requestFetch: typeof fetch = fetch,
+    private readonly authToken: string | undefined = config.CONTENT_PR_IMPORT_GITHUB_TOKEN
   ) {}
 
   private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -66,8 +72,8 @@ export class ContentImportGitHubClient {
     headers.set('accept', 'application/vnd.github+json')
     headers.set('x-github-api-version', '2022-11-28')
     headers.set('user-agent', 'vinci-cms-content-import')
-    if (this.config.CONTENT_PR_IMPORT_GITHUB_TOKEN) {
-      headers.set('authorization', `Bearer ${this.config.CONTENT_PR_IMPORT_GITHUB_TOKEN}`)
+    if (this.authToken) {
+      headers.set('authorization', `Bearer ${this.authToken}`)
     }
     for (let attempt = 1; attempt <= this.config.CONTENT_PR_IMPORT_RETRY_ATTEMPTS; attempt += 1) {
       let response: Response
@@ -83,7 +89,10 @@ export class ContentImportGitHubClient {
         await delay(50 * attempt)
         continue
       }
-      if (response.ok) return await response.json() as T
+      if (response.ok) {
+        if (response.status === 204) return undefined as T
+        return await response.json() as T
+      }
       if ((response.status === 429 || response.status >= 500)
         && attempt < this.config.CONTENT_PR_IMPORT_RETRY_ATTEMPTS) {
         const retryAfter = Number(response.headers.get('retry-after') || '0')
@@ -174,5 +183,29 @@ export class ContentImportGitHubClient {
         body: JSON.stringify({ state: 'closed' })
       })
     )
+  }
+
+  async getBranchReference(repositoryId: string, branch: string) {
+    return this.validated(
+      referenceSchema,
+      await this.request<unknown>(
+        `/repos/${repositoryId}/git/ref/${pathForApi(`heads/${branch}`)}`
+      )
+    )
+  }
+
+  async deleteBranch(repositoryId: string, branch: string) {
+    try {
+      await this.request<void>(
+        `/repos/${repositoryId}/git/refs/${pathForApi(`heads/${branch}`)}`,
+        { method: 'DELETE' }
+      )
+    } catch (error) {
+      if (error instanceof ContentImportGitHubError && [409, 422].includes(error.status)) {
+        throw new ContentImportGitHubError('GITHUB_BRANCH_DELETE_REJECTED', error.status)
+      }
+      throw error
+    }
+    return { deleted: true as const }
   }
 }

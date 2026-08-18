@@ -38,7 +38,12 @@ export const throwContentImportHttpError = (error: unknown): never => {
         IMPORT_HIGH_RISK_SELECTION_INVALID: '只能强制导入已明确选择的高风险文章项目',
         IMPORT_HIGH_RISK_CONFIRMATION_REQUIRED: '强制导入高风险内容需要输入指定确认短语',
         IMPORT_GITHUB_WRITE_NOT_CONFIGURED: '未配置 GitHub 外部写权限',
-        IMPORT_PULL_REQUEST_CHANGED: 'PR Head 已变化，请重新 Dry Run'
+        IMPORT_PULL_REQUEST_CHANGED: 'PR 源分支或 Head 已变化，请重新 Dry Run',
+        IMPORT_EXTERNAL_ACTION_IN_PROGRESS: '同一项 GitHub 操作正在执行，请稍后刷新',
+        IMPORT_BRANCH_CLEANUP_NOT_CONFIGURED: '服务器未配置独立的 PR 源分支清理权限',
+        IMPORT_BRANCH_CLEANUP_EXTERNAL_FORK: '外部 Fork 的源分支必须由提交者自行删除',
+        IMPORT_BRANCH_CLEANUP_CONFIRMATION_INVALID: '源分支名称确认不匹配，已拒绝删除',
+        IMPORT_BRANCH_CLEANUP_REQUIRES_CLOSED_PR: '必须先成功关闭 PR，才能删除源分支'
       } as Record<string, string>)[error.code] || '外部内容导入被安全拒绝',
       data: { code: error.code }
     })
@@ -48,6 +53,13 @@ export const throwContentImportHttpError = (error: unknown): never => {
       throw createError({
         statusCode: error.status,
         message: 'PR 文件数量超过服务器允许的导入上限',
+        data: { code: error.code }
+      })
+    }
+    if (error.code === 'GITHUB_BRANCH_DELETE_REJECTED') {
+      throw createError({
+        statusCode: error.status,
+        message: 'GitHub 拒绝删除源分支；请确认它不是默认分支或受保护分支',
         data: { code: error.code }
       })
     }

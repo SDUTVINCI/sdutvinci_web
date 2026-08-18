@@ -2009,3 +2009,15 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
   密码哈希，通过或拒绝后立即清除；公开提交要求同源并受 IP 限流，审核要求管理员、同源和 CSRF。
 - 使用和测试见 `docs/ACCOUNT_REGISTRATION.md`。本功能不修改独立内容仓库、正式 Markdown、文章/
   成员 Revision、Wiki 拼音/章节模块、S3/COS 或生产环境。
+
+## 2026-08-19：PR 外部动作幂等与源分支清理
+
+- PR 检查结果留言和关闭动作按 run/action 串行保留一次成功结果；重复请求不再重复调用 GitHub，
+  页面成功后分别固定显示“已留言”和“PR 已关闭”并禁用按钮，失败动作仍可明确重试。
+- 管理员关闭 PR 后可选择删除官方内容仓库中的源分支。删除前要求输入完整分支名，并再次验证
+  PR 已关闭、关闭审计成功、仓库/分支未变且分支仍指向 Dry Run Head；外部 Fork、`main`、旧记录
+  或 Head 已变化均拒绝。
+- 删除使用独立 `CONTENT_PR_BRANCH_CLEANUP_GITHUB_TOKEN`，不扩大日常导入 Token 权限；新增
+  expand-only Migration `0024` 保存 Head repository/ref 并允许 `delete_branch` 审计动作。
+- 本功能仅在本地隔离测试数据库验证，不修改独立内容仓库、正式 Markdown、Wiki 路径工具或
+  生产环境；不会自动 Merge，也不会删除导入产生的草稿、成员提案和审计记录。

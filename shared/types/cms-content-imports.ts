@@ -19,6 +19,7 @@ export const contentImportClassifications = [
 
 export type ContentImportClassification = typeof contentImportClassifications[number]
 export type ContentImportItemStatus = 'pending' | 'imported' | 'skipped' | 'blocked'
+export type ContentPrExternalAction = 'comment' | 'close' | 'delete_branch'
 
 export const CONTENT_IMPORT_HIGH_RISK_CONFIRMATION = '确认强制导入高风险内容'
 
@@ -61,6 +62,8 @@ export interface CmsContentImportRun {
   pullRequestNumber: number
   baseCommitHash: string
   headCommitHash: string
+  headRepositoryId: string | null
+  headRef: string | null
   baseSnapshotSha256: string
   prAuthorLabel: string | null
   status: 'dry_run' | 'partially_imported' | 'imported' | 'failed'
@@ -72,10 +75,14 @@ export interface CmsContentImportRun {
   completedAt: string | null
   externalActions: Array<{
     id: string
-    action: 'comment' | 'close'
+    action: ContentPrExternalAction
     status: 'processing' | 'succeeded' | 'failed'
     errorCode: string | null
     createdAt: string
   }>
+  branchCleanup: {
+    status: 'available' | 'not_configured' | 'external_fork' | 'unavailable'
+    reason: string
+  }
   items: CmsContentImportItem[]
 }

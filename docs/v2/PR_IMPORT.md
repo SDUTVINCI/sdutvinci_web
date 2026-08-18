@@ -25,10 +25,13 @@ Outbox、评论/关闭确认或“绝不自动 Merge”的边界。
   完整 40 位 Commit，Head repository 不能缺失。
 - 默认只允许 `https://api.github.com`。本地 mock 仅在运行时 `NODE_ENV=test` 且
   `CONTENT_PR_IMPORT_TEST_MODE=true` 时允许。
-- Dry Run 只调用 PR、分页 files 和 commit-bound contents API。评论和关闭 PR 是两个
-  独立 POST 入口，各自要求确认字符串；关闭还要求 `admin`。没有 Merge API。
+- Dry Run 只调用 PR、分页 files 和 commit-bound contents API。评论、关闭 PR 和删除同仓库
+  源分支是三个独立 POST 入口，各自要求确认；关闭和删分支还要求 `admin`。没有 Merge API。
 - `CONTENT_PR_IMPORT_GITHUB_TOKEN` 未配置时，Dry Run 仍可使用公开读取，但评论和关闭
   fail closed。Token、Authorization、远端 URL、私钥和绝对路径不进入响应或审计摘要。
+- 源分支删除不复用上述 Token；只有单独配置 `CONTENT_PR_BRANCH_CLEANUP_GITHUB_TOKEN` 后才开放。
+  该凭据只应限定内容仓库并授予 `Contents: Read and write`。外部 Fork、`main`、旧记录和 Head
+  已变化的分支始终拒绝删除。
 - PR 文件数超过 `CONTENT_PR_IMPORT_MAX_FILES` 时，页面明确显示“PR 文件数量超过服务器允许的
   导入上限”并保留 `GITHUB_PULL_FILE_LIMIT_EXCEEDED` 错误码；这属于本地安全上限，不应误报为
   GitHub API、Token 或网络故障。
@@ -115,8 +118,9 @@ HTML/Vue 标签、MDC 指令、可执行标签、事件属性、`javascript:`/`d
 返回同一 run。item 在事务中锁定，已导入项直接返回原 draft，不重复创建。允许选择
 任意安全子集，冲突项保持 pending/blocked，不回滚已成功的其他项。
 
-审计覆盖 Dry Run、逐项导入、选择批次、评论、关闭和外部写失败。GitHub 外部动作另存
-processing/succeeded/failed 与脱敏错误码。排障时先保留：
+审计覆盖 Dry Run、逐项导入、选择批次、评论、关闭、源分支删除和外部写失败。GitHub 外部
+动作另存 processing/succeeded/failed 与脱敏错误码。同一 run 的同类外部动作成功后，后续
+请求直接返回既有成功结果，不会再次留言、关闭或删除；进行中的重复请求会被拒绝。排障时先保留：
 
 1. CMS run ID、PR 编号、Base/Head、分类和 item ID；
 2. `content_pr_import_runs/items/external_actions` 与对应 `audit_logs`；
@@ -178,6 +182,11 @@ pointer。管理员必须在成员页再次明确接受，服务再次用 `membe
 它不会合并或发布，也不会删除已经创建的草稿、成员提案、导入记录或审计记录。评论和
 关闭继续使用两个独立确认入口；CMS 用带图标、边框和背景的中文状态卡片显示执行中、
 成功或失败，不再直接显示 `comment · succeeded` 一类内部值。
+
+成功留言后按钮固定显示“已留言”并禁用；成功关闭后固定显示“PR 已关闭”并禁用。管理员可在
+关闭卡片中继续执行可选的“删除源分支”：必须先成功关闭、输入完整分支名，并由服务端再次确认
+PR 已关闭、源仓库/分支未变、分支仍指向 Dry Run 保存的 Head Commit。删除只支持官方内容仓库
+内的非 `main` 分支；外部 Fork 由提交者自行删除。删分支不会删除草稿、成员提案或审计记录。
 
 四方材料按 Git diff 习惯显示旧/新行号、`+`/`-` 和整行底色：
 

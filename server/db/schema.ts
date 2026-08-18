@@ -749,6 +749,8 @@ export const contentPrImportRuns = pgTable('content_pr_import_runs', {
   pullRequestNumber: integer('pull_request_number').notNull(),
   baseCommitHash: varchar('base_commit_hash', { length: 64 }).notNull(),
   headCommitHash: varchar('head_commit_hash', { length: 64 }).notNull(),
+  headRepositoryId: varchar('head_repository_id', { length: 200 }),
+  headRef: varchar('head_ref', { length: 255 }),
   baseSnapshotSha256: varchar('base_snapshot_sha256', { length: 64 }).notNull(),
   actorUserId: uuid('actor_user_id')
     .references(() => users.id, { onDelete: 'set null' }),
@@ -875,7 +877,7 @@ export const contentPrExternalActions = pgTable('content_pr_external_actions', {
 }, table => [
   check(
     'content_pr_external_actions_action_check',
-    sql`${table.action} in ('comment', 'close')`
+    sql`${table.action} in ('comment', 'close', 'delete_branch')`
   ),
   check(
     'content_pr_external_actions_status_check',

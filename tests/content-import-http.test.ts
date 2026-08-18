@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ContentImportGitHubError } from '../server/services/content-import-github'
+import { ContentPrImportError } from '../server/services/content-pr-import'
 import { throwContentImportHttpError } from '../server/utils/content-import-http'
 import { getContentImportConfig, resetContentImportConfigForTests } from '../server/utils/content-import-config'
 import { contentImportSelectionSchema } from '../server/utils/content-import-request'
@@ -62,6 +63,26 @@ describe('内容 PR 导入 HTTP 错误', () => {
       statusCode: 503,
       message: 'GitHub API 请求失败；已保留脱敏错误码',
       data: { code: 'GITHUB_API_FAILED' }
+    }))
+  })
+
+  it('源分支清理拒绝原因返回可执行的中文提示', () => {
+    expect(() => throwContentImportHttpError(
+      new ContentPrImportError('IMPORT_BRANCH_CLEANUP_EXTERNAL_FORK', 409)
+    )).toThrow(expect.objectContaining({
+      statusCode: 409,
+      message: '外部 Fork 的源分支必须由提交者自行删除',
+      data: { code: 'IMPORT_BRANCH_CLEANUP_EXTERNAL_FORK' }
+    }))
+    expect(() => throwContentImportHttpError(
+      new ContentPrImportError('IMPORT_BRANCH_CLEANUP_REQUIRES_CLOSED_PR', 409)
+    )).toThrow(expect.objectContaining({
+      message: '必须先成功关闭 PR，才能删除源分支'
+    }))
+    expect(() => throwContentImportHttpError(
+      new ContentImportGitHubError('GITHUB_BRANCH_DELETE_REJECTED', 422)
+    )).toThrow(expect.objectContaining({
+      message: 'GitHub 拒绝删除源分支；请确认它不是默认分支或受保护分支'
     }))
   })
 })

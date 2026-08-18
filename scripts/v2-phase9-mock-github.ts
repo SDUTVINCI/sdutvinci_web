@@ -32,7 +32,7 @@ createServer(async (request, response) => {
       return json(response, 200, {
         number: fixture.pullRequestNumber, state: state.state, user: { login: 'phase9-local-fixture' },
         base: { sha: fixture.baseCommit, ref: 'main', repo: { full_name: fixture.repositoryId } },
-        head: { sha: fixture.headCommit, repo: { full_name: fixture.repositoryId } }
+        head: { sha: fixture.headCommit, ref: 'phase9-manual-test', repo: { full_name: fixture.repositoryId } }
       })
     }
     if (request.method === 'GET' && url.pathname === `${prefix}/pulls/${fixture.pullRequestNumber}/files`) {

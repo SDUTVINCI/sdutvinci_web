@@ -48,7 +48,7 @@ createServer(async (request, response) => {
         state: pullState.state,
         user: { login: 'phase8-local-fixture' },
         base: { sha: fixture.baseCommit, ref: 'main', repo: { full_name: fixture.repositoryId } },
-        head: { sha: fixture.headCommit, repo: { full_name: fixture.repositoryId } }
+        head: { sha: fixture.headCommit, ref: 'phase8-manual-test', repo: { full_name: fixture.repositoryId } }
       })
     }
     if (request.method === 'GET' && url.pathname === `${prefix}/pulls/${fixture.pullRequestNumber}/files`) {

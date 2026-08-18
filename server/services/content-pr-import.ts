@@ -1,11 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { dirname, extname } from 'node:path'
-import { and, asc, eq, ilike, inArray, isNull, ne, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, ilike, inArray, isNull, ne, or, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import type {
   CmsContentImportItem,
   CmsContentImportRun,
-  ContentImportClassification
+  ContentImportClassification,
+  ContentPrExternalAction
 } from '../../shared/types/cms-content-imports'
 import { CONTENT_IMPORT_HIGH_RISK_CONFIRMATION } from '../../shared/types/cms-content-imports'
 import type { CmsArticleCollection } from '../../shared/types/cms-articles'
@@ -638,6 +639,8 @@ export const getContentPrImportRun = async (runId: string): Promise<CmsContentIm
     pullRequestNumber: run.pullRequestNumber,
     baseCommitHash: run.baseCommitHash,
     headCommitHash: run.headCommitHash,
+    headRepositoryId: run.headRepositoryId,
+    headRef: run.headRef,
     baseSnapshotSha256: run.baseSnapshotSha256,
     prAuthorLabel: run.prAuthorLabel,
     status: run.status as CmsContentImportRun['status'],
@@ -649,11 +652,20 @@ export const getContentPrImportRun = async (runId: string): Promise<CmsContentIm
     completedAt: run.completedAt?.toISOString() || null,
     externalActions: actions.map(action => ({
       id: action.id,
-      action: action.action as 'comment' | 'close',
+      action: action.action as ContentPrExternalAction,
       status: action.status as 'processing' | 'succeeded' | 'failed',
       errorCode: action.errorCode,
       createdAt: action.createdAt.toISOString()
     })),
+    branchCleanup: !run.headRepositoryId || !run.headRef
+      ? { status: 'unavailable', reason: '这条旧导入记录没有保存源分支信息，不能安全删除。' }
+      : run.headRepositoryId !== run.repositoryId
+        ? { status: 'external_fork', reason: '源分支位于外部 Fork，请提交者自行删除。' }
+        : run.headRef === 'main'
+          ? { status: 'unavailable', reason: '默认分支不能删除。' }
+          : !getContentImportConfig().CONTENT_PR_BRANCH_CLEANUP_GITHUB_TOKEN
+            ? { status: 'not_configured', reason: '服务器未配置独立的源分支清理凭据。' }
+            : { status: 'available', reason: 'PR 关闭后可由管理员删除这个源分支。' },
     items: items.map(itemResponse)
   }
 }
@@ -783,6 +795,8 @@ export const dryRunContentPrImport = async (
       pullRequestNumber: pull.number,
       baseCommitHash: pull.base.sha,
       headCommitHash: pull.head.sha,
+      headRepositoryId: pull.head.repo!.full_name,
+      headRef: pull.head.ref,
       baseSnapshotSha256: sha256ContentBytes(snapshotSource),
       actorUserId,
       prAuthorLabel: pull.user.login.slice(0, 128),
@@ -1301,50 +1315,140 @@ const externalSummary = (run: NonNullable<Awaited<ReturnType<typeof getContentPr
 export const executeContentPrExternalAction = async (
   runId: string,
   actorUserId: string,
-  action: 'comment' | 'close',
-  client = new ContentImportGitHubClient()
+  action: ContentPrExternalAction,
+  client?: ContentImportGitHubClient,
+  options: { confirmedBranch?: string } = {}
 ) => {
   requireContentPrImportEnabled()
-  if (!getContentImportConfig().CONTENT_PR_IMPORT_GITHUB_TOKEN) {
-    throw new ContentPrImportError('IMPORT_GITHUB_WRITE_NOT_CONFIGURED', 409)
-  }
+  const config = getContentImportConfig()
+  const token = action === 'delete_branch'
+    ? config.CONTENT_PR_BRANCH_CLEANUP_GITHUB_TOKEN
+    : config.CONTENT_PR_IMPORT_GITHUB_TOKEN
+  if (!token) throw new ContentPrImportError(
+    action === 'delete_branch'
+      ? 'IMPORT_BRANCH_CLEANUP_NOT_CONFIGURED'
+      : 'IMPORT_GITHUB_WRITE_NOT_CONFIGURED',
+    409
+  )
   const run = await getContentPrImportRun(runId)
   if (!run) throw new ContentPrImportError('IMPORT_RUN_NOT_FOUND', 404)
-  const pull = await client.getPullRequest(run.repositoryId, run.pullRequestNumber)
-  if (pull.base.repo.full_name !== run.repositoryId || pull.head.sha !== run.headCommitHash) {
-    throw new ContentPrImportError('IMPORT_PULL_REQUEST_CHANGED', 409)
+  const reservation = await getDatabase().transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(
+      hashtextextended(${`vinci:content-pr-external:${runId}:${action}`}, 0)
+    )`)
+    const active = await tx.select({
+      id: contentPrExternalActions.id,
+      status: contentPrExternalActions.status,
+      createdAt: contentPrExternalActions.createdAt
+    }).from(contentPrExternalActions).where(and(
+      eq(contentPrExternalActions.runId, runId),
+      eq(contentPrExternalActions.action, action),
+      inArray(contentPrExternalActions.status, ['processing', 'succeeded'])
+    )).orderBy(desc(contentPrExternalActions.createdAt))
+    const completed = active.find(item => item.status === 'succeeded')
+    if (completed) return { kind: 'completed' as const, id: completed.id }
+    const processing = active.find(item => item.status === 'processing'
+      && Date.now() - item.createdAt.getTime() < 10 * 60 * 1000)
+    if (processing) return { kind: 'processing' as const, id: processing.id }
+    if (active.some(item => item.status === 'processing')) {
+      await tx.update(contentPrExternalActions).set({
+        status: 'failed',
+        errorCode: 'EXTERNAL_ACTION_INTERRUPTED',
+        completedAt: new Date()
+      }).where(and(
+        eq(contentPrExternalActions.runId, runId),
+        eq(contentPrExternalActions.action, action),
+        eq(contentPrExternalActions.status, 'processing')
+      ))
+    }
+    const [record] = await tx.insert(contentPrExternalActions).values({
+      runId,
+      actorUserId,
+      action,
+      status: 'processing'
+    }).returning({ id: contentPrExternalActions.id })
+    return { kind: 'reserved' as const, id: record!.id }
+  })
+  if (reservation.kind === 'completed') {
+    return { succeeded: true, alreadyCompleted: true }
   }
-  const [record] = await getDatabase().insert(contentPrExternalActions).values({
-    runId,
-    actorUserId,
-    action,
-    status: 'processing'
-  }).returning({ id: contentPrExternalActions.id })
+  if (reservation.kind === 'processing') {
+    throw new ContentPrImportError('IMPORT_EXTERNAL_ACTION_IN_PROGRESS', 409)
+  }
+  const actionClient = client || new ContentImportGitHubClient(config, fetch, token)
+  const pullClient = action === 'delete_branch' && !client
+    ? new ContentImportGitHubClient(config, fetch, config.CONTENT_PR_IMPORT_GITHUB_TOKEN)
+    : actionClient
   try {
-    const response = action === 'comment'
-      ? await client.comment(run.repositoryId, run.pullRequestNumber, externalSummary(run))
-      : await client.close(run.repositoryId, run.pullRequestNumber)
+    const pull = await pullClient.getPullRequest(run.repositoryId, run.pullRequestNumber)
+    if (pull.base.repo.full_name !== run.repositoryId || pull.head.sha !== run.headCommitHash) {
+      throw new ContentPrImportError('IMPORT_PULL_REQUEST_CHANGED', 409)
+    }
+    let externalReference: string
+    if (action === 'comment') {
+      const response = await actionClient.comment(
+        run.repositoryId,
+        run.pullRequestNumber,
+        externalSummary(run)
+      )
+      externalReference = String(response.id)
+    } else if (action === 'close') {
+      if (pull.state !== 'closed') {
+        await actionClient.close(run.repositoryId, run.pullRequestNumber)
+      }
+      externalReference = pull.state === 'closed' ? 'already_closed' : 'closed'
+    } else {
+      if (!run.headRepositoryId || !run.headRef
+        || pull.head.repo?.full_name !== run.headRepositoryId
+        || pull.head.ref !== run.headRef) {
+        throw new ContentPrImportError('IMPORT_PULL_REQUEST_CHANGED', 409)
+      }
+      if (run.headRepositoryId !== run.repositoryId) {
+        throw new ContentPrImportError('IMPORT_BRANCH_CLEANUP_EXTERNAL_FORK', 409)
+      }
+      if (run.headRef === 'main' || options.confirmedBranch !== run.headRef) {
+        throw new ContentPrImportError('IMPORT_BRANCH_CLEANUP_CONFIRMATION_INVALID', 400)
+      }
+      if (pull.state !== 'closed'
+        || !run.externalActions.some(item => item.action === 'close' && item.status === 'succeeded')) {
+        throw new ContentPrImportError('IMPORT_BRANCH_CLEANUP_REQUIRES_CLOSED_PR', 409)
+      }
+      const reference = await actionClient.getBranchReference(run.headRepositoryId, run.headRef)
+      if (reference.object.type !== 'commit' || reference.object.sha !== run.headCommitHash) {
+        throw new ContentPrImportError('IMPORT_PULL_REQUEST_CHANGED', 409)
+      }
+      await actionClient.deleteBranch(run.headRepositoryId, run.headRef)
+      externalReference = `deleted:${run.headCommitHash}`
+    }
     await getDatabase().transaction(async (tx) => {
       await tx.update(contentPrExternalActions).set({
         status: 'succeeded',
-        externalReference: action === 'comment' && 'id' in response ? String(response.id) : 'closed',
+        externalReference,
         completedAt: new Date()
-      }).where(eq(contentPrExternalActions.id, record!.id))
+      }).where(eq(contentPrExternalActions.id, reservation.id))
       await tx.insert(auditLogs).values({
         actorUserId,
         action: `content_pr_import.${action}`,
         targetType: 'content_pr_import_run',
         targetId: runId,
-        metadata: { repositoryId: run.repositoryId, pullRequestNumber: run.pullRequestNumber, headCommitHash: run.headCommitHash }
+        metadata: {
+          repositoryId: run.repositoryId,
+          pullRequestNumber: run.pullRequestNumber,
+          headCommitHash: run.headCommitHash,
+          ...(action === 'delete_branch'
+            ? { headRepositoryId: run.headRepositoryId, headRef: run.headRef }
+            : {})
+        }
       })
     })
     return { succeeded: true }
   } catch (error) {
-    const errorCode = error instanceof ContentImportGitHubError ? error.code : 'GITHUB_WRITE_FAILED'
+    const errorCode = error instanceof ContentImportGitHubError || error instanceof ContentPrImportError
+      ? error.code : 'GITHUB_WRITE_FAILED'
     await getDatabase().transaction(async (tx) => {
       await tx.update(contentPrExternalActions).set({
         status: 'failed', errorCode, completedAt: new Date()
-      }).where(eq(contentPrExternalActions.id, record!.id))
+      }).where(eq(contentPrExternalActions.id, reservation.id))
       await tx.insert(auditLogs).values({
         actorUserId,
         action: `content_pr_import.${action}_failed`,
