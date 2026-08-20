@@ -448,7 +448,7 @@ reset 或 Force Push。修复后重新从 `dry_run` 生成新报告和新令牌�
 | `CONTENT_PR_IMPORT_MODE` | 不使用 PR 导入时保持 `disabled`；完成权限验收后才用 `enabled` | enabled 只允许把选中的 PR diff 导入为草稿/提案，不会自动 Merge、批准或发布。 |
 | `CONTENT_PR_IMPORT_REPOSITORY_ID` | 固定 `SDUTVINCI/sdutvinci_content` | 正式环境只接受唯一内容仓库，不能让请求参数选择任意仓库。 |
 | `CONTENT_PR_IMPORT_API_URL` | 固定 `https://api.github.com` | 正式环境只允许 GitHub 官方 HTTPS API，禁止内嵌凭据或改成 HTTP。 |
-| `CONTENT_PR_IMPORT_GITHUB_TOKEN` | 首次保守部署可留空；也可先写入已验证的 Fine-grained PAT，同时继续保持 mode 为 `disabled` | 预配置便于以后只切换 mode，但 Token 会提前存入宿主机和容器配置，必须限定内容仓库。需要源分支清理时授予 `Contents: Read and write` 与 `Pull requests: Read and write`；不得复用 SSH Deploy Key、GHCR Token、个人 classic PAT 或代码仓库凭据。 |
+| `CONTENT_PR_IMPORT_GITHUB_TOKEN` | 首次保守部署可留空；也可先写入已验证的 Fine-grained PAT，同时继续保持 mode 为 `disabled` | 完整 CMS PR 工作流统一授予 `Contents: Read and write` 与 `Pull requests: Read and write`，并且 Token 必须只限定内容仓库。不得复用 SSH Deploy Key、GHCR Token、个人 classic PAT 或代码仓库凭据。 |
 | `CONTENT_PR_IMPORT_MAX_FILE_BYTES` | 默认 `1048576`（1 MiB） | 单文件上限，范围 `1024–5000000` 字节；超限拒绝整个相关动作。 |
 | `CONTENT_PR_IMPORT_MAX_FILES` | 默认 `500` | 单 PR 文件数量上限，范围 `1–500`；达到上限后仍 fail closed，避免无界读取。 |
 | `CONTENT_PR_IMPORT_RETRY_ATTEMPTS` | 默认 `3` | GitHub 网络、429 和 5xx 重试次数，范围 `1–5`；不是业务操作无限重试。 |
@@ -474,7 +474,8 @@ CONTENT_PR_IMPORT_TEST_MODE=false
 GitHub REST API 不能使用它。
 
 如果维护者明确希望现在完成凭据准备、以后只切换 mode，也允许“Token 已配置，但功能仍关闭”。若未来
-要使用读取、评论和显式关闭全部能力，现在就按下表最后一行创建 Token，完成第 6.3 节只读验证，然后
+要使用读取、留言、显式关闭和同仓库源分支删除的完整工作流，现在就按下表最后一行创建 Token，
+完成第 6.3 节只读验证，然后
 填写：
 
 ```dotenv
@@ -493,18 +494,19 @@ CONTENT_PR_IMPORT_GITHUB_TOKEN=<从密码管理器粘贴的真实Fine-grained-PA
 | 公共内容仓库，只做未认证只读导入 | 可留空 | 无；受 GitHub 未认证 API 限流影响，不能评论或关闭 |
 | 私有仓库，只读 PR 和文件 | 必需 | `Contents: Read-only`、`Pull requests: Read-only` |
 | 读取并允许评论，但不允许关闭 PR | 必需 | `Contents: Read-only`、`Pull requests: Read-only`、`Issues: Read and write` |
-| 读取、评论并允许显式关闭 PR | 必需 | `Contents: Read-only`、`Pull requests: Read and write`；`Issues` 保持 No access |
+| 完整 CMS 工作流：读取、留言、关闭 PR、删除同仓库源分支 | 必需（推荐） | `Contents: Read and write`、`Pull requests: Read and write`；`Issues` 保持 No access |
 
 代码读取 `/pulls`、`/pulls/{number}/files` 和 `/contents/{path}`；评论使用 issue comment API，关闭使用
 `PATCH /pulls/{number}`。GitHub 官方说明读取仓库文件需要 Contents read，列出 PR 文件需要 Pull
 requests read；创建 PR 普通评论可使用 Issues write 或 Pull requests write，而关闭 PR 需要 Pull
-requests write。Vinci 没有调用 Merge API；不使用源分支清理时，不要为了省事授予
-`Contents: Read and write`、`Administration` 或组织级权限。
+requests write。Vinci 没有调用 Merge API。当前推荐按完整 CMS 工作流配置同一个
+`CONTENT_PR_IMPORT_GITHUB_TOKEN`：`Contents: Read and write` 用于读取内容和删除同仓库源分支，
+`Pull requests: Read and write` 用于读取、留言和关闭 PR。不授予 `Administration`、组织级权限或
+其他仓库访问权限。
 
-需要在 CMS 中删除官方内容仓库的 PR 源分支时，复用同一个
-`CONTENT_PR_IMPORT_GITHUB_TOKEN`，将 `Contents` 提升为 `Read and write`，同时保留评论/关闭所需
-的 `Pull requests: Read and write`。Token 仍必须只限定官方内容仓库；服务端还会拒绝外部 Fork、
-`main`、未关闭 PR、分支名确认不匹配，以及分支不再指向 Dry Run Head 的请求。
+服务端仍会拒绝删除外部 Fork、`main`、未关闭 PR、分支名确认不匹配，以及分支不再指向
+Dry Run Head 的请求。只有在明确不启用源分支删除时，才可将 `Contents` 降为 `Read-only`；这种配置下点击
+删除分支会被 GitHub 拒绝，不应用于完整功能验收。
 
 ### 6.2 创建仅限内容仓库的 Fine-grained PAT
 
@@ -519,8 +521,9 @@ requests write。Vinci 没有调用 Merge API；不使用源分支清理时，�
    不影响 Deploy Key 导出，但会让启用的 PR API 操作失败。
 4. Resource owner 选择 `SDUTVINCI`；Repository access 选择 **Only select repositories**，且只选
    `sdutvinci_content`。不能选 All repositories，也不能把 `sdutvinci_web` 加进去。
-5. Repository permissions 严格按第 6.1 节对应行选择；Account permissions 和 Organization
-   permissions 全部保持 **No access**。GitHub 自动显示的 Metadata read 无需额外扩大。
+5. 完整 CMS 工作流在 Repository permissions 中选择 **Contents: Read and write** 和
+   **Pull requests: Read and write**；**Issues**、Account permissions 和 Organization permissions
+   全部保持 **No access**。GitHub 自动显示的 Metadata read 无需额外扩大。
 6. 点击 **Generate token**。若组织要求审批，Token 在组织 Owner 批准前可能只能读取公共资源；等待
    `SDUTVINCI` Owner 在 Personal access token 请求中审批，不能改用 classic PAT 绕过策略。
 7. Token 只显示一次，直接保存进密码管理器。不要粘贴到聊天、截图、shell history、GitHub issue、
