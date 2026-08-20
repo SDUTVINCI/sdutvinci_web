@@ -56,7 +56,7 @@ const docGroups = computed<WikiDocGroup[]>(() => {
   const groups = new Map<string, WikiDocGroup>()
 
   wikiPages.value
-    .filter((wiki) => wiki.isWikiDoc)
+    .filter(wiki => wiki.isWikiDoc)
     .forEach((wiki) => {
       const key = wiki.docKey || wiki.docRoot || wiki.stem || wiki.path
       if (!key) return
@@ -94,18 +94,18 @@ const docGroups = computed<WikiDocGroup[]>(() => {
     })
 
   return [...groups.values()]
-    .map((group) => ({
+    .map(group => ({
       ...group,
       chapters: numberWikiChapters(group.chapters)
         .sort(compareWikiChapters)
-        .map((chapter) => ({
+        .map(chapter => ({
           ...chapter,
           depth: chapter.chapterDepth
         }))
     }))
     .sort((a, b) =>
-      String(b.date || '').localeCompare(String(a.date || '')) ||
-      a.title.localeCompare(b.title, 'zh-CN')
+      String(b.date || '').localeCompare(String(a.date || ''))
+      || a.title.localeCompare(b.title, 'zh-CN')
     )
 })
 
@@ -116,17 +116,19 @@ const filteredDocGroups = computed(() => {
   if (query) {
     list = list
       .map((doc) => {
-        const docMatches = doc.title.toLowerCase().includes(query) ||
-          String(doc.date || '').toLowerCase().includes(query)
+        const docMatches = doc.title.toLowerCase().includes(query)
+          || String(doc.date || '').toLowerCase().includes(query)
 
         return {
           ...doc,
           chapters: docMatches
             ? doc.chapters
-            : doc.chapters.filter((chapter) => matchesQuery(chapter, query))
+            : doc.chapters.filter(chapter => matchesQuery(chapter, query))
         }
       })
-      .filter((doc) => doc.title.toLowerCase().includes(query) || doc.chapters.length)
+      .filter(doc => doc.title.toLowerCase().includes(query)
+        || String(doc.date || '').toLowerCase().includes(query)
+        || doc.chapters.length)
   }
 
   if (!query) {
@@ -138,6 +140,10 @@ const filteredDocGroups = computed(() => {
 
 const restrictedDocKeys = computed(() => new Set(
   restrictedWikiDocuments.value.map(doc => doc.docKey)
+))
+
+const restrictedDocumentByKey = computed(() => new Map(
+  restrictedWikiDocuments.value.map(doc => [doc.docKey, doc])
 ))
 
 const filteredLockedDocuments = computed(() => {
@@ -156,16 +162,22 @@ const filteredLockedDocuments = computed(() => {
 })
 
 function isDocExpanded(doc: WikiDocGroup) {
-  return Boolean(searchQuery.value.trim()) || expandedDocs.value.has(doc.key)
+  const query = searchQuery.value.trim().toLowerCase()
+  const docMatches = doc.title.toLowerCase().includes(query)
+    || String(doc.date || '').toLowerCase().includes(query)
+  return expandedDocs.value.has(doc.key) || Boolean(query && !docMatches)
 }
 
 function articleCount(doc: WikiDocGroup) {
   return doc.chapters.length + (doc.index ? 1 : 0)
 }
 
-function hasRestrictedArticles(doc: WikiDocGroup) {
+function hasAnonymousRestrictedArticles(doc: WikiDocGroup) {
   return restrictedDocKeys.value.has(doc.key)
-    || Boolean(doc.index?.requiresAuth || doc.chapters.some(item => item.requiresAuth))
+}
+
+function restrictedLoginPath(doc: WikiDocGroup) {
+  return restrictedDocumentByKey.value.get(doc.key)?.path || doc.path
 }
 
 function toggleDoc(key: string) {
@@ -181,98 +193,172 @@ function toggleDoc(key: string) {
 }
 
 function matchesQuery(wiki: WikiListItem, query: string) {
-  return [
-    wiki.title,
-    wiki.chapter,
-    wiki.date,
-    wiki.path
-  ].some((value) => String(value || '').toLowerCase().includes(query))
+  return [wiki.title, wiki.chapter, wiki.date, wiki.path]
+    .some(value => String(value || '').toLowerCase().includes(query))
 }
 </script>
 
 <template>
   <section class="wiki-list">
-    <label class="wiki-search-box">
-      <span>搜索 Wiki 或章节</span>
-      <input
-        v-model="searchQuery"
-        type="search"
-        placeholder="输入教程名、章节名或路径"
-        class="wiki-search-input"
-      >
-    </label>
+    <div class="wiki-directory-toolbar">
+      <div class="wiki-directory-copy">
+        <strong>文档导航</strong>
+        <span>搜索教程、公开章节或路径</span>
+      </div>
+      <label class="wiki-search-box">
+        <WikiIcon name="search" />
+        <input
+          v-model="searchQuery"
+          type="search"
+          aria-label="搜索 Wiki 或章节"
+          placeholder="搜索 Wiki 或章节"
+          class="wiki-search-input"
+        >
+      </label>
+    </div>
+
+    <div v-if="!pending" class="wiki-result-summary" aria-live="polite">
+      <span>当前显示 {{ filteredDocGroups.length + filteredLockedDocuments.length }} 份文档</span>
+      <span v-if="filteredLockedDocuments.length">
+        {{ filteredLockedDocuments.length }} 份完整文档登录后可见
+      </span>
+    </div>
 
     <div v-if="pending" class="wiki-loading">正在扫描 Wiki...</div>
 
     <template v-else>
-      <div v-if="filteredDocGroups.length" class="wiki-doc-list">
-        <article v-for="doc in filteredDocGroups" :key="doc.key" class="wiki-doc-card">
-          <header class="wiki-doc-header">
-            <div class="wiki-doc-title-block">
-              <NuxtLink :to="doc.path" class="wiki-doc-title">
-                {{ doc.title }}
-              </NuxtLink>
-              <div class="wiki-doc-meta">
-                <span>{{ doc.date || '未标注日期' }}</span>
-                <span>{{ articleCount(doc) }} 篇文章</span>
-                <span v-if="hasRestrictedArticles(doc)" class="content-access-label">含需登录文章</span>
-              </div>
-            </div>
-
-            <button
-              v-if="doc.chapters.length"
-              class="wiki-doc-toggle"
-              type="button"
-              :aria-expanded="isDocExpanded(doc)"
-              @click="toggleDoc(doc.key)"
-            >
-              {{ isDocExpanded(doc) ? '收起章节' : '查看全部章节' }}
-            </button>
-          </header>
-
-          <ol v-if="doc.chapters.length && isDocExpanded(doc)" class="wiki-chapter-list">
-            <li
-              v-for="chapter in doc.chapters"
-              :key="chapter.path"
-              class="wiki-chapter-item"
-              :style="{ '--chapter-depth': String(chapter.depth) }"
-            >
-              <NuxtLink :to="chapter.path" class="wiki-chapter-link">
-                <span v-if="chapter.chapter" class="wiki-chapter-number">{{ chapter.chapter }}</span>
-                <span>{{ chapter.title || '无标题' }}</span>
-              </NuxtLink>
-            </li>
-          </ol>
-        </article>
-      </div>
-
       <section
         v-if="filteredLockedDocuments.length"
-        class="wiki-locked-section"
+        class="wiki-member-shelf"
         aria-labelledby="wiki-locked-title"
       >
-        <div class="wiki-locked-heading">
-          <div>
-            <p class="eyebrow">Members Only</p>
-            <h3 id="wiki-locked-title">队内资料</h3>
+        <header class="wiki-member-shelf-heading">
+          <div class="wiki-member-shelf-title">
+            <span class="wiki-member-shelf-icon" aria-hidden="true">
+              <WikiIcon name="lock" />
+            </span>
+            <div>
+              <p>成员资料</p>
+              <h3 id="wiki-locked-title">登录后可查看的 Wiki</h3>
+            </div>
           </div>
-          <p>以下 Wiki 需要成员登录后查看，未登录时不展示章节标题、数量或正文。</p>
-        </div>
+          <p>文档标题公开展示，章节目录与正文仅向已登录成员开放。</p>
+        </header>
 
-        <div class="wiki-locked-list">
+        <div class="wiki-member-list">
           <NuxtLink
             v-for="lockedDoc in filteredLockedDocuments"
             :key="lockedDoc.docKey"
             :to="{ path: '/cms/login', query: { redirect: lockedDoc.path } }"
-            class="wiki-locked-card"
+            class="wiki-member-card"
           >
-            <span class="wiki-locked-icon" aria-hidden="true">锁</span>
-            <span>
-              <strong>{{ lockedDoc.title }}</strong>
-              <small>需登录查看</small>
+            <span class="wiki-member-card-icon" aria-hidden="true">
+              <WikiIcon name="document" />
             </span>
-            <span class="wiki-locked-arrow" aria-hidden="true">→</span>
+            <span class="wiki-member-card-copy">
+              <strong>{{ lockedDoc.title }}</strong>
+              <small>完整文档仅限成员</small>
+            </span>
+            <span class="wiki-member-card-action">
+              登录查看
+              <WikiIcon name="arrow" />
+            </span>
           </NuxtLink>
+        </div>
+      </section>
+
+      <section
+        v-if="filteredDocGroups.length"
+        class="wiki-public-directory"
+        aria-labelledby="wiki-public-title"
+      >
+        <header class="wiki-public-heading">
+          <div>
+            <p>公开资料</p>
+            <h3 id="wiki-public-title">知识文档</h3>
+          </div>
+          <span>{{ filteredDocGroups.length }} 份文档</span>
+        </header>
+
+        <div class="wiki-doc-list">
+          <article
+            v-for="doc in filteredDocGroups"
+            :key="doc.key"
+            class="wiki-doc-card"
+            :class="{
+              'is-expanded': isDocExpanded(doc),
+              'has-member-content': hasAnonymousRestrictedArticles(doc)
+            }"
+          >
+            <header class="wiki-doc-header">
+              <span class="wiki-doc-icon" aria-hidden="true">
+                <WikiIcon name="document" />
+              </span>
+              <div class="wiki-doc-title-block">
+                <div class="wiki-doc-title-line">
+                  <NuxtLink :to="doc.path" class="wiki-doc-title">
+                    {{ doc.title }}
+                  </NuxtLink>
+                  <span
+                    v-if="hasAnonymousRestrictedArticles(doc)"
+                    class="wiki-doc-access-badge"
+                  >
+                    部分内容需登录
+                  </span>
+                </div>
+                <div class="wiki-doc-meta">
+                  <span>{{ doc.date || '未标注日期' }}</span>
+                  <span>{{ articleCount(doc) }} 篇可浏览文章</span>
+                </div>
+              </div>
+
+              <button
+                v-if="doc.chapters.length"
+                class="wiki-doc-toggle"
+                type="button"
+                :aria-expanded="isDocExpanded(doc)"
+                @click="toggleDoc(doc.key)"
+              >
+                {{ isDocExpanded(doc) ? '收起' : '章节' }}
+                <WikiIcon name="chevron" />
+              </button>
+              <NuxtLink v-else :to="doc.path" class="wiki-doc-open" aria-label="打开文档">
+                <WikiIcon name="arrow" />
+              </NuxtLink>
+            </header>
+
+            <ol v-if="doc.chapters.length && isDocExpanded(doc)" class="wiki-chapter-list">
+              <li
+                v-for="chapter in doc.chapters"
+                :key="chapter.path"
+                class="wiki-chapter-item"
+                :style="{ '--chapter-depth': String(chapter.depth) }"
+              >
+                <NuxtLink :to="chapter.path" class="wiki-chapter-link">
+                  <span v-if="chapter.chapter" class="wiki-chapter-number">{{ chapter.chapter }}</span>
+                  <span>{{ chapter.title || '无标题' }}</span>
+                </NuxtLink>
+              </li>
+            </ol>
+
+            <NuxtLink
+              v-if="hasAnonymousRestrictedArticles(doc)"
+              :to="{ path: '/cms/login', query: { redirect: restrictedLoginPath(doc) } }"
+              class="wiki-partial-access"
+            >
+              <span class="wiki-partial-access-icon" aria-hidden="true">
+                <WikiIcon name="lock" />
+              </span>
+              <span>
+                <strong>部分内容仅限成员</strong>
+                <small>登录后查看完整目录</small>
+              </span>
+              <span class="wiki-partial-access-action">
+                登录
+                <WikiIcon name="arrow" />
+              </span>
+            </NuxtLink>
+          </article>
         </div>
       </section>
 
