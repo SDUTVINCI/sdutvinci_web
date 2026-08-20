@@ -55,6 +55,13 @@ export interface PublicContentSearchResult {
   contentHash: string
 }
 
+export interface PublicRestrictedWikiDocument {
+  docKey: string
+  path: string
+  title: string
+  date?: string
+}
+
 export interface PublicContentCacheInvalidationInput {
   collection?: PublicArticleCollection
   articleId?: string

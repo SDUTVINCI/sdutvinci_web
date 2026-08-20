@@ -13,7 +13,8 @@ import type {
   PublicArticle,
   PublicArticleCollection,
   PublicContentSearchResult,
-  PublicMember
+  PublicMember,
+  PublicRestrictedWikiDocument
 } from '../../shared/types/public-content'
 import { resolveStaticMediaUrl } from '../../shared/utils/static-media'
 import { getWikiContentMeta } from '../../utils/wiki-content-meta'
@@ -162,6 +163,58 @@ export const listPublicArticlesFromDatabase = async (
     )
 
   return rows.map(row => toPublicArticle(row as PublishedArticleRow))
+}
+
+export const listRestrictedWikiDocumentsFromDatabase = async (): Promise<
+  PublicRestrictedWikiDocument[]
+> => {
+  const rows = await getDatabase()
+    .select({
+      relativePath: articles.relativePath,
+      articleTitle: articles.title,
+      frontmatter: articleRevisions.frontmatter
+    })
+    .from(articles)
+    .innerJoin(
+      articleRevisions,
+      eq(articles.currentRevisionId, articleRevisions.id)
+    )
+    .where(and(
+      publishedArticleFilters('wiki', { includeRestricted: true }),
+      eq(articles.requiresAuth, true)
+    ))
+    .orderBy(asc(articles.relativePath))
+
+  const documents = new Map<string, PublicRestrictedWikiDocument>()
+
+  for (const row of rows) {
+    const stem = `wiki/${row.relativePath.slice(0, -extname(row.relativePath).length)}`
+    const meta = getWikiContentMeta(stem)
+    if (!meta) continue
+
+    const current = documents.get(meta.docKey)
+    const document = current || {
+      docKey: meta.docKey,
+      path: meta.path,
+      title: meta.docTitle,
+      ...(meta.date ? { date: meta.date } : {})
+    }
+
+    if (meta.isWikiIndex) {
+      const frontmatter = (row.frontmatter || {}) as Record<string, unknown>
+      document.path = meta.docRoot
+      document.title = stringField(frontmatter, 'title')
+        || row.articleTitle
+        || meta.docTitle
+    }
+
+    documents.set(meta.docKey, document)
+  }
+
+  return [...documents.values()].sort((a, b) =>
+    String(b.date || '').localeCompare(String(a.date || ''))
+    || a.title.localeCompare(b.title, 'zh-CN')
+  )
 }
 
 export const getPublicArticleFromDatabase = async (

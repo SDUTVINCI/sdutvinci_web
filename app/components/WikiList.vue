@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { PublicRestrictedWikiDocument } from '~~/shared/types/public-content'
 import { compareWikiChapters, numberWikiChapters } from '~~/utils/wiki-chapters'
 
 interface WikiListItem {
@@ -27,23 +28,29 @@ interface WikiDocGroup {
   chapters: Array<WikiListItem & { depth: number }>
 }
 
+interface WikiListResponse {
+  items: WikiListItem[]
+  restrictedDocuments: PublicRestrictedWikiDocument[]
+}
+
 const props = withDefaults(defineProps<{
   limit?: number
 }>(), {
   limit: Number.POSITIVE_INFINITY
 })
 
-const { data: wikis, pending } = await usePublicContentQuery<WikiListItem[]>({
+const { data: wikiResponse, pending } = await usePublicContentQuery<WikiListResponse>({
   key: 'wiki-list-meta',
-  database: async requestFetch => (
-    await requestFetch<{ items: WikiListItem[] }>('/api/v2/content/wiki')
-  ).items
+  database: requestFetch => requestFetch<WikiListResponse>('/api/v2/content/wiki')
 })
 
 const searchQuery = ref('')
 const expandedDocs = ref(new Set<string>())
 
-const wikiPages = computed(() => wikis.value ?? [])
+const wikiPages = computed(() => wikiResponse.value?.items ?? [])
+const restrictedWikiDocuments = computed(() => (
+  wikiResponse.value?.restrictedDocuments ?? []
+))
 
 const docGroups = computed<WikiDocGroup[]>(() => {
   const groups = new Map<string, WikiDocGroup>()
@@ -129,6 +136,25 @@ const filteredDocGroups = computed(() => {
   return list
 })
 
+const restrictedDocKeys = computed(() => new Set(
+  restrictedWikiDocuments.value.map(doc => doc.docKey)
+))
+
+const filteredLockedDocuments = computed(() => {
+  const publicDocKeys = new Set(docGroups.value.map(doc => doc.key))
+  const query = searchQuery.value.trim().toLowerCase()
+  let list = restrictedWikiDocuments.value.filter(doc => !publicDocKeys.has(doc.docKey))
+
+  if (query) {
+    list = list.filter(doc => [doc.title, doc.date]
+      .some(value => String(value || '').toLowerCase().includes(query)))
+  } else {
+    list = list.slice(0, props.limit)
+  }
+
+  return list
+})
+
 function isDocExpanded(doc: WikiDocGroup) {
   return Boolean(searchQuery.value.trim()) || expandedDocs.value.has(doc.key)
 }
@@ -138,7 +164,8 @@ function articleCount(doc: WikiDocGroup) {
 }
 
 function hasRestrictedArticles(doc: WikiDocGroup) {
-  return Boolean(doc.index?.requiresAuth || doc.chapters.some(item => item.requiresAuth))
+  return restrictedDocKeys.value.has(doc.key)
+    || Boolean(doc.index?.requiresAuth || doc.chapters.some(item => item.requiresAuth))
 }
 
 function toggleDoc(key: string) {
@@ -177,49 +204,84 @@ function matchesQuery(wiki: WikiListItem, query: string) {
 
     <div v-if="pending" class="wiki-loading">正在扫描 Wiki...</div>
 
-    <div v-else-if="filteredDocGroups.length" class="wiki-doc-list">
-      <article v-for="doc in filteredDocGroups" :key="doc.key" class="wiki-doc-card">
-        <header class="wiki-doc-header">
-          <div class="wiki-doc-title-block">
-            <NuxtLink :to="doc.path" class="wiki-doc-title">
-              {{ doc.title }}
-            </NuxtLink>
-            <div class="wiki-doc-meta">
-              <span>{{ doc.date || '未标注日期' }}</span>
-              <span>{{ articleCount(doc) }} 篇文章</span>
-              <span v-if="hasRestrictedArticles(doc)" class="content-access-label">含需登录文章</span>
+    <template v-else>
+      <div v-if="filteredDocGroups.length" class="wiki-doc-list">
+        <article v-for="doc in filteredDocGroups" :key="doc.key" class="wiki-doc-card">
+          <header class="wiki-doc-header">
+            <div class="wiki-doc-title-block">
+              <NuxtLink :to="doc.path" class="wiki-doc-title">
+                {{ doc.title }}
+              </NuxtLink>
+              <div class="wiki-doc-meta">
+                <span>{{ doc.date || '未标注日期' }}</span>
+                <span>{{ articleCount(doc) }} 篇文章</span>
+                <span v-if="hasRestrictedArticles(doc)" class="content-access-label">含需登录文章</span>
+              </div>
             </div>
+
+            <button
+              v-if="doc.chapters.length"
+              class="wiki-doc-toggle"
+              type="button"
+              :aria-expanded="isDocExpanded(doc)"
+              @click="toggleDoc(doc.key)"
+            >
+              {{ isDocExpanded(doc) ? '收起章节' : '查看全部章节' }}
+            </button>
+          </header>
+
+          <ol v-if="doc.chapters.length && isDocExpanded(doc)" class="wiki-chapter-list">
+            <li
+              v-for="chapter in doc.chapters"
+              :key="chapter.path"
+              class="wiki-chapter-item"
+              :style="{ '--chapter-depth': String(chapter.depth) }"
+            >
+              <NuxtLink :to="chapter.path" class="wiki-chapter-link">
+                <span v-if="chapter.chapter" class="wiki-chapter-number">{{ chapter.chapter }}</span>
+                <span>{{ chapter.title || '无标题' }}</span>
+              </NuxtLink>
+            </li>
+          </ol>
+        </article>
+      </div>
+
+      <section
+        v-if="filteredLockedDocuments.length"
+        class="wiki-locked-section"
+        aria-labelledby="wiki-locked-title"
+      >
+        <div class="wiki-locked-heading">
+          <div>
+            <p class="eyebrow">Members Only</p>
+            <h3 id="wiki-locked-title">队内资料</h3>
           </div>
+          <p>以下 Wiki 需要成员登录后查看，未登录时不展示章节标题、数量或正文。</p>
+        </div>
 
-          <button
-            v-if="doc.chapters.length"
-            class="wiki-doc-toggle"
-            type="button"
-            :aria-expanded="isDocExpanded(doc)"
-            @click="toggleDoc(doc.key)"
+        <div class="wiki-locked-list">
+          <NuxtLink
+            v-for="lockedDoc in filteredLockedDocuments"
+            :key="lockedDoc.docKey"
+            :to="{ path: '/cms/login', query: { redirect: lockedDoc.path } }"
+            class="wiki-locked-card"
           >
-            {{ isDocExpanded(doc) ? '收起章节' : '查看全部章节' }}
-          </button>
-        </header>
+            <span class="wiki-locked-icon" aria-hidden="true">锁</span>
+            <span>
+              <strong>{{ lockedDoc.title }}</strong>
+              <small>需登录查看</small>
+            </span>
+            <span class="wiki-locked-arrow" aria-hidden="true">→</span>
+          </NuxtLink>
+        </div>
+      </section>
 
-        <ol v-if="doc.chapters.length && isDocExpanded(doc)" class="wiki-chapter-list">
-          <li
-            v-for="chapter in doc.chapters"
-            :key="chapter.path"
-            class="wiki-chapter-item"
-            :style="{ '--chapter-depth': String(chapter.depth) }"
-          >
-            <NuxtLink :to="chapter.path" class="wiki-chapter-link">
-              <span v-if="chapter.chapter" class="wiki-chapter-number">{{ chapter.chapter }}</span>
-              <span>{{ chapter.title || '无标题' }}</span>
-            </NuxtLink>
-          </li>
-        </ol>
-      </article>
-    </div>
-
-    <div v-else class="empty-state">
-      {{ searchQuery ? '没有找到相关 Wiki。' : 'Wiki 还没有内容。' }}
-    </div>
+      <div
+        v-if="!filteredDocGroups.length && !filteredLockedDocuments.length"
+        class="empty-state"
+      >
+        {{ searchQuery ? '没有找到相关 Wiki。' : 'Wiki 还没有内容。' }}
+      </div>
+    </template>
   </section>
 </template>

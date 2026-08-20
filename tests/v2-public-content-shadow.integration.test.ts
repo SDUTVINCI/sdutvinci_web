@@ -20,6 +20,7 @@ import {
   getPublicMemberFromDatabase,
   listPublicArticlesFromDatabase,
   listPublicMembersFromDatabase,
+  listRestrictedWikiDocumentsFromDatabase,
   resolvePublicArticleAccessFromDatabase,
   searchPublicArticlesFromDatabase
 } from '../server/services/public-content'
@@ -296,8 +297,16 @@ databaseSuite('V2 阶段 4 正式内容查询、缓存与候选 Feed', () => {
     await getDatabase().update(articles)
       .set({ requiresAuth: true })
       .where(eq(articles.id, articleIds['wiki-first']!))
+    await getDatabase().update(articles)
+      .set({ requiresAuth: true })
+      .where(eq(articles.id, articleIds['wiki-index']!))
+    await getDatabase().update(articles)
+      .set({ requiresAuth: true })
+      .where(eq(articles.id, articleIds['wiki-second']!))
     invalidatePublicContentCache({ articleId: articleIds.news })
     invalidatePublicContentCache({ articleId: articleIds['wiki-first'] })
+    invalidatePublicContentCache({ articleId: articleIds['wiki-index'] })
+    invalidatePublicContentCache({ articleId: articleIds['wiki-second'] })
 
     try {
       expect(await listPublicArticlesFromDatabase('news')).toEqual([])
@@ -306,6 +315,13 @@ databaseSuite('V2 阶段 4 正式内容查询、缓存与候选 Feed', () => {
         '/news/phase4-test-news'
       )).toBeNull()
       expect(await searchPublicArticlesFromDatabase('机器人')).toEqual([])
+      expect(await listPublicArticlesFromDatabase('wiki')).toEqual([])
+      expect(await listRestrictedWikiDocumentsFromDatabase()).toEqual([{
+        docKey: '2026-07-29-jie-duan-si-ce-shi',
+        path: '/wiki/2026-07-29-jie-duan-si-ce-shi',
+        title: '阶段四测试',
+        date: '2026-07-29'
+      }])
 
       await expect(resolvePublicArticleAccessFromDatabase(
         'news',
@@ -355,6 +371,9 @@ databaseSuite('V2 阶段 4 正式内容查询、缓存与候选 Feed', () => {
       expect(await listPublicArticlesFromDatabase('news', {
         includeRestricted: true
       })).toHaveLength(1)
+      expect(await listPublicArticlesFromDatabase('wiki', {
+        includeRestricted: true
+      })).toHaveLength(3)
       expect(await searchPublicArticlesFromDatabase(
         '机器人',
         undefined,
@@ -374,8 +393,16 @@ databaseSuite('V2 阶段 4 正式内容查询、缓存与候选 Feed', () => {
       await getDatabase().update(articles)
         .set({ requiresAuth: false })
         .where(eq(articles.id, articleIds['wiki-first']!))
+      await getDatabase().update(articles)
+        .set({ requiresAuth: false })
+        .where(eq(articles.id, articleIds['wiki-index']!))
+      await getDatabase().update(articles)
+        .set({ requiresAuth: false })
+        .where(eq(articles.id, articleIds['wiki-second']!))
       invalidatePublicContentCache({ articleId: articleIds.news })
       invalidatePublicContentCache({ articleId: articleIds['wiki-first'] })
+      invalidatePublicContentCache({ articleId: articleIds['wiki-index'] })
+      invalidatePublicContentCache({ articleId: articleIds['wiki-second'] })
     }
   })
 

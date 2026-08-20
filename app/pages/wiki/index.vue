@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { PublicRestrictedWikiDocument } from '~~/shared/types/public-content'
+
 interface WikiMetaItem {
   path: string
   date?: string
@@ -6,11 +8,14 @@ interface WikiMetaItem {
   isWikiDoc?: boolean
 }
 
-const { data: wikiMeta } = await usePublicContentQuery<WikiMetaItem[]>({
+interface WikiIndexResponse {
+  items: WikiMetaItem[]
+  restrictedDocuments: PublicRestrictedWikiDocument[]
+}
+
+const { data: wikiResponse } = await usePublicContentQuery<WikiIndexResponse>({
   key: 'wiki:index-stats',
-  database: async requestFetch => (
-    await requestFetch<{ items: WikiMetaItem[] }>('/api/v2/content/wiki')
-  ).items
+  database: requestFetch => requestFetch<WikiIndexResponse>('/api/v2/content/wiki')
 })
 
 useContentSeo({
@@ -19,10 +24,15 @@ useContentSeo({
   path: '/wiki'
 })
 
-const wikiPages = computed(() => (wikiMeta.value ?? []).filter((item) => item.isWikiDoc))
+const wikiPages = computed(() => (
+  wikiResponse.value?.items ?? []
+).filter((item) => item.isWikiDoc))
 
 const wikiStats = computed(() => {
   const docs = new Set(wikiPages.value.map((item) => item.docKey).filter(Boolean))
+  for (const doc of wikiResponse.value?.restrictedDocuments ?? []) {
+    docs.add(doc.docKey)
+  }
   const latestDate = wikiPages.value
     .map((item) => item.date)
     .filter(Boolean)
@@ -30,7 +40,7 @@ const wikiStats = computed(() => {
 
   return [
     { value: docs.size, label: '教程文档' },
-    { value: wikiPages.value.length, label: '页面与章节' },
+    { value: wikiPages.value.length, label: '可浏览页面与章节' },
     { value: latestDate || '持续整理', label: '最近文档日期' }
   ]
 })

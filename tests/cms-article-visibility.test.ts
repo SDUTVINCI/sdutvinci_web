@@ -31,6 +31,30 @@ describe('文章访问权限入口与 Wiki 文章计数', () => {
     expect(source).toContain("wiki.isWikiIndex ? (wiki.docRoot || wiki.path) : wiki.path")
   })
 
+  it('匿名 Wiki 将完全受限文档合并到独立登录区且不渲染章节材料', async () => {
+    const [component, page, api, service, styles] = await Promise.all([
+      readFile('app/components/WikiList.vue', 'utf8'),
+      readFile('app/pages/wiki/index.vue', 'utf8'),
+      readFile('server/api/v2/content/wiki/index.get.ts', 'utf8'),
+      readFile('server/services/public-content.ts', 'utf8'),
+      readFile('app/assets/css/wiki.css', 'utf8')
+    ])
+
+    expect(api).toContain('listRestrictedWikiDocumentsFromDatabase')
+    expect(api).toContain('restrictedDocuments')
+    expect(service).toContain('eq(articles.requiresAuth, true)')
+    expect(service).toContain('PublicRestrictedWikiDocument[]')
+    expect(component).toContain('队内资料')
+    expect(component).toContain('未登录时不展示章节标题、数量或正文')
+    expect(component).toContain("path: '/cms/login', query: { redirect: lockedDoc.path }")
+    expect(component).toContain('<strong>{{ lockedDoc.title }}</strong>')
+    expect(component).not.toContain('lockedDoc.chapters')
+    expect(component).not.toContain('lockedDoc.body')
+    expect(page).toContain("label: '可浏览页面与章节'")
+    expect(styles).toContain('.wiki-locked-section')
+    expect(styles).toContain('.wiki-locked-card')
+  })
+
   it('受限详情跳转登录并保留原文章路径，缺失详情仍走 404', async () => {
     const [newsPage, wikiPage, loginPage, newsApi, wikiApi] = await Promise.all([
       readFile('app/pages/news/[slug].vue', 'utf8'),
