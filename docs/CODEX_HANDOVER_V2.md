@@ -2041,3 +2041,12 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
   阶段 8 集成 19/19、相关单元 13/13、typecheck、production build 和 diff check 通过。
 - 无数据库结构变化，不创建 Migration。本轮未修改独立内容仓库、正式 Markdown、
   `utils/wiki-content-meta.ts` 或 `utils/wiki-chapters.ts`；未 Fetch、Push、SSH、部署或访问生产资源。
+
+## 2026-08-20：受限文章登录回跳
+
+- 匿名用户直接打开真实存在且标记为“需登录”的新闻或 Wiki 时，不再显示 404；详情 API 返回
+  专用 401 错误码，页面跳转 `/cms/login` 并携带原文章完整站内路径。
+- 登录页继续使用既有站内路径校验，登录成功后自动返回原新闻或 Wiki；页面会明确提示登录后返回
+  原文章。真实不存在、已删除或非法路径继续显示 404。
+- 匿名列表、搜索、Sitemap 和 RSS 仍排除受限文章；有效 CMS 会话的原读取权限不变。无数据库
+  结构变化，不创建 Migration，不修改正式 Markdown、独立内容仓库或 Wiki 拼音/章节模块。

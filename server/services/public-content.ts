@@ -128,6 +128,11 @@ interface PublicArticleAccessOptions {
   includeRestricted?: boolean
 }
 
+export interface PublicArticleAccessResult {
+  article: PublicArticle | null
+  requiresAuthentication: boolean
+}
+
 const publishedArticleFilters = (
   collection?: PublicArticleCollection,
   options: PublicArticleAccessOptions = {}
@@ -210,6 +215,25 @@ export const getPublicArticleFromDatabase = async (
     articleId: candidate.articleId,
     revisionId: candidate.revisionId
   })
+}
+
+export const resolvePublicArticleAccessFromDatabase = async (
+  collection: PublicArticleCollection,
+  publicPath: string,
+  authenticated: boolean
+): Promise<PublicArticleAccessResult> => {
+  const article = await getPublicArticleFromDatabase(collection, publicPath, {
+    includeRestricted: true
+  })
+
+  if (!article) {
+    return { article: null, requiresAuthentication: false }
+  }
+  if (article.requiresAuth && !authenticated) {
+    return { article: null, requiresAuthentication: true }
+  }
+
+  return { article, requiresAuthentication: false }
 }
 
 export const searchPublicArticlesFromDatabase = async (

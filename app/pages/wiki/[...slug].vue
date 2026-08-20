@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import mediumZoom from 'medium-zoom'
 import { cmsAccountPattern } from '~~/shared/types/cms-auth'
 import type { PublicArticleCreditIdentity } from '~~/shared/types/article-credit-identities'
+import { isPublicArticleAuthRequiredError } from '~~/shared/utils/public-article-access'
 import { compareWikiChapters, numberWikiChapters } from '~~/utils/wiki-chapters'
 import {
   applyWikiHeadingNumbers,
@@ -39,7 +40,7 @@ const candidateSlug = computed(() =>
     .join('/')
 )
 
-const { data: page, pending } = await usePublicContentQuery<WikiPage | null>({
+const { data: page, pending, error: pageError } = await usePublicContentQuery<WikiPage | null>({
   key: computed(() => `wiki-page-${cleanPath.value}`),
   database: async requestFetch => (
     await requestFetch<{ item: WikiPage }>(
@@ -49,7 +50,12 @@ const { data: page, pending } = await usePublicContentQuery<WikiPage | null>({
   watch: [cleanPath]
 })
 
-if (!pending.value && !page.value) {
+if (isPublicArticleAuthRequiredError(pageError.value)) {
+  await navigateTo({
+    path: '/cms/login',
+    query: { redirect: route.fullPath }
+  })
+} else if (!pending.value && !page.value) {
   throw createError({
     statusCode: 404,
     statusMessage: 'Wiki 页面不存在',

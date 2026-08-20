@@ -45,6 +45,9 @@ const safeRedirect = computed(() => {
     ? value
     : '/cms'
 })
+const returnsToArticle = computed(() => (
+  safeRedirect.value.startsWith('/news/') || safeRedirect.value.startsWith('/wiki/')
+))
 
 onMounted(async () => {
   if (await loadSession(true)) {
@@ -145,7 +148,7 @@ const submitRegistration = async () => {
 
       <template v-if="mode === 'login'">
         <h2>欢迎回来</h2>
-        <p class="cms-muted">使用队内成员账号进入内容管理后台。</p>
+        <p class="cms-muted">{{ returnsToArticle ? '登录后将自动返回原文章。' : '使用队内成员账号进入内容管理后台。' }}</p>
         <form class="cms-form cms-login-form" @submit.prevent="submit">
           <label class="cms-login-field">
             <span class="cms-login-field-label"><span>账号</span><small>ACCOUNT</small></span>
@@ -156,7 +159,7 @@ const submitRegistration = async () => {
             <span class="cms-login-input"><span class="cms-login-field-index" aria-hidden="true">02</span><input v-model="password" type="password" autocomplete="current-password" placeholder="请输入密码" required></span>
           </label>
           <p v-if="errorMessage" class="cms-alert cms-alert-error" role="alert">{{ errorMessage }}</p>
-          <button class="cms-button cms-button-primary cms-login-submit" type="submit" :disabled="submitting"><span>{{ submitting ? '正在验证身份…' : '进入工作台' }}</span><span aria-hidden="true">{{ submitting ? '···' : '↗' }}</span></button>
+          <button class="cms-button cms-button-primary cms-login-submit" type="submit" :disabled="submitting"><span>{{ submitting ? '正在验证身份…' : (returnsToArticle ? '登录并返回文章' : '进入工作台') }}</span><span aria-hidden="true">{{ submitting ? '···' : '↗' }}</span></button>
         </form>
       </template>
 

@@ -20,6 +20,7 @@ import {
   getPublicMemberFromDatabase,
   listPublicArticlesFromDatabase,
   listPublicMembersFromDatabase,
+  resolvePublicArticleAccessFromDatabase,
   searchPublicArticlesFromDatabase
 } from '../server/services/public-content'
 import {
@@ -292,7 +293,11 @@ databaseSuite('V2 阶段 4 正式内容查询、缓存与候选 Feed', () => {
     await getDatabase().update(articles)
       .set({ requiresAuth: true })
       .where(eq(articles.id, articleIds.news!))
+    await getDatabase().update(articles)
+      .set({ requiresAuth: true })
+      .where(eq(articles.id, articleIds['wiki-first']!))
     invalidatePublicContentCache({ articleId: articleIds.news })
+    invalidatePublicContentCache({ articleId: articleIds['wiki-first'] })
 
     try {
       expect(await listPublicArticlesFromDatabase('news')).toEqual([])
@@ -302,6 +307,31 @@ databaseSuite('V2 阶段 4 正式内容查询、缓存与候选 Feed', () => {
       )).toBeNull()
       expect(await searchPublicArticlesFromDatabase('机器人')).toEqual([])
 
+      await expect(resolvePublicArticleAccessFromDatabase(
+        'news',
+        '/news/phase4-test-news',
+        false
+      )).resolves.toEqual({
+        article: null,
+        requiresAuthentication: true
+      })
+      await expect(resolvePublicArticleAccessFromDatabase(
+        'news',
+        '/news/not-found',
+        false
+      )).resolves.toEqual({
+        article: null,
+        requiresAuthentication: false
+      })
+      await expect(resolvePublicArticleAccessFromDatabase(
+        'wiki',
+        '/wiki/2026-07-29-jie-duan-si-ce-shi/0100-kai-shi',
+        false
+      )).resolves.toEqual({
+        article: null,
+        requiresAuthentication: true
+      })
+
       const authenticated = await getPublicArticleFromDatabase(
         'news',
         '/news/phase4-test-news',
@@ -310,6 +340,17 @@ databaseSuite('V2 阶段 4 正式内容查询、缓存与候选 Feed', () => {
       expect(authenticated).toMatchObject({
         id: articleIds.news,
         requiresAuth: true
+      })
+      await expect(resolvePublicArticleAccessFromDatabase(
+        'news',
+        '/news/phase4-test-news',
+        true
+      )).resolves.toMatchObject({
+        article: {
+          id: articleIds.news,
+          requiresAuth: true
+        },
+        requiresAuthentication: false
       })
       expect(await listPublicArticlesFromDatabase('news', {
         includeRestricted: true
@@ -330,7 +371,11 @@ databaseSuite('V2 阶段 4 正式内容查询、缓存与候选 Feed', () => {
       await getDatabase().update(articles)
         .set({ requiresAuth: false })
         .where(eq(articles.id, articleIds.news!))
+      await getDatabase().update(articles)
+        .set({ requiresAuth: false })
+        .where(eq(articles.id, articleIds['wiki-first']!))
       invalidatePublicContentCache({ articleId: articleIds.news })
+      invalidatePublicContentCache({ articleId: articleIds['wiki-first'] })
     }
   })
 

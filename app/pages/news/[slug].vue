@@ -1,11 +1,13 @@
 <script setup lang="ts">
+import { isPublicArticleAuthRequiredError } from '~~/shared/utils/public-article-access'
+
 type NewsItem = Record<string, any>
 
 const route = useRoute()
 const slug = decodeURIComponent(String(route.params.slug ?? ''))
 const newsPath = `/news/${slug}`
 
-const { data: page } = await usePublicContentQuery<NewsItem | null>({
+const { data: page, error: pageError } = await usePublicContentQuery<NewsItem | null>({
   key: `news:${slug}`,
   database: async requestFetch => (
     await requestFetch<{ item: NewsItem }>(
@@ -14,7 +16,12 @@ const { data: page } = await usePublicContentQuery<NewsItem | null>({
   ).item
 })
 
-if (!page.value) {
+if (isPublicArticleAuthRequiredError(pageError.value)) {
+  await navigateTo({
+    path: '/cms/login',
+    query: { redirect: route.fullPath }
+  })
+} else if (!page.value) {
   throw createError({
     statusCode: 404,
     statusMessage: '新闻不存在'
