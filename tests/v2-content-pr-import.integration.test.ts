@@ -10,11 +10,13 @@ import { closeDatabase, getDatabase } from '../server/db/client'
 import { runMigrations } from '../server/db/migrate'
 import {
   articleRevisions,
+  articleRedirects,
   articles,
   auditLogs,
   contentPrExternalActions,
   contentPrImportItems,
   contentPrImportRuns,
+  contentExportJobs,
   draftAuthors,
   drafts,
   memberProposals,
@@ -41,6 +43,7 @@ import {
 import { mergeMarkdownThreeWay } from '../server/services/content-import-merge'
 import { publishCmsDraftDatabase } from '../server/services/cms-publishing-database'
 import { buildPublishedSource } from '../server/services/cms-publishing-legacy'
+import { getCmsArticlePublicPath } from '../server/services/cms-articles'
 import {
   CMS_UNMATCHED_AUTHORS_KEY,
   CMS_UNMATCHED_CONTRIBUTORS_KEY
@@ -194,7 +197,7 @@ suite('V2 阶段 8 本地 Markdown PR 导入与三方冲突', () => {
       id: articleId,
       collection: 'wiki',
       relativePath,
-      publicPath: `/wiki/${relativePath.replace(/\.md$/, '')}`,
+      publicPath: getCmsArticlePublicPath('wiki', relativePath),
       directory: dirname(relativePath) === '.' ? 'wiki' : `wiki/${dirname(relativePath)}`,
       title: String(baseFrontmatter.title),
       frontmatter: baseFrontmatter,
@@ -831,6 +834,217 @@ suite('V2 阶段 8 本地 Markdown PR 导入与三方冲突', () => {
     const deletedRow = (await getDatabase().select().from(articles).where(eq(articles.id, deleted.articleId)))[0]!
     expect(deletedRow.deletedAt).not.toBeNull()
     expect(deletedRow.isPresent).toBe('false')
+  })
+
+  it('同一 Wiki 集合可将整个目录跨目录改名，并保持文章 ID、旧链接和移动导出任务', async () => {
+    const oldDirectory = '2023-12-10-电控视觉环境搭建'
+    const newDirectory = '2023-12-10-机器人开发环境搭建'
+    const index = await seedArticle(`${oldDirectory}/index.md`, '目录首页。\n')
+    const chapter = await seedArticle(`${oldDirectory}/0100-准备.md`, '章节正文。\n')
+    const seeded = [index, chapter]
+    const metadata = buildContentRepositoryMetadata(
+      seeded.map(item => item.snapshotFile),
+      [],
+      new Date('2026-01-01T00:00:00.000Z')
+    )
+    const fake = new FakeGitHub()
+    fake.contents.set(`${BASE}:.vinci/snapshot.json`, metadata.snapshotSource)
+    for (const item of seeded) fake.contents.set(`${BASE}:${item.path}`, item.baseSource)
+
+    const targetPaths = [
+      `wiki/${newDirectory}/index.md`,
+      `wiki/${newDirectory}/0100-准备.md`
+    ]
+    fake.contents.set(`${HEAD}:${targetPaths[0]}`, index.baseSource)
+    fake.contents.set(`${HEAD}:${targetPaths[1]}`, chapter.baseSource)
+    fake.files = seeded.map((item, ordinal) => ({
+      filename: targetPaths[ordinal]!,
+      previous_filename: item.path,
+      status: 'renamed',
+      changes: 0
+    }))
+
+    const run = (await dryRunContentPrImport(
+      actorUserId,
+      { repository: 'SDUTVINCI/sdutvinci_content', pullRequestNumber: 8 },
+      fake as unknown as ContentImportGitHubClient
+    ))!
+    expect(run.items).toHaveLength(2)
+    expect(run.items.every(item => item.classification === 'move_or_rename' && item.importable)).toBe(true)
+    expect(run.items.map(item => [item.oldPath, item.newPath])).toEqual([
+      [index.path, targetPaths[0]],
+      [chapter.path, targetPaths[1]]
+    ])
+
+    await importContentPrItems(run.id, run.items.map(item => item.id), actorUserId)
+    const importedDrafts = await getDatabase().select().from(drafts)
+    expect(importedDrafts).toHaveLength(2)
+    expect(importedDrafts.every(draft => draft.proposedAction === 'move')).toBe(true)
+    expect(importedDrafts.map(draft => draft.proposedRelativePath).sort()).toEqual([
+      `${newDirectory}/0100-准备.md`,
+      `${newDirectory}/index.md`
+    ])
+
+    const [reviewer] = await getDatabase().insert(users).values({
+      account: `directorymovereviewer${randomUUID().replaceAll('-', '').slice(0, 8)}`,
+      passwordHash: 'unused'
+    }).returning({ id: users.id })
+    for (const draft of importedDrafts) {
+      await getDatabase().update(drafts).set({ status: 'approved' }).where(eq(drafts.id, draft.id))
+      await getDatabase().insert(reviewEvents).values({
+        draftId: draft.id,
+        actorUserId: reviewer!.id,
+        action: 'approved',
+        fromStatus: 'pending_review',
+        toStatus: 'approved'
+      })
+      await publishCmsDraftDatabase(draft.id, actorUserId, { version: draft.version })
+    }
+
+    const movedRows = await getDatabase().select().from(articles)
+    const movedById = new Map(movedRows.map(article => [article.id, article]))
+    expect(movedById.get(index.articleId)).toMatchObject({
+      relativePath: `${newDirectory}/index.md`,
+      directory: `wiki/${newDirectory}`
+    })
+    expect(movedById.get(chapter.articleId)).toMatchObject({
+      relativePath: `${newDirectory}/0100-准备.md`,
+      directory: `wiki/${newDirectory}`
+    })
+
+    const redirects = await getDatabase().select().from(articleRedirects)
+    expect(redirects).toHaveLength(2)
+    expect((await getPublicArticleFromDatabase(
+      'wiki',
+      getCmsArticlePublicPath('wiki', `${oldDirectory}/index.md`)
+    ))?.id)
+      .toBe(index.articleId)
+    expect((await getPublicArticleFromDatabase(
+      'wiki',
+      getCmsArticlePublicPath('wiki', `${oldDirectory}/0100-准备.md`)
+    ))?.id)
+      .toBe(chapter.articleId)
+    expect((await getPublicArticleFromDatabase(
+      'wiki',
+      getCmsArticlePublicPath('wiki', `${newDirectory}/index.md`)
+    ))?.id).toBe(index.articleId)
+
+    const exportJobs = await getDatabase().select().from(contentExportJobs)
+    expect(exportJobs).toHaveLength(2)
+    expect(exportJobs.every(job => job.operation === 'move')).toBe(true)
+    expect(exportJobs.map(job => job.previousPath).sort()).toEqual([
+      `wiki/${oldDirectory}/0100-准备.md`,
+      `wiki/${oldDirectory}/index.md`
+    ])
+    expect(exportJobs.map(job => job.targetPath).sort()).toEqual(targetPaths.slice().sort())
+  })
+
+  it('跨目录放行不放宽跨内容集合移动', async () => {
+    const article = await seedArticle('collection-boundary/source.md', '跨集合保护。\n')
+    const metadata = buildContentRepositoryMetadata(
+      [article.snapshotFile],
+      [],
+      new Date('2026-01-01T00:00:00.000Z')
+    )
+    const fake = new FakeGitHub()
+    fake.contents.set(`${BASE}:.vinci/snapshot.json`, metadata.snapshotSource)
+    fake.files = [{
+      filename: 'news/collection-boundary/source.md',
+      previous_filename: article.path,
+      status: 'renamed',
+      changes: 0
+    }]
+
+    const run = (await dryRunContentPrImport(
+      actorUserId,
+      { repository: 'SDUTVINCI/sdutvinci_content', pullRequestNumber: 8 },
+      fake as unknown as ContentImportGitHubClient
+    ))!
+    expect(run.items[0]).toMatchObject({
+      classification: 'invalid_file',
+      importable: false,
+      warningCodes: ['IMPORT_CROSS_COLLECTION_MOVE']
+    })
+  })
+
+  it('相同 PR Head 的旧跨目录非法结果会原地重新规划且不重复写审计', async () => {
+    const oldPath = 'legacy-old/index.md'
+    const newPath = 'legacy-new/index.md'
+    const article = await seedArticle(oldPath, '旧 Dry Run 中的正文。\n')
+    const metadata = buildContentRepositoryMetadata(
+      [article.snapshotFile],
+      [],
+      new Date('2026-01-01T00:00:00.000Z')
+    )
+    const fake = new FakeGitHub()
+    fake.contents.set(`${BASE}:.vinci/snapshot.json`, metadata.snapshotSource)
+    fake.contents.set(`${BASE}:${article.path}`, article.baseSource)
+    fake.contents.set(`${HEAD}:wiki/${newPath}`, article.baseSource)
+    fake.files = [{
+      filename: `wiki/${newPath}`,
+      previous_filename: article.path,
+      status: 'renamed',
+      changes: 0
+    }]
+
+    const [legacyRun] = await getDatabase().insert(contentPrImportRuns).values({
+      repositoryId: 'SDUTVINCI/sdutvinci_content',
+      pullRequestNumber: 8,
+      baseCommitHash: BASE,
+      headCommitHash: HEAD,
+      headRepositoryId: 'SDUTVINCI/sdutvinci_content',
+      headRef: 'phase8-content-change',
+      baseSnapshotSha256: metadata.snapshotSha256,
+      actorUserId,
+      prAuthorLabel: 'phase8-proposer',
+      status: 'dry_run',
+      itemCount: 1,
+      importableCount: 0,
+      conflictCount: 1,
+      completedAt: new Date('2026-01-02T00:00:00.000Z')
+    }).returning({ id: contentPrImportRuns.id })
+    const [legacyItem] = await getDatabase().insert(contentPrImportItems).values({
+      runId: legacyRun!.id,
+      ordinal: 0,
+      targetType: 'article',
+      changeType: 'invalid',
+      classification: 'path_conflict',
+      importable: false,
+      oldPath: article.path,
+      newPath: `wiki/${newPath}`,
+      proposedArticleId: null,
+      warningCodes: ['IMPORT_CROSS_DIRECTORY_MOVE']
+    }).returning({ id: contentPrImportItems.id })
+
+    const replanned = (await dryRunContentPrImport(
+      actorUserId,
+      { repository: 'SDUTVINCI/sdutvinci_content', pullRequestNumber: 8 },
+      fake as unknown as ContentImportGitHubClient
+    ))!
+    expect(replanned.id).toBe(legacyRun!.id)
+    expect(replanned).toMatchObject({ importableCount: 1, conflictCount: 0 })
+    expect(replanned.items[0]).toMatchObject({
+      id: legacyItem!.id,
+      changeType: 'renamed',
+      classification: 'move_or_rename',
+      importable: true,
+      status: 'pending',
+      articleId: article.articleId,
+      warningCodes: []
+    })
+    expect((await getDatabase().select().from(auditLogs)
+      .where(eq(auditLogs.action, 'content_pr_import.legacy_cross_directory_replanned'))))
+      .toHaveLength(1)
+
+    const repeated = await dryRunContentPrImport(
+      actorUserId,
+      { repository: 'SDUTVINCI/sdutvinci_content', pullRequestNumber: 8 },
+      fake as unknown as ContentImportGitHubClient
+    )
+    expect(repeated!.items[0]).toMatchObject({ classification: 'move_or_rename', importable: true })
+    expect((await getDatabase().select().from(auditLogs)
+      .where(eq(auditLogs.action, 'content_pr_import.legacy_cross_directory_replanned'))))
+      .toHaveLength(1)
   })
 
   it('外部留言、关闭和同仓库源分支清理有顺序约束且重复请求幂等', async () => {

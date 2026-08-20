@@ -94,7 +94,8 @@ CodeMirror/Milkdown、S3 兼容对象存储和 Docker Compose。
    之前失败，要求先完成显式首次 snapshot 导入。
 
 文章 PR 导入固定比较 Base snapshot、数据库 Current Revision 与 PR Proposed。安全修改只建
-草稿；成员修改只建 Proposal；移动/删除需后续审核；评论与关闭 PR 需明确授权且没有 Merge
+草稿；成员修改只建 Proposal；同一内容集合内允许跨目录移动，但仍校验稳定 Article ID、
+目标路径、公开 URL 与重定向冲突；移动/删除需后续审核；评论与关闭 PR 需明确授权且没有 Merge
 API。评论和关闭成功后按 run/action 幂等，不重复调用 GitHub。可选源分支清理复用限定到内容
 仓库的 PR 导入 Token，只允许管理员在 PR 关闭后删除仍指向已检查 Head 的非默认分支；
 外部 Fork 由提交者处理。页面的白话说明、中文状态和 Git diff 行级材料属于长期回归边界。

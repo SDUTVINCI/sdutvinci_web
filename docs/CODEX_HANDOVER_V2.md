@@ -2022,3 +2022,22 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
   repository/ref 并允许 `delete_branch` 审计动作。
 - 本功能仅在本地隔离测试数据库验证，不修改独立内容仓库、正式 Markdown、Wiki 路径工具或
   生产环境；不会自动 Merge，也不会删除导入产生的草稿、成员提案和审计记录。
+
+## 2026-08-20：PR 同集合跨目录移动
+
+- PR 导入不再因旧新 Markdown 的父目录不同而生成 `IMPORT_CROSS_DIRECTORY_MOVE`。
+  同一 `wiki` 或 `news` collection 内可将单篇文章或整个目录改名；跨 collection、
+  路径占用、公开 URL/重定向冲突、Base snapshot、`vinciId` 和 Current Revision 校验
+  仍保持。
+- 正式发布服务同步放开同 collection 跨目录移动，保持 Article ID，更新
+  `relativePath`/`directory`/公开路径，为旧公开路径写 `article_redirects`，并生成带
+  `previousPath` 的 `move` export Outbox；发布层仍防御跨 collection 提案。
+- 为避免相同 PR/Head 继续返回已存的旧错误，Base/Head 不变时只对带旧错误且没有
+  草稿/成员提案的项目原地重新规划；run/item ID、其他已导入项和 GitHub 外部动作
+  记录不变，并写独立审计。
+- 隔离回归直接覆盖
+  `2023-12-10-电控视觉环境搭建` → `2023-12-10-机器人开发环境搭建`，
+  同时移动 `index.md` 和章节，并验证导入、批准、发布、redirect 和 Outbox。
+  阶段 8 集成 19/19、相关单元 13/13、typecheck、production build 和 diff check 通过。
+- 无数据库结构变化，不创建 Migration。本轮未修改独立内容仓库、正式 Markdown、
+  `utils/wiki-content-meta.ts` 或 `utils/wiki-chapters.ts`；未 Fetch、Push、SSH、部署或访问生产资源。

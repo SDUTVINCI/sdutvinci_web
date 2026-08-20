@@ -259,3 +259,11 @@ external_actions=2
 CMS 15 files / 109 tests、typecheck、wiki check、production build 和 `git diff --check`
 均通过。首次 production build 暴露共享 helper 相对路径无法被 Nitro 最终解析；改用
 Nuxt 根别名后重新构建通过，没有放宽任何运行时边界。
+
+## 9. 2026-08-20 同集合跨目录移动回归
+
+阶段 8 原验收中的“跨目录拒绝”已被后续需求取代。现行规则允许同一 `wiki` 或
+`news` collection 内跨目录移动，用于 Wiki 整目录改名；跨 collection、目标路径/公开
+URL/重定向冲突、`vinciId` 不一致等保护仍保持。定向集成回归覆盖中文 Wiki 目录的
+`index.md` 和章节同时移动，并走完 Dry Run、导入草稿、人工批准、正式发布、旧链接
+redirect 与内容仓库 `move` Outbox 验证。

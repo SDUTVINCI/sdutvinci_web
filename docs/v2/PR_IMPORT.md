@@ -83,7 +83,7 @@ Dry Run 后导入每一项时，会在同一事务中锁定导入项和文章，
 | `auto_merge` | 是 | 保存四方材料，使用 merged 内容创建草稿 |
 | `content_conflict` | 否 | 保留冲突证据，等待人工另行处理 |
 | `new_article` | 是 | DB 在 Dry Run item 上预分配 UUID；只创建新文章草稿 |
-| `move_or_rename` | 是 | 保持 vinciId，创建同目录移动提案并记录引用/重定向检查 |
+| `move_or_rename` | 是 | 保持 vinciId，创建同一内容集合内的移动提案，并记录引用/重定向检查 |
 | `deletion_proposal` | 是 | 只创建删除提案 |
 | `path_conflict` | 否 | 显示重复路径/ID、路径占用、越界或非法移动 |
 | `invalid_file` | 否 | 显示不受管文件、内容/快照/Frontmatter 错误 |
@@ -95,6 +95,13 @@ Article/Revision。移动发布保持同一 Article ID，写 `article_redirects`
 解析到同一文章。删除提案只有在正常提交、另一位审核者批准和管理员明确发布后才标记
 Article 删除并创建 export outbox；导入本身不会删除任何正式内容。
 
+同一个 `wiki` 或 `news` 集合内允许跨目录移动。因此将整个 Wiki 目录从
+`wiki/2023-12-10-电控视觉环境搭建/` 改名为
+`wiki/2023-12-10-机器人开发环境搭建/` 时，GitHub Diff 中能识别为 `renamed` 的
+`index.md` 和各章节会分别成为可导入的移动提案。每篇文章仍须保留 Base snapshot
+中的 `vinciId`；目标 Markdown 路径、目标公开 URL 或既有重定向有冲突时，对应项仍会
+被阻止。跨 `wiki` / `news` 集合移动仍不允许。
+
 文章 `authors`/`contributors` 中能匹配成员稳定 ID 的值继续进入成员关联；暂时没有成员档案
 的原始人名也会保存在草稿内部，并在正式发布时恢复到同名标准 Frontmatter 字段。内部保存键
 不会出现在公开 Markdown 中，导入不再因单个署名无法匹配而阻止整篇文章。
@@ -103,9 +110,10 @@ Article 删除并创建 export outbox；导入本身不会删除任何正式内�
 
 文章受管路径只能是 NFC 编码的 `news/**/*.md` 或 `wiki/**/*.md`；阶段 9 另允许已在 Base
 snapshot 登记的 `members/**/*.md` 做原路径修改或删除提案。拒绝绝对路径、反斜线、
-NUL、`.`/`..`/`.git` 段、跨 collection 或跨目录移动、成员新增/重命名、README、
+NUL、`.`/`..`/`.git` 段、跨 collection 移动、成员新增/重命名、README、
 manifest 外文件、重复路径/vinciId、非法 UTF-8、二进制、符号链接、非 file API 类型、
 超限文件和超限 PR。新文章不得自带 vinciId；正式 ID 只能由数据库分配。
+同一 collection 内的跨目录移动只放开目录边界，不放宽任何其他路径、身份或冲突检查。
 
 新增文章会扫描全文；修改/重命名文章只比较 Base → Proposed 新增的语法特征。只有 PR 新增
 HTML/Vue 标签、MDC 指令、可执行标签、事件属性、`javascript:`/`data:` 或未知模板语法才
@@ -117,6 +125,11 @@ HTML/Vue 标签、MDC 指令、可执行标签、事件属性、`javascript:`/`d
 `(repository_id, pull_request_number, head_commit_hash)` 唯一；同一 PR/Head 的并发或重试
 返回同一 run。item 在事务中锁定，已导入项直接返回原 draft，不重复创建。允许选择
 任意安全子集，冲突项保持 pending/blocked，不回滚已成功的其他项。
+
+为了让放开跨目录移动后的相同 PR/Head 可直接重试，服务会在 Base/Head 仍与原 run
+一致时，只对带旧 `IMPORT_CROSS_DIRECTORY_MOVE` 错误、且没有草稿或成员提案的项目原地
+重新规划。项目 ID、run ID、其他已导入项目和 GitHub 外部操作记录保持不变，重规划另写
+审计；Base 已变时不会用新基线改写旧 run。
 
 审计覆盖 Dry Run、逐项导入、选择批次、评论、关闭、源分支删除和外部写失败。GitHub 外部
 动作另存 processing/succeeded/failed 与脱敏错误码。同一 run 的同类外部动作成功后，后续
@@ -149,6 +162,8 @@ Migration `0016_flowery_war_machine.sql` 是 expand-only：只增加 PR run/item
 ## 9. 测试与本地人工验收
 
 - 专项：`npm run test:v2:phase8`（必须设置名称含 `test` 的独立 `TEST_DATABASE_URL`）。
+- 跨目录回归：专项测试使用上述两个中文 Wiki 目录，同时移动 `index.md` 与章节，
+  并验证 Article ID、新目录、旧链接 redirect 和 `move` export outbox。
 - 完整 CMS：`npm run test:cms`，使用同样隔离规则。
 - 浏览器夹具：`npm run v2:phase8:manual -- start|status|inspect|stop`。
 

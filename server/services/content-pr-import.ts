@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { dirname, extname } from 'node:path'
+import { extname } from 'node:path'
 import { and, asc, desc, eq, ilike, inArray, isNull, ne, or, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import type {
@@ -204,6 +204,32 @@ const invalidPlan = (
   conflictDetails: details
 })
 
+const plannedItemStorage = (item: PlannedItem) => ({
+  targetType: item.targetType || 'article',
+  changeType: item.changeType,
+  classification: item.classification,
+  importable: item.importable,
+  oldPath: item.oldPath,
+  newPath: item.newPath,
+  articleId: item.articleId,
+  baseRevisionId: item.baseRevisionId,
+  currentRevisionId: item.currentRevisionId,
+  memberId: item.memberId || null,
+  baseMemberRevisionId: item.baseMemberRevisionId || null,
+  currentMemberRevisionId: item.currentMemberRevisionId || null,
+  proposedArticleId: item.classification === 'new_article' ? undefined : null,
+  baseSource: item.baseSource,
+  currentSource: item.currentSource,
+  proposedSource: item.proposedSource,
+  mergedSource: item.mergedSource,
+  baseSha256: item.baseSource === null ? null : sha256(item.baseSource),
+  currentSha256: item.currentSource === null ? null : sha256(item.currentSource),
+  proposedSha256: item.proposedSource === null ? null : sha256(item.proposedSource),
+  mergedSha256: item.mergedSource === null ? null : sha256(item.mergedSource),
+  warningCodes: item.warningCodes,
+  conflictDetails: item.conflictDetails
+})
+
 const serializeCurrent = (row: {
   articleId: string
   collection: string
@@ -276,11 +302,6 @@ const planFile = async (
   if (oldPath && newPath && oldPath.collection !== newPath.collection) {
     return invalidPlan(ordinal, file, 'IMPORT_CROSS_COLLECTION_MOVE')
   }
-  if (file.status === 'renamed' && oldPath && newPath
-    && dirname(oldPath.relativePath) !== dirname(newPath.relativePath)) {
-    return invalidPlan(ordinal, file, 'IMPORT_CROSS_DIRECTORY_MOVE')
-  }
-
   let baseSource: string | null = null
   let proposedSource: string | null = null
   try {
@@ -690,13 +711,33 @@ export const dryRunContentPrImport = async (
     || pull.state !== 'open') {
     throw new ContentPrImportError('IMPORT_PULL_REQUEST_INVALID')
   }
-  const [existing] = await getDatabase().select({ id: contentPrImportRuns.id })
+  const [existing] = await getDatabase().select({
+    id: contentPrImportRuns.id,
+    baseCommitHash: contentPrImportRuns.baseCommitHash
+  })
     .from(contentPrImportRuns).where(and(
       eq(contentPrImportRuns.repositoryId, repositoryId),
       eq(contentPrImportRuns.pullRequestNumber, pull.number),
       eq(contentPrImportRuns.headCommitHash, pull.head.sha)
     )).limit(1)
-  if (existing) return getContentPrImportRun(existing.id)
+  let legacyCrossDirectoryRunId: string | null = null
+  if (existing) {
+    const storedItems = await getDatabase().select({
+      warningCodes: contentPrImportItems.warningCodes,
+      status: contentPrImportItems.status,
+      draftId: contentPrImportItems.draftId,
+      memberProposalId: contentPrImportItems.memberProposalId
+    }).from(contentPrImportItems).where(eq(contentPrImportItems.runId, existing.id))
+    const canReplanLegacyCrossDirectory = existing.baseCommitHash === pull.base.sha
+      && storedItems.some(item =>
+        item.status !== 'imported'
+        && !item.draftId
+        && !item.memberProposalId
+        && item.warningCodes.includes('IMPORT_CROSS_DIRECTORY_MOVE')
+      )
+    if (!canReplanLegacyCrossDirectory) return getContentPrImportRun(existing.id)
+    legacyCrossDirectoryRunId = existing.id
+  }
 
   let snapshotSource: string
   try {
@@ -790,6 +831,74 @@ export const dryRunContentPrImport = async (
 
   const now = new Date()
   const run = await getDatabase().transaction(async (tx) => {
+    if (legacyCrossDirectoryRunId) {
+      const [lockedRun] = await tx.select().from(contentPrImportRuns)
+        .where(eq(contentPrImportRuns.id, legacyCrossDirectoryRunId)).limit(1).for('update')
+      if (!lockedRun || lockedRun.baseCommitHash !== pull.base.sha
+        || lockedRun.headCommitHash !== pull.head.sha) {
+        throw new ContentPrImportError('IMPORT_IDEMPOTENCY_FAILED', 409)
+      }
+      const storedItems = await tx.select().from(contentPrImportItems)
+        .where(eq(contentPrImportItems.runId, lockedRun.id))
+        .orderBy(asc(contentPrImportItems.ordinal)).for('update')
+      const plannedByOrdinal = new Map(planned.map(item => [item.ordinal, item]))
+      const legacyItems = storedItems.filter(item =>
+        item.status !== 'imported'
+        && !item.draftId
+        && !item.memberProposalId
+        && item.warningCodes.includes('IMPORT_CROSS_DIRECTORY_MOVE')
+      )
+      for (const item of legacyItems) {
+        const replacement = plannedByOrdinal.get(item.ordinal)
+        if (!replacement || replacement.oldPath !== item.oldPath || replacement.newPath !== item.newPath) {
+          throw new ContentPrImportError('IMPORT_IDEMPOTENCY_FAILED', 409)
+        }
+        await tx.update(contentPrImportItems).set({
+          ...plannedItemStorage(replacement),
+          status: 'pending',
+          draftId: null,
+          memberProposalId: null,
+          importedAt: null
+        }).where(eq(contentPrImportItems.id, item.id))
+      }
+      if (!legacyItems.length) return { id: lockedRun.id }
+
+      const refreshedItems = await tx.select({
+        classification: contentPrImportItems.classification,
+        importable: contentPrImportItems.importable
+      }).from(contentPrImportItems).where(eq(contentPrImportItems.runId, lockedRun.id))
+      await tx.update(contentPrImportRuns).set({
+        itemCount: refreshedItems.length,
+        importableCount: refreshedItems.filter(item => item.importable).length,
+        conflictCount: refreshedItems.filter(item => !item.importable).length,
+        report: {
+          ...lockedRun.report,
+          classifications: Object.fromEntries(
+            [...new Set(refreshedItems.map(item => item.classification))].map(classification => [
+              classification,
+              refreshedItems.filter(item => item.classification === classification).length
+            ])
+          ),
+          legacyCrossDirectoryItemsReplanned: legacyItems.length
+        },
+        completedAt: now
+      }).where(eq(contentPrImportRuns.id, lockedRun.id))
+      await tx.insert(auditLogs).values({
+        actorUserId,
+        action: 'content_pr_import.legacy_cross_directory_replanned',
+        targetType: 'content_pr_import_run',
+        targetId: lockedRun.id,
+        metadata: {
+          repositoryId,
+          pullRequestNumber: pull.number,
+          baseCommitHash: pull.base.sha,
+          headCommitHash: pull.head.sha,
+          replannedItemCount: legacyItems.length
+        }
+      })
+      return { id: lockedRun.id }
+    }
+
     const [created] = await tx.insert(contentPrImportRuns).values({
       repositoryId,
       pullRequestNumber: pull.number,
@@ -836,29 +945,7 @@ export const dryRunContentPrImport = async (
     const inserted = await tx.insert(contentPrImportItems).values(planned.map(item => ({
       runId: created.id,
       ordinal: item.ordinal,
-      targetType: item.targetType || 'article',
-      changeType: item.changeType,
-      classification: item.classification,
-      importable: item.importable,
-      oldPath: item.oldPath,
-      newPath: item.newPath,
-      articleId: item.articleId,
-      baseRevisionId: item.baseRevisionId,
-      currentRevisionId: item.currentRevisionId,
-      memberId: item.memberId || null,
-      baseMemberRevisionId: item.baseMemberRevisionId || null,
-      currentMemberRevisionId: item.currentMemberRevisionId || null,
-      proposedArticleId: item.classification === 'new_article' ? undefined : null,
-      baseSource: item.baseSource,
-      currentSource: item.currentSource,
-      proposedSource: item.proposedSource,
-      mergedSource: item.mergedSource,
-      baseSha256: item.baseSource === null ? null : sha256(item.baseSource),
-      currentSha256: item.currentSource === null ? null : sha256(item.currentSource),
-      proposedSha256: item.proposedSource === null ? null : sha256(item.proposedSource),
-      mergedSha256: item.mergedSource === null ? null : sha256(item.mergedSource),
-      warningCodes: item.warningCodes,
-      conflictDetails: item.conflictDetails
+      ...plannedItemStorage(item)
     }))).returning({ id: contentPrImportItems.id })
     await tx.insert(auditLogs).values({
       actorUserId,

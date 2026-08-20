@@ -1,5 +1,4 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { dirname } from 'node:path'
 import { and, desc, eq, isNull, ne, or } from 'drizzle-orm'
 import type { CmsArticleCollection } from '../../shared/types/cms-articles'
 import type { CmsPublishResult } from '../../shared/types/cms-publishing'
@@ -220,8 +219,8 @@ export const publishCmsDraftDatabase = async (
       throw new CmsPublishPathError('PR 新文章必须保留 Dry Run 已审计的目标路径')
     }
     if (moving) {
-      if (dirname(relativePath) !== dirname(existingArticle!.relativePath)) {
-        throw new CmsPublishPathError('PR 移动提案不允许跨目录')
+      if (collection !== existingArticle!.collection) {
+        throw new CmsPublishPathError('PR 移动提案不允许跨内容集合')
       }
       const targetPublicPath = getCmsArticlePublicPath(collection, relativePath)
       const [collision] = await tx.select({ id: articles.id }).from(articles).where(or(
