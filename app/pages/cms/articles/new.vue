@@ -6,6 +6,11 @@ import {
   isWikiDocumentIndexPath,
   WIKI_DOCUMENT_TAGS
 } from '~~/shared/utils/wiki-tags'
+import {
+  isCanonicalWikiDocumentDate,
+  validateWikiDocumentPath,
+  WIKI_DOCUMENT_NAME_MAX_LENGTH
+} from '~~/shared/utils/wiki-document-path'
 
 definePageMeta({ layout: 'cms', middleware: 'cms-auth' })
 useHead({ title: '新建内容草稿 · Vinci 内容管理后台' })
@@ -14,7 +19,8 @@ const form = reactive({
   title: '',
   collection: 'news' as 'news' | 'wiki',
   wikiContentType: 'document' as 'document' | 'chapter',
-  directory: '',
+  documentDate: '',
+  documentName: '',
   parentArticleId: '',
   filename: '',
   tags: [] as WikiDocumentTag[]
@@ -28,7 +34,13 @@ const { data: wikiArticleData } = await useAsyncData(
 )
 const wikiDocuments = computed(() => (wikiArticleData.value?.articles || [])
   .filter(article => isWikiDocumentIndexPath(article.relativePath) && !article.isDeleted))
-const directoryEdited = ref(false)
+const localToday = () => {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+}
+form.documentDate = localToday()
+const documentDateEdited = ref(false)
+const documentNameEdited = ref(false)
 const filenameEdited = ref(false)
 const safeSegment = (value: string) => value
   .trim()
@@ -37,24 +49,122 @@ const safeSegment = (value: string) => value
   .replace(/^-+|-+$/g, '')
 
 watch(() => form.title, (title) => {
-  if (!directoryEdited.value) form.directory = safeSegment(title)
+  const datedTitle = title.trim().match(/^(\d{4}-\d{2}-\d{2})-(.+)$/)
+  if (!documentNameEdited.value) {
+    form.documentName = safeSegment(
+      datedTitle && isCanonicalWikiDocumentDate(datedTitle[1]!) ? datedTitle[2]! : title
+    )
+  }
+  if (!documentDateEdited.value && datedTitle && isCanonicalWikiDocumentDate(datedTitle[1]!)) {
+    form.documentDate = datedTitle[1]!
+  }
   if (!filenameEdited.value) form.filename = `${safeSegment(title) || '章节'}.md`
+})
+
+const documentPathValidation = computed(() =>
+  validateWikiDocumentPath(form.documentDate, form.documentName)
+)
+type PathAvailabilityState = 'idle' | 'checking' | 'available' | 'unavailable' | 'error'
+const pathAvailability = ref<PathAvailabilityState>('idle')
+const pathCollision = ref<'article' | 'draft' | null>(null)
+let availabilityTimer: ReturnType<typeof setTimeout> | null = null
+let availabilityRequest = 0
+const checkPathAvailability = async () => {
+  const validation = documentPathValidation.value
+  if (!validation.valid) {
+    pathAvailability.value = 'idle'
+    pathCollision.value = null
+    return
+  }
+  const request = ++availabilityRequest
+  pathAvailability.value = 'checking'
+  pathCollision.value = null
+  try {
+    const result = await $fetch<{
+      available: boolean
+      collision: 'article' | 'draft' | null
+    }>('/api/cms/drafts/wiki-path-availability', {
+      query: {
+        documentDate: validation.date,
+        documentName: validation.name
+      }
+    })
+    if (request !== availabilityRequest) return
+    pathAvailability.value = result.available ? 'available' : 'unavailable'
+    pathCollision.value = result.collision
+  } catch {
+    if (request !== availabilityRequest) return
+    pathAvailability.value = 'error'
+  }
+}
+watch(
+  [() => form.collection, () => form.wikiContentType, () => form.documentDate, () => form.documentName],
+  () => {
+    if (availabilityTimer) clearTimeout(availabilityTimer)
+    availabilityRequest += 1
+    if (!import.meta.client || form.collection !== 'wiki' || form.wikiContentType !== 'document') {
+      pathAvailability.value = 'idle'
+      pathCollision.value = null
+      return
+    }
+    pathAvailability.value = documentPathValidation.value.valid ? 'checking' : 'idle'
+    pathCollision.value = null
+    availabilityTimer = setTimeout(checkPathAvailability, 300)
+  },
+  { immediate: true }
+)
+onBeforeUnmount(() => {
+  if (availabilityTimer) clearTimeout(availabilityTimer)
+  availabilityRequest += 1
+})
+
+const documentPathStatus = computed(() => {
+  const validation = documentPathValidation.value
+  if (!validation.valid) return { tone: 'error', message: validation.message }
+  if (pathAvailability.value === 'checking') return { tone: 'checking', message: '正在检查目录是否可用…' }
+  if (pathAvailability.value === 'unavailable') {
+    return {
+      tone: 'error',
+      message: pathCollision.value === 'draft'
+        ? '这个目录已有活动草稿，请勿重复创建'
+        : '这个目录已有正式 Wiki 资料，请更换日期或名称'
+    }
+  }
+  if (pathAvailability.value === 'available') return { tone: 'success', message: '目录格式正确，且当前可以使用' }
+  if (pathAvailability.value === 'error') return { tone: 'warning', message: '实时占用检查暂时失败，提交时仍会再次校验' }
+  return { tone: 'checking', message: '目录格式正确，等待检查是否可用' }
 })
 
 const plannedPath = computed(() => {
   if (form.collection !== 'wiki') return '发布时按新闻标题自动生成路径'
   if (form.wikiContentType === 'document') {
-    return form.directory ? `wiki/${form.directory}/index.md` : '请填写一级资料目录'
+    return documentPathValidation.value.valid
+      ? `wiki/${documentPathValidation.value.relativePath}`
+      : '完善资料日期和名称后自动生成'
   }
   const parent = wikiDocuments.value.find(article => article.id === form.parentArticleId)
   if (!parent) return '请先选择所属主文档'
   const directory = parent.relativePath.slice(0, -'/index.md'.length)
   return `wiki/${directory}/${form.filename || '章节.md'}`
 })
+const canCreate = computed(() => {
+  if (!form.title.trim()) return false
+  if (form.collection === 'news') return true
+  if (form.wikiContentType === 'chapter') return Boolean(form.parentArticleId && form.filename.trim())
+  return documentPathValidation.value.valid
+    && pathAvailability.value !== 'checking'
+    && pathAvailability.value !== 'unavailable'
+})
 const submitting = ref(false)
 const errorMessage = ref('')
 
 const createDraft = async () => {
+  if (!canCreate.value) {
+    errorMessage.value = documentPathValidation.value.valid
+      ? '请先完成并通过 Wiki 保存位置检查'
+      : documentPathValidation.value.message
+    return
+  }
   submitting.value = true
   errorMessage.value = ''
   try {
@@ -68,7 +178,8 @@ const createDraft = async () => {
         ...(form.collection === 'wiki' && form.wikiContentType === 'document'
           ? {
               wikiContentType: 'document',
-              directory: form.directory,
+              documentDate: form.documentDate,
+              documentName: form.documentName,
               tags: form.tags
             }
           : {}),
@@ -125,16 +236,42 @@ const createDraft = async () => {
       </fieldset>
 
       <template v-if="form.collection === 'wiki' && form.wikiContentType === 'document'">
-        <label>
-          <span>一级资料目录</span>
+        <div class="cms-wiki-document-path-fields">
+          <label>
+            <span>资料日期</span>
+            <input
+              v-model="form.documentDate"
+              type="date"
+              required
+              @input="documentDateEdited = true"
+            >
+            <small>日期会固定写入一级目录前缀。</small>
+          </label>
+          <label>
+            <span>资料名称（不含日期）</span>
+            <input
+              v-model.trim="form.documentName"
+              required
+              :maxlength="WIKI_DOCUMENT_NAME_MAX_LENGTH"
+              placeholder="例如：OpenWrt编译教学"
+              @input="documentNameEdited = true"
+            >
+            <small>不能填写斜杠，也不要在这里重复填写日期。</small>
+          </label>
+        </div>
+        <label class="cms-generated-path-field">
+          <span>最终一级目录（自动生成）</span>
           <input
-            v-model.trim="form.directory"
-            required
-            maxlength="200"
-            placeholder="例如：2021-09-16-OpenWrt编译教学"
-            @input="directoryEdited = true"
+            :value="documentPathValidation.valid ? documentPathValidation.directory : ''"
+            readonly
+            placeholder="选择日期并填写名称后显示"
+            :aria-invalid="documentPathStatus.tone === 'error'"
           >
-          <small>主文档正文将保存为此目录下的 index.md；这才是前台 Wiki 的“大文章”。</small>
+          <small
+            class="cms-path-validation-status"
+            :class="`is-${documentPathStatus.tone}`"
+            role="status"
+          >{{ documentPathStatus.message }}</small>
         </label>
         <fieldset class="cms-choice-fieldset">
           <legend>组别标签（可多选）</legend>
@@ -173,7 +310,7 @@ const createDraft = async () => {
       </template>
 
       <p class="cms-planned-path"><strong>计划保存位置</strong><code>{{ plannedPath }}</code></p>
-      <button class="cms-button cms-button-primary" :disabled="submitting">
+      <button class="cms-button cms-button-primary" :disabled="submitting || !canCreate">
         {{ submitting ? '正在创建…' : '创建并开始编辑' }}
       </button>
     </form>

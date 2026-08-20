@@ -9,6 +9,10 @@ import type {
 } from '../../shared/types/cms-drafts'
 import { assessMarkdownVisualSafety } from '../../shared/utils/cms-markdown-safety'
 import {
+  parseWikiDocumentDirectory,
+  validateWikiDocumentPath
+} from '../../shared/utils/wiki-document-path'
+import {
   isWikiDocumentIndexPath,
   isWikiDocumentTag,
   normalizeWikiDocumentTags,
@@ -502,6 +506,10 @@ export const createCmsNewArticleDraft = async (
   if (collection === 'wiki' && relativePath) {
     const segments = relativePath.split('/')
     if (segments.length !== 2) throw new Error('WIKI_ARTICLE_PATH_INVALID')
+    if (
+      isWikiDocumentIndexPath(relativePath)
+      && !parseWikiDocumentDirectory(segments[0]!)
+    ) throw new Error('WIKI_ARTICLE_PATH_INVALID')
   }
   const wikiTags = options.wikiTags || []
   if (wikiTags.some(tag => !isWikiDocumentTag(tag))) {
@@ -565,6 +573,38 @@ export const createCmsNewArticleDraft = async (
     return result
   })
   return (await rowsToDrafts([created!]))[0]!
+}
+
+export const getCmsNewWikiDocumentPathAvailability = async (
+  documentDate: string,
+  documentName: string
+) => {
+  const validation = validateWikiDocumentPath(documentDate, documentName)
+  if (!validation.valid) return { available: false as const, validation }
+
+  const [formalCollision] = await getDatabase()
+    .select({ id: articles.id })
+    .from(articles)
+    .where(and(
+      eq(articles.collection, 'wiki'),
+      eq(articles.relativePath, validation.relativePath)
+    ))
+    .limit(1)
+  const [draftCollision] = await getDatabase()
+    .select({ id: drafts.id })
+    .from(drafts)
+    .where(and(
+      eq(drafts.collection, 'wiki'),
+      isNull(drafts.deletedAt),
+      sql`${drafts.preservedFrontmatter} ->> ${CMS_NEW_ARTICLE_RELATIVE_PATH_KEY} = ${validation.relativePath}`
+    ))
+    .limit(1)
+
+  return {
+    available: !formalCollision && !draftCollision,
+    validation,
+    collision: formalCollision ? 'article' as const : draftCollision ? 'draft' as const : null
+  }
 }
 
 export const saveCmsDraft = async (

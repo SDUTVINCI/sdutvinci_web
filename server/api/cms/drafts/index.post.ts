@@ -9,15 +9,16 @@ import {
   isWikiDocumentIndexPath,
   WIKI_DOCUMENT_TAGS
 } from '../../../../shared/utils/wiki-tags'
+import { validateWikiDocumentPath } from '../../../../shared/utils/wiki-document-path'
 import {
   requireCmsCsrf,
   requireCmsRequestAuth
 } from '../../../utils/cms-http'
 
-const wikiDirectorySchema = z.string().trim().min(1).max(200).refine(
-  value => !value.includes('/') && !value.includes('\\') && value !== '.' && value !== '..',
-  'Wiki 一级目录名不合法'
-)
+const wikiDocumentPathFields = {
+  documentDate: z.string().trim(),
+  documentName: z.string().trim()
+}
 const wikiChapterFilenameSchema = z.string().trim().min(4).max(200).refine(
   value => value.endsWith('.md')
     && !value.includes('/')
@@ -37,13 +38,18 @@ const schema = z.union([
     title: z.string().trim().min(1).max(200)
   }).strict(),
   z.object({
+    ...wikiDocumentPathFields,
     kind: z.literal('new'),
     collection: z.literal('wiki'),
     wikiContentType: z.literal('document'),
     title: z.string().trim().min(1).max(200),
-    directory: wikiDirectorySchema,
     tags: z.array(z.enum(WIKI_DOCUMENT_TAGS)).max(WIKI_DOCUMENT_TAGS.length)
-  }).strict(),
+  }).strict().superRefine((value, context) => {
+    const validation = validateWikiDocumentPath(value.documentDate, value.documentName)
+    if (!validation.valid) {
+      context.addIssue({ code: z.ZodIssueCode.custom, message: validation.message })
+    }
+  }),
   z.object({
     kind: z.literal('new'),
     collection: z.literal('wiki'),
@@ -66,8 +72,10 @@ export default defineEventHandler(async (event) => {
     } else if (input.collection === 'news') {
       draft = await createCmsNewArticleDraft('news', input.title, auth.user.id)
     } else if (input.wikiContentType === 'document') {
+      const path = validateWikiDocumentPath(input.documentDate, input.documentName)
+      if (!path.valid) throw createError({ statusCode: 400, message: path.message })
       draft = await createCmsNewArticleDraft('wiki', input.title, auth.user.id, {
-        relativePath: `${input.directory}/index.md`,
+        relativePath: path.relativePath,
         wikiTags: input.tags
       })
     } else {

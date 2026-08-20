@@ -13,6 +13,7 @@ import {
   createCmsNewArticleDraft,
   deleteCmsDraft,
   getCmsDraft,
+  getCmsNewWikiDocumentPathAvailability,
   listCmsDrafts,
   restoreCmsDraft,
   saveCmsDraft
@@ -122,6 +123,16 @@ integration('CMS Markdown 编辑器与草稿系统', () => {
   })
 
   it('按 Wiki 主文档和章节保存计划路径，且只有 index.md 可编辑组别标签', async () => {
+    await expect(getCmsNewWikiDocumentPathAvailability(
+      '2021-09-16',
+      'OpenWrt编译教学'
+    )).resolves.toMatchObject({ available: true })
+    await expect(createCmsNewArticleDraft(
+      'wiki',
+      '非法自由目录',
+      userId,
+      { relativePath: '111/index.md' }
+    )).rejects.toThrow('WIKI_ARTICLE_PATH_INVALID')
     const mainDraft = await createCmsNewArticleDraft(
       'wiki',
       '2021-09-16-OpenWrt编译教学',
@@ -136,6 +147,10 @@ integration('CMS Markdown 编辑器与草稿系统', () => {
       wikiContentType: 'document',
       wikiTags: ['嵌入式组', '软件算法组']
     })
+    await expect(getCmsNewWikiDocumentPathAvailability(
+      '2021-09-16',
+      'OpenWrt编译教学'
+    )).resolves.toMatchObject({ available: false, collision: 'draft' })
 
     const mainLeaseId = await acquireLease(mainDraft.id)
     const savedMain = await saveCmsDraft(mainDraft.id, userId, {

@@ -477,6 +477,59 @@
   cursor: not-allowed;
 }
 
+.cms-form input[readonly] {
+  border-style: dashed;
+  background: color-mix(in srgb, var(--cyan) 6%, var(--surface));
+  color: var(--ink);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  cursor: text;
+}
+
+.cms-wiki-document-path-fields {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.7fr) minmax(260px, 1.3fr);
+  gap: 14px;
+}
+
+.cms-generated-path-field {
+  padding: 15px;
+  border: 1px solid color-mix(in srgb, var(--cyan) 28%, var(--line));
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--cyan) 5%, var(--surface));
+}
+
+.cms-form label > .cms-path-validation-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 700;
+}
+
+.cms-path-validation-status::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.cms-path-validation-status.is-success {
+  color: var(--success, #2e9d68);
+}
+
+.cms-path-validation-status.is-error {
+  color: var(--danger, #d9534f);
+}
+
+.cms-path-validation-status.is-warning {
+  color: var(--warning, #c77b16);
+}
+
+.cms-path-validation-status.is-checking {
+  color: var(--muted);
+}
+
 .cms-choice-fieldset {
   display: grid;
   gap: 12px;
@@ -565,6 +618,12 @@
 .cms-planned-path code {
   overflow-wrap: anywhere;
   color: var(--ink);
+}
+
+@media (max-width: 680px) {
+  .cms-wiki-document-path-fields {
+    grid-template-columns: 1fr;
+  }
 }
 
 .cms-login-form {
