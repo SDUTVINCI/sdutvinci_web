@@ -524,8 +524,236 @@ a.article-credit-person:hover {
 .vinci-content-alert,
 .vinci-parameter-card,
 .vinci-video-embed,
+.vinci-document-embed,
 .vinci-download-card {
   margin: 1.5rem 0;
+}
+
+.wiki-content-body blockquote:has(+ .vinci-document-embed) {
+  display: none;
+}
+
+.vinci-document-embed {
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--cyan) 28%, var(--line));
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.vinci-document-embed-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px 18px;
+  background:
+    linear-gradient(110deg, color-mix(in srgb, var(--cyan) 8%, transparent), transparent 58%),
+    var(--surface-soft);
+}
+
+.vinci-document-embed-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.vinci-document-embed-heading > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.vinci-document-embed-icon {
+  display: grid;
+  flex: 0 0 auto;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--cyan);
+  color: #fff;
+  font-size: 1.35rem;
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--cyan) 22%, transparent);
+}
+
+.vinci-document-embed-heading small,
+.vinci-document-dialog header small {
+  color: var(--cyan);
+  font-size: 0.69rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.vinci-document-embed-heading strong,
+.vinci-document-dialog header strong {
+  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 950;
+}
+
+.vinci-document-embed-heading > span:last-child > span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vinci-document-embed-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.vinci-document-embed-actions button,
+.vinci-document-embed-actions a,
+.vinci-document-dialog header button,
+.vinci-document-dialog header a {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 7px 11px;
+  background: var(--surface);
+  color: var(--ink) !important;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 900;
+  line-height: 1.2;
+  text-decoration: none !important;
+}
+
+.vinci-document-embed-actions button:hover,
+.vinci-document-embed-actions a:hover,
+.vinci-document-dialog header button:hover,
+.vinci-document-dialog header a:hover {
+  border-color: color-mix(in srgb, var(--cyan) 48%, var(--line));
+  color: var(--cyan) !important;
+}
+
+.vinci-document-embed-actions .vinci-document-embed-wide {
+  border-color: var(--cyan);
+  background: var(--cyan);
+  color: #fff !important;
+}
+
+.vinci-document-embed-actions .vinci-document-embed-wide:hover {
+  background: color-mix(in srgb, var(--cyan) 82%, #06191b);
+  color: #fff !important;
+}
+
+.vinci-document-embed-frame,
+.vinci-document-dialog-frame {
+  position: relative;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--surface-soft) 82%, #d8e5e4);
+}
+
+.vinci-document-embed-frame {
+  height: clamp(520px, 68vh, 680px);
+  border-top: 1px solid var(--line);
+}
+
+.vinci-document-embed-frame iframe,
+.vinci-document-dialog-frame iframe {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100% !important;
+  max-width: none;
+  height: 100% !important;
+  border: 0;
+  background: #fff;
+}
+
+.vinci-document-embed-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 850;
+}
+
+.vinci-document-embed-collapsed {
+  display: grid;
+  width: 100%;
+  min-height: clamp(520px, 68vh, 680px);
+  place-items: center;
+  gap: 3px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  padding: 24px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--cyan) 9%, transparent), transparent 62%),
+    var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+}
+
+.vinci-document-embed-collapsed > span {
+  color: var(--cyan);
+  font-size: 1.8rem;
+}
+
+.vinci-document-embed-collapsed strong {
+  font-size: 0.95rem;
+}
+
+.vinci-document-embed-collapsed small {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.vinci-document-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2400;
+  display: grid;
+  place-items: center;
+  padding: 3vh 3vw;
+  background: rgba(11, 18, 22, 0.72);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+.vinci-document-dialog {
+  display: grid;
+  overflow: hidden;
+  width: min(94vw, 1720px);
+  height: 90vh;
+  grid-template-rows: auto minmax(0, 1fr);
+  border: 1px solid color-mix(in srgb, var(--cyan) 35%, var(--line));
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.34);
+}
+
+.vinci-document-dialog > header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px 12px 18px;
+  background: var(--surface-soft);
+}
+
+.vinci-document-dialog > header > div {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+}
+
+.vinci-document-dialog-frame {
+  border-top: 1px solid var(--line);
 }
 
 .vinci-content-alert {
@@ -1009,6 +1237,52 @@ a.article-credit-person:hover {
 
   .wiki-content-body {
     font-size: 1rem;
+  }
+
+  .vinci-document-embed-header {
+    display: grid;
+    padding: 15px;
+  }
+
+  .vinci-document-embed-heading > span:last-child > span {
+    white-space: normal;
+  }
+
+  .vinci-document-embed-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .vinci-document-embed-actions a {
+    grid-column: 1 / -1;
+  }
+
+  .vinci-document-embed-frame {
+    height: 65vh;
+    min-height: 440px;
+  }
+
+  .vinci-document-embed-collapsed {
+    min-height: 154px;
+  }
+
+  .vinci-document-dialog-backdrop {
+    padding: 0;
+  }
+
+  .vinci-document-dialog {
+    width: 100vw;
+    height: 100dvh;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .vinci-document-dialog > header {
+    flex-wrap: wrap;
+  }
+
+  .vinci-document-dialog > header > div {
+    flex-basis: calc(100% - 62px);
   }
 
   .wiki-article-header h1 {

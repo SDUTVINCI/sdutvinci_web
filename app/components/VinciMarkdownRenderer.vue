@@ -11,9 +11,11 @@ import {
 } from '../utils/wiki-heading-numbering'
 import VinciAlert from './markdown/VinciAlert.vue'
 import VinciDownloadCard from './markdown/VinciDownloadCard.vue'
+import VinciDocumentEmbed from './markdown/VinciDocumentEmbed.vue'
 import VinciParameterCard from './markdown/VinciParameterCard.vue'
 import VinciVideo from './markdown/VinciVideo.vue'
 import { resolveMarkdownMediaUrls } from '~~/shared/utils/static-media'
+import { resolveLegacyDocumentEmbeds } from '~~/shared/utils/vinci-document-embed'
 
 const props = defineProps<{
   markdown: string
@@ -21,7 +23,7 @@ const props = defineProps<{
 }>()
 
 const preparedMarkdown = computed(() =>
-  protectVinciTemplateTokens(resolveMarkdownMediaUrls(props.markdown))
+  protectVinciTemplateTokens(resolveMarkdownMediaUrls(resolveLegacyDocumentEmbeds(props.markdown)))
 )
 const plugins = createVinciMarkdownPlugins()
 const NuxtLinkComponent = resolveComponent('NuxtLink')
@@ -31,6 +33,7 @@ const components = {
   'vinci-alert': VinciAlert,
   'vinci-parameter-card': VinciParameterCard,
   'vinci-video': VinciVideo,
+  'vinci-document-embed': VinciDocumentEmbed,
   'vinci-download-card': VinciDownloadCard
 }
 

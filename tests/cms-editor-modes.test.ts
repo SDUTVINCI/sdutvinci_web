@@ -30,7 +30,7 @@ describe('CMS 沉浸式编辑、双栏预览与内容组件', () => {
 未知组件保持原文
 ::
 
-${vinciContentComponentDefinitions[3]!.defaultMarkdown}`
+${vinciContentComponentDefinitions.find(item => item.id === 'download-card')!.defaultMarkdown}`
     const occurrences = findVinciContentComponents(source)
 
     expect(occurrences.map(item => item.definition.id)).toEqual([

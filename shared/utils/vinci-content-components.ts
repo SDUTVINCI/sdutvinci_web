@@ -2,6 +2,7 @@ export type VinciContentComponentId =
   | 'alert'
   | 'parameter-card'
   | 'video'
+  | 'document-embed'
   | 'download-card'
 
 export interface VinciContentComponentDefinition {
@@ -47,6 +48,14 @@ export const vinciContentComponentDefinitions: readonly VinciContentComponentDef
     label: '视频',
     description: '嵌入 HTTPS 或站内视频地址。',
     defaultMarkdown: `::vinci-video{src="https://example.com/embed" title="视频"}
+::`
+  },
+  {
+    id: 'document-embed',
+    tag: 'vinci-document-embed',
+    label: '外部文档',
+    description: '嵌入飞书等 HTTPS 在线文档，并提供移动端展开和宽屏查看。',
+    defaultMarkdown: `::vinci-document-embed{src="https://example.com/document" provider="在线文档" title="资料预览"}
 ::`
   },
   {
