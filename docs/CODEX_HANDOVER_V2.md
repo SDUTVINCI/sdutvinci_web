@@ -2017,7 +2017,8 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
 - 管理员关闭 PR 后可选择删除官方内容仓库中的源分支。删除前要求输入完整分支名，并再次验证
   PR 已关闭、关闭审计成功、仓库/分支未变且分支仍指向 Dry Run Head；外部 Fork、`main`、旧记录
   或 Head 已变化均拒绝。
-- 删除使用独立 `CONTENT_PR_BRANCH_CLEANUP_GITHUB_TOKEN`，不扩大日常导入 Token 权限；新增
-  expand-only Migration `0024` 保存 Head repository/ref 并允许 `delete_branch` 审计动作。
+- 删除复用 `CONTENT_PR_IMPORT_GITHUB_TOKEN`；该 Fine-grained PAT 必须限定内容仓库，并配置
+  `Contents: Read and write` 与 `Pull requests: Read and write`。Migration `0024` 保存 Head
+  repository/ref 并允许 `delete_branch` 审计动作。
 - 本功能仅在本地隔离测试数据库验证，不修改独立内容仓库、正式 Markdown、Wiki 路径工具或
   生产环境；不会自动 Merge，也不会删除导入产生的草稿、成员提案和审计记录。

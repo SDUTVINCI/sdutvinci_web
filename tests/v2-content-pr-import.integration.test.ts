@@ -164,7 +164,6 @@ suite('V2 阶段 8 本地 Markdown PR 导入与三方冲突', () => {
     process.env.CONTENT_PR_IMPORT_MAX_FILES = '200'
     process.env.CONTENT_PR_IMPORT_RETRY_ATTEMPTS = '3'
     delete process.env.CONTENT_PR_IMPORT_GITHUB_TOKEN
-    delete process.env.CONTENT_PR_BRANCH_CLEANUP_GITHUB_TOKEN
     resetContentImportConfigForTests()
   }
 
@@ -863,8 +862,8 @@ suite('V2 阶段 8 本地 Markdown PR 导入与三方冲突', () => {
       { repository: 'SDUTVINCI/sdutvinci_content', pullRequestNumber: 8 },
       fake as unknown as ContentImportGitHubClient
     ))!
+    expect(run.branchCleanup.status).toBe('unavailable')
     process.env.CONTENT_PR_IMPORT_GITHUB_TOKEN = 'github_pat_phase8_test_only_1234567890'
-    process.env.CONTENT_PR_BRANCH_CLEANUP_GITHUB_TOKEN = 'github_pat_phase8_cleanup_test_only_1234567890'
     resetContentImportConfigForTests()
     await executeContentPrExternalAction(run.id, actorUserId, 'comment', fake as unknown as ContentImportGitHubClient)
     fake.comment = async () => { throw new ContentImportGitHubError('DUPLICATE_COMMENT_SHOULD_NOT_RUN', 500) }

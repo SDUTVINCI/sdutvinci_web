@@ -663,8 +663,8 @@ export const getContentPrImportRun = async (runId: string): Promise<CmsContentIm
         ? { status: 'external_fork', reason: '源分支位于外部 Fork，请提交者自行删除。' }
         : run.headRef === 'main'
           ? { status: 'unavailable', reason: '默认分支不能删除。' }
-          : !getContentImportConfig().CONTENT_PR_BRANCH_CLEANUP_GITHUB_TOKEN
-            ? { status: 'not_configured', reason: '服务器未配置独立的源分支清理凭据。' }
+          : !getContentImportConfig().CONTENT_PR_IMPORT_GITHUB_TOKEN
+            ? { status: 'unavailable', reason: '服务器未配置 PR 导入 GitHub Token，不能执行源分支清理。' }
             : { status: 'available', reason: 'PR 关闭后可由管理员删除这个源分支。' },
     items: items.map(itemResponse)
   }
@@ -1321,15 +1321,9 @@ export const executeContentPrExternalAction = async (
 ) => {
   requireContentPrImportEnabled()
   const config = getContentImportConfig()
-  const token = action === 'delete_branch'
-    ? config.CONTENT_PR_BRANCH_CLEANUP_GITHUB_TOKEN
-    : config.CONTENT_PR_IMPORT_GITHUB_TOKEN
-  if (!token) throw new ContentPrImportError(
-    action === 'delete_branch'
-      ? 'IMPORT_BRANCH_CLEANUP_NOT_CONFIGURED'
-      : 'IMPORT_GITHUB_WRITE_NOT_CONFIGURED',
-    409
-  )
+  if (!config.CONTENT_PR_IMPORT_GITHUB_TOKEN) {
+    throw new ContentPrImportError('IMPORT_GITHUB_WRITE_NOT_CONFIGURED', 409)
+  }
   const run = await getContentPrImportRun(runId)
   if (!run) throw new ContentPrImportError('IMPORT_RUN_NOT_FOUND', 404)
   const reservation = await getDatabase().transaction(async (tx) => {
@@ -1375,12 +1369,9 @@ export const executeContentPrExternalAction = async (
   if (reservation.kind === 'processing') {
     throw new ContentPrImportError('IMPORT_EXTERNAL_ACTION_IN_PROGRESS', 409)
   }
-  const actionClient = client || new ContentImportGitHubClient(config, fetch, token)
-  const pullClient = action === 'delete_branch' && !client
-    ? new ContentImportGitHubClient(config, fetch, config.CONTENT_PR_IMPORT_GITHUB_TOKEN)
-    : actionClient
+  const actionClient = client || new ContentImportGitHubClient(config)
   try {
-    const pull = await pullClient.getPullRequest(run.repositoryId, run.pullRequestNumber)
+    const pull = await actionClient.getPullRequest(run.repositoryId, run.pullRequestNumber)
     if (pull.base.repo.full_name !== run.repositoryId || pull.head.sha !== run.headCommitHash) {
       throw new ContentPrImportError('IMPORT_PULL_REQUEST_CHANGED', 409)
     }

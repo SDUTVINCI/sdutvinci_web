@@ -81,7 +81,7 @@ export interface CmsContentImportRun {
     createdAt: string
   }>
   branchCleanup: {
-    status: 'available' | 'not_configured' | 'external_fork' | 'unavailable'
+    status: 'available' | 'external_fork' | 'unavailable'
     reason: string
   }
   items: CmsContentImportItem[]

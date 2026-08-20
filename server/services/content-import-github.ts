@@ -63,8 +63,7 @@ const pathForApi = (value: string) => value.split('/').map(encodeURIComponent).j
 export class ContentImportGitHubClient {
   constructor(
     private readonly config: ContentImportConfig = getContentImportConfig(),
-    private readonly requestFetch: typeof fetch = fetch,
-    private readonly authToken: string | undefined = config.CONTENT_PR_IMPORT_GITHUB_TOKEN
+    private readonly requestFetch: typeof fetch = fetch
   ) {}
 
   private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -72,8 +71,8 @@ export class ContentImportGitHubClient {
     headers.set('accept', 'application/vnd.github+json')
     headers.set('x-github-api-version', '2022-11-28')
     headers.set('user-agent', 'vinci-cms-content-import')
-    if (this.authToken) {
-      headers.set('authorization', `Bearer ${this.authToken}`)
+    if (this.config.CONTENT_PR_IMPORT_GITHUB_TOKEN) {
+      headers.set('authorization', `Bearer ${this.config.CONTENT_PR_IMPORT_GITHUB_TOKEN}`)
     }
     for (let attempt = 1; attempt <= this.config.CONTENT_PR_IMPORT_RETRY_ATTEMPTS; attempt += 1) {
       let response: Response

@@ -29,9 +29,9 @@ Outbox、评论/关闭确认或“绝不自动 Merge”的边界。
   源分支是三个独立 POST 入口，各自要求确认；关闭和删分支还要求 `admin`。没有 Merge API。
 - `CONTENT_PR_IMPORT_GITHUB_TOKEN` 未配置时，Dry Run 仍可使用公开读取，但评论和关闭
   fail closed。Token、Authorization、远端 URL、私钥和绝对路径不进入响应或审计摘要。
-- 源分支删除不复用上述 Token；只有单独配置 `CONTENT_PR_BRANCH_CLEANUP_GITHUB_TOKEN` 后才开放。
-  该凭据只应限定内容仓库并授予 `Contents: Read and write`。外部 Fork、`main`、旧记录和 Head
-  已变化的分支始终拒绝删除。
+- 源分支删除复用 `CONTENT_PR_IMPORT_GITHUB_TOKEN`。启用此操作时，该 Fine-grained PAT 必须
+  限定内容仓库，并将 `Contents` 设为 `Read and write`；评论/关闭所需的 `Pull requests` 也保持
+  `Read and write`。外部 Fork、`main`、旧记录和 Head 已变化的分支始终拒绝删除。
 - PR 文件数超过 `CONTENT_PR_IMPORT_MAX_FILES` 时，页面明确显示“PR 文件数量超过服务器允许的
   导入上限”并保留 `GITHUB_PULL_FILE_LIMIT_EXCEEDED` 错误码；这属于本地安全上限，不应误报为
   GitHub API、Token 或网络故障。

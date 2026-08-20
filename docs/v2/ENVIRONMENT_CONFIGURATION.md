@@ -448,8 +448,7 @@ reset 或 Force Push。修复后重新从 `dry_run` 生成新报告和新令牌�
 | `CONTENT_PR_IMPORT_MODE` | 不使用 PR 导入时保持 `disabled`；完成权限验收后才用 `enabled` | enabled 只允许把选中的 PR diff 导入为草稿/提案，不会自动 Merge、批准或发布。 |
 | `CONTENT_PR_IMPORT_REPOSITORY_ID` | 固定 `SDUTVINCI/sdutvinci_content` | 正式环境只接受唯一内容仓库，不能让请求参数选择任意仓库。 |
 | `CONTENT_PR_IMPORT_API_URL` | 固定 `https://api.github.com` | 正式环境只允许 GitHub 官方 HTTPS API，禁止内嵌凭据或改成 HTTP。 |
-| `CONTENT_PR_IMPORT_GITHUB_TOKEN` | 首次保守部署可留空；也可先写入已验证的 Fine-grained PAT，同时继续保持 mode 为 `disabled` | 预配置便于以后只切换 mode，但 Token 会提前存入宿主机和容器配置，必须按未来实际能力做最小授权。不得复用 SSH Deploy Key、GHCR Token、个人 classic PAT 或代码仓库凭据。 |
-| `CONTENT_PR_BRANCH_CLEANUP_GITHUB_TOKEN` | 默认留空；确需让管理员删除官方内容仓库的 PR 源分支时单独配置 | 只用于关闭 PR 后的同仓库分支清理。必须限定 `SDUTVINCI/sdutvinci_content`，仅授予 `Contents: Read and write`，不得与导入 Token、部署凭据或 SSH Key 复用。外部 Fork 不使用它。 |
+| `CONTENT_PR_IMPORT_GITHUB_TOKEN` | 首次保守部署可留空；也可先写入已验证的 Fine-grained PAT，同时继续保持 mode 为 `disabled` | 预配置便于以后只切换 mode，但 Token 会提前存入宿主机和容器配置，必须限定内容仓库。需要源分支清理时授予 `Contents: Read and write` 与 `Pull requests: Read and write`；不得复用 SSH Deploy Key、GHCR Token、个人 classic PAT 或代码仓库凭据。 |
 | `CONTENT_PR_IMPORT_MAX_FILE_BYTES` | 默认 `1048576`（1 MiB） | 单文件上限，范围 `1024–5000000` 字节；超限拒绝整个相关动作。 |
 | `CONTENT_PR_IMPORT_MAX_FILES` | 默认 `500` | 单 PR 文件数量上限，范围 `1–500`；达到上限后仍 fail closed，避免无界读取。 |
 | `CONTENT_PR_IMPORT_RETRY_ATTEMPTS` | 默认 `3` | GitHub 网络、429 和 5xx 重试次数，范围 `1–5`；不是业务操作无限重试。 |
@@ -467,7 +466,6 @@ CONTENT_PR_IMPORT_MODE=disabled
 CONTENT_PR_IMPORT_REPOSITORY_ID=SDUTVINCI/sdutvinci_content
 CONTENT_PR_IMPORT_API_URL=https://api.github.com
 CONTENT_PR_IMPORT_GITHUB_TOKEN=
-CONTENT_PR_BRANCH_CLEANUP_GITHUB_TOKEN=
 CONTENT_PR_IMPORT_TEST_MODE=false
 ```
 
@@ -500,14 +498,13 @@ CONTENT_PR_IMPORT_GITHUB_TOKEN=<从密码管理器粘贴的真实Fine-grained-PA
 代码读取 `/pulls`、`/pulls/{number}/files` 和 `/contents/{path}`；评论使用 issue comment API，关闭使用
 `PATCH /pulls/{number}`。GitHub 官方说明读取仓库文件需要 Contents read，列出 PR 文件需要 Pull
 requests read；创建 PR 普通评论可使用 Issues write 或 Pull requests write，而关闭 PR 需要 Pull
-requests write。Vinci 没有调用 Merge API，不能为了省事授予 `Contents: Read and write`、
-`Administration` 或组织级权限。
+requests write。Vinci 没有调用 Merge API；不使用源分支清理时，不要为了省事授予
+`Contents: Read and write`、`Administration` 或组织级权限。
 
-上句只针对 `CONTENT_PR_IMPORT_GITHUB_TOKEN`。可选的源分支清理必须使用独立
-`CONTENT_PR_BRANCH_CLEANUP_GITHUB_TOKEN`，因为删除 Git ref 需要 `Contents: Write`。该 Token
-只限定官方内容仓库；服务端还会拒绝外部 Fork、`main`、未关闭 PR、分支名确认不匹配，以及
-分支不再指向 Dry Run Head 的请求。PR 状态复核仍使用日常导入客户端，清理 Token 只读取和删除
-目标 Git ref；日常读取、留言和关闭凭据因此仍不拥有删除文件或分支能力。
+需要在 CMS 中删除官方内容仓库的 PR 源分支时，复用同一个
+`CONTENT_PR_IMPORT_GITHUB_TOKEN`，将 `Contents` 提升为 `Read and write`，同时保留评论/关闭所需
+的 `Pull requests: Read and write`。Token 仍必须只限定官方内容仓库；服务端还会拒绝外部 Fork、
+`main`、未关闭 PR、分支名确认不匹配，以及分支不再指向 Dry Run Head 的请求。
 
 ### 6.2 创建仅限内容仓库的 Fine-grained PAT
 
