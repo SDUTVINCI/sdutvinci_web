@@ -31,6 +31,7 @@ import {
 } from './cms-publishing-legacy'
 import { appendCmsArticleRevision } from './cms-revisions'
 import { contentExportPath, serializeContentRevision } from './content-export-serialization'
+import { CMS_NEW_ARTICLE_RELATIVE_PATH_KEY } from './cms-drafts'
 
 const sha256 = (source: string) =>
   createHash('sha256').update(source).digest('hex')
@@ -197,6 +198,9 @@ export const publishCmsDraftDatabase = async (
     const importedNew = Boolean(
       !existingArticle && draft.proposedArticleId && draft.proposedRelativePath
     )
+    const plannedRelativePath = typeof draft.preservedFrontmatter[CMS_NEW_ARTICLE_RELATIVE_PATH_KEY] === 'string'
+      ? draft.preservedFrontmatter[CMS_NEW_ARTICLE_RELATIVE_PATH_KEY] as string
+      : ''
     if (draft.proposedAction === 'move' && (!existingArticle || !draft.proposedRelativePath)) {
       throw new CmsPublishStateError()
     }
@@ -204,6 +208,7 @@ export const publishCmsDraftDatabase = async (
       moving ? draft.proposedRelativePath!
       : importedNew ? draft.proposedRelativePath!
       : existingArticle?.relativePath
+      || plannedRelativePath
       || input.relativePath
       || suggestCmsArticlePath(collection, draft.title, draft.id)
     )
@@ -217,6 +222,10 @@ export const publishCmsDraftDatabase = async (
     if (importedNew && input.relativePath
       && normalizeRelativePath(input.relativePath) !== relativePath) {
       throw new CmsPublishPathError('PR 新文章必须保留 Dry Run 已审计的目标路径')
+    }
+    if (plannedRelativePath && input.relativePath
+      && normalizeRelativePath(input.relativePath) !== relativePath) {
+      throw new CmsPublishPathError('新内容路径已在创建草稿时确定')
     }
     if (moving) {
       if (collection !== existingArticle!.collection) {

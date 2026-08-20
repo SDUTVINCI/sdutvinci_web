@@ -153,7 +153,10 @@ databaseSuite('V2 阶段 4 正式内容查询、缓存与候选 Feed', () => {
       relativePath: '2026-07-29-阶段四测试/index.md',
       publicPath: '/wiki/2026-07-29-jie-duan-si-ce-shi',
       title: '阶段四测试',
-      body: '# 目录\n'
+      body: '# 目录\n',
+      frontmatter: {
+        tags: ['软件算法组', '嵌入式组']
+      }
     })
     await seedArticle({
       key: 'wiki-first',
@@ -161,7 +164,10 @@ databaseSuite('V2 阶段 4 正式内容查询、缓存与候选 Feed', () => {
       relativePath: '2026-07-29-阶段四测试/0100-开始.md',
       publicPath: '/wiki/2026-07-29-jie-duan-si-ce-shi/0100-kai-shi',
       title: '开始',
-      body: '## 第一节\n'
+      body: '## 第一节\n',
+      frontmatter: {
+        tags: ['机械组']
+      }
     })
     await seedArticle({
       key: 'wiki-second',
@@ -243,6 +249,14 @@ databaseSuite('V2 阶段 4 正式内容查询、缓存与候选 Feed', () => {
     expect(pages.every(page => page.isWikiDoc === true)).toBe(true)
     const docKey = pages[0]!.docKey
     expect(pages.every(page => page.docKey === docKey)).toBe(true)
+    expect(pages.every(page => JSON.stringify(page.tags) === JSON.stringify([
+      '嵌入式组',
+      '软件算法组'
+    ]))).toBe(true)
+    expect(pages.every(page => JSON.stringify(page.frontmatter.tags) === JSON.stringify([
+      '嵌入式组',
+      '软件算法组'
+    ]))).toBe(true)
     const index = pages.find(page => page.isWikiIndex)
     const chapters = numberWikiChapters(
       pages.filter(page => !page.isWikiIndex)
@@ -251,6 +265,37 @@ databaseSuite('V2 阶段 4 正式内容查询、缓存与候选 Feed', () => {
     expect(chapters.map(page => page.chapter)).toEqual(['1', '2'])
     expect([index, ...chapters].map(page => page?.title))
       .toEqual(['阶段四测试', '开始', '继续'])
+    await expect(getPublicArticleFromDatabase(
+      'wiki',
+      '/wiki/2026-07-29-jie-duan-si-ce-shi/0100-kai-shi'
+    )).resolves.toMatchObject({
+      tags: ['嵌入式组', '软件算法组'],
+      frontmatter: { tags: ['嵌入式组', '软件算法组'] }
+    })
+  })
+
+  it('Wiki 缺失或包含非法 index 标签时明确返回未分类', async () => {
+    await getDatabase().update(articleRevisions).set({
+      frontmatter: { title: '阶段四测试' }
+    }).where(eq(articleRevisions.id, revisionIds['wiki-index']!))
+    expect((await listPublicArticlesFromDatabase('wiki'))
+      .every(page => JSON.stringify(page.tags) === JSON.stringify(['未分类']))).toBe(true)
+
+    await getDatabase().update(articleRevisions).set({
+      frontmatter: {
+        title: '阶段四测试',
+        tags: ['嵌入式组', '非法标签']
+      }
+    }).where(eq(articleRevisions.id, revisionIds['wiki-index']!))
+    expect((await listPublicArticlesFromDatabase('wiki'))
+      .every(page => JSON.stringify(page.tags) === JSON.stringify(['未分类']))).toBe(true)
+
+    await getDatabase().update(articleRevisions).set({
+      frontmatter: {
+        title: '阶段四测试',
+        tags: ['软件算法组', '嵌入式组']
+      }
+    }).where(eq(articleRevisions.id, revisionIds['wiki-index']!))
   })
 
   it('成员列表和详情都只读取数据库结构化资料与正文', async () => {
@@ -312,7 +357,8 @@ databaseSuite('V2 阶段 4 正式内容查询、缓存与候选 Feed', () => {
         docKey: '2026-07-29-jie-duan-si-ce-shi',
         path: '/wiki/2026-07-29-jie-duan-si-ce-shi/0100-kai-shi',
         title: '阶段四测试',
-        date: '2026-07-29'
+        date: '2026-07-29',
+        tags: ['嵌入式组', '软件算法组']
       }])
 
       await getDatabase().update(articles)
@@ -329,7 +375,8 @@ databaseSuite('V2 阶段 4 正式内容查询、缓存与候选 Feed', () => {
         docKey: '2026-07-29-jie-duan-si-ce-shi',
         path: '/wiki/2026-07-29-jie-duan-si-ce-shi',
         title: '阶段四测试',
-        date: '2026-07-29'
+        date: '2026-07-29',
+        tags: ['嵌入式组', '软件算法组']
       }])
 
       await expect(resolvePublicArticleAccessFromDatabase(

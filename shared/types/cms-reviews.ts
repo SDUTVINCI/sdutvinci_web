@@ -1,4 +1,5 @@
 import type { CmsDraft, CmsDraftStatus } from './cms-drafts'
+import type { WikiDocumentCategory } from '../utils/wiki-tags'
 
 export type CmsReviewAction =
   | 'submitted'
@@ -58,12 +59,14 @@ export interface CmsReviewComparison {
     title: string
     description: string
     authorKeys: string[]
+    wikiTags: WikiDocumentCategory[]
     body: string
   } | null
   draft: {
     title: string
     description: string
     authorKeys: string[]
+    wikiTags: WikiDocumentCategory[]
     body: string
   }
   bodyDiff: CmsDiffPart[]

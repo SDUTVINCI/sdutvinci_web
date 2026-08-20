@@ -477,6 +477,96 @@
   cursor: not-allowed;
 }
 
+.cms-choice-fieldset {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  margin: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface-soft) 82%, transparent);
+}
+
+.cms-choice-fieldset legend {
+  padding: 0 7px;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.cms-choice-fieldset > small,
+.cms-form label > small {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.55;
+}
+
+.cms-choice-fieldset .cms-choice-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 13px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.cms-choice-card input,
+.cms-tag-choice input {
+  width: 17px;
+  min-height: 17px;
+  margin-top: 2px;
+  accent-color: var(--cyan);
+}
+
+.cms-choice-card span {
+  display: grid;
+  gap: 4px;
+}
+
+.cms-choice-card small {
+  color: var(--muted);
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.cms-tag-choice-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.cms-choice-fieldset .cms-tag-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.cms-planned-path {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 13px 15px;
+  border-left: 3px solid var(--cyan);
+  border-radius: 0 10px 10px 0;
+  background: color-mix(in srgb, var(--cyan) 7%, var(--surface));
+  color: var(--muted);
+}
+
+.cms-planned-path code {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+}
+
 .cms-login-form {
   gap: 18px;
   margin-top: 34px;
@@ -2725,6 +2815,30 @@
   border-color: color-mix(in srgb, var(--red) 22%, transparent);
   background: color-mix(in srgb, var(--red) 12%, transparent);
   color: var(--red);
+}
+
+.cms-badge-primary {
+  border-color: color-mix(in srgb, var(--cyan) 40%, transparent);
+  background: color-mix(in srgb, var(--cyan) 18%, transparent);
+  color: var(--ink);
+}
+
+.cms-wiki-document-row td {
+  border-top: 2px solid color-mix(in srgb, var(--cyan) 22%, var(--line));
+  background: color-mix(in srgb, var(--cyan) 3%, var(--surface));
+}
+
+.cms-wiki-chapter-row .cms-article-title-cell a {
+  padding-left: 14px;
+}
+
+.cms-wiki-parent-label {
+  display: block;
+  max-width: 180px;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1.4;
 }
 
 .cms-empty {

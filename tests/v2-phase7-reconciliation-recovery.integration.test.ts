@@ -344,7 +344,9 @@ suite('V2 阶段 7 全量对账、空库初始化和灾难恢复', () => {
   })
 
   it('Dry Run 校验格式/哈希/令牌，事务失败不留半导入，成功后拒绝非空库', async () => {
-    const first = await seedArticle('first.md')
+    const first = await seedArticle('guide/index.md', {
+      tags: ['嵌入式组', '软件算法组']
+    })
     const second = await seedArticle('second.md')
     await seedRepository([first, second])
     const source = await cloneRecoverySource()
@@ -403,6 +405,13 @@ suite('V2 阶段 7 全量对账、空库初始化和灾难恢复', () => {
     expect(applied.status).toBe('succeeded')
     expect((await getDatabase().select({ value: count() }).from(articles))[0]?.value).toBe(2)
     expect((await getDatabase().select({ value: count() }).from(auditLogs))[0]?.value).toBe(1)
+    const [restored] = await getDatabase().select({
+      frontmatter: articleRevisions.frontmatter
+    }).from(articles).innerJoin(
+      articleRevisions,
+      eq(articles.currentRevisionId, articleRevisions.id)
+    ).where(eq(articles.relativePath, 'guide/index.md'))
+    expect(restored?.frontmatter.tags).toEqual(['嵌入式组', '软件算法组'])
     await expect(dryRunContentRecovery(
       source,
       'disaster_recovery',

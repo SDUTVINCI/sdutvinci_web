@@ -1,3 +1,5 @@
+import type { WikiDocumentCategory } from '../utils/wiki-tags'
+
 export type PublicContentCollection = 'news' | 'wiki' | 'members'
 export type PublicArticleCollection = Exclude<PublicContentCollection, 'members'>
 export type PublicContentSourceMode = 'legacy_git' | 'database_shadow' | 'database'
@@ -20,6 +22,7 @@ export interface PublicArticle {
   path: string
   title: string
   description: string
+  tags?: string[]
   body: string
   frontmatter: Record<string, unknown>
   revisionId: string
@@ -60,6 +63,7 @@ export interface PublicRestrictedWikiDocument {
   path: string
   title: string
   date?: string
+  tags: WikiDocumentCategory[]
 }
 
 export interface PublicContentCacheInvalidationInput {

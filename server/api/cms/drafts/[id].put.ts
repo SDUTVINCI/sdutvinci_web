@@ -29,6 +29,12 @@ export default defineEventHandler(async (event) => {
     if (error instanceof Error && error.message.startsWith('UNKNOWN_DRAFT_AUTHORS:')) {
       throw createError({ statusCode: 400, message: '作者成员 ID 不存在' })
     }
+    if (error instanceof Error && [
+      'WIKI_TAGS_INVALID',
+      'WIKI_TAGS_ONLY_DOCUMENT_INDEX'
+    ].includes(error.message)) {
+      throw createError({ statusCode: 400, message: '只有 Wiki 主文档可以设置固定组别标签' })
+    }
     throwCmsWorkflowError(error)
   }
 })

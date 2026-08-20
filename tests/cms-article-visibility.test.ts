@@ -32,12 +32,14 @@ describe('文章访问权限入口与 Wiki 文章计数', () => {
   })
 
   it('匿名 Wiki 区分完整受限和部分受限文档且不渲染受限章节材料', async () => {
-    const [component, icon, page, api, service, styles] = await Promise.all([
+    const [component, icon, page, detail, api, service, tags, styles] = await Promise.all([
       readFile('app/components/WikiList.vue', 'utf8'),
       readFile('app/components/WikiIcon.vue', 'utf8'),
       readFile('app/pages/wiki/index.vue', 'utf8'),
+      readFile('app/pages/wiki/[...slug].vue', 'utf8'),
       readFile('server/api/v2/content/wiki/index.get.ts', 'utf8'),
       readFile('server/services/public-content.ts', 'utf8'),
+      readFile('shared/utils/wiki-tags.ts', 'utf8'),
       readFile('app/assets/css/wiki.css', 'utf8')
     ])
 
@@ -49,6 +51,10 @@ describe('文章访问权限入口与 Wiki 文章计数', () => {
     expect(component).toContain('完整文档仅限成员')
     expect(component).toContain('部分内容仅限成员')
     expect(component).toContain('登录后查看完整目录')
+    expect(component).toContain('资料分类')
+    expect(component).toContain('selectedCategory')
+    expect(component).toContain('wiki-card-tags')
+    expect(component).toContain("query.tag = category")
     expect(component).toContain('restrictedLoginPath(doc)')
     expect(component).toContain('!publicDocKeys.has(doc.docKey)')
     expect(component).not.toContain('Members Only')
@@ -57,11 +63,18 @@ describe('文章访问权限入口与 Wiki 文章计数', () => {
     expect(component).not.toContain('lockedDoc.chapters')
     expect(component).not.toContain('lockedDoc.body')
     expect(icon).toContain("name: 'arrow' | 'chevron' | 'document' | 'lock' | 'search'")
+    expect(detail).toContain('wikiDocumentTags')
+    expect(detail).toContain('class="wiki-article-tags"')
+    expect(tags).toContain("'机械组'")
+    expect(tags).toContain("'未分类'")
+    expect(tags).toContain('isWikiDocumentIndexPath')
     expect(page).toContain("label: '可浏览页面与章节'")
     expect(page).toContain('class="wiki-overview"')
     expect(styles).toContain('.wiki-member-shelf')
     expect(styles).toContain('.wiki-partial-access')
     expect(styles).toContain('.wiki-doc-card.is-expanded')
+    expect(styles).toContain('.wiki-category-panel')
+    expect(styles).toContain('.wiki-article-tags')
     expect(styles).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))')
   })
 

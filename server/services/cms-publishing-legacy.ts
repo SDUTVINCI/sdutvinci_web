@@ -16,6 +16,7 @@ import {
 } from '../db/schema'
 import {
   CMS_PUBLISHED_AT_OVERRIDE_KEY,
+  CMS_NEW_ARTICLE_RELATIVE_PATH_KEY,
   CMS_UNMATCHED_AUTHORS_KEY,
   CMS_UNMATCHED_CONTRIBUTORS_KEY,
   CMS_UPDATED_AT_OVERRIDE_KEY
@@ -104,7 +105,7 @@ export const suggestCmsArticlePath = (
   if (collection === 'news') {
     return `${now.toISOString().slice(0, 10)}-${stem}.md`
   }
-  return `${stem}.md`
+  return `${stem}/index.md`
 }
 
 const descriptionFromBody = (body: string) => {
@@ -146,6 +147,7 @@ export const buildPublishedSource = (input: {
     Object.entries(existing).filter(([key]) => ![
       CMS_UPDATED_AT_OVERRIDE_KEY,
       CMS_PUBLISHED_AT_OVERRIDE_KEY,
+      CMS_NEW_ARTICLE_RELATIVE_PATH_KEY,
       CMS_UNMATCHED_AUTHORS_KEY,
       CMS_UNMATCHED_CONTRIBUTORS_KEY
     ].includes(key))
@@ -283,8 +285,12 @@ export const publishCmsDraftGitFirst = async (
     ? (await db.select().from(articles).where(eq(articles.id, draft.articleId)).limit(1))[0]
     : null
   if (draft.articleId && !existingArticle) throw new CmsPublishNotFoundError()
+  const plannedRelativePath = typeof draft.preservedFrontmatter[CMS_NEW_ARTICLE_RELATIVE_PATH_KEY] === 'string'
+    ? draft.preservedFrontmatter[CMS_NEW_ARTICLE_RELATIVE_PATH_KEY] as string
+    : ''
   const relativePath = normalizeRelativePath(
     existingArticle?.relativePath
+    || plannedRelativePath
     || input.relativePath
     || suggestCmsArticlePath(
       draft.collection as CmsArticleCollection,
@@ -294,6 +300,10 @@ export const publishCmsDraftGitFirst = async (
   )
   if (existingArticle && input.relativePath && relativePath !== existingArticle.relativePath) {
     throw new CmsPublishPathError('现有文章不允许在发布时改名或移动')
+  }
+  if (plannedRelativePath && input.relativePath
+    && normalizeRelativePath(input.relativePath) !== relativePath) {
+    throw new CmsPublishPathError('新内容路径已在创建草稿时确定')
   }
   const message = `cms: publish ${draft.collection}/${relativePath}`
   const [attempt] = await db.insert(publishRecords).values({

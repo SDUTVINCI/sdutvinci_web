@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { cmsAccountPattern } from '../../shared/types/cms-auth'
+import { WIKI_DOCUMENT_TAGS } from '../../shared/utils/wiki-tags'
 
 export const cmsDraftSaveSchema = z.object({
   title: z.string().trim().min(1).max(200),
@@ -13,6 +14,7 @@ export const cmsDraftSaveSchema = z.object({
   ).max(100),
   updatedAtOverride: z.string().datetime({ offset: true }).nullable(),
   publishedAtOverride: z.string().datetime({ offset: true }).nullable(),
+  wikiTags: z.array(z.enum(WIKI_DOCUMENT_TAGS)).max(WIKI_DOCUMENT_TAGS.length).optional(),
   version: z.number().int().positive(),
   lockLeaseId: z.string().uuid()
 }).strict()

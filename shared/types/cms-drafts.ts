@@ -1,4 +1,5 @@
 import type { CmsArticleCollection } from './cms-articles'
+import type { WikiDocumentCategory, WikiDocumentTag } from '../utils/wiki-tags'
 
 export const cmsDraftStatuses = [
   'draft',
@@ -39,6 +40,9 @@ export interface CmsDraft {
   articleId: string | null
   ownerUserId: string
   collection: CmsArticleCollection
+  plannedRelativePath: string | null
+  wikiContentType: 'document' | 'chapter' | 'legacy' | null
+  wikiTags: WikiDocumentCategory[]
   title: string
   description: string
   body: string
@@ -93,6 +97,7 @@ export interface CmsDraftSaveInput {
   contributorKeys: string[]
   updatedAtOverride: string | null
   publishedAtOverride: string | null
+  wikiTags?: WikiDocumentTag[]
   version: number
   lockLeaseId: string
 }

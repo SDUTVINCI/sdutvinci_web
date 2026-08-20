@@ -8,9 +8,16 @@ import type {
   CmsDraftSummary
 } from '../../shared/types/cms-drafts'
 import { assessMarkdownVisualSafety } from '../../shared/utils/cms-markdown-safety'
+import {
+  isWikiDocumentIndexPath,
+  isWikiDocumentTag,
+  normalizeWikiDocumentTags,
+  wikiDocumentIndexPath
+} from '../../shared/utils/wiki-tags'
 import { getDatabase } from '../db/client'
 import {
   auditLogs,
+  articles,
   draftAuthors,
   drafts,
   editLocks,
@@ -40,6 +47,7 @@ export class CmsDraftStateError extends Error {
 }
 
 const editableFrontmatterKeys = new Set(['title', 'description', 'authors'])
+export const CMS_NEW_ARTICLE_RELATIVE_PATH_KEY = '_vinciNewArticleRelativePath'
 export const CMS_UPDATED_AT_OVERRIDE_KEY = '_vinciUpdatedAtOverride'
 export const CMS_PUBLISHED_AT_OVERRIDE_KEY = '_vinciPublishedAtOverride'
 export const CMS_UNMATCHED_AUTHORS_KEY = '_vinciUnmatchedAuthors'
@@ -99,7 +107,38 @@ const loadDraftAuthors = async (draftIds: string[]) => {
 
 const rowsToDrafts = async (rows: Array<typeof drafts.$inferSelect>): Promise<CmsDraft[]> => {
   const authors = await loadDraftAuthors(rows.map(row => row.id))
+  const articleIds = rows
+    .map(row => row.articleId)
+    .filter((value): value is string => Boolean(value))
+  const articlePaths = new Map<string, string>()
+  if (articleIds.length) {
+    const pathRows = await getDatabase()
+      .select({ id: articles.id, relativePath: articles.relativePath })
+      .from(articles)
+      .where(inArray(articles.id, articleIds))
+    pathRows.forEach(row => articlePaths.set(row.id, row.relativePath))
+  }
   return rows.map(row => ({
+    ...(() => {
+      const preservedPath = row.preservedFrontmatter[CMS_NEW_ARTICLE_RELATIVE_PATH_KEY]
+      const plannedRelativePath = row.articleId
+        ? articlePaths.get(row.articleId) || null
+        : typeof preservedPath === 'string' ? preservedPath : null
+      const wikiContentType = row.collection !== 'wiki'
+        ? null
+        : plannedRelativePath
+          ? isWikiDocumentIndexPath(plannedRelativePath)
+            ? 'document'
+            : wikiDocumentIndexPath(plannedRelativePath) ? 'chapter' : 'legacy'
+          : 'document'
+      return {
+        plannedRelativePath,
+        wikiContentType,
+        wikiTags: wikiContentType === 'document'
+          ? normalizeWikiDocumentTags(row.preservedFrontmatter.tags)
+          : []
+      }
+    })(),
     id: row.id,
     articleId: row.articleId,
     ownerUserId: row.ownerUserId,
@@ -108,7 +147,11 @@ const rowsToDrafts = async (rows: Array<typeof drafts.$inferSelect>): Promise<Cm
     description: row.description,
     body: row.body,
     authors: authors.get(row.id) || [],
-    preservedFrontmatter: row.preservedFrontmatter,
+    preservedFrontmatter: Object.fromEntries(
+      Object.entries(row.preservedFrontmatter).filter(
+        ([key]) => key !== CMS_NEW_ARTICLE_RELATIVE_PATH_KEY
+      )
+    ),
     systemFrontmatter: systemFrontmatterFrom(row.preservedFrontmatter),
     baseContentHash: row.baseContentHash,
     baseRevisionId: row.baseRevisionId,
@@ -442,10 +485,65 @@ export const createCmsDraftForArticle = async (
 export const createCmsNewArticleDraft = async (
   collection: CmsArticleCollection,
   title: string,
-  ownerUserId: string
+  ownerUserId: string,
+  options: {
+    relativePath?: string
+    wikiTags?: unknown[]
+  } = {}
 ) => {
+  const relativePath = options.relativePath?.trim().replaceAll('\\', '/') || ''
+  if (relativePath && (
+    !relativePath.endsWith('.md')
+    || relativePath.startsWith('/')
+    || relativePath.split('/').some(segment => !segment || segment === '.' || segment === '..')
+  )) {
+    throw new Error('NEW_ARTICLE_PATH_INVALID')
+  }
+  if (collection === 'wiki' && relativePath) {
+    const segments = relativePath.split('/')
+    if (segments.length !== 2) throw new Error('WIKI_ARTICLE_PATH_INVALID')
+  }
+  const wikiTags = options.wikiTags || []
+  if (wikiTags.some(tag => !isWikiDocumentTag(tag))) {
+    throw new Error('WIKI_TAGS_INVALID')
+  }
+  if (
+    collection === 'wiki'
+    && relativePath
+    && !isWikiDocumentIndexPath(relativePath)
+    && wikiTags.length
+  ) {
+    throw new Error('WIKI_TAGS_ONLY_DOCUMENT_INDEX')
+  }
   const defaultAuthor = await currentMemberKey(ownerUserId)
   const [created] = await getDatabase().transaction(async (tx) => {
+    if (relativePath) {
+      const [formalCollision] = await tx
+        .select({ id: articles.id })
+        .from(articles)
+        .where(and(
+          eq(articles.collection, collection),
+          eq(articles.relativePath, relativePath)
+        ))
+        .limit(1)
+      const [draftCollision] = await tx
+        .select({ id: drafts.id })
+        .from(drafts)
+        .where(and(
+          eq(drafts.collection, collection),
+          isNull(drafts.deletedAt),
+          sql`${drafts.preservedFrontmatter} ->> ${CMS_NEW_ARTICLE_RELATIVE_PATH_KEY} = ${relativePath}`
+        ))
+        .limit(1)
+      if (formalCollision || draftCollision) throw new Error('NEW_ARTICLE_PATH_EXISTS')
+    }
+    const preservedFrontmatter: Record<string, unknown> = {}
+    if (relativePath) preservedFrontmatter[CMS_NEW_ARTICLE_RELATIVE_PATH_KEY] = relativePath
+    if (
+      collection === 'wiki'
+      && relativePath
+      && isWikiDocumentIndexPath(relativePath)
+    ) preservedFrontmatter.tags = [...new Set(wikiTags)]
     const result = await tx.insert(drafts).values({
       articleId: null,
       ownerUserId,
@@ -453,7 +551,7 @@ export const createCmsNewArticleDraft = async (
       title: title.trim(),
       description: '',
       body: '',
-      preservedFrontmatter: {},
+      preservedFrontmatter,
       baseContentHash: null
     }).returning()
     await replaceDraftAuthors(tx, result[0]!.id, defaultAuthor ? [defaultAuthor] : [])
@@ -462,7 +560,7 @@ export const createCmsNewArticleDraft = async (
       action: 'draft.create',
       targetType: 'draft',
       targetId: result[0]!.id,
-      metadata: { articleId: null, collection }
+      metadata: { articleId: null, collection, relativePath: relativePath || null }
     })
     return result
   })
@@ -485,9 +583,33 @@ export const saveCmsDraft = async (
 
   const updated = await getDatabase().transaction(async (tx) => {
     await assertCmsDraftEditLease(tx, draftId, requesterUserId, input.lockLeaseId)
-    const [currentDraft] = await tx.select({ preservedFrontmatter: drafts.preservedFrontmatter })
+    const [currentDraft] = await tx.select({
+      articleId: drafts.articleId,
+      collection: drafts.collection,
+      preservedFrontmatter: drafts.preservedFrontmatter
+    })
       .from(drafts).where(eq(drafts.id, draftId)).limit(1)
     const preservedFrontmatter = { ...(currentDraft?.preservedFrontmatter || {}) }
+    if (input.wikiTags !== undefined) {
+      if (input.wikiTags.some(tag => !isWikiDocumentTag(tag))) {
+        throw new Error('WIKI_TAGS_INVALID')
+      }
+      let relativePath = typeof preservedFrontmatter[CMS_NEW_ARTICLE_RELATIVE_PATH_KEY] === 'string'
+        ? preservedFrontmatter[CMS_NEW_ARTICLE_RELATIVE_PATH_KEY] as string
+        : null
+      if (currentDraft?.articleId) {
+        const [article] = await tx
+          .select({ relativePath: articles.relativePath })
+          .from(articles)
+          .where(eq(articles.id, currentDraft.articleId))
+          .limit(1)
+        relativePath = article?.relativePath || null
+      }
+      if (currentDraft?.collection !== 'wiki' || !relativePath || !isWikiDocumentIndexPath(relativePath)) {
+        throw new Error('WIKI_TAGS_ONLY_DOCUMENT_INDEX')
+      }
+      preservedFrontmatter.tags = [...new Set(input.wikiTags)]
+    }
     if (contributorKeys.length) preservedFrontmatter.contributors = contributorKeys
     else delete preservedFrontmatter.contributors
     if (input.updatedAtOverride) preservedFrontmatter[CMS_UPDATED_AT_OVERRIDE_KEY] = input.updatedAtOverride

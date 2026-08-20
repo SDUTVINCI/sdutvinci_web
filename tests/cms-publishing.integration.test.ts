@@ -42,7 +42,10 @@ import {
   deleteCmsArticle,
   restoreCmsArticle
 } from '../server/services/cms-deletions'
-import { createCmsDraftForArticle } from '../server/services/cms-drafts'
+import {
+  CMS_NEW_ARTICLE_RELATIVE_PATH_KEY,
+  createCmsDraftForArticle
+} from '../server/services/cms-drafts'
 import { parseCmsMarkdown, writeCmsMarkdown } from '../server/utils/cms-frontmatter'
 import { resetCmsGitConfigForTests } from '../server/utils/cms-git-config'
 import { resetCmsV2FlagsForTests } from '../server/utils/cms-v2-flags'
@@ -342,6 +345,10 @@ suite('CMS 阶段 5 Git 发布与历史集成', () => {
       collection: 'wiki',
       title: '新的 Wiki 条目',
       body: '新条目正文\n',
+      preservedFrontmatter: {
+        [CMS_NEW_ARTICLE_RELATIVE_PATH_KEY]: 'planned-wiki/index.md',
+        tags: ['通用资料']
+      },
       status: 'approved',
       version: 1
     }).returning()
@@ -358,7 +365,7 @@ suite('CMS 阶段 5 Git 发布与历史集成', () => {
       toStatus: 'approved'
     })
     const result = await publishCmsDraft(draft!.id, operatorUserId, { version: 1 })
-    expect(result.relativePath).toMatch(/\.md$/)
+    expect(result.relativePath).toBe('planned-wiki/index.md')
     const [published] = await getDatabase()
       .select()
       .from(drafts)
@@ -368,7 +375,10 @@ suite('CMS 阶段 5 Git 发布与历史集成', () => {
       'git',
       ['--git-dir', remoteRepository, 'show', `main:content/wiki/${result.relativePath}`]
     )).stdout
-    expect(parseCmsMarkdown(source).body).toBe('新条目正文\n')
+    const parsed = parseCmsMarkdown(source)
+    expect(parsed.body).toBe('新条目正文\n')
+    expect(parsed.frontmatter.tags).toEqual(['通用资料'])
+    expect(parsed.frontmatter).not.toHaveProperty(CMS_NEW_ARTICLE_RELATIVE_PATH_KEY)
   })
 
   it('已发布草稿可从文章入口重新进入下一轮编辑', async () => {

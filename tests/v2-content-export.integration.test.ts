@@ -727,6 +727,20 @@ suite('V2 阶段 6 独立内容仓库与异步增量导出', () => {
     expect(first.source.indexOf('title:')).toBeLessThan(first.source.indexOf('tags:'))
     expect(first.source.indexOf('aUnknown:')).toBeLessThan(first.source.indexOf('zUnknown:'))
 
+    const wiki = serializeContentRevision({
+      ...input,
+      collection: 'wiki',
+      relativePath: 'guide/index.md',
+      frontmatter: {
+        title: 'Wiki 标签导出',
+        tags: ['嵌入式组', '软件算法组'],
+        aUnknown: '保留'
+      }
+    })
+    expect(wiki.source).toContain('tags:\n  - 嵌入式组\n  - 软件算法组\n')
+    expect(wiki.source.indexOf('title:')).toBeLessThan(wiki.source.indexOf('tags:'))
+    expect(wiki.source.indexOf('tags:')).toBeLessThan(wiki.source.indexOf('aUnknown:'))
+
     process.env.CONTENT_EXPORT_TEST_MODE = 'false'
     process.env.CONTENT_EXPORT_REMOTE_URL = join(root, 'not-official.git')
     resetContentExportConfigForTests()

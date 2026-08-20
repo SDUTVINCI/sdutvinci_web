@@ -378,7 +378,8 @@ suite('V2 阶段 8 本地 Markdown PR 导入与三方冲突', () => {
     fake.contents.set(`${HEAD}:wiki/credits/new.md`, writeCmsMarkdown({
       title: '保留无法匹配署名',
       authors: ['known-author', '外部作者'],
-      contributors: ['known-contributor', '外部编辑']
+      contributors: ['known-contributor', '外部编辑'],
+      tags: ['嵌入式组', '软件算法组']
     }, '正文。\n'))
     fake.files = [{ filename: 'wiki/credits/new.md', status: 'added', changes: 8 }]
 
@@ -392,6 +393,7 @@ suite('V2 阶段 8 本地 Markdown PR 导入与三方冲突', () => {
     const [draft] = await getDatabase().select().from(drafts).where(eq(drafts.id, draftId))
     expect(draft!.preservedFrontmatter).toMatchObject({
       contributors: ['known-contributor'],
+      tags: ['嵌入式组', '软件算法组'],
       [CMS_UNMATCHED_AUTHORS_KEY]: ['外部作者'],
       [CMS_UNMATCHED_CONTRIBUTORS_KEY]: ['外部编辑']
     })
@@ -411,6 +413,7 @@ suite('V2 阶段 8 本地 Markdown PR 导入与三方冲突', () => {
     })
     expect(built.frontmatter.authors).toEqual(['known-author', '外部作者'])
     expect(built.frontmatter.contributors).toEqual(['known-contributor', '外部编辑'])
+    expect(built.frontmatter.tags).toEqual(['嵌入式组', '软件算法组'])
     expect(built.source).not.toContain(CMS_UNMATCHED_AUTHORS_KEY)
     expect(built.source).not.toContain(CMS_UNMATCHED_CONTRIBUTORS_KEY)
   })

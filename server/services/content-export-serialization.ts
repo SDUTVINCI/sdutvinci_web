@@ -18,7 +18,7 @@ const systemFrontmatterOrder = [
 
 const collectionFrontmatterOrder: Record<CmsArticleCollection, readonly string[]> = {
   news: ['date', 'author', 'tags', 'image', 'bvid', 'summary'],
-  wiki: []
+  wiki: ['tags']
 }
 
 const compareCodePoints = (left: string, right: string) =>

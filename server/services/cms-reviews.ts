@@ -22,6 +22,7 @@ import {
 import { getCmsArticle } from './cms-articles'
 import { getCmsDraftForReview } from './cms-drafts'
 import { isCmsDatabaseAuthorityEnabled } from '../utils/cms-v2-flags'
+import { normalizeWikiDocumentTags } from '../../shared/utils/wiki-tags'
 import {
   assertCmsDraftEditLease,
   releaseCmsDraftEditLeaseInTransaction
@@ -73,6 +74,9 @@ const comparisonForDraft = async (draftId: string): Promise<CmsReviewComparison>
           ? formalArticle.frontmatter.description
           : '',
         authorKeys: formalAuthorKeys,
+        wikiTags: draft.wikiContentType === 'document'
+          ? normalizeWikiDocumentTags(formalArticle.frontmatter.tags)
+          : [],
         body: formalArticle.body
       }
     : null
@@ -80,6 +84,7 @@ const comparisonForDraft = async (draftId: string): Promise<CmsReviewComparison>
     title: draft.title,
     description: draft.description,
     authorKeys: draft.authors.map(author => author.memberKey),
+    wikiTags: draft.wikiTags,
     body: draft.body
   }
   const databaseAuthority = isCmsDatabaseAuthorityEnabled()

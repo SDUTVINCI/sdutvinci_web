@@ -7,6 +7,8 @@ import type {
 } from '../../../../shared/types/cms-reviews'
 import type { CmsMember } from '../../../../shared/types/cms-members'
 import type { CmsMediaUploadResponse } from '../../../../shared/types/cms-media'
+import type { WikiDocumentTag } from '~~/shared/utils/wiki-tags'
+import { WIKI_DOCUMENT_TAGS } from '~~/shared/utils/wiki-tags'
 import CmsMarkdownVisualEditor from '../../../components/cms/CmsMarkdownVisualEditor.client.vue'
 import CmsMarkdownSourceEditor from '../../../components/cms/CmsMarkdownSourceEditor.client.vue'
 import VinciMarkdownRenderer from '../../../components/VinciMarkdownRenderer.vue'
@@ -68,6 +70,9 @@ const description = ref(initial.description)
 const body = ref(initial.body)
 const authorKeys = ref(initial.authors.map(author => author.memberKey))
 const contributorKeys = ref([...initial.systemFrontmatter.contributors])
+const wikiTags = ref<WikiDocumentTag[]>(initial.wikiTags.filter(
+  (tag): tag is WikiDocumentTag => tag !== '未分类'
+))
 const toDateTimeLocal = (value: string | null) => {
   if (!value) return ''
   const date = new Date(value)
@@ -304,6 +309,7 @@ const snapshot = () => ({
   publishedAtOverride: publishedAtOverride.value
     ? new Date(publishedAtOverride.value).toISOString()
     : null,
+  ...(initial.wikiContentType === 'document' ? { wikiTags: [...wikiTags.value] } : {}),
   version: version.value,
   lockLeaseId: leaseId.value || ''
 })
@@ -314,6 +320,8 @@ const sameAsSnapshot = (value: ReturnType<typeof snapshot>) =>
   && body.value === value.body
   && authorKeys.value.join('\0') === value.authorKeys.join('\0')
   && contributorKeys.value.join('\0') === value.contributorKeys.join('\0')
+  && (initial.wikiContentType !== 'document'
+    || wikiTags.value.join('\0') === (value.wikiTags || []).join('\0'))
   && (updatedAtOverride.value
     ? new Date(updatedAtOverride.value).toISOString()
     : null) === value.updatedAtOverride
@@ -373,7 +381,7 @@ const scheduleSave = () => {
   saveTimer = setTimeout(() => save(false), 1200)
 }
 
-watch([title, description, body, authorKeys, contributorKeys, updatedAtOverride, publishedAtOverride], scheduleSave, { deep: true })
+watch([title, description, body, authorKeys, contributorKeys, wikiTags, updatedAtOverride, publishedAtOverride], scheduleSave, { deep: true })
 watch(authorKeys, keys => {
   contributorKeys.value = contributorKeys.value.filter(key => !keys.includes(key))
 }, { deep: true })
@@ -903,6 +911,12 @@ onBeforeUnmount(() => {
           · 版本 {{ version }}
           · {{ baseRevisionId || baseContentHash ? '基于正式版本' : '尚未发布的新文章' }}
           · {{ proposalLabel }}
+          <template v-if="initial.collection === 'wiki'">
+            · {{ initial.wikiContentType === 'document' ? 'Wiki 主文档' : initial.wikiContentType === 'chapter' ? 'Wiki 章节' : '旧式独立 Wiki 页面' }}
+          </template>
+        </p>
+        <p v-if="initial.plannedRelativePath" class="cms-muted">
+          保存位置：<code>{{ initial.collection }}/{{ initial.plannedRelativePath }}</code>
         </p>
       </div>
       <div class="cms-editor-actions">
@@ -1069,6 +1083,24 @@ onBeforeUnmount(() => {
           />
           <small>可手动增删；正式发布时，非作者的发布者仍会自动加入协作者。</small>
         </label>
+
+        <fieldset v-if="initial.wikiContentType === 'document'" class="cms-choice-fieldset">
+          <legend>tags（组别标签，可多选）</legend>
+          <div class="cms-tag-choice-grid">
+            <label v-for="tag in WIKI_DOCUMENT_TAGS" :key="tag" class="cms-tag-choice">
+              <input v-model="wikiTags" type="checkbox" :value="tag" :disabled="!canEdit">
+              <span>{{ tag }}</span>
+            </label>
+          </div>
+          <small>仅 Wiki 主文档 index.md 可设置；不选时前台明确显示“未分类”。所有章节继承这里的标签。</small>
+        </fieldset>
+
+        <p v-else-if="initial.wikiContentType === 'chapter'" class="cms-alert">
+          此内容是 Wiki 章节。组别标签由所属主文档 index.md 统一管理，章节自身的 tags 不参与分类。
+        </p>
+        <p v-else-if="initial.wikiContentType === 'legacy'" class="cms-alert">
+          这是旧式独立 Wiki 页面，未关联一级目录 index.md。内容会继续兼容，但不能作为主文档设置组别标签。
+        </p>
 
         <label>
           <span>updatedAt（更新时间）</span>

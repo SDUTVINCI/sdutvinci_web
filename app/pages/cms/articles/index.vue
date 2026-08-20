@@ -4,6 +4,10 @@ import type {
   CmsArticleListResponse,
   CmsArticleVisibilityUpdateResult
 } from '../../../../shared/types/cms-articles'
+import {
+  isWikiDocumentIndexPath,
+  wikiDocumentIndexPath
+} from '~~/shared/utils/wiki-tags'
 
 definePageMeta({ layout: 'cms', middleware: 'cms-auth' })
 useHead({ title: '文章 · Vinci 内容管理后台' })
@@ -39,6 +43,32 @@ const applySearch = () => {
 }
 
 const articles = computed(() => data.value?.articles ?? [])
+const wikiDocumentTitles = computed(() => new Map(
+  articles.value
+    .filter(article => article.collection === 'wiki' && isWikiDocumentIndexPath(article.relativePath))
+    .map(article => [article.relativePath, article.title])
+))
+const displayArticles = computed(() => [...articles.value].sort((left, right) => {
+  if (left.collection !== right.collection) return left.collection.localeCompare(right.collection)
+  if (left.collection !== 'wiki') return left.relativePath.localeCompare(right.relativePath)
+  const leftRoot = wikiDocumentIndexPath(left.relativePath) || left.relativePath
+  const rightRoot = wikiDocumentIndexPath(right.relativePath) || right.relativePath
+  if (leftRoot !== rightRoot) return leftRoot.localeCompare(rightRoot)
+  const leftMain = isWikiDocumentIndexPath(left.relativePath)
+  const rightMain = isWikiDocumentIndexPath(right.relativePath)
+  if (leftMain !== rightMain) return leftMain ? -1 : 1
+  return left.relativePath.localeCompare(right.relativePath)
+}))
+const wikiDocumentTitle = (relativePath: string) => {
+  const indexPath = wikiDocumentIndexPath(relativePath)
+  return wikiDocumentTitles.value.get(indexPath || '')
+    || indexPath?.slice(0, -'/index.md'.length)
+    || '旧式独立页'
+}
+const wikiContentType = (relativePath: string) => {
+  if (isWikiDocumentIndexPath(relativePath)) return 'document'
+  return wikiDocumentIndexPath(relativePath) ? 'chapter' : 'legacy'
+}
 const selectedArticleIds = ref<string[]>([])
 const visibilityBusy = ref(false)
 const visibilityBusyId = ref('')
@@ -112,11 +142,11 @@ const toggleArticleVisibility = async (articleId: string, requiresAuth: boolean)
     <header class="cms-page-header cms-page-header-actions">
       <div>
         <p class="cms-eyebrow">ARTICLES</p>
-        <h1>文章与草稿</h1>
-        <p>当前索引 {{ data?.total ?? 0 }} 篇正式文章。编辑只保存草稿，不影响前台。</p>
+        <h1>内容与草稿</h1>
+        <p>当前索引 {{ data?.total ?? 0 }} 个内容页面；Wiki 会按主文档与所属章节排列。编辑只保存草稿，不影响前台。</p>
       </div>
       <NuxtLink class="cms-button cms-button-primary cms-button-link" to="/cms/articles/new">
-        新建文章草稿
+        新建内容草稿
       </NuxtLink>
     </header>
 
@@ -205,6 +235,7 @@ const toggleArticleVisibility = async (articleId: string, requiresAuth: boolean)
             <th v-if="isAdmin">选择</th>
             <th>标题</th>
             <th>集合</th>
+            <th>内容类型</th>
             <th>目录</th>
             <th>源文件</th>
             <th>状态</th>
@@ -212,7 +243,14 @@ const toggleArticleVisibility = async (articleId: string, requiresAuth: boolean)
           </tr>
         </thead>
         <tbody>
-          <tr v-for="article in data?.articles ?? []" :key="article.id">
+          <tr
+            v-for="article in displayArticles"
+            :key="article.id"
+            :class="{
+              'cms-wiki-document-row': article.collection === 'wiki' && isWikiDocumentIndexPath(article.relativePath),
+              'cms-wiki-chapter-row': article.collection === 'wiki' && wikiContentType(article.relativePath) === 'chapter'
+            }"
+          >
             <td v-if="isAdmin">
               <input
                 v-model="selectedArticleIds"
@@ -222,8 +260,22 @@ const toggleArticleVisibility = async (articleId: string, requiresAuth: boolean)
                 :aria-label="`选择文章：${article.title}`"
               >
             </td>
-            <td><NuxtLink :to="`/cms/articles/${article.id}`">{{ article.title }}</NuxtLink></td>
+            <td class="cms-article-title-cell"><NuxtLink :to="`/cms/articles/${article.id}`">{{ article.title }}</NuxtLink></td>
             <td><span class="cms-badge">{{ article.collection }}</span></td>
+            <td>
+              <template v-if="article.collection === 'wiki'">
+                <span class="cms-badge" :class="{ 'cms-badge-primary': isWikiDocumentIndexPath(article.relativePath) }">
+                  {{ wikiContentType(article.relativePath) === 'document' ? '主文档' : wikiContentType(article.relativePath) === 'chapter' ? '章节' : '旧式独立页' }}
+                </span>
+                <small v-if="wikiContentType(article.relativePath) === 'chapter'" class="cms-wiki-parent-label">
+                  属于：{{ wikiDocumentTitle(article.relativePath) }}
+                </small>
+                <small v-else-if="wikiContentType(article.relativePath) === 'legacy'" class="cms-wiki-parent-label">
+                  未关联一级目录 index.md
+                </small>
+              </template>
+              <span v-else class="cms-muted">独立文章</span>
+            </td>
             <td>{{ article.directory }}</td>
             <td><code>{{ article.relativePath }}</code></td>
             <td>

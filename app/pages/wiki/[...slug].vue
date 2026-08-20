@@ -4,6 +4,10 @@ import mediumZoom from 'medium-zoom'
 import { cmsAccountPattern } from '~~/shared/types/cms-auth'
 import type { PublicArticleCreditIdentity } from '~~/shared/types/article-credit-identities'
 import { isPublicArticleAuthRequiredError } from '~~/shared/utils/public-article-access'
+import {
+  WIKI_UNCATEGORIZED_TAG,
+  normalizeWikiDocumentTags
+} from '~~/shared/utils/wiki-tags'
 import { compareWikiChapters, numberWikiChapters } from '~~/utils/wiki-chapters'
 import {
   applyWikiHeadingNumbers,
@@ -25,6 +29,7 @@ interface WikiPage {
   isWikiDoc?: boolean
   isWikiIndex?: boolean
   requiresAuth?: boolean
+  tags?: unknown
   body?: unknown
   [key: string]: unknown
 }
@@ -120,6 +125,7 @@ const articleFrontmatter = computed<Record<string, unknown>>(() =>
     ? page.value.frontmatter as Record<string, unknown>
     : {}
 )
+const wikiDocumentTags = computed(() => normalizeWikiDocumentTags(page.value?.tags))
 const articleCreditKeys = computed(() => [...new Set(
   ['authors', 'contributors'].flatMap((field) => {
     const value = articleFrontmatter.value[field]
@@ -700,6 +706,16 @@ function normalizePath(path: string) {
             </div>
             <span v-if="page.requiresAuth" class="content-access-label">队内登录可见</span>
             <h1>{{ page.title }}</h1>
+            <nav class="wiki-article-tags" aria-label="资料分类">
+              <NuxtLink
+                v-for="tag in wikiDocumentTags"
+                :key="tag"
+                :to="{ path: '/wiki', query: { tag } }"
+                :class="{ 'is-uncategorized': tag === WIKI_UNCATEGORIZED_TAG }"
+              >
+                {{ tag }}
+              </NuxtLink>
+            </nav>
             <ArticleCredits
               :authors="articleFrontmatter.authors"
               :contributors="articleFrontmatter.contributors"

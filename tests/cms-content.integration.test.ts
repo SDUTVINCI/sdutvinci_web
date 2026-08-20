@@ -133,7 +133,7 @@ integration('CMS 成员与文章只读管理', () => {
     )
     await writeFile(
       join(contentRoot, 'wiki', 'guide', 'index.md'),
-      markdown('title: Wiki 指南', '安装说明')
+      markdown('title: Wiki 指南\ntags:\n  - 嵌入式组\n  - 软件算法组', '安装说明')
     )
 
     expect(await synchronizeCmsArticles()).toBe(2)
@@ -146,6 +146,8 @@ integration('CMS 成员与文章只读管理', () => {
     const news = all.articles.find(article => article.collection === 'news')!
     const wiki = all.articles.find(article => article.collection === 'wiki')!
     expect((await getCmsArticle(news.id))?.frontmatter.tags).toEqual(['比赛'])
+    expect((await getCmsArticle(wiki.id))?.frontmatter.tags)
+      .toEqual(['嵌入式组', '软件算法组'])
     expect(wiki.requiresAuth).toBe(false)
     const admin = await bootstrapCmsAdmin({
       account: 'visibilityadmin',

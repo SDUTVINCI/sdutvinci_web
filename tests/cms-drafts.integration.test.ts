@@ -121,6 +121,69 @@ integration('CMS Markdown 编辑器与草稿系统', () => {
     expect(await listCmsArticles()).toMatchObject({ total: 0 })
   })
 
+  it('按 Wiki 主文档和章节保存计划路径，且只有 index.md 可编辑组别标签', async () => {
+    const mainDraft = await createCmsNewArticleDraft(
+      'wiki',
+      '2021-09-16-OpenWrt编译教学',
+      userId,
+      {
+        relativePath: '2021-09-16-OpenWrt编译教学/index.md',
+        wikiTags: ['软件算法组', '嵌入式组']
+      }
+    )
+    expect(mainDraft).toMatchObject({
+      plannedRelativePath: '2021-09-16-OpenWrt编译教学/index.md',
+      wikiContentType: 'document',
+      wikiTags: ['嵌入式组', '软件算法组']
+    })
+
+    const mainLeaseId = await acquireLease(mainDraft.id)
+    const savedMain = await saveCmsDraft(mainDraft.id, userId, {
+      title: mainDraft.title,
+      description: '',
+      body: '主文档正文',
+      authorKeys: ['dongjiahui'],
+      contributorKeys: [],
+      updatedAtOverride: null,
+      publishedAtOverride: null,
+      wikiTags: ['运营组', '通用资料'],
+      version: mainDraft.version,
+      lockLeaseId: mainLeaseId
+    })
+    expect(savedMain.wikiTags).toEqual(['运营组', '通用资料'])
+    await expect(createCmsNewArticleDraft(
+      'wiki',
+      '重复主文档',
+      userId,
+      { relativePath: '2021-09-16-OpenWrt编译教学/index.md' }
+    )).rejects.toThrow('NEW_ARTICLE_PATH_EXISTS')
+
+    const chapterDraft = await createCmsNewArticleDraft(
+      'wiki',
+      '准备环境',
+      userId,
+      { relativePath: '2021-09-16-OpenWrt编译教学/0100-准备环境.md' }
+    )
+    expect(chapterDraft).toMatchObject({
+      plannedRelativePath: '2021-09-16-OpenWrt编译教学/0100-准备环境.md',
+      wikiContentType: 'chapter',
+      wikiTags: []
+    })
+    const chapterLeaseId = await acquireLease(chapterDraft.id)
+    await expect(saveCmsDraft(chapterDraft.id, userId, {
+      title: chapterDraft.title,
+      description: '',
+      body: '',
+      authorKeys: ['dongjiahui'],
+      contributorKeys: [],
+      updatedAtOverride: null,
+      publishedAtOverride: null,
+      wikiTags: ['机械组'],
+      version: chapterDraft.version,
+      lockLeaseId: chapterLeaseId
+    })).rejects.toThrow('WIKI_TAGS_ONLY_DOCUMENT_INDEX')
+  })
+
   it('已有文章草稿记录正式内容哈希，保存草稿不改变源 Markdown', async () => {
     const articlePath = join(contentRoot, 'news', 'published.md')
     const source = markdown(

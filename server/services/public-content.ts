@@ -17,6 +17,12 @@ import type {
   PublicRestrictedWikiDocument
 } from '../../shared/types/public-content'
 import { resolveStaticMediaUrl } from '../../shared/utils/static-media'
+import {
+  isWikiDocumentIndexPath,
+  normalizeWikiDocumentTags,
+  wikiDocumentIndexPath,
+  type WikiDocumentCategory
+} from '../../shared/utils/wiki-tags'
 import { getWikiContentMeta } from '../../utils/wiki-content-meta'
 import { getDatabase } from '../db/client'
 import {
@@ -79,15 +85,27 @@ const stringField = (
   key: string
 ) => typeof record[key] === 'string' ? String(record[key]).trim() : ''
 
-const toPublicArticle = (row: PublishedArticleRow): PublicArticle => {
+const toPublicArticle = (
+  row: PublishedArticleRow,
+  options: {
+    wikiTags?: WikiDocumentCategory[]
+    cacheKey?: string
+  } = {}
+): PublicArticle => {
   const collection = row.collection as PublicArticleCollection
   const frontmatter = row.frontmatter || {}
-  const publicFrontmatter = Object.fromEntries(
+  const resolvedFrontmatter = Object.fromEntries(
     Object.entries(frontmatter).map(([key, value]) => [
       key,
       typeof value === 'string' ? resolveStaticMediaUrl(value) : value
     ])
   )
+  const publicFrontmatter = collection === 'wiki'
+    ? {
+        ...resolvedFrontmatter,
+        tags: options.wikiTags || normalizeWikiDocumentTags(undefined)
+      }
+    : resolvedFrontmatter
   const title = stringField(frontmatter, 'title') || row.articleTitle
   const description = stringField(frontmatter, 'description')
     || stringField(frontmatter, 'summary')
@@ -98,7 +116,7 @@ const toPublicArticle = (row: PublishedArticleRow): PublicArticle => {
   const wikiMeta = collection === 'wiki'
     ? (getWikiContentMeta(stem) || {})
     : {}
-  const cacheKey = createPublicRevisionCacheKey(
+  const cacheKey = options.cacheKey || createPublicRevisionCacheKey(
     collection,
     row.articleId,
     row.revisionId
@@ -144,6 +162,75 @@ const publishedArticleFilters = (
   ...(collection ? [eq(articles.collection, collection)] : [])
 )
 
+interface WikiDocumentTagSource {
+  tags: WikiDocumentCategory[]
+  revisionId: string | null
+}
+
+const uncategorizedWikiTagSource = (): WikiDocumentTagSource => ({
+  tags: normalizeWikiDocumentTags(undefined),
+  revisionId: null
+})
+
+const listWikiDocumentTagSources = async () => {
+  const rows = await getDatabase()
+    .select({
+      relativePath: articles.relativePath,
+      frontmatter: articleRevisions.frontmatter,
+      revisionId: articleRevisions.id
+    })
+    .from(articles)
+    .innerJoin(
+      articleRevisions,
+      eq(articles.currentRevisionId, articleRevisions.id)
+    )
+    .where(and(
+      publishedArticleFilters('wiki', { includeRestricted: true }),
+      sql`${articles.relativePath} like ${'%/index.md'}`
+    ))
+    .orderBy(asc(articles.relativePath))
+
+  return new Map(rows
+    .filter(row => isWikiDocumentIndexPath(row.relativePath))
+    .map(row => [
+      row.relativePath,
+      {
+        tags: normalizeWikiDocumentTags(row.frontmatter?.tags),
+        revisionId: row.revisionId
+      } satisfies WikiDocumentTagSource
+    ]))
+}
+
+const getWikiDocumentTagSource = async (
+  relativePath: string
+): Promise<WikiDocumentTagSource> => {
+  const indexPath = wikiDocumentIndexPath(relativePath)
+  if (!indexPath) return uncategorizedWikiTagSource()
+
+  const [row] = await getDatabase()
+    .select({
+      frontmatter: articleRevisions.frontmatter,
+      revisionId: articleRevisions.id
+    })
+    .from(articles)
+    .innerJoin(
+      articleRevisions,
+      eq(articles.currentRevisionId, articleRevisions.id)
+    )
+    .where(and(
+      publishedArticleFilters('wiki', { includeRestricted: true }),
+      eq(articles.relativePath, indexPath)
+    ))
+    .limit(1)
+
+  return row
+    ? {
+        tags: normalizeWikiDocumentTags(row.frontmatter?.tags),
+        revisionId: row.revisionId
+      }
+    : uncategorizedWikiTagSource()
+}
+
 export const listPublicArticlesFromDatabase = async (
   collection: PublicArticleCollection,
   options: PublicArticleAccessOptions = {}
@@ -162,28 +249,43 @@ export const listPublicArticlesFromDatabase = async (
         : asc(articles.relativePath)
     )
 
-  return rows.map(row => toPublicArticle(row as PublishedArticleRow))
+  if (collection !== 'wiki') {
+    return rows.map(row => toPublicArticle(row as PublishedArticleRow))
+  }
+
+  const tagSources = await listWikiDocumentTagSources()
+  return rows.map((row) => {
+    const candidate = row as PublishedArticleRow
+    const indexPath = wikiDocumentIndexPath(candidate.relativePath)
+    const source = indexPath ? tagSources.get(indexPath) : null
+    return toPublicArticle(candidate, {
+      wikiTags: source?.tags || uncategorizedWikiTagSource().tags
+    })
+  })
 }
 
 export const listRestrictedWikiDocumentsFromDatabase = async (): Promise<
   PublicRestrictedWikiDocument[]
 > => {
-  const rows = await getDatabase()
-    .select({
-      relativePath: articles.relativePath,
-      articleTitle: articles.title,
-      frontmatter: articleRevisions.frontmatter
-    })
-    .from(articles)
-    .innerJoin(
-      articleRevisions,
-      eq(articles.currentRevisionId, articleRevisions.id)
-    )
-    .where(and(
-      publishedArticleFilters('wiki', { includeRestricted: true }),
-      eq(articles.requiresAuth, true)
-    ))
-    .orderBy(asc(articles.relativePath))
+  const [rows, tagSources] = await Promise.all([
+    getDatabase()
+      .select({
+        relativePath: articles.relativePath,
+        articleTitle: articles.title,
+        frontmatter: articleRevisions.frontmatter
+      })
+      .from(articles)
+      .innerJoin(
+        articleRevisions,
+        eq(articles.currentRevisionId, articleRevisions.id)
+      )
+      .where(and(
+        publishedArticleFilters('wiki', { includeRestricted: true }),
+        eq(articles.requiresAuth, true)
+      ))
+      .orderBy(asc(articles.relativePath)),
+    listWikiDocumentTagSources()
+  ])
 
   const documents = new Map<string, PublicRestrictedWikiDocument>()
 
@@ -193,11 +295,16 @@ export const listRestrictedWikiDocumentsFromDatabase = async (): Promise<
     if (!meta) continue
 
     const current = documents.get(meta.docKey)
+    const indexPath = wikiDocumentIndexPath(row.relativePath)
+    const tags = indexPath
+      ? tagSources.get(indexPath)?.tags || uncategorizedWikiTagSource().tags
+      : uncategorizedWikiTagSource().tags
     const document = current || {
       docKey: meta.docKey,
       path: meta.path,
       title: meta.docTitle,
-      ...(meta.date ? { date: meta.date } : {})
+      ...(meta.date ? { date: meta.date } : {}),
+      tags
     }
 
     if (meta.isWikiIndex) {
@@ -255,15 +362,24 @@ export const getPublicArticleFromDatabase = async (
   }
 
   const candidate = row as PublishedArticleRow
-  const key = createPublicRevisionCacheKey(
+  const wikiTagSource = collection === 'wiki'
+    ? await getWikiDocumentTagSource(candidate.relativePath)
+    : null
+  const baseKey = createPublicRevisionCacheKey(
     collection,
     candidate.articleId,
     candidate.revisionId
   )
+  const key = wikiTagSource
+    ? `${baseKey}:wiki-index:${wikiTagSource.revisionId || 'missing'}`
+    : baseKey
   const cached = getCachedPublicRevision<PublicArticle>(key)
   if (cached) return cached
 
-  return setCachedPublicRevision(key, toPublicArticle(candidate), {
+  return setCachedPublicRevision(key, toPublicArticle(candidate, {
+    wikiTags: wikiTagSource?.tags,
+    cacheKey: key
+  }), {
     collection,
     articleId: candidate.articleId,
     revisionId: candidate.revisionId

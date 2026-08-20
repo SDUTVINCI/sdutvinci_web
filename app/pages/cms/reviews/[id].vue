@@ -161,6 +161,11 @@ const reject = async () => {
               <td>{{ review.comparison.formal?.authorKeys.join(', ') || '—' }}</td>
               <td>{{ review.comparison.draft.authorKeys.join(', ') || '—' }}</td>
             </tr>
+            <tr v-if="review.draft.wikiContentType === 'document'">
+              <th>tags</th>
+              <td>{{ review.comparison.formal?.wikiTags.join('、') || '新主文档，无正式版本' }}</td>
+              <td>{{ review.comparison.draft.wikiTags.join('、') || '未分类' }}</td>
+            </tr>
           </tbody>
         </table>
 
@@ -196,7 +201,10 @@ const reject = async () => {
           <p class="cms-muted">
             DB-first 会在单个事务写入 Revision、草稿、审计和 Outbox；显式 legacy_git 回滚模式沿用原 Git-first 发布。
           </p>
-          <label v-if="!review.draft.articleId">
+          <p v-if="!review.draft.articleId && review.draft.plannedRelativePath" class="cms-muted">
+            已关联保存位置：<code>{{ review.draft.collection }}/{{ review.draft.plannedRelativePath }}</code>
+          </p>
+          <label v-else-if="!review.draft.articleId">
             <span>新文章相对路径（可留空自动生成）</span>
             <input
               v-model="publishPath"
