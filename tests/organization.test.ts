@@ -46,10 +46,11 @@ describe('独立组织架构', () => {
   })
 
   it('公开页和 CMS 只复用架构组件，不引入成员选择器或历史赛季', async () => {
-    const [publicPage, cmsPage, chart, cmsLayout] = await Promise.all([
+    const [publicPage, cmsPage, chart, chartStyles, cmsLayout] = await Promise.all([
       readFile('app/pages/team/organization.vue', 'utf8'),
       readFile('app/pages/cms/organization.vue', 'utf8'),
       readFile('app/components/OrganizationChart.vue', 'utf8'),
+      readFile('app/assets/css/organization.css', 'utf8'),
       readFile('app/layouts/cms.vue', 'utf8')
     ])
     expect(publicPage).toContain('<OrganizationChart')
@@ -60,6 +61,14 @@ describe('独立组织架构', () => {
     expect(chart).toContain('organization-institution')
     expect(chart).toContain("item.institution.id === 'institution-vinci'")
     expect(chart).toContain('organization-crosslinks')
+    expect(chart).toContain('logo-e355a71c.webp')
+    expect(chart).toContain('sponsors/EMIS.webp')
+    expect(chart).toContain('sponsors/IRI_Lab.webp?v=20260813-transparent')
+    expect(chart).toContain('organization-institution-orbit')
+    expect(chartStyles).toContain('@keyframes organization-planet-orbit')
+    expect(chartStyles).toContain('animation-play-state: paused')
+    expect(chartStyles).toContain('@media (prefers-reduced-motion: reduce)')
+    expect(chartStyles).toContain('.organization-constellation.is-compact .organization-institution {')
     expect(cmsLayout).toContain("to: '/cms/organization'")
   })
 })

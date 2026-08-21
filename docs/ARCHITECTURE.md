@@ -59,7 +59,9 @@ CMS 仍以每个 Markdown 页面作为 Article/Revision 粒度，但创建与列
 `organization_configs` 不引用 `members`、成员组别或赛季数据。管理员在 `/cms/organization`
 维护树节点和跨部门关系，CMS 使用草稿/发布双副本；匿名 `/api/organization` 只读取正式副本。
 树中机电创新学会、Vinci 机器人队和 IRI Lab 是三个独立机构节点，各自可有一个负责人职责；
-公开页以代码原生径向布局呈现，并在负责人层居中强调机器人队队长。IRI 的当前定位说明为“实验室”。
+公开页以代码原生动态星系呈现，官方 Logo 通过稳定机构 ID 的受控前端注册表映射，三机构在桌面端
+围绕固定的“协同运行”核心缓慢公转，并在负责人层居中强调机器人队队长。窄屏、CMS 预览和减少
+动态效果偏好停止公转；IRI 的当前定位说明为“实验室”。
 写请求继续要求管理员、同源、CSRF 和乐观版本锁。完整边界见 `docs/ORGANIZATION_STRUCTURE.md`。
 
 文章编辑器有两个显式模式：富文本使用 Milkdown/Crepe 单栏画布；源码在桌面端同时显示
