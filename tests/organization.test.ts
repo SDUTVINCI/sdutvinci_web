@@ -46,14 +46,16 @@ describe('独立组织架构', () => {
   })
 
   it('公开页和 CMS 只复用架构组件，不引入成员选择器或历史赛季', async () => {
-    const [publicPage, cmsPage, chart, chartStyles, cmsLayout] = await Promise.all([
+    const [publicPage, cmsPage, chart, galaxyBackground, chartStyles, cmsLayout] = await Promise.all([
       readFile('app/pages/team/organization.vue', 'utf8'),
       readFile('app/pages/cms/organization.vue', 'utf8'),
       readFile('app/components/OrganizationChart.vue', 'utf8'),
+      readFile('app/components/OrganizationGalaxyBackground.vue', 'utf8'),
       readFile('app/assets/css/organization.css', 'utf8'),
       readFile('app/layouts/cms.vue', 'utf8')
     ])
     expect(publicPage).toContain('<OrganizationChart')
+    expect(publicPage).toContain('<OrganizationGalaxyBackground')
     expect(cmsPage).toContain('<OrganizationChart')
     expect(cmsPage).toContain('保存草稿')
     expect(cmsPage).toContain('发布架构')
@@ -84,6 +86,16 @@ describe('独立组织架构', () => {
     expect(chart).toContain('当前未配置下级岗位')
     expect(chart).not.toContain('organization-institution-caption')
     expect(chart).not.toContain('structure.responsibilityNote')
+    expect(chart).not.toContain('organization-starfield')
+    expect(galaxyBackground).toContain('requestAnimationFrame')
+    expect(galaxyBackground).toContain('ResizeObserver')
+    expect(galaxyBackground).toContain("prefers-reduced-motion: reduce")
+    expect(galaxyBackground).toContain("prefers-color-scheme: dark")
+    expect(galaxyBackground).toContain("attributeFilter: ['data-theme']")
+    expect(galaxyBackground).toContain('visibilitychange')
+    expect(galaxyBackground).toContain('pointerTargetX')
+    expect(galaxyBackground).toContain('devicePixelRatio')
+    expect(chartStyles).toContain('.organization-galaxy-background')
     expect(chartStyles).toContain('@keyframes organization-institution-orbit')
     expect(chartStyles).toContain('@keyframes organization-local-satellite-orbit')
     expect(chartStyles).toContain('@keyframes organization-role-moons-orbit')

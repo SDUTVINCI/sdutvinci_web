@@ -2181,3 +2181,16 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
   不再贴边。部门的岗位提示卫星改用外扩轨道，与部门球之间保留明确间距。
 - 本轮只修改展示组件、样式、静态回归与现行文档；不修改组织数据、API、数据库 Schema、成员
   数据、独立内容仓库、正式 Markdown 或 Wiki 路径工具，因此不新增 Migration。
+
+## 2026-08-21：组织页全幅程序化 Galaxy 背景
+
+- `/team/organization` 新增独立 `OrganizationGalaxyBackground.vue`，参考 React Bits Galaxy 的
+  多层景深星点、闪烁、缓慢旋臂漂移和指针视差，但按现有 Nuxt/Vue 架构使用原生 2D Canvas 实现，
+  不引入 React、OGL 或新运行依赖。背景覆盖英雄区、导航、组织图与发布说明，组织图面板改为轻量
+  半透明表面，让整页而非只有中心区域保持连续星系氛围。
+- 深色模式使用深蓝黑底、青蓝星尘与少量暖色亮点；浅色模式使用冰蓝灰底和更低不透明度的蓝绿星点，
+  同时保留深色文字和行星边界。Canvas 不接收点击，部门、负责人和跨部门关系交互保持原样。
+- Canvas 限制设备像素比并约以 30 FPS 绘制；窗口、页面高度和主题变化时重新适配，指针离开后平滑
+  回中。`prefers-reduced-motion: reduce` 仅绘制静态帧。CMS 紧凑预览仍使用现有静态语义布局。
+- 本轮仅修改公开展示组件、样式、静态测试和现行文档；不修改组织结构 API、数据库 Schema、成员、
+  正式 Markdown、独立内容仓库或 Wiki 路径工具，因此不新增 Migration。

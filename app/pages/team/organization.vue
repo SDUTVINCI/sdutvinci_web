@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import OrganizationGalaxyBackground from '../../components/OrganizationGalaxyBackground.vue'
 import type { PublicOrganizationResponse } from '../../../shared/types/organization'
 
 const requestFetch = import.meta.server ? useRequestFetch() : $fetch
@@ -15,6 +16,8 @@ useContentSeo({
 
 <template>
   <main class="organization-page">
+    <OrganizationGalaxyBackground />
+
     <section class="organization-hero">
       <div>
         <p class="eyebrow">Team structure</p>

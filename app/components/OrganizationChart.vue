@@ -241,10 +241,6 @@ onBeforeUnmount(() => {
 <template>
   <section class="organization-chart organization-constellation" :class="{ 'is-compact': compact }" aria-label="组织架构图">
     <div ref="organizationStage" class="organization-orbit-stage" tabindex="-1" @keydown.esc="closeInspector">
-      <div class="organization-starfield" aria-hidden="true">
-        <span v-for="index in 18" :key="index" />
-      </div>
-
       <svg class="organization-orbit-lines" viewBox="0 0 1160 920" aria-hidden="true" preserveAspectRatio="none">
         <ellipse class="orbit-outer" cx="580" cy="450" rx="500" ry="368" />
         <ellipse class="orbit-middle" cx="580" cy="450" rx="390" ry="278" />
