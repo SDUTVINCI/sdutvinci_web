@@ -1037,102 +1037,170 @@ onBeforeUnmount(() => {
     </section>
 
     <div class="cms-draft-layout" :class="{ 'cms-editor-readonly': !canEdit }">
-      <aside
+      <div
         v-if="showDocumentSettings"
-        class="cms-panel cms-draft-fields cms-draft-fields-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-label="文章信息"
+        class="cms-document-settings-layer"
+        role="presentation"
+        @click.self="showDocumentSettings = false"
       >
-        <header class="cms-draft-fields-header">
-          <div>
-            <p class="cms-eyebrow">ARTICLE SETTINGS</p>
-            <h2>文章信息</h2>
+        <aside
+          class="cms-panel cms-draft-fields cms-draft-fields-dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="cms-document-settings-title"
+          @keydown.esc.stop="showDocumentSettings = false"
+        >
+          <header class="cms-draft-fields-header">
+            <div class="cms-settings-heading">
+              <span class="cms-settings-heading-icon" aria-hidden="true">文</span>
+              <div>
+                <p class="cms-eyebrow">DOCUMENT SETTINGS</p>
+                <h2 id="cms-document-settings-title">文章信息</h2>
+                <p>管理标题、署名、资料分类与发布时间。</p>
+              </div>
+            </div>
+            <button
+              class="cms-settings-close"
+              type="button"
+              aria-label="关闭文章信息"
+              @click="showDocumentSettings = false"
+            >
+              <span aria-hidden="true">×</span>
+            </button>
+          </header>
+
+          <div class="cms-settings-body">
+            <section class="cms-settings-section cms-settings-section-wide">
+              <header>
+                <span>01</span>
+                <div>
+                  <h3>基础信息</h3>
+                  <p>用于列表、搜索结果和文章页标题区域。</p>
+                </div>
+              </header>
+              <div class="cms-settings-fields">
+                <label>
+                  <span class="cms-field-label">文章标题 <code>title</code></span>
+                  <input v-model="title" required maxlength="200" :disabled="!canEdit">
+                </label>
+                <label>
+                  <span class="cms-field-label">内容摘要 <code>description</code></span>
+                  <textarea v-model="description" maxlength="2000" rows="3" :disabled="!canEdit" placeholder="留空时将在正式发布阶段自动生成" />
+                  <small>建议用一两句话概括正文；留空不会阻止保存或发布。</small>
+                </label>
+              </div>
+            </section>
+
+            <section class="cms-settings-section">
+              <header>
+                <span>02</span>
+                <div>
+                  <h3>文章署名</h3>
+                  <p>选择主要作者与参与整理的协作者。</p>
+                </div>
+              </header>
+              <div class="cms-settings-fields cms-settings-fields-split">
+                <label>
+                  <span class="cms-field-label">作者 <code>authors</code></span>
+                  <CmsMemberPicker
+                    v-model="authorKeys"
+                    :members="memberData?.members ?? []"
+                    :disabled="!canEdit"
+                    empty-label="点击选择一名作者"
+                  />
+                  <small>作者为单选，选择后会显示成员头像与姓名。</small>
+                </label>
+
+                <label>
+                  <span class="cms-field-label">协作者 <code>contributors</code></span>
+                  <CmsMemberPicker
+                    v-model="contributorKeys"
+                    :members="memberData?.members ?? []"
+                    multiple
+                    :disabled="!canEdit"
+                    empty-label="点击添加协作者"
+                  />
+                  <small>正式发布时，非作者的发布者也会自动加入协作者。</small>
+                </label>
+              </div>
+            </section>
+
+            <section v-if="initial.collection === 'wiki'" class="cms-settings-section">
+              <header>
+                <span>03</span>
+                <div>
+                  <h3>资料分类</h3>
+                  <p>分类仅由 Wiki 主文档的 index.md 统一决定。</p>
+                </div>
+              </header>
+              <fieldset v-if="initial.wikiContentType === 'document'" class="cms-choice-fieldset cms-settings-tags">
+                <legend>组别标签（可多选）</legend>
+                <div class="cms-tag-choice-grid">
+                  <label v-for="tag in WIKI_DOCUMENT_TAGS" :key="tag" class="cms-tag-choice">
+                    <input v-model="wikiTags" type="checkbox" :value="tag" :disabled="!canEdit">
+                    <span class="cms-tag-choice-check" aria-hidden="true">✓</span>
+                    <span>{{ tag }}</span>
+                  </label>
+                </div>
+                <small>不选择时前台会明确显示“未分类”；所有章节继承这里的标签。</small>
+              </fieldset>
+
+              <p v-else-if="initial.wikiContentType === 'chapter'" class="cms-alert cms-settings-inline-alert">
+                此内容是 Wiki 章节。组别标签由所属主文档 index.md 统一管理，章节自身的 tags 不参与分类。
+              </p>
+              <p v-else-if="initial.wikiContentType === 'legacy'" class="cms-alert cms-settings-inline-alert">
+                这是旧式独立 Wiki 页面，未关联一级目录 index.md。内容继续兼容，但不能在这里设置组别标签。
+              </p>
+            </section>
+
+            <section class="cms-settings-section">
+              <header>
+                <span>{{ initial.collection === 'wiki' ? '04' : '03' }}</span>
+                <div>
+                  <h3>发布时间</h3>
+                  <p>通常保持为空，由系统在正式发布时维护。</p>
+                </div>
+              </header>
+              <div class="cms-settings-fields cms-settings-fields-split">
+                <label>
+                  <span class="cms-field-label">更新时间 <code>updatedAt</code></span>
+                  <input v-model="updatedAtOverride" type="datetime-local" :disabled="!canEdit">
+                  <small>当前正式值：{{ formatSystemDate(initial.systemFrontmatter.updatedAt) }}</small>
+                </label>
+
+                <label>
+                  <span class="cms-field-label">首次发布日期 <code>publishedAt</code></span>
+                  <input v-model="publishedAtOverride" type="datetime-local" :disabled="!canEdit">
+                  <small>当前正式值：{{ formatSystemDate(initial.systemFrontmatter.publishedAt) }}</small>
+                </label>
+              </div>
+            </section>
+
+            <details class="cms-settings-technical">
+              <summary>技术信息与保留 Frontmatter</summary>
+              <div>
+                <pre>{{ JSON.stringify(initial.preservedFrontmatter, null, 2) }}</pre>
+                <p v-if="baseContentHash" class="cms-muted cms-base-version">
+                  基线 SHA-256<br><code>{{ baseContentHash }}</code>
+                </p>
+                <p v-if="baseRevisionId" class="cms-muted cms-base-version">
+                  数据库基线 Revision<br><code>{{ baseRevisionId }}</code>
+                </p>
+              </div>
+            </details>
           </div>
-          <button class="cms-button cms-button-quiet" type="button" @click="showDocumentSettings = false">
-            关闭
-          </button>
-        </header>
-        <label>
-          <span>title</span>
-          <input v-model="title" required maxlength="200" :disabled="!canEdit">
-        </label>
-        <label>
-          <span>description</span>
-          <textarea v-model="description" maxlength="2000" rows="5" :disabled="!canEdit" placeholder="留空时将在正式发布阶段自动生成" />
-        </label>
-        <label>
-          <span>authors（作者）</span>
-          <CmsMemberPicker
-            v-model="authorKeys"
-            :members="memberData?.members ?? []"
-            :disabled="!canEdit"
-            empty-label="点击选择一名作者"
-          />
-          <small>作者为单选；展开后选择成员，收起时只显示当前作者。</small>
-        </label>
 
-        <label>
-          <span>contributors（协作者）</span>
-          <CmsMemberPicker
-            v-model="contributorKeys"
-            :members="memberData?.members ?? []"
-            multiple
-            :disabled="!canEdit"
-            empty-label="点击添加协作者"
-          />
-          <small>可手动增删；正式发布时，非作者的发布者仍会自动加入协作者。</small>
-        </label>
-
-        <fieldset v-if="initial.wikiContentType === 'document'" class="cms-choice-fieldset">
-          <legend>tags（组别标签，可多选）</legend>
-          <div class="cms-tag-choice-grid">
-            <label v-for="tag in WIKI_DOCUMENT_TAGS" :key="tag" class="cms-tag-choice">
-              <input v-model="wikiTags" type="checkbox" :value="tag" :disabled="!canEdit">
-              <span>{{ tag }}</span>
-            </label>
-          </div>
-          <small>仅 Wiki 主文档 index.md 可设置；不选时前台明确显示“未分类”。所有章节继承这里的标签。</small>
-        </fieldset>
-
-        <p v-else-if="initial.wikiContentType === 'chapter'" class="cms-alert">
-          此内容是 Wiki 章节。组别标签由所属主文档 index.md 统一管理，章节自身的 tags 不参与分类。
-        </p>
-        <p v-else-if="initial.wikiContentType === 'legacy'" class="cms-alert">
-          这是旧式独立 Wiki 页面，未关联一级目录 index.md。内容会继续兼容，但不能作为主文档设置组别标签。
-        </p>
-
-        <label>
-          <span>updatedAt（更新时间）</span>
-          <input v-model="updatedAtOverride" type="datetime-local" :disabled="!canEdit">
-          <small>
-            留空则在正式发布时自动使用当前时间；填写后使用指定时间。
-            当前正式值：{{ formatSystemDate(initial.systemFrontmatter.updatedAt) }}
-          </small>
-        </label>
-
-        <label>
-          <span>publishedAt（首次发布日期）</span>
-          <input v-model="publishedAtOverride" type="datetime-local" :disabled="!canEdit">
-          <small>
-            留空则首次发布时自动生成，后续发布保持原值；填写后使用指定时间。
-            当前正式值：{{ formatSystemDate(initial.systemFrontmatter.publishedAt) }}
-          </small>
-        </label>
-
-        <small>publishedAt 记录文章第一次正式发布的时间；updatedAt 记录文章最近一次更新的时间。</small>
-
-        <details>
-          <summary>其他保留 Frontmatter</summary>
-          <pre>{{ JSON.stringify(initial.preservedFrontmatter, null, 2) }}</pre>
-        </details>
-        <p v-if="baseContentHash" class="cms-muted cms-base-version">
-          基线 SHA-256<br><code>{{ baseContentHash }}</code>
-        </p>
-        <p v-if="baseRevisionId" class="cms-muted cms-base-version">
-          数据库基线 Revision<br><code>{{ baseRevisionId }}</code>
-        </p>
-      </aside>
+          <footer class="cms-settings-footer">
+            <p>
+              <span :class="`cms-save-indicator cms-save-indicator-${saveState}`" aria-hidden="true" />
+              <span>{{ saveLabel }}</span>
+            </p>
+            <button class="cms-button cms-button-primary" type="button" @click="showDocumentSettings = false">
+              完成
+            </button>
+          </footer>
+        </aside>
+      </div>
 
       <main
         class="cms-editor-workspace"

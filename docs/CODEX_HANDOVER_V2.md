@@ -2103,3 +2103,16 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
   校验路径；`111/index.md` 不能通过内部创建服务绕过。
 - 旧文章、旧草稿和章节读取保持兼容；没有修改数据库 Schema、正式 Markdown、独立内容仓库或
   Wiki 拼音/章节工具，因此不新增 Migration。
+
+## 2026-08-21：CMS 文章信息视觉重构
+
+- 草稿“文章信息”由窄侧栏改为居中响应式弹层，按基础信息、署名、Wiki 分类和发布时间分区；
+  底部固定显示自动保存状态，桌面使用宽布局，窄屏改为单列且无横向溢出。
+- Wiki 主文档的五类标签改为带明确勾选状态的紧凑矩形选项，并修正通用输入框宽度覆盖 checkbox
+  导致标签逐字竖排、外观近似大圆圈的问题；章节与旧式 Wiki 的既有标签边界保持不变。
+- 正式文章详情将原始 Frontmatter、哈希、Revision 和导出信息拆成可扫读的结构化卡片；原始
+  Frontmatter 仍可展开查看。作者与协作者复用既有署名解析接口显示头像、中文姓名和次要稳定 ID，
+  未解析旧值继续回退显示原 ID。
+- 本轮仅修改 CMS 页面、样式、静态回归和编辑器教程，不改变 API 契约、权限、自动保存、Revision、
+  Outbox、数据库 Schema 或正式内容，因此不新增 Migration；未修改独立内容仓库、正式 Markdown、
+  `utils/wiki-content-meta.ts` 或 `utils/wiki-chapters.ts`。
