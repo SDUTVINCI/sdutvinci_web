@@ -2116,3 +2116,14 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
 - 本轮仅修改 CMS 页面、样式、静态回归和编辑器教程，不改变 API 契约、权限、自动保存、Revision、
   Outbox、数据库 Schema 或正式内容，因此不新增 Migration；未修改独立内容仓库、正式 Markdown、
   `utils/wiki-content-meta.ts` 或 `utils/wiki-chapters.ts`。
+
+## 2026-08-21：当前组织架构独立维护
+
+- 新增公开页 `/team/organization` 和 Team 内的“成员名录 / 组织架构”切换；站点主导航把“成员”调整为“团队”。
+- 新增管理员页面 `/cms/organization`，采用架构树、节点属性、跨部门关系和同组件实时预览；没有成员选择器、头像、赛季或历史架构入口。
+- 数据完全独立保存在 `organization_configs`。`draft_structure` 和 `published_structure` 分离，公开 API 不会泄露未发布草稿。
+- 当前结构把机电创新学会、Vinci 机器人队和 IRI Lab 保存为三个独立机构，IRI 定位显示“实验室”；负责人层居中突出机器人队队长，并保留可编辑的“通常由同一人兼任”说明。
+- 公开图采用代码原生径向星图：三机构位于核心，两侧展示技术组别与社团部门，底部展示新闻部到运营组的孵化关系；窄屏和 CMS 预览自动改为语义卡片，额外机构或分支不会被静默隐藏。
+- 新增迁移 `0025_fat_marauders.sql`，创建真实配置表并写入上述当前组织结构；没有修改独立内容仓库。
+- 服务端校验单根树、唯一 ID、严格节点层级、每机构最多一个负责人、连通性和跨部门关系；管理员写入使用 CSRF、角色权限和 `expectedVersion` 乐观锁。
+- 维护与测试方法见 `docs/ORGANIZATION_STRUCTURE.md`。

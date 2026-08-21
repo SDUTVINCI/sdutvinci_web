@@ -15,6 +15,7 @@ import {
   varchar
 } from 'drizzle-orm/pg-core'
 import { sql } from 'drizzle-orm'
+import type { OrganizationStructure } from '../../shared/types/organization'
 
 const timestamps = {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -981,6 +982,21 @@ export const auditLogs = pgTable('audit_logs', {
   index('audit_logs_created_at_index').on(table.createdAt)
 ])
 
+export const organizationConfigs = pgTable('organization_configs', {
+  id: varchar('id', { length: 32 }).primaryKey(),
+  draftStructure: jsonb('draft_structure').$type<OrganizationStructure>().notNull(),
+  publishedStructure: jsonb('published_structure').$type<OrganizationStructure>().notNull(),
+  version: integer('version').default(1).notNull(),
+  publishedVersion: integer('published_version').default(1).notNull(),
+  publishedAt: timestamp('published_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedByUserId: uuid('updated_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  ...timestamps
+}, table => [
+  check('organization_configs_id_check', sql`${table.id} = 'current'`),
+  check('organization_configs_version_check', sql`${table.version} >= 1`),
+  check('organization_configs_published_version_check', sql`${table.publishedVersion} >= 1 and ${table.publishedVersion} <= ${table.version}`)
+])
+
 export type User = typeof users.$inferSelect
 export type NewUser = typeof users.$inferInsert
 export type Role = typeof roles.$inferSelect
@@ -1007,3 +1023,4 @@ export type ContentPrImportRun = typeof contentPrImportRuns.$inferSelect
 export type ContentPrImportItem = typeof contentPrImportItems.$inferSelect
 export type EditLock = typeof editLocks.$inferSelect
 export type AuditLog = typeof auditLogs.$inferSelect
+export type OrganizationConfig = typeof organizationConfigs.$inferSelect

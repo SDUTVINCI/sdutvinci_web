@@ -33,6 +33,9 @@ const navItems = computed(() => [
     caption: 'MEMBERS',
     icon: 'members' as const
   },
+  ...(isAdmin.value
+    ? [{ to: '/cms/organization', code: 'OR', label: '组织架构', caption: 'STRUCTURE', icon: 'activity' as const }]
+    : []),
   {
     to: '/cms/users',
     code: isAdmin.value ? '06' : '05',
@@ -56,6 +59,7 @@ const sectionTitle = computed(() => {
     reviews: '审核',
     'content-imports': '外部内容导入',
     members: '成员',
+    organization: '组织架构',
     'member-options': '成员',
     'member-applications': '审核',
     users: '账号',

@@ -198,6 +198,8 @@ const stats = computed(() => {
       </div>
     </section>
 
+    <TeamSectionNav />
+
     <section class="stats-band members-stats" aria-label="成员概览">
       <div v-for="item in stats" :key="item.label" class="stat-item">
         <strong>{{ item.value }}</strong>

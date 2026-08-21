@@ -176,6 +176,13 @@
       "when": 1787072839980,
       "tag": "0024_skinny_wind_dancer",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1787285096033,
+      "tag": "0025_fat_marauders",
+      "breakpoints": true
     }
   ]
 }

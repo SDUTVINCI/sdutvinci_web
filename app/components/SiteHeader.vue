@@ -10,7 +10,7 @@ const navItems = [
   { label: '首页', to: '/' },
   { label: '成果', to: '/research' },
   { label: '项目', to: '/projects' },
-  { label: '成员', to: '/team' },
+  { label: '团队', to: '/team' },
   { label: '新闻', to: '/news' },
   { label: 'Wiki', to: '/wiki' },
   { label: '纳新', to: '/recruitment' },
