@@ -490,6 +490,22 @@
   box-shadow: 0 28px 74px rgba(38, 94, 124, 0.16), inset 0 0 80px rgba(35, 162, 199, 0.05);
 }
 :root[data-theme="light"] .organization-orbit-stage::before { opacity: 0.24; }
+:root[data-theme="light"] .organization-orbit-lines {
+  stroke: rgba(15, 112, 153, 0.38);
+  stroke-width: 1.35;
+  filter: drop-shadow(0 0 2px rgba(31, 139, 173, 0.14));
+}
+:root[data-theme="light"] .organization-orbit-lines .orbit-outer { stroke: rgba(12, 139, 180, 0.48); }
+:root[data-theme="light"] .organization-orbit-lines .orbit-inner { stroke: rgba(24, 151, 189, 0.5); }
+:root[data-theme="light"] .organization-orbit-lines .orbit-signal { stroke: rgba(19, 123, 162, 0.4); }
+:root[data-theme="light"] .organization-local-orbits,
+:root[data-theme="light"] .organization-local-orbits i {
+  border-color: color-mix(in srgb, var(--system-accent) 44%, rgba(14, 83, 118, 0.3));
+}
+:root[data-theme="light"] .organization-local-orbits {
+  box-shadow: 0 0 24px color-mix(in srgb, var(--system-accent) 12%, transparent);
+}
+:root[data-theme="light"] .organization-local-orbits i:last-child { opacity: 0.72; }
 :root[data-theme="light"] .organization-collaboration-hub { background: radial-gradient(circle at 36% 25%, rgba(34, 184, 213, 0.2), transparent 34%), rgba(250, 254, 255, 0.95); box-shadow: 0 0 0 12px rgba(19, 155, 185, 0.06), 0 0 38px rgba(39, 165, 194, 0.18), inset 0 0 25px rgba(38, 181, 209, 0.08); }
 :root[data-theme="light"] .organization-institution-planet { background: radial-gradient(circle at 35% 24%, color-mix(in srgb, var(--system-accent) 22%, transparent), transparent 36%), linear-gradient(145deg, #ffffff, #e7f4f9); box-shadow: inset -8px -10px 22px rgba(34, 106, 139, 0.08), 0 14px 35px rgba(39, 88, 116, 0.16), 0 0 30px color-mix(in srgb, var(--system-accent) 15%, transparent); }
 :root[data-theme="light"] .organization-institution-planet > strong { color: #0a294e; }

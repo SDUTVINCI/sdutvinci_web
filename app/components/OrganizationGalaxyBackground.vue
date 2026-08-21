@@ -12,17 +12,33 @@ let resizeObserver: ResizeObserver | null = null
 let themeObserver: MutationObserver | null = null
 let reduceMotionQuery: MediaQueryList | null = null
 let systemThemeQuery: MediaQueryList | null = null
+let coarsePointerQuery: MediaQueryList | null = null
 let pageElement: HTMLElement | null = null
 let disposed = false
 let reducedMotion = false
 let darkMode = true
-let lastFrame = 0
+let lastAnimationTick = 0
+let frameAccumulator = 0
+let smoothingElapsed = 0
 let targetMouseX = 0.5
 let targetMouseY = 0.5
 let smoothMouseX = 0.5
 let smoothMouseY = 0.5
 let targetMouseActive = 0
 let smoothMouseActive = 0
+
+const DESKTOP_FRAME_INTERVAL = 1000 / 120
+const COARSE_POINTER_FRAME_INTERVAL = 1000 / 60
+const SMOOTHING_BASE_INTERVAL = 1000 / 30
+
+const frameInterval = () => coarsePointerQuery?.matches
+  ? COARSE_POINTER_FRAME_INTERVAL
+  : DESKTOP_FRAME_INTERVAL
+
+const dampingFactor = (baseFactor: number, deltaMs: number) => 1 - Math.pow(
+  1 - baseFactor,
+  Math.max(0, Math.min(deltaMs, 100)) / SMOOTHING_BASE_INTERVAL
+)
 
 const vertexShader = `
 attribute vec2 uv;
@@ -177,15 +193,16 @@ const readTheme = () => {
   }
 }
 
-const renderFrame = (timestamp: number) => {
+const renderFrame = (timestamp: number, deltaMs = frameInterval()) => {
   if (!renderer || !program || !mesh) return
   if (!reducedMotion) {
     program.uniforms.uTime.value = timestamp * 0.001
     program.uniforms.uStarSpeed.value = timestamp * 0.001 * 0.5 / 10
   }
-  smoothMouseX += (targetMouseX - smoothMouseX) * 0.32
-  smoothMouseY += (targetMouseY - smoothMouseY) * 0.32
-  const activityFollow = targetMouseActive > smoothMouseActive ? 0.24 : 0.12
+  const pointerFollow = dampingFactor(0.32, deltaMs)
+  smoothMouseX += (targetMouseX - smoothMouseX) * pointerFollow
+  smoothMouseY += (targetMouseY - smoothMouseY) * pointerFollow
+  const activityFollow = dampingFactor(targetMouseActive > smoothMouseActive ? 0.24 : 0.12, deltaMs)
   smoothMouseActive += (targetMouseActive - smoothMouseActive) * activityFollow
   program.uniforms.uMouse.value[0] = smoothMouseX
   program.uniforms.uMouse.value[1] = smoothMouseY
@@ -194,10 +211,24 @@ const renderFrame = (timestamp: number) => {
 }
 
 const animate = (timestamp: number) => {
-  if (timestamp - lastFrame >= 33) {
-    renderFrame(timestamp)
-    lastFrame = timestamp
+  if (lastAnimationTick === 0) lastAnimationTick = timestamp
+  const elapsed = Math.min(timestamp - lastAnimationTick, 100)
+  lastAnimationTick = timestamp
+  frameAccumulator += elapsed
+  smoothingElapsed += elapsed
+  const targetInterval = frameInterval()
+  if (frameAccumulator >= targetInterval - 0.5) {
+    renderFrame(timestamp, smoothingElapsed)
+    frameAccumulator %= targetInterval
+    smoothingElapsed = 0
   }
+  animationFrame = requestAnimationFrame(animate)
+}
+
+const startAnimation = () => {
+  lastAnimationTick = 0
+  frameAccumulator = 0
+  smoothingElapsed = 0
   animationFrame = requestAnimationFrame(animate)
 }
 
@@ -232,7 +263,7 @@ const handleMotionChange = () => {
     smoothMouseActive = 0
     renderFrame(0)
   } else if (!reducedMotion && animationFrame === null) {
-    animationFrame = requestAnimationFrame(animate)
+    startAnimation()
   }
 }
 const handleThemeChange = () => {
@@ -244,7 +275,7 @@ const handleVisibilityChange = () => {
     cancelAnimationFrame(animationFrame)
     animationFrame = null
   } else if (document.visibilityState !== 'hidden' && !reducedMotion && animationFrame === null) {
-    animationFrame = requestAnimationFrame(animate)
+    startAnimation()
   } else if (document.visibilityState !== 'hidden') {
     renderFrame(performance.now())
   }
@@ -255,6 +286,7 @@ onMounted(async () => {
   if (!container.value || !pageElement) return
   reduceMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
   systemThemeQuery = window.matchMedia('(prefers-color-scheme: dark)')
+  coarsePointerQuery = window.matchMedia('(pointer: coarse)')
   reducedMotion = reduceMotionQuery.matches
   readTheme()
   try {
@@ -304,7 +336,7 @@ onMounted(async () => {
     pageElement.addEventListener('pointermove', handlePointerMove, { passive: true })
     pageElement.addEventListener('pointerleave', handlePointerLeave, { passive: true })
     resize()
-    if (!reducedMotion) animationFrame = requestAnimationFrame(animate)
+    if (!reducedMotion) startAnimation()
   } catch (error) {
     webglFailed.value = true
     console.warn('[organization-galaxy] WebGL background unavailable', error)
