@@ -2194,3 +2194,16 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
   回中。`prefers-reduced-motion: reduce` 仅绘制静态帧。CMS 紧凑预览仍使用现有静态语义布局。
 - 本轮仅修改公开展示组件、样式、静态测试和现行文档；不修改组织结构 API、数据库 Schema、成员、
   正式 Markdown、独立内容仓库或 Wiki 路径工具，因此不新增 Migration。
+
+## 2026-08-21：组织页改用 React Bits Galaxy 星流效果
+
+- 用户确认目标是 React Bits Galaxy 的均匀高密度星场与鼠标排斥穿梭效果，而不是 2D 旋臂星尘。
+  `OrganizationGalaxyBackground.vue` 已按用户提供的 Galaxy shader 移植为 Nuxt/Vue 生命周期组件，
+  使用 `ogl` 创建 WebGL 全屏三角形，不安装 shadcn 生成的 React/JSX 组件。
+- shader 保留四层景深、星芒耀光、闪烁、自动旋转和指针排斥。鼠标离开组织页时排斥系数平滑归零，
+  恢复均匀星场；背景层不接收点击，机构、部门、负责人和跨部门关系交互保持原样。
+- 深色模式输出接近参考的近白星光，浅色模式将星流映射为蓝青色并降低 Alpha。组织图整块遮罩及模糊
+  已减弱，避免再次把背景效果盖掉；WebGL 渲染像素数有上限，约 30 FPS，后台页暂停，减少动态效果
+  使用静态帧，WebGL 不可用时回退为 CSS 多层星点。
+- 本轮仅修改公开展示组件、样式、依赖、静态测试和文档；不修改组织架构 API、数据库 Schema、成员、
+  正式 Markdown、独立内容仓库或 Wiki 路径工具，因此不新增 Migration。

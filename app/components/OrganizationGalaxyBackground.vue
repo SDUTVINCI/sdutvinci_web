@@ -1,294 +1,312 @@
 <script setup lang="ts">
-type GalaxyParticle = {
-  angle: number
-  distance: number
-  depth: number
-  size: number
-  alpha: number
-  phase: number
-  warmth: number
-  armOffset: number
-}
+import type { Mesh, Program, Renderer } from 'ogl'
 
-type FieldStar = {
-  x: number
-  y: number
-  depth: number
-  size: number
-  alpha: number
-  phase: number
-  warmth: number
-}
+const container = ref<HTMLDivElement | null>(null)
+const webglFailed = ref(false)
 
-const canvas = ref<HTMLCanvasElement | null>(null)
-const galaxyParticles: GalaxyParticle[] = []
-const fieldStars: FieldStar[] = []
-
+let renderer: Renderer | null = null
+let program: Program | null = null
+let mesh: Mesh | null = null
 let animationFrame: number | null = null
 let resizeObserver: ResizeObserver | null = null
 let themeObserver: MutationObserver | null = null
 let reduceMotionQuery: MediaQueryList | null = null
 let systemThemeQuery: MediaQueryList | null = null
 let pageElement: HTMLElement | null = null
-let width = 1
-let height = 1
-let deviceScale = 1
-let lastFrame = 0
+let disposed = false
 let reducedMotion = false
 let darkMode = true
-let pointerTargetX = 0
-let pointerTargetY = 0
-let pointerX = 0
-let pointerY = 0
-let pageVisible = true
+let lastFrame = 0
+let targetMouseX = 0.5
+let targetMouseY = 0.5
+let smoothMouseX = 0.5
+let smoothMouseY = 0.5
+let targetMouseActive = 0
+let smoothMouseActive = 0
 
-const seededRandom = (() => {
-  let seed = 0x19_09_20_13
-  return () => {
-    seed = (Math.imul(seed, 1_664_525) + 1_013_904_223) >>> 0
-    return seed / 4_294_967_296
+const vertexShader = `
+attribute vec2 uv;
+attribute vec2 position;
+varying vec2 vUv;
+void main() {
+  vUv = uv;
+  gl_Position = vec4(position, 0, 1);
+}
+`
+
+// Vue/WebGL port of the React Bits Galaxy fragment shader supplied for this page.
+const fragmentShader = `
+precision highp float;
+uniform float uTime;
+uniform vec3 uResolution;
+uniform vec2 uFocal;
+uniform vec2 uRotation;
+uniform float uStarSpeed;
+uniform float uDensity;
+uniform float uHueShift;
+uniform float uSpeed;
+uniform vec2 uMouse;
+uniform float uGlowIntensity;
+uniform float uSaturation;
+uniform bool uMouseRepulsion;
+uniform float uTwinkleIntensity;
+uniform float uRotationSpeed;
+uniform float uRepulsionStrength;
+uniform float uMouseActiveFactor;
+uniform float uAutoCenterRepulsion;
+uniform bool uTransparent;
+uniform bool uLightMode;
+varying vec2 vUv;
+
+#define NUM_LAYER 4.0
+#define STAR_COLOR_CUTOFF 0.2
+#define MAT45 mat2(0.7071, -0.7071, 0.7071, 0.7071)
+#define PERIOD 3.0
+
+float Hash21(vec2 p) {
+  p = fract(p * vec2(123.34, 456.21));
+  p += dot(p, p + 45.32);
+  return fract(p.x * p.y);
+}
+float tri(float x) { return abs(fract(x) * 2.0 - 1.0); }
+float tris(float x) {
+  float t = fract(x);
+  return 1.0 - smoothstep(0.0, 1.0, abs(2.0 * t - 1.0));
+}
+float trisn(float x) {
+  float t = fract(x);
+  return 2.0 * (1.0 - smoothstep(0.0, 1.0, abs(2.0 * t - 1.0))) - 1.0;
+}
+vec3 hsv2rgb(vec3 c) {
+  vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+  vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+  return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+float Star(vec2 uv, float flare) {
+  float d = max(length(uv), 0.001);
+  float m = (0.05 * uGlowIntensity) / d;
+  float rays = smoothstep(0.0, 1.0, 1.0 - abs(uv.x * uv.y * 1000.0));
+  m += rays * flare * uGlowIntensity;
+  uv *= MAT45;
+  rays = smoothstep(0.0, 1.0, 1.0 - abs(uv.x * uv.y * 1000.0));
+  m += rays * 0.3 * flare * uGlowIntensity;
+  m *= smoothstep(1.0, 0.2, d);
+  return m;
+}
+vec3 StarLayer(vec2 uv) {
+  vec3 col = vec3(0.0);
+  vec2 gv = fract(uv) - 0.5;
+  vec2 id = floor(uv);
+  for (int y = -1; y <= 1; y++) {
+    for (int x = -1; x <= 1; x++) {
+      vec2 offset = vec2(float(x), float(y));
+      vec2 si = id + offset;
+      float seed = Hash21(si);
+      float size = fract(seed * 345.32);
+      float glossLocal = tri(uStarSpeed / (PERIOD * seed + 1.0));
+      float flareSize = smoothstep(0.9, 1.0, size) * glossLocal;
+      float red = smoothstep(STAR_COLOR_CUTOFF, 1.0, Hash21(si + 1.0)) + STAR_COLOR_CUTOFF;
+      float blu = smoothstep(STAR_COLOR_CUTOFF, 1.0, Hash21(si + 3.0)) + STAR_COLOR_CUTOFF;
+      float grn = min(red, blu) * seed;
+      vec3 base = vec3(red, grn, blu);
+      float hue = atan(base.g - base.r, base.b - base.r) / (2.0 * 3.14159) + 0.5;
+      hue = fract(hue + uHueShift / 360.0);
+      float sat = length(base - vec3(dot(base, vec3(0.299, 0.587, 0.114)))) * uSaturation;
+      float val = max(max(base.r, base.g), base.b);
+      base = hsv2rgb(vec3(hue, sat, val));
+      vec2 pad = vec2(
+        tris(seed * 34.0 + uTime * uSpeed / 10.0),
+        tris(seed * 38.0 + uTime * uSpeed / 30.0)
+      ) - 0.5;
+      float star = Star(gv - offset - pad, flareSize);
+      float twinkle = trisn(uTime * uSpeed + seed * 6.2831) * 0.5 + 1.0;
+      star *= mix(1.0, twinkle, uTwinkleIntensity);
+      col += star * size * base;
+    }
   }
-})()
-
-for (let index = 0; index < 390; index += 1) {
-  const arm = index % 3
-  galaxyParticles.push({
-    angle: seededRandom() * Math.PI * 2,
-    distance: Math.pow(seededRandom(), 0.62),
-    depth: 0.36 + seededRandom() * 0.64,
-    size: 0.45 + seededRandom() * 1.85,
-    alpha: 0.18 + seededRandom() * 0.62,
-    phase: seededRandom() * Math.PI * 2,
-    warmth: seededRandom(),
-    armOffset: arm * Math.PI * 2 / 3 + (seededRandom() - 0.5) * 0.52
-  })
+  return col;
 }
-
-for (let index = 0; index < 180; index += 1) {
-  fieldStars.push({
-    x: seededRandom(),
-    y: seededRandom(),
-    depth: 0.25 + seededRandom() * 0.75,
-    size: 0.35 + seededRandom() * 1.55,
-    alpha: 0.16 + seededRandom() * 0.56,
-    phase: seededRandom() * Math.PI * 2,
-    warmth: seededRandom()
-  })
+void main() {
+  vec2 focalPx = uFocal * uResolution.xy;
+  vec2 uv = (vUv * uResolution.xy - focalPx) / uResolution.y;
+  vec2 mouseNorm = uMouse - vec2(0.5);
+  if (uAutoCenterRepulsion > 0.0) {
+    float centerDist = length(uv);
+    vec2 repulsion = normalize(uv) * (uAutoCenterRepulsion / (centerDist + 0.1));
+    uv += repulsion * 0.05;
+  } else if (uMouseRepulsion) {
+    vec2 mousePosUV = (uMouse * uResolution.xy - focalPx) / uResolution.y;
+    float mouseDist = length(uv - mousePosUV);
+    vec2 repulsion = normalize(uv - mousePosUV) * (uRepulsionStrength / (mouseDist + 0.1));
+    uv += repulsion * 0.05 * uMouseActiveFactor;
+  } else {
+    uv += mouseNorm * 0.1 * uMouseActiveFactor;
+  }
+  float autoRotAngle = uTime * uRotationSpeed;
+  mat2 autoRot = mat2(cos(autoRotAngle), -sin(autoRotAngle), sin(autoRotAngle), cos(autoRotAngle));
+  uv = autoRot * uv;
+  uv = mat2(uRotation.x, -uRotation.y, uRotation.y, uRotation.x) * uv;
+  vec3 col = vec3(0.0);
+  for (float i = 0.0; i < 1.0; i += 1.0 / NUM_LAYER) {
+    float depth = fract(i + uStarSpeed * uSpeed);
+    float scale = mix(20.0 * uDensity, 0.5 * uDensity, depth);
+    float fade = depth * smoothstep(1.0, 0.9, depth);
+    col += StarLayer(uv * scale + i * 453.32) * fade;
+  }
+  float alpha = min(smoothstep(0.0, 0.3, length(col)), 1.0);
+  if (uLightMode) {
+    float intensity = clamp(length(col), 0.0, 1.0);
+    col = mix(vec3(0.09, 0.22, 0.36), vec3(0.02, 0.48, 0.62), intensity * 0.58);
+    alpha *= 0.72;
+  }
+  gl_FragColor = uTransparent ? vec4(col, alpha) : vec4(col, 1.0);
 }
+`
 
 const readTheme = () => {
   const explicitTheme = document.documentElement.dataset.theme
   darkMode = explicitTheme === 'dark' || (explicitTheme !== 'light' && Boolean(systemThemeQuery?.matches))
+  if (program) {
+    program.uniforms.uLightMode.value = !darkMode
+    program.uniforms.uSaturation.value = darkMode ? 0.06 : 0.34
+  }
 }
 
-const resize = () => {
-  const target = canvas.value
-  if (!target || !pageElement) return
-  const rect = pageElement.getBoundingClientRect()
-  width = Math.max(1, Math.round(rect.width))
-  height = Math.max(1, Math.round(pageElement.scrollHeight))
-  deviceScale = Math.min(window.devicePixelRatio || 1, 1.6)
-  target.width = Math.round(width * deviceScale)
-  target.height = Math.round(height * deviceScale)
-  target.style.width = `${width}px`
-  target.style.height = `${height}px`
-  draw(performance.now())
-}
-
-const starColor = (warmth: number, alpha: number) => {
-  if (darkMode) {
-    if (warmth > 0.9) return `rgba(255, 236, 176, ${alpha})`
-    if (warmth > 0.56) return `rgba(117, 226, 241, ${alpha})`
-    return `rgba(151, 184, 255, ${alpha})`
+const renderFrame = (timestamp: number) => {
+  if (!renderer || !program || !mesh) return
+  if (!reducedMotion) {
+    program.uniforms.uTime.value = timestamp * 0.001
+    program.uniforms.uStarSpeed.value = timestamp * 0.001 * 0.5 / 10
   }
-  if (warmth > 0.9) return `rgba(163, 119, 33, ${alpha})`
-  if (warmth > 0.56) return `rgba(14, 130, 155, ${alpha})`
-  return `rgba(54, 92, 151, ${alpha})`
-}
-
-const drawGlow = (
-  context: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  radius: number,
-  color: string
-) => {
-  const glow = context.createRadialGradient(x, y, 0, x, y, radius)
-  glow.addColorStop(0, color)
-  glow.addColorStop(1, 'rgba(0, 0, 0, 0)')
-  context.fillStyle = glow
-  context.beginPath()
-  context.arc(x, y, radius, 0, Math.PI * 2)
-  context.fill()
-}
-
-const draw = (timestamp: number) => {
-  const target = canvas.value
-  const context = target?.getContext('2d')
-  if (!target || !context) return
-
-  const elapsed = reducedMotion ? 0 : timestamp / 1000
-  pointerX += (pointerTargetX - pointerX) * 0.035
-  pointerY += (pointerTargetY - pointerY) * 0.035
-
-  context.setTransform(deviceScale, 0, 0, deviceScale, 0, 0)
-  context.clearRect(0, 0, width, height)
-
-  const base = context.createLinearGradient(0, 0, width, height)
-  if (darkMode) {
-    base.addColorStop(0, '#07141f')
-    base.addColorStop(0.48, '#081a2a')
-    base.addColorStop(1, '#09171f')
-  } else {
-    base.addColorStop(0, '#f7fbfd')
-    base.addColorStop(0.5, '#edf6fa')
-    base.addColorStop(1, '#f8fbfc')
-  }
-  context.fillStyle = base
-  context.fillRect(0, 0, width, height)
-
-  const centerX = width * 0.52 + pointerX * 18
-  const centerY = height * 0.57 + pointerY * 12
-  const galaxyRadius = Math.min(width * 0.58, 690)
-
-  drawGlow(
-    context,
-    centerX,
-    centerY,
-    galaxyRadius * 0.74,
-    darkMode ? 'rgba(14, 117, 158, 0.12)' : 'rgba(33, 150, 179, 0.075)'
-  )
-  drawGlow(
-    context,
-    width * 0.14,
-    height * 0.23,
-    Math.min(width, height) * 0.28,
-    darkMode ? 'rgba(38, 73, 150, 0.09)' : 'rgba(83, 125, 192, 0.06)'
-  )
-  drawGlow(
-    context,
-    width * 0.87,
-    height * 0.72,
-    Math.min(width, height) * 0.26,
-    darkMode ? 'rgba(17, 128, 124, 0.07)' : 'rgba(54, 160, 148, 0.045)'
-  )
-
-  context.globalCompositeOperation = darkMode ? 'lighter' : 'source-over'
-
-  for (const star of fieldStars) {
-    const parallax = 4 + star.depth * 17
-    const x = ((star.x * width + pointerX * parallax) % width + width) % width
-    const y = ((star.y * height + pointerY * parallax * 0.64) % height + height) % height
-    const twinkle = reducedMotion ? 0.82 : 0.66 + Math.sin(elapsed * (0.52 + star.depth) + star.phase) * 0.24
-    const alpha = star.alpha * twinkle * (darkMode ? 0.82 : 0.54)
-    const radius = star.size * (0.55 + star.depth * 0.66)
-    context.fillStyle = starColor(star.warmth, alpha)
-    context.beginPath()
-    context.arc(x, y, radius, 0, Math.PI * 2)
-    context.fill()
-    if (star.size > 1.45 && darkMode) {
-      drawGlow(context, x, y, radius * 6, starColor(star.warmth, alpha * 0.18))
-    }
-  }
-
-  for (const particle of galaxyParticles) {
-    const rotation = particle.angle + particle.armOffset + particle.distance * 5.7 + elapsed * 0.012 * particle.depth
-    const radius = particle.distance * galaxyRadius
-    const scatter = Math.sin(particle.phase * 3.1 + particle.distance * 9.2) * (18 + radius * 0.035)
-    const x = centerX + Math.cos(rotation) * radius + Math.cos(rotation + Math.PI / 2) * scatter + pointerX * particle.depth * 7
-    const y = centerY + Math.sin(rotation) * radius * 0.34 + Math.sin(rotation + Math.PI / 2) * scatter * 0.46 + pointerY * particle.depth * 5
-    const fade = Math.pow(1 - particle.distance * 0.72, 1.3)
-    const twinkle = reducedMotion ? 0.88 : 0.76 + Math.sin(elapsed * (0.7 + particle.depth) + particle.phase) * 0.2
-    const alpha = particle.alpha * fade * twinkle * (darkMode ? 0.72 : 0.42)
-    context.fillStyle = starColor(particle.warmth, alpha)
-    context.beginPath()
-    context.arc(x, y, particle.size * (0.48 + particle.depth * 0.58), 0, Math.PI * 2)
-    context.fill()
-  }
-
-  context.globalCompositeOperation = 'source-over'
-  const vignette = context.createRadialGradient(centerX, centerY, Math.min(width, height) * 0.12, centerX, centerY, Math.max(width, height) * 0.76)
-  vignette.addColorStop(0, 'rgba(0, 0, 0, 0)')
-  vignette.addColorStop(1, darkMode ? 'rgba(1, 8, 14, 0.34)' : 'rgba(236, 245, 248, 0.18)')
-  context.fillStyle = vignette
-  context.fillRect(0, 0, width, height)
+  smoothMouseX += (targetMouseX - smoothMouseX) * 0.05
+  smoothMouseY += (targetMouseY - smoothMouseY) * 0.05
+  smoothMouseActive += (targetMouseActive - smoothMouseActive) * 0.05
+  program.uniforms.uMouse.value[0] = smoothMouseX
+  program.uniforms.uMouse.value[1] = smoothMouseY
+  program.uniforms.uMouseActiveFactor.value = smoothMouseActive
+  renderer.render({ scene: mesh })
 }
 
 const animate = (timestamp: number) => {
   if (timestamp - lastFrame >= 33) {
-    draw(timestamp)
+    renderFrame(timestamp)
     lastFrame = timestamp
   }
   animationFrame = requestAnimationFrame(animate)
 }
 
+const resize = () => {
+  if (!renderer || !program || !pageElement) return
+  const width = Math.max(1, Math.round(pageElement.clientWidth))
+  const height = Math.max(1, Math.round(pageElement.scrollHeight))
+  const renderScale = Math.min(1, Math.sqrt(1_650_000 / (width * height)))
+  renderer.setSize(Math.round(width * renderScale), Math.round(height * renderScale))
+  const gl = renderer.gl
+  gl.canvas.style.width = `${width}px`
+  gl.canvas.style.height = `${height}px`
+  program.uniforms.uResolution.value.set(gl.canvas.width, gl.canvas.height, gl.canvas.width / gl.canvas.height)
+  renderFrame(performance.now())
+}
+
 const handlePointerMove = (event: PointerEvent) => {
   if (!pageElement || reducedMotion) return
   const rect = pageElement.getBoundingClientRect()
-  pointerTargetX = ((event.clientX - rect.left) / Math.max(rect.width, 1) - 0.5) * 2
-  pointerTargetY = ((event.clientY - rect.top) / Math.max(rect.height, 1) - 0.5) * 2
+  targetMouseX = Math.min(1, Math.max(0, (event.clientX - rect.left) / Math.max(rect.width, 1)))
+  targetMouseY = 1 - Math.min(1, Math.max(0, (event.clientY - rect.top) / Math.max(rect.height, 1)))
+  targetMouseActive = 1
 }
-
-const handlePointerLeave = () => {
-  pointerTargetX = 0
-  pointerTargetY = 0
-}
+const handlePointerLeave = () => { targetMouseActive = 0 }
 
 const handleMotionChange = () => {
   reducedMotion = Boolean(reduceMotionQuery?.matches)
+  targetMouseActive = 0
   if (reducedMotion && animationFrame !== null) {
     cancelAnimationFrame(animationFrame)
     animationFrame = null
-    pointerTargetX = 0
-    pointerTargetY = 0
-    pointerX = 0
-    pointerY = 0
-    draw(0)
-  } else if (!animationFrame) {
+    smoothMouseActive = 0
+    renderFrame(0)
+  } else if (!reducedMotion && animationFrame === null) {
     animationFrame = requestAnimationFrame(animate)
   }
 }
-
 const handleThemeChange = () => {
   readTheme()
-  draw(performance.now())
+  renderFrame(performance.now())
 }
-
 const handleVisibilityChange = () => {
-  pageVisible = document.visibilityState !== 'hidden'
-  if (!pageVisible && animationFrame !== null) {
+  if (document.visibilityState === 'hidden' && animationFrame !== null) {
     cancelAnimationFrame(animationFrame)
     animationFrame = null
-  } else if (pageVisible && !reducedMotion && animationFrame === null) {
+  } else if (document.visibilityState !== 'hidden' && !reducedMotion && animationFrame === null) {
     animationFrame = requestAnimationFrame(animate)
-  } else if (pageVisible) {
-    draw(performance.now())
+  } else if (document.visibilityState !== 'hidden') {
+    renderFrame(performance.now())
   }
 }
 
-onMounted(() => {
-  pageElement = canvas.value?.parentElement || null
-  if (!pageElement) return
-
+onMounted(async () => {
+  pageElement = container.value?.parentElement || null
+  if (!container.value || !pageElement) return
   reduceMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
   systemThemeQuery = window.matchMedia('(prefers-color-scheme: dark)')
   reducedMotion = reduceMotionQuery.matches
   readTheme()
-
-  resizeObserver = new ResizeObserver(resize)
-  resizeObserver.observe(pageElement)
-  themeObserver = new MutationObserver(handleThemeChange)
-  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
-  reduceMotionQuery.addEventListener('change', handleMotionChange)
-  systemThemeQuery.addEventListener('change', handleThemeChange)
-  document.addEventListener('visibilitychange', handleVisibilityChange)
-  pageElement.addEventListener('pointermove', handlePointerMove, { passive: true })
-  pageElement.addEventListener('pointerleave', handlePointerLeave, { passive: true })
-  resize()
-  if (!reducedMotion) animationFrame = requestAnimationFrame(animate)
+  try {
+    const { Renderer: OglRenderer, Program: OglProgram, Mesh: OglMesh, Color, Triangle } = await import('ogl')
+    if (disposed || !container.value) return
+    renderer = new OglRenderer({ alpha: true, premultipliedAlpha: false, dpr: 1 })
+    const gl = renderer.gl
+    gl.enable(gl.BLEND)
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+    gl.clearColor(0, 0, 0, 0)
+    const geometry = new Triangle(gl)
+    program = new OglProgram(gl, {
+      vertex: vertexShader,
+      fragment: fragmentShader,
+      uniforms: {
+        uTime: { value: 0 },
+        uResolution: { value: new Color(1, 1, 1) },
+        uFocal: { value: new Float32Array([0.5, 0.5]) },
+        uRotation: { value: new Float32Array([1, 0]) },
+        uStarSpeed: { value: 0.5 },
+        uDensity: { value: 1.42 },
+        uHueShift: { value: 210 },
+        uSpeed: { value: 1 },
+        uMouse: { value: new Float32Array([0.5, 0.5]) },
+        uGlowIntensity: { value: 0.48 },
+        uSaturation: { value: darkMode ? 0.06 : 0.34 },
+        uMouseRepulsion: { value: true },
+        uTwinkleIntensity: { value: 0.34 },
+        uRotationSpeed: { value: 0.035 },
+        uRepulsionStrength: { value: 2 },
+        uMouseActiveFactor: { value: 0 },
+        uAutoCenterRepulsion: { value: 0 },
+        uTransparent: { value: true },
+        uLightMode: { value: !darkMode }
+      }
+    })
+    mesh = new OglMesh(gl, { geometry, program })
+    gl.canvas.setAttribute('aria-hidden', 'true')
+    container.value.appendChild(gl.canvas)
+    resizeObserver = new ResizeObserver(resize)
+    resizeObserver.observe(pageElement)
+    themeObserver = new MutationObserver(handleThemeChange)
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+    reduceMotionQuery.addEventListener('change', handleMotionChange)
+    systemThemeQuery.addEventListener('change', handleThemeChange)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    pageElement.addEventListener('pointermove', handlePointerMove, { passive: true })
+    pageElement.addEventListener('pointerleave', handlePointerLeave, { passive: true })
+    resize()
+    if (!reducedMotion) animationFrame = requestAnimationFrame(animate)
+  } catch (error) {
+    webglFailed.value = true
+    console.warn('[organization-galaxy] WebGL background unavailable', error)
+  }
 })
 
 onBeforeUnmount(() => {
+  disposed = true
   if (animationFrame !== null) cancelAnimationFrame(animationFrame)
   resizeObserver?.disconnect()
   themeObserver?.disconnect()
@@ -297,9 +315,15 @@ onBeforeUnmount(() => {
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   pageElement?.removeEventListener('pointermove', handlePointerMove)
   pageElement?.removeEventListener('pointerleave', handlePointerLeave)
+  const gl = renderer?.gl
+  if (gl?.canvas.parentElement) gl.canvas.parentElement.removeChild(gl.canvas)
+  gl?.getExtension('WEBGL_lose_context')?.loseContext()
+  renderer = null
+  program = null
+  mesh = null
 })
 </script>
 
 <template>
-  <canvas ref="canvas" class="organization-galaxy-background" aria-hidden="true" />
+  <div ref="container" class="organization-galaxy-background" :class="{ 'is-fallback': webglFailed }" aria-hidden="true" />
 </template>
