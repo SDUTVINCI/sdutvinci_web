@@ -155,9 +155,11 @@ void main() {
   }
   float alpha = min(smoothstep(0.0, 0.3, length(col)), 1.0);
   if (uLightMode) {
-    float intensity = clamp(length(col), 0.0, 1.0);
-    col = mix(vec3(0.09, 0.22, 0.36), vec3(0.02, 0.48, 0.62), intensity * 0.58);
-    alpha *= 0.72;
+    float lightEnergy = clamp(length(col), 0.0, 1.0);
+    float fineDust = smoothstep(0.004, 0.055, lightEnergy) * 0.075;
+    float brightCore = smoothstep(0.018, 0.24, lightEnergy) * 0.225;
+    col = mix(vec3(0.22, 0.32, 0.40), vec3(0.08, 0.40, 0.46), min(lightEnergy * 0.42, 0.34));
+    alpha = min(fineDust + brightCore, 0.3);
   }
   gl_FragColor = uTransparent ? vec4(col, alpha) : vec4(col, 1.0);
 }
@@ -168,7 +170,10 @@ const readTheme = () => {
   darkMode = explicitTheme === 'dark' || (explicitTheme !== 'light' && Boolean(systemThemeQuery?.matches))
   if (program) {
     program.uniforms.uLightMode.value = !darkMode
-    program.uniforms.uSaturation.value = darkMode ? 0.06 : 0.34
+    program.uniforms.uDensity.value = darkMode ? 1.42 : 1.68
+    program.uniforms.uGlowIntensity.value = darkMode ? 0.48 : 0.14
+    program.uniforms.uSaturation.value = darkMode ? 0.06 : 0
+    program.uniforms.uTwinkleIntensity.value = darkMode ? 0.34 : 0.18
   }
 }
 
@@ -178,9 +183,10 @@ const renderFrame = (timestamp: number) => {
     program.uniforms.uTime.value = timestamp * 0.001
     program.uniforms.uStarSpeed.value = timestamp * 0.001 * 0.5 / 10
   }
-  smoothMouseX += (targetMouseX - smoothMouseX) * 0.05
-  smoothMouseY += (targetMouseY - smoothMouseY) * 0.05
-  smoothMouseActive += (targetMouseActive - smoothMouseActive) * 0.05
+  smoothMouseX += (targetMouseX - smoothMouseX) * 0.32
+  smoothMouseY += (targetMouseY - smoothMouseY) * 0.32
+  const activityFollow = targetMouseActive > smoothMouseActive ? 0.24 : 0.12
+  smoothMouseActive += (targetMouseActive - smoothMouseActive) * activityFollow
   program.uniforms.uMouse.value[0] = smoothMouseX
   program.uniforms.uMouse.value[1] = smoothMouseY
   program.uniforms.uMouseActiveFactor.value = smoothMouseActive
@@ -269,14 +275,14 @@ onMounted(async () => {
         uFocal: { value: new Float32Array([0.5, 0.5]) },
         uRotation: { value: new Float32Array([1, 0]) },
         uStarSpeed: { value: 0.5 },
-        uDensity: { value: 1.42 },
+        uDensity: { value: darkMode ? 1.42 : 1.68 },
         uHueShift: { value: 210 },
         uSpeed: { value: 1 },
         uMouse: { value: new Float32Array([0.5, 0.5]) },
-        uGlowIntensity: { value: 0.48 },
-        uSaturation: { value: darkMode ? 0.06 : 0.34 },
+        uGlowIntensity: { value: darkMode ? 0.48 : 0.14 },
+        uSaturation: { value: darkMode ? 0.06 : 0 },
         uMouseRepulsion: { value: true },
-        uTwinkleIntensity: { value: 0.34 },
+        uTwinkleIntensity: { value: darkMode ? 0.34 : 0.18 },
         uRotationSpeed: { value: 0.035 },
         uRepulsionStrength: { value: 2 },
         uMouseActiveFactor: { value: 0 },

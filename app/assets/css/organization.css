@@ -98,6 +98,11 @@
   background-size: 97px 83px, 137px 121px, 173px 157px;
 }
 
+:root[data-theme="light"] .organization-galaxy-background.is-fallback {
+  opacity: 0.3;
+  filter: saturate(0.55);
+}
+
 .organization-page::before {
   position: absolute;
   z-index: 1;
