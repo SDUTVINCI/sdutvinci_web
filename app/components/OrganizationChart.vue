@@ -11,6 +11,14 @@ type InstitutionSatellite = {
   division?: OrganizationNode
 }
 
+type RelationGeometry = {
+  path: string
+  fromX: number
+  fromY: number
+  toX: number
+  toY: number
+}
+
 const institutionLogos: Record<string, { src: string, alt: string, className: string }> = {
   'institution-emis': {
     src: 'https://cdn.sdutvincirobot.top/site-assets/images/sponsors/EMIS.webp',
@@ -75,62 +83,184 @@ const relationDetails = (relation: OrganizationRelation) => ({
 })
 
 const selectedDepartmentId = ref<string | null>(null)
+const selectedResponsibilityId = ref<string | null>(null)
 const selectedRelationId = ref<string | null>(null)
 const selectedDepartment = computed(() => institutionSystems.value
   .flatMap(system => system.satellites)
   .find(item => item.type === 'group' && item.node.id === selectedDepartmentId.value) || null)
+const selectedResponsibility = computed(() => institutionSystems.value
+  .flatMap(system => system.satellites)
+  .find(item => item.type === 'responsibility' && item.node.id === selectedResponsibilityId.value) || null)
 const selectedRelation = computed(() => props.structure.relations.find(relation => relation.id === selectedRelationId.value) || null)
+const organizationStage = ref<HTMLElement | null>(null)
+const relationCanvas = ref({ width: 1, height: 1 })
+const relationGeometries = ref<Record<string, RelationGeometry>>({})
+let relationAnimationFrame: number | null = null
+let lastRelationUpdate = 0
 
 const institutionSystemStyle = (index: number) => ({
   '--institution-start': `${index / Math.max(institutionSystems.value.length, 1) * 100}%`,
-  '--institution-delay': `${index * -1.7}s`
+  '--institution-delay': '0s'
 } as CSSProperties)
 
 const satelliteOrbitStyle = (index: number, total: number, type: InstitutionSatellite['type']) => ({
   '--satellite-start': `${total ? index / total * 100 : 0}%`,
-  '--satellite-delay': `${index * -0.7}s`,
-  '--satellite-size': type === 'responsibility' ? '70px' : '62px'
+  '--satellite-delay': '0s',
+  '--satellite-size': type === 'responsibility' ? '96px' : '86px'
 } as CSSProperties)
 
 const roleOrbitStyle = (index: number, total: number) => ({
   '--role-start': `${total ? index / total * 100 : 0}%`,
-  '--role-delay': `${index * -1.1}s`
+  '--role-delay': '0s'
 } as CSSProperties)
 
 const selectDepartment = (id: string) => {
   selectedRelationId.value = null
+  selectedResponsibilityId.value = null
   selectedDepartmentId.value = id
+}
+
+const selectResponsibility = (id: string) => {
+  selectedRelationId.value = null
+  selectedDepartmentId.value = null
+  selectedResponsibilityId.value = id
 }
 
 const selectRelation = (id: string) => {
   selectedDepartmentId.value = null
+  selectedResponsibilityId.value = null
   selectedRelationId.value = id
 }
 
 const closeInspector = () => {
   selectedDepartmentId.value = null
+  selectedResponsibilityId.value = null
   selectedRelationId.value = null
 }
+
+let prefersReducedMotion = false
+
+const updateRelationGeometries = (timestamp = 0) => {
+  const stage = organizationStage.value
+  if (!stage) return
+
+  const stageRect = stage.getBoundingClientRect()
+  const nodeElements = Array.from(stage.querySelectorAll<HTMLElement>('[data-organization-node-id]'))
+  const elementByNodeId = new Map(nodeElements.map(element => [element.dataset.organizationNodeId, element]))
+  const nextGeometries: Record<string, RelationGeometry> = {}
+
+  for (const [relationIndex, relation] of props.structure.relations.entries()) {
+    const fromElement = elementByNodeId.get(relation.fromNodeId)
+    const toElement = elementByNodeId.get(relation.toNodeId)
+    if (!fromElement || !toElement) continue
+
+    const fromRect = fromElement.getBoundingClientRect()
+    const toRect = toElement.getBoundingClientRect()
+    const fromX = fromRect.left - stageRect.left + fromRect.width / 2
+    const fromY = fromRect.top - stageRect.top + fromRect.height / 2
+    const toX = toRect.left - stageRect.left + toRect.width / 2
+    const toY = toRect.top - stageRect.top + toRect.height / 2
+    const middleX = (fromX + toX) / 2
+    const middleY = (fromY + toY) / 2
+    const distance = Math.hypot(toX - fromX, toY - fromY)
+    const directionX = (toX - fromX) / (distance || 1)
+    const directionY = (toY - fromY) / (distance || 1)
+    const normalX = -directionY
+    const normalY = directionX
+    const morphPhase = prefersReducedMotion ? 0 : timestamp / 520 + relationIndex * 1.7
+    const bend = Math.min(190, Math.max(82, distance * 0.26))
+    const coreX = stageRect.width / 2
+    const coreY = stageRect.height / 2
+    const positiveDistance = Math.hypot(middleX + normalX * bend - coreX, middleY + normalY * bend - coreY)
+    const negativeDistance = Math.hypot(middleX - normalX * bend - coreX, middleY - normalY * bend - coreY)
+    const outwardSign = positiveDistance >= negativeDistance ? 1 : -1
+    const rounded = (value: number) => Math.round(value * 10) / 10
+    const morphAmplitude = prefersReducedMotion ? 0 : Math.min(54, Math.max(28, distance * 0.075))
+    const pointOnWave = (progress: number, baseScale: number, phaseOffset: number) => {
+      const normalOffset = (bend * baseScale + Math.sin(morphPhase + phaseOffset) * morphAmplitude) * outwardSign
+      return {
+        x: fromX + (toX - fromX) * progress + normalX * normalOffset,
+        y: fromY + (toY - fromY) * progress + normalY * normalOffset
+      }
+    }
+    const points = [
+      { x: fromX, y: fromY },
+      pointOnWave(0.24, 0.72, 0),
+      pointOnWave(0.5, 1.08, 2.1),
+      pointOnWave(0.76, 0.78, 4.2),
+      { x: toX, y: toY }
+    ]
+    const curveSegments: string[] = []
+    for (let index = 0; index < points.length - 1; index++) {
+      const previous = points[index - 1] || points[index]!
+      const current = points[index]!
+      const next = points[index + 1]!
+      const afterNext = points[index + 2] || next
+      const controlOne = {
+        x: current.x + (next.x - previous.x) / 6,
+        y: current.y + (next.y - previous.y) / 6
+      }
+      const controlTwo = {
+        x: next.x - (afterNext.x - current.x) / 6,
+        y: next.y - (afterNext.y - current.y) / 6
+      }
+      curveSegments.push(`C ${rounded(controlOne.x)} ${rounded(controlOne.y)} ${rounded(controlTwo.x)} ${rounded(controlTwo.y)} ${rounded(next.x)} ${rounded(next.y)}`)
+    }
+
+    nextGeometries[relation.id] = {
+      path: `M ${rounded(fromX)} ${rounded(fromY)} ${curveSegments.join(' ')}`,
+      fromX: rounded(fromX),
+      fromY: rounded(fromY),
+      toX: rounded(toX),
+      toY: rounded(toY)
+    }
+  }
+
+  relationCanvas.value = { width: Math.max(1, stageRect.width), height: Math.max(1, stageRect.height) }
+  relationGeometries.value = nextGeometries
+}
+
+const syncRelationGeometries = (timestamp: number) => {
+  if (timestamp - lastRelationUpdate >= 32) {
+    updateRelationGeometries(timestamp)
+    lastRelationUpdate = timestamp
+  }
+  relationAnimationFrame = requestAnimationFrame(syncRelationGeometries)
+}
+
+onMounted(() => {
+  prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  relationAnimationFrame = requestAnimationFrame(syncRelationGeometries)
+})
+
+onBeforeUnmount(() => {
+  if (relationAnimationFrame !== null) cancelAnimationFrame(relationAnimationFrame)
+})
 </script>
 
 <template>
   <section class="organization-chart organization-constellation" :class="{ 'is-compact': compact }" aria-label="组织架构图">
-    <div class="organization-orbit-stage" tabindex="-1" @keydown.esc="closeInspector">
+    <div ref="organizationStage" class="organization-orbit-stage" tabindex="-1" @keydown.esc="closeInspector">
       <div class="organization-starfield" aria-hidden="true">
         <span v-for="index in 18" :key="index" />
       </div>
 
-      <svg class="organization-orbit-lines" viewBox="0 0 1160 820" aria-hidden="true" preserveAspectRatio="none">
-        <ellipse class="orbit-outer" cx="580" cy="405" rx="485" ry="322" />
-        <ellipse class="orbit-middle" cx="580" cy="405" rx="372" ry="242" />
-        <ellipse class="orbit-inner" cx="580" cy="405" rx="158" ry="104" />
-        <ellipse class="orbit-signal" cx="580" cy="405" rx="268" ry="178" />
-        <path class="orbit-comet" d="M110 515 C270 765 876 790 1050 500" />
+      <svg class="organization-orbit-lines" viewBox="0 0 1160 920" aria-hidden="true" preserveAspectRatio="none">
+        <ellipse class="orbit-outer" cx="580" cy="450" rx="500" ry="368" />
+        <ellipse class="orbit-middle" cx="580" cy="450" rx="390" ry="278" />
+        <ellipse class="orbit-inner" cx="580" cy="450" rx="184" ry="122" />
+        <ellipse class="orbit-signal" cx="580" cy="450" rx="286" ry="196" />
       </svg>
 
       <div class="organization-collaboration-hub">
-        <svg viewBox="0 0 32 32" aria-hidden="true">
-          <path d="M16 2.8c.8 7.8 5.4 12.4 13.2 13.2C21.4 16.8 16.8 21.4 16 29.2 15.2 21.4 10.6 16.8 2.8 16 10.6 15.2 15.2 10.6 16 2.8Z" />
+        <svg viewBox="0 0 48 48" aria-hidden="true">
+          <ellipse cx="24" cy="24" rx="19" ry="7.5" />
+          <ellipse cx="24" cy="24" rx="19" ry="7.5" transform="rotate(60 24 24)" />
+          <ellipse cx="24" cy="24" rx="19" ry="7.5" transform="rotate(-60 24 24)" />
+          <circle class="organization-core-center" cx="24" cy="24" r="4.4" />
+          <circle class="organization-core-node" cx="43" cy="24" r="2.6" />
+          <circle class="organization-core-node" cx="14.5" cy="40.45" r="2.6" />
+          <circle class="organization-core-node" cx="14.5" cy="7.55" r="2.6" />
         </svg>
         <strong>{{ root?.name || '协同运行' }}</strong>
       </div>
@@ -143,7 +273,7 @@ const closeInspector = () => {
           :class="[
             `institution-system-${system.index + 1}`,
             institutionLogo(system.institution.id)?.className,
-            { 'has-selected-satellite': selectedDepartment?.institution.id === system.institution.id }
+            { 'has-selected-satellite': selectedDepartment?.institution.id === system.institution.id || selectedResponsibility?.institution.id === system.institution.id }
           ]"
           :style="institutionSystemStyle(system.index)"
         >
@@ -172,16 +302,24 @@ const closeInspector = () => {
               class="organization-institution-satellite"
               :class="[
                 satellite.type === 'responsibility' ? 'organization-responsibility-satellite' : 'organization-department-satellite',
-                { 'is-selected': selectedDepartmentId === satellite.node.id }
+                { 'is-selected': selectedDepartmentId === satellite.node.id || selectedResponsibilityId === satellite.node.id }
               ]"
               :style="satelliteOrbitStyle(satelliteIndex, system.satellites.length, satellite.type)"
+              :data-organization-node-id="satellite.node.id"
             >
-              <div v-if="satellite.type === 'responsibility'" class="organization-responsibility-planet">
+              <button
+                v-if="satellite.type === 'responsibility'"
+                type="button"
+                class="organization-responsibility-planet"
+                :aria-expanded="selectedResponsibilityId === satellite.node.id"
+                aria-controls="organization-responsibility-focus"
+                @click="selectResponsibility(satellite.node.id)"
+              >
                 <span aria-hidden="true">
                   <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.2" /><path d="M5.5 20c.5-4.2 2.7-6.3 6.5-6.3s6 2.1 6.5 6.3" /></svg>
                 </span>
                 <strong>{{ satellite.node.name }}</strong>
-              </div>
+              </button>
               <button
                 v-else
                 type="button"
@@ -207,29 +345,64 @@ const closeInspector = () => {
             </div>
           </div>
 
-          <p v-if="system.divisions[0]" class="organization-institution-caption">{{ system.divisions[0].name }}</p>
         </article>
       </section>
 
-      <p class="organization-responsibility-note">{{ structure.responsibilityNote }}</p>
-
       <aside v-if="structure.relations.length" class="organization-relation-layer" aria-label="跨部门关系">
-        <div v-for="(relation, index) in structure.relations" :key="relation.id" class="organization-relation-wire">
-          <svg viewBox="0 0 560 180" aria-hidden="true" preserveAspectRatio="none">
-            <path class="relation-glow" d="M10 160 C125 25 395 18 550 146" />
-            <path class="relation-bolt" d="M10 160 C125 25 395 18 550 146" />
-          </svg>
-          <button
-            type="button"
-            class="organization-relation-trigger"
-            :style="{ '--relation-index': index }"
-            :aria-expanded="selectedRelationId === relation.id"
-            aria-controls="organization-relation-focus"
-            @click="selectRelation(relation.id)"
+        <svg
+          class="organization-relation-map"
+          :viewBox="`0 0 ${relationCanvas.width} ${relationCanvas.height}`"
+          preserveAspectRatio="none"
+        >
+          <g
+            v-for="relation in structure.relations"
+            :key="relation.id"
+            class="organization-relation-wire"
+            :class="{ 'is-active': selectedRelationId === relation.id }"
           >
-            <i aria-hidden="true">ϟ</i><span>{{ relation.label }}</span>
-          </button>
-        </div>
+            <template v-if="relationGeometries[relation.id]">
+              <path class="relation-glow" :d="relationGeometries[relation.id]!.path" />
+              <path class="relation-halo" :d="relationGeometries[relation.id]!.path" />
+              <path class="relation-line" :d="relationGeometries[relation.id]!.path" />
+              <path class="relation-spark" :d="relationGeometries[relation.id]!.path" />
+              <circle
+                class="relation-endpoint"
+                :cx="relationGeometries[relation.id]!.fromX"
+                :cy="relationGeometries[relation.id]!.fromY"
+                r="3"
+              />
+              <circle
+                class="relation-endpoint"
+                :cx="relationGeometries[relation.id]!.toX"
+                :cy="relationGeometries[relation.id]!.toY"
+                r="3"
+              />
+              <path
+                class="relation-hitbox"
+                :d="relationGeometries[relation.id]!.path"
+                role="button"
+                tabindex="0"
+                :aria-label="`查看${relationDetails(relation).from}与${relationDetails(relation).to}的关系`"
+                :aria-expanded="selectedRelationId === relation.id"
+                aria-controls="organization-relation-focus"
+                @click="selectRelation(relation.id)"
+                @keydown.enter="selectRelation(relation.id)"
+                @keydown.space.prevent="selectRelation(relation.id)"
+              >
+                <title>点击查看跨部门关系</title>
+              </path>
+            </template>
+          </g>
+        </svg>
+        <button
+          v-for="relation in structure.relations"
+          :key="`${relation.id}-mobile`"
+          type="button"
+          class="organization-relation-mobile-trigger"
+          @click="selectRelation(relation.id)"
+        >
+          <span aria-hidden="true">ϟ</span>查看跨部门关系
+        </button>
       </aside>
 
       <Transition name="organization-focus">
@@ -265,6 +438,34 @@ const closeInspector = () => {
               </li>
             </ul>
             <p v-else class="organization-focus-empty">当前未配置下级岗位</p>
+          </div>
+        </section>
+      </Transition>
+
+      <Transition name="organization-focus">
+        <section
+          v-if="selectedResponsibility"
+          id="organization-responsibility-focus"
+          class="organization-inspector organization-responsibility-focus"
+          role="dialog"
+          aria-modal="true"
+          :aria-labelledby="`${selectedResponsibility.node.id}-focus-title`"
+        >
+          <button type="button" class="organization-focus-close" aria-label="关闭负责人聚焦" @click="closeInspector">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+          </button>
+          <header>
+            <small>{{ selectedResponsibility.institution.name }}</small>
+            <h2 :id="`${selectedResponsibility.node.id}-focus-title`">{{ selectedResponsibility.node.name }}</h2>
+            <p>机构负责人职责节点</p>
+          </header>
+          <div class="organization-focus-system organization-responsibility-focus-system">
+            <div class="organization-focus-orbit" aria-hidden="true"><i /><i /></div>
+            <div class="organization-focus-planet organization-focus-responsibility">
+              <span aria-hidden="true">◎</span>
+              <strong>{{ selectedResponsibility.node.name }}</strong>
+            </div>
+            <p class="organization-focus-empty">{{ selectedResponsibility.node.description || `${selectedResponsibility.institution.name}的负责人职责` }}</p>
           </div>
         </section>
       </Transition>
