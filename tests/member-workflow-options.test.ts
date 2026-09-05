@@ -26,10 +26,10 @@ describe('成员选项、自动归类与 Markdown 图床', () => {
 
   it('为 Markdown 根路径图片补齐固定 CDN，不改绝对和协议相对 URL', () => {
     expect(resolveMarkdownMediaUrls('![](/images/a b.webp "图")\n<img src="/images/c.webp">\n![](https://example.com/x.png)'))
-      .toContain('<img src="https://cdn.sdutvincirobot.top/images/c.webp">')
-    expect(resolveMarkdownMediaUrls('![](/images/a.webp)')).toBe('![](https://cdn.sdutvincirobot.top/images/a.webp)')
+      .toContain('<img src="https://cdn.sdutvinci.cn/images/c.webp">')
+    expect(resolveMarkdownMediaUrls('![](/images/a.webp)')).toBe('![](https://cdn.sdutvinci.cn/images/a.webp)')
     expect(resolveMarkdownMediaUrls('![](https://example.com/x.png)')).toBe('![](https://example.com/x.png)')
-    expect(resolveMarkdownMediaUrls('![](/images/logo.png)')).toContain('https://cdn.sdutvincirobot.top/site-assets/images/logo-')
+    expect(resolveMarkdownMediaUrls('![](/images/logo.png)')).toContain('https://cdn.sdutvinci.cn/site-assets/images/logo-')
   })
 
   it('使用学校教学单位作为学院选择题，并以浏览器样式导出 A4 PDF', () => {

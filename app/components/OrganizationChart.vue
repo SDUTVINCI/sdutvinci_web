@@ -21,7 +21,7 @@ type RelationGeometry = {
 
 const institutionLogos: Record<string, { src: string, alt: string, className: string }> = {
   'institution-emis': {
-    src: 'https://cdn.sdutvincirobot.top/site-assets/images/sponsors/EMIS.webp',
+    src: 'https://cdn.sdutvinci.cn/site-assets/images/sponsors/EMIS.webp',
     alt: '机电创新学会 EMIS 标志',
     className: 'is-emis'
   },
@@ -31,7 +31,7 @@ const institutionLogos: Record<string, { src: string, alt: string, className: st
     className: 'is-vinci'
   },
   'institution-iri': {
-    src: 'https://cdn.sdutvincirobot.top/site-assets/images/sponsors/IRI_Lab.webp?v=20260813-transparent',
+    src: 'https://cdn.sdutvinci.cn/site-assets/images/sponsors/IRI_Lab.webp?v=20260813-transparent',
     alt: 'IRI Lab 智能机器人创新实践基地标志',
     className: 'is-iri'
   }

@@ -131,7 +131,7 @@ onBeforeUnmount(() => {
 <template>
   <header class="site-header">
     <NuxtLink class="brand" to="/" aria-label="返回首页">
-      <img class="brand-logo" src="https://cdn.sdutvincirobot.top/site-assets/images/logo-e355a71c.webp" alt="Vinci 机器人队标志">
+      <img class="brand-logo" src="https://cdn.sdutvinci.cn/site-assets/images/logo-e355a71c.webp" alt="Vinci 机器人队标志">
       <span class="brand-copy">
         <span class="brand-title">山理工 Vinci 机器人队</span>
         <span class="brand-subtitle">创新，无畏，团结，拼搏</span>

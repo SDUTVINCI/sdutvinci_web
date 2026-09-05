@@ -13,7 +13,7 @@ export interface FooterPartnerGroup {
 }
 
 const sponsorAsset = (filename: string) =>
-  `https://cdn.sdutvincirobot.top/site-assets/images/sponsors/${filename}`
+  `https://cdn.sdutvinci.cn/site-assets/images/sponsors/${filename}`
 
 export const footerPartnerGroups: FooterPartnerGroup[] = [
   {

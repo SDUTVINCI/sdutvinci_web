@@ -16,8 +16,8 @@
 
 - `POST /api/cms/media` 的请求字段不变，成功响应仍返回 `asset` 与可直接插入正文的 `markdown`。
 - `asset.url` 由部署环境配置的 `S3_PUBLIC_BASE_URL` 加对象 key 构成；该变量没有写死。
-  例如公开基址配置为 `https://cdn.sdutvincirobot.top` 时，Wiki 图片 URL 形如
-  `https://cdn.sdutvincirobot.top/site-assets/images/wiki/2025/02/07/<文件名>.webp`。
+  例如公开基址配置为 `https://cdn.sdutvinci.cn` 时，Wiki 图片 URL 形如
+  `https://cdn.sdutvinci.cn/site-assets/images/wiki/2025/02/07/<文件名>.webp`。
 - 已有文章优先读取 Wiki 目录或新闻文件名开头的 `YYYY-MM-DD`，与内容仓库结构一致；尚无路径
   时使用 `publishedAt`（明确覆盖值优先），再回退到草稿创建日。因此同一草稿后续编辑仍在同一
   日期目录。

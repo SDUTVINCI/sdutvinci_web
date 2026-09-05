@@ -15,7 +15,7 @@ describe('网站 Footer 合作与支持', () => {
       expect.objectContaining({ name: '库犸科技 MAMMOTION', href: 'https://mammotion.com/cn/' })
     ]))
     expect(footerPartnerGroups.flatMap(group => group.items).every(item =>
-      item.logo.startsWith('https://cdn.sdutvincirobot.top/site-assets/images/sponsors/')
+      item.logo.startsWith('https://cdn.sdutvinci.cn/site-assets/images/sponsors/')
     )).toBe(true)
   })
 

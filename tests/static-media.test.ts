@@ -11,7 +11,7 @@ import {
 
 describe('仓库静态媒体 CDN 兼容映射', () => {
   it('映射已有路径、编码路径和 URL 后缀，未知内容保持原样', () => {
-    const expected = 'https://cdn.sdutvincirobot.top/site-assets/images/member_photo/%E5%BC%A0%E7%9B%8A%E8%B1%AA-d5952078.webp'
+    const expected = 'https://cdn.sdutvinci.cn/site-assets/images/member_photo/%E5%BC%A0%E7%9B%8A%E8%B1%AA-d5952078.webp'
     expect(resolveStaticMediaUrl('/images/member_photo/张益豪.jpg')).toBe(expected)
     expect(resolveStaticMediaUrl('/images/member_photo/%E5%BC%A0%E7%9B%8A%E8%B1%AA.jpg?v=1#photo'))
       .toBe(`${expected}?v=1#photo`)

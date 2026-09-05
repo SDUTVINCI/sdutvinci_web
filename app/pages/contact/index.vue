@@ -64,7 +64,7 @@ const socialLinks = [
       </div>
 
       <div class="contact-visual">
-        <img src="https://cdn.sdutvincirobot.top/site-assets/images/cooporate-34c74ea5.webp" alt="Vinci 机器人队合作交流展示">
+        <img src="https://cdn.sdutvinci.cn/site-assets/images/cooporate-34c74ea5.webp" alt="Vinci 机器人队合作交流展示">
       </div>
     </section>
 

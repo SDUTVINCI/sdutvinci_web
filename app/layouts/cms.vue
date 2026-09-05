@@ -114,7 +114,7 @@ const handleLogout = async () => {
         to="/cms"
       >
         <span class="cms-brand-mark">
-          <img src="https://cdn.sdutvincirobot.top/site-assets/images/logo-e355a71c.webp" alt="">
+          <img src="https://cdn.sdutvinci.cn/site-assets/images/logo-e355a71c.webp" alt="">
         </span>
         <span class="cms-brand-copy">
           <strong>Vinci 机器人队</strong>

@@ -11,7 +11,7 @@ const footerPartners = footerPartnerGroups.flatMap(group =>
     <div class="footer-inner">
       <div class="footer-main">
         <div class="footer-brand">
-          <img src="https://cdn.sdutvincirobot.top/site-assets/images/logo_black-e355a71c.webp" alt="Vinci 机器人队标志">
+          <img src="https://cdn.sdutvinci.cn/site-assets/images/logo_black-e355a71c.webp" alt="Vinci 机器人队标志">
           <div>
             <strong>山东理工大学 Vinci 机器人队</strong>
             <span>以 Robocon 为核心的机器人创新团队</span>

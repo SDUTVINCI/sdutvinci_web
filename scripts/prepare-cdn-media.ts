@@ -13,7 +13,7 @@ import { dirname, extname, join, parse, relative, resolve, sep } from 'node:path
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import sharp from 'sharp'
 
-const defaultCdnBaseUrl = 'https://cdn.sdutvincirobot.top'
+const defaultCdnBaseUrl = 'https://cdn.sdutvinci.cn'
 const maximumImageDimension = 2560
 const photographicWebpQuality = 85
 const hashSuffixLength = 8

@@ -1798,7 +1798,7 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
   改为 `<Unix毫秒>-<最终WebP的SHA-256前8位>.webp`；年月、草稿 ID、数据库登记、编辑锁、
   权限和 S3 配置模型不变，不需要数据库 Migration。
 - 仓库原有 56 张图片转换为 WebP，首页 MP4 按维护者最终决定不压缩、不转码、逐字节复制；
-  生成的 57 个对象由维护者手动上传到 `cdn.sdutvincirobot.top/site-assets/`。上传后已逐项 GET
+  生成的 57 个对象由维护者手动上传到 `cdn.sdutvinci.cn/site-assets/`。上传后已逐项 GET
   核对状态、Content-Type、长度和 SHA-256，视频 Range 请求返回 206。
 - `shared/utils/static-media.ts` 登记 57 条旧路径到 CDN 的确定性映射。站点直接引用已切换；
   正式 Comark 渲染器只改写元素/组件属性中的登记路径，代码文本和未知 `/images/...` 保持
