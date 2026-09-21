@@ -14,33 +14,49 @@ const message = ref('')
 const errorMessage = ref('')
 const submitting = ref(false)
 const avatarUploading = ref(false)
-const ensureApplication = async () => { application.value ||= await $fetch('/api/member-applications/start', { method: 'POST' }) }
+type ApplicationSession = { id: string, token: string }
+let applicationRequest: Promise<ApplicationSession> | null = null
+const ensureApplication = async () => {
+  if (application.value) return application.value
+  applicationRequest ||= $fetch<ApplicationSession>('/api/member-applications/start', { method: 'POST' })
+  try {
+    const started = await applicationRequest
+    application.value ||= started
+    return application.value
+  } finally {
+    applicationRequest = null
+  }
+}
 
 const uploadAvatar = async (file: File) => {
   if (!file || !form.name) { errorMessage.value = '请先填写姓名，再选择头像'; return }
   avatarUploading.value = true
   errorMessage.value = ''
   try {
-    await ensureApplication()
+    const activeApplication = await ensureApplication()
     const body = new FormData()
-    body.append('token', application.value!.token)
+    body.append('token', activeApplication.token)
     body.append('name', form.name)
     body.append('image', file)
-    const result = await $fetch<{ url: string }>(`/api/member-applications/${application.value!.id}/avatar`, { method: 'POST', body })
+    const result = await $fetch<{ url: string }>(`/api/member-applications/${activeApplication.id}/avatar`, { method: 'POST', body })
     avatarUrl.value = result.url
   } catch (error: any) { errorMessage.value = error?.data?.message || '头像上传失败' }
   finally { avatarUploading.value = false }
 }
 
 const submit = async () => {
+  if (avatarUploading.value) {
+    errorMessage.value = '请等待头像上传完成后再提交'
+    return
+  }
   submitting.value = true; errorMessage.value = ''
   try {
-    await ensureApplication()
-    await $fetch(`/api/member-applications/${application.value!.id}/submit`, {
-      method: 'POST', body: { token: application.value!.token, profile: form }
+    const activeApplication = await ensureApplication()
+    await $fetch(`/api/member-applications/${activeApplication.id}/submit`, {
+      method: 'POST', body: { token: activeApplication.token, profile: form }
     })
     if (props.immediateApproval) {
-      await $fetch(`/api/cms/member-applications/${application.value!.id}/review`, {
+      await $fetch(`/api/cms/member-applications/${activeApplication.id}/review`, {
         method: 'POST', headers: csrfHeaders(), body: { action: 'approve', note: '管理员在成员管理中直接创建' }
       })
       message.value = '成员已创建并上线。'
@@ -68,11 +84,12 @@ onBeforeUnmount(() => {
       <MemberAvatarUpload
         :name="form.name"
         :current-url="avatarUrl"
+        :disabled="submitting"
         :uploading="avatarUploading"
         @select="uploadAvatar"
       />
       <MemberProfileFields v-model="form" :options="options" />
-      <footer class="member-application-actions"><button class="cms-button cms-button-primary" :disabled="submitting">{{ submitting ? '正在处理…' : (immediateApproval ? '创建并上线' : '提交审核') }}</button></footer>
+      <footer class="member-application-actions"><button class="cms-button cms-button-primary" :disabled="submitting || avatarUploading">{{ avatarUploading ? '正在上传头像…' : (submitting ? '正在处理…' : (immediateApproval ? '创建并上线' : '提交审核')) }}</button></footer>
     </form>
   </div>
 </template>

@@ -17,17 +17,25 @@ const previewUrl = computed(() =>
   localPreviewUrl.value || resolveStaticMediaUrl(props.currentUrl || '/images/logo.png')
 )
 
+const clearLocalPreview = () => {
+  if (!localPreviewUrl.value) return
+  URL.revokeObjectURL(localPreviewUrl.value)
+  localPreviewUrl.value = ''
+}
+
 const selectAvatar = (event: Event) => {
   const file = (event.target as HTMLInputElement).files?.[0]
   if (!file) return
-  if (localPreviewUrl.value) URL.revokeObjectURL(localPreviewUrl.value)
+  clearLocalPreview()
   localPreviewUrl.value = URL.createObjectURL(file)
   emit('select', file)
 }
 
-onBeforeUnmount(() => {
-  if (localPreviewUrl.value) URL.revokeObjectURL(localPreviewUrl.value)
+watch(() => props.uploading, (uploading, wasUploading) => {
+  if (wasUploading && !uploading) clearLocalPreview()
 })
+
+onBeforeUnmount(clearLocalPreview)
 </script>
 
 <template>
@@ -42,10 +50,10 @@ onBeforeUnmount(() => {
         class="member-file-input"
         type="file"
         accept="image/jpeg,image/png,image/webp,image/gif"
-        :disabled="disabled || uploading"
+        :disabled="disabled || uploading || !name.trim()"
         @change="selectAvatar"
       >
-      <small>{{ uploading ? '正在转换并上传…' : '支持 JPG、PNG、WebP 或 GIF，最大 10 MB' }}</small>
+      <small>{{ !name.trim() ? '请先填写姓名，再选择头像' : (uploading ? '正在转换并上传…' : '支持 JPG、PNG、WebP 或 GIF，最大 10 MB') }}</small>
     </label>
   </section>
 </template>

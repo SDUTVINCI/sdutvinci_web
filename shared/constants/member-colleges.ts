@@ -3,6 +3,7 @@ export const MEMBER_COLLEGE_OPTIONS = [
   '机械工程学院',
   '交通与车辆工程学院',
   '农业工程与食品科学学院',
+  '智能农业装备工程学院',
   '电气与电子工程学院',
   '计算机科学与技术学院',
   '化学化工学院',
@@ -28,4 +29,3 @@ export const MEMBER_COLLEGE_OPTIONS = [
   '教师教育学院',
   '信息管理学院'
 ] as const
-

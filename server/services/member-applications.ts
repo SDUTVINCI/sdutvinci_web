@@ -79,10 +79,24 @@ export const uploadMemberApplicationAvatar = async (input: { id: string, token: 
     cacheControl: 'private, max-age=86400',
     metadata: { 'member-application-id': input.id }
   })
-  if (application.avatarObjectKey && application.avatarObjectKey !== key) {
-    await client.send(new DeleteObjectCommand({ Bucket: config.S3_BUCKET, Key: application.avatarObjectKey }))
+  const updated = await getDatabase().update(memberApplications).set({
+    avatarObjectKey: key,
+    avatarPublicUrl: url,
+    avatarByteSize: output.length,
+    updatedAt: new Date()
+  }).where(and(
+    eq(memberApplications.id, input.id),
+    eq(memberApplications.status, 'editing')
+  )).returning({ id: memberApplications.id })
+  if (!updated.length) {
+    if (application.avatarObjectKey !== key) {
+      await client.send(new DeleteObjectCommand({ Bucket: config.S3_BUCKET, Key: key })).catch(() => undefined)
+    }
+    throw new Error('MEMBER_APPLICATION_STATE_INVALID')
   }
-  await getDatabase().update(memberApplications).set({ avatarObjectKey: key, avatarPublicUrl: url, avatarByteSize: output.length, updatedAt: new Date() }).where(eq(memberApplications.id, input.id))
+  if (application.avatarObjectKey && application.avatarObjectKey !== key) {
+    await client.send(new DeleteObjectCommand({ Bucket: config.S3_BUCKET, Key: application.avatarObjectKey })).catch(() => undefined)
+  }
   return { url, filename }
 }
 

@@ -70,6 +70,10 @@ const uploadAvatar = async (file: File) => {
 }
 
 const save = async () => {
+  if (avatarUploading.value) {
+    errorMessage.value = '请等待头像上传完成后再保存'
+    return
+  }
   submitting.value = true
   message.value = ''
   errorMessage.value = ''
@@ -199,8 +203,8 @@ const applyProposal = async (proposalId: string) => {
       </details>
 
       <footer v-if="isAdmin" class="member-application-actions">
-        <button class="cms-button cms-button-primary" :disabled="submitting">{{ submitting ? '正在保存…' : '保存成员资料' }}</button>
-        <button class="cms-button cms-button-danger" type="button" :disabled="submitting" @click="deleteMember">删除成员档案</button>
+        <button class="cms-button cms-button-primary" :disabled="submitting || avatarUploading">{{ avatarUploading ? '正在上传头像…' : (submitting ? '正在保存…' : '保存成员资料') }}</button>
+        <button class="cms-button cms-button-danger" type="button" :disabled="submitting || avatarUploading" @click="deleteMember">删除成员档案</button>
       </footer>
     </form>
 
