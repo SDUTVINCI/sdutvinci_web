@@ -4,10 +4,12 @@ import { resolveStaticMediaUrl } from '~~/shared/utils/static-media'
 const props = withDefaults(defineProps<{
   name: string
   currentUrl?: string | null
+  required?: boolean
   disabled?: boolean
   uploading?: boolean
 }>(), {
   currentUrl: null,
+  required: false,
   disabled: false,
   uploading: false
 })
@@ -45,15 +47,22 @@ onBeforeUnmount(clearLocalPreview)
       <span>头像预览</span>
     </div>
     <label class="member-avatar-upload">
-      <span>头像（文件名自动转为姓名-哈希.webp）</span>
+      <span>
+        头像
+        <strong v-if="required" class="member-required-marker">必填</strong>
+        <small>（文件名自动转为姓名-哈希.webp）</small>
+      </span>
       <input
         class="member-file-input"
         type="file"
         accept="image/jpeg,image/png,image/webp,image/gif"
+        :required="required && !currentUrl"
         :disabled="disabled || uploading || !name.trim()"
         @change="selectAvatar"
       >
-      <small>{{ !name.trim() ? '请先填写姓名，再选择头像' : (uploading ? '正在转换并上传…' : '支持 JPG、PNG、WebP 或 GIF，最大 10 MB') }}</small>
+      <small :class="{ 'member-avatar-name-warning': !name.trim() }">
+        {{ !name.trim() ? '请先填写姓名，再选择头像' : (uploading ? '正在转换并上传…' : '支持 JPG、PNG、WebP 或 GIF，最大 10 MB') }}
+      </small>
     </label>
   </section>
 </template>

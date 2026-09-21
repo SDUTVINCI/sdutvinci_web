@@ -83,14 +83,37 @@ integration('公开成员申请审核', () => {
   it('拒绝不存在或未提交申请，且服务端拒绝年度外组别', async () => {
     const application = await startMemberApplication()
     await expect(submitMemberApplication(application.id, application.token, {
-      name: '错误组别', grade: '2025', groupName: '电路组', positions: ['成员']
+      name: '缺少头像', grade: '2025', groupName: '软件算法组', positions: ['成员'], seasons: ['25']
+    })).rejects.toThrow('MEMBER_APPLICATION_PROFILE_INVALID')
+    const image = await sharp({
+      create: { width: 32, height: 32, channels: 3, background: '#ad3232' }
+    }).png().toBuffer()
+    await uploadMemberApplicationAvatar({
+      id: application.id,
+      token: application.token,
+      name: '错误组别',
+      data: image,
+      mimeType: 'image/png'
+    })
+    await expect(submitMemberApplication(application.id, application.token, {
+      name: '错误组别', grade: '2025', groupName: '电路组', positions: ['成员'], seasons: ['25']
     })).rejects.toThrow('MEMBER_APPLICATION_PROFILE_INVALID')
   })
 
   it('同名成员使用从 1 开始的最小可用数字后缀', async () => {
     const admin = await bootstrapCmsAdmin({ account: 'keyadmin', password: 'KeyAdminPassword123!' })
-    for (const expectedKey of ['tongmingchengyuan', 'tongmingchengyuan1', 'tongmingchengyuan2']) {
+    for (const [index, expectedKey] of ['tongmingchengyuan', 'tongmingchengyuan1', 'tongmingchengyuan2'].entries()) {
       const application = await startMemberApplication()
+      const image = await sharp({
+        create: { width: 32, height: 32, channels: 3, background: { r: 22 + index, g: 125, b: 139 } }
+      }).png().toBuffer()
+      await uploadMemberApplicationAvatar({
+        id: application.id,
+        token: application.token,
+        name: '同名成员',
+        data: image,
+        mimeType: 'image/png'
+      })
       await submitMemberApplication(application.id, application.token, {
         name: '同名成员', grade: '2025', groupName: '软件算法组', positions: ['成员'], seasons: ['25']
       })

@@ -100,7 +100,7 @@ const loadMemberRows = async (id?: string, includeDeleted = true) => {
   return filters.length ? query.where(and(...filters)) : query
 }
 
-export const listCmsMembers = async (includeDeleted = true): Promise<CmsMember[]> =>
+export const listCmsMembers = async (includeDeleted = false): Promise<CmsMember[]> =>
   (await loadMemberRows(undefined, includeDeleted)).map(toCmsMember)
 
 export const getCmsMember = async (id: string) =>

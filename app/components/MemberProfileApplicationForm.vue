@@ -49,6 +49,18 @@ const submit = async () => {
     errorMessage.value = '请等待头像上传完成后再提交'
     return
   }
+  if (!avatarUrl.value) {
+    errorMessage.value = '请上传头像后再提交'
+    return
+  }
+  if (!form.positions.length) {
+    errorMessage.value = '请至少选择一项职责'
+    return
+  }
+  if (!form.seasons.length) {
+    errorMessage.value = '请至少选择一个参加过的赛季'
+    return
+  }
   submitting.value = true; errorMessage.value = ''
   try {
     const activeApplication = await ensureApplication()
@@ -84,11 +96,12 @@ onBeforeUnmount(() => {
       <MemberAvatarUpload
         :name="form.name"
         :current-url="avatarUrl"
+        required
         :disabled="submitting"
         :uploading="avatarUploading"
         @select="uploadAvatar"
       />
-      <MemberProfileFields v-model="form" :options="options" />
+      <MemberProfileFields v-model="form" :options="options" required />
       <footer class="member-application-actions"><button class="cms-button cms-button-primary" :disabled="submitting || avatarUploading">{{ avatarUploading ? '正在上传头像…' : (submitting ? '正在处理…' : (immediateApproval ? '创建并上线' : '提交审核')) }}</button></footer>
     </form>
   </div>

@@ -127,6 +127,10 @@ suite('V2 阶段 9 成员数据库权威与迁移', () => {
       .rejects.toThrow('成员资料已被其他操作更新')
     const deleted = await deleteCmsMember(created!.id, 1, admin!.id)
     expect(deleted).toMatchObject({ version: 2, deletedAt: expect.any(String) })
+    expect(await listCmsMembers()).toHaveLength(0)
+    expect(await listCmsMembers(true)).toEqual([
+      expect.objectContaining({ id: created!.id, deletedAt: expect.any(String) })
+    ])
     expect(await listPublicMembersFromDatabase()).toHaveLength(0)
     expect(await getPublicMemberFromDatabase('memberdelete')).toBeNull()
     expect(await getDatabase().select().from(userMembers).where(eq(userMembers.memberId, created!.id))).toHaveLength(0)
