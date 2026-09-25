@@ -68,7 +68,7 @@ x-app: &app
 
 services:
   postgres:
-    image: postgres:17-bookworm
+    image: ${POSTGRES_IMAGE:-postgres:17-bookworm}
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
@@ -92,7 +92,7 @@ services:
     <<: *app
 
   gateway:
-    image: caddy:2.10-alpine
+    image: ${CADDY_IMAGE:-caddy:2.10-alpine}
     restart: unless-stopped
     depends_on:
       app-blue:
