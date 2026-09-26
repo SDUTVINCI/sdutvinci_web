@@ -59,6 +59,7 @@ export default defineNuxtConfig({
     '/wiki/**': { prerender: false },
     '/docs': { redirect: '/wiki' },
     '/recruitment': { prerender: true },
+    '/links': { prerender: true },
     '/contact': { prerender: true },
     '/cms/**': { prerender: false },
     '/api/cms/**': { prerender: false },
@@ -69,7 +70,7 @@ export default defineNuxtConfig({
   nitro: {
     prerender: {
       crawlLinks: true,
-      routes: ['/research', '/projects', '/recruitment', '/contact']
+      routes: ['/research', '/projects', '/recruitment', '/links', '/contact']
     }
   }
 })
