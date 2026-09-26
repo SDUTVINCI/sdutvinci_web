@@ -75,17 +75,17 @@ const footerPartners = footerPartnerGroups.flatMap(group =>
 
       <div class="footer-records">
         <span class="footer-copyright">© 2026 山东理工大学 Vinci 机器人队</span>
-        <a href="https://beian.miit.gov.cn" target="_blank" rel="noopener noreferrer">
+        <a href="https://beian.miit.gov.cn/#/Integrated/index" target="_blank" rel="noopener noreferrer">
           <img
             class="footer-record-icon"
             src="https://cdn.tungchiahui.cn/tungwebsite/assets/images/footer/favicon-miit.webp"
             alt=""
             aria-hidden="true"
           >
-          鲁ICP备2025185601号-1
+          鲁ICP备09041544号-6
         </a>
         <a
-          href="http://www.beian.gov.cn/portal/registerSystemInfo?recordcode=37030302001123"
+          href="http://www.beian.gov.cn/portal/registerSystemInfo?recordcode=37030302000010"
           target="_blank"
           rel="noopener noreferrer"
         >
@@ -95,7 +95,7 @@ const footerPartners = footerPartnerGroups.flatMap(group =>
             alt=""
             aria-hidden="true"
           >
-          鲁公网安备37030302001123号
+          鲁公网安备37030302000010号
         </a>
       </div>
     </div>
