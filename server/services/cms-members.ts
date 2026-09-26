@@ -221,7 +221,14 @@ export const createCmsMember = async (
   actorUserId: string
 ) => {
   const memberId = randomUUID()
-  const profile = inputProfile(input, input.sourcePath || `cms/${input.memberKey.trim().toLowerCase()}-${memberId}.md`)
+  const defaultSourcePath = `cms/${input.memberKey.trim().toLowerCase()}.md`
+  const [usedDefaultPath] = input.sourcePath ? [] : await getDatabase()
+    .select({ id: members.id }).from(members)
+    .where(eq(members.sourcePath, defaultSourcePath)).limit(1)
+  const sourcePath = input.sourcePath || (usedDefaultPath
+    ? `cms/${input.memberKey.trim().toLowerCase()}-${memberId}.md`
+    : defaultSourcePath)
+  const profile = inputProfile(input, sourcePath)
   await assertMemberProfileOptions(profile)
   await getDatabase().transaction(async (tx) => {
     await tx.insert(members).values({ id: memberId, ...memberValues(profile) })
