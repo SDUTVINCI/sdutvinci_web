@@ -14,6 +14,7 @@ import {
   users
 } from '../db/schema'
 import { hashCmsPassword } from '../utils/cms-security'
+import { getActiveMemberAccountLink } from './member-account-links'
 
 type CmsTransaction = Parameters<
   Parameters<ReturnType<typeof getDatabase>['transaction']>[0]
@@ -117,8 +118,7 @@ export const submitAccountRegistration = async (input: {
     if (!member || member.deletedAt || !member.currentRevisionId) {
       throw new Error('ACCOUNT_REGISTRATION_MEMBER_NOT_FOUND')
     }
-    const [binding] = await tx.select({ userId: userMembers.userId })
-      .from(userMembers).where(eq(userMembers.memberId, member.id)).limit(1)
+    const binding = await getActiveMemberAccountLink(tx, member.id)
     if (binding) throw new AccountRegistrationAlreadyRegisteredError()
     const [pending] = await tx.select({ id: accountRegistrationApplications.id })
       .from(accountRegistrationApplications).where(and(
@@ -231,8 +231,7 @@ export const reviewAccountRegistration = async (
   if (!member || member.deletedAt || !member.currentRevisionId) {
     throw new Error('ACCOUNT_REGISTRATION_MEMBER_NOT_FOUND')
   }
-  const [binding] = await tx.select({ userId: userMembers.userId })
-    .from(userMembers).where(eq(userMembers.memberId, member.id)).limit(1)
+  const binding = await getActiveMemberAccountLink(tx, member.id)
   if (binding) throw new AccountRegistrationAlreadyRegisteredError()
 
   const account = member.memberKey

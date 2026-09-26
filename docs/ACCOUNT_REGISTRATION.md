@@ -19,6 +19,10 @@
 审核通过后创建全新的同 ID 账号，不继承旧账号的会话、角色或草稿。已打开的注册页可点击“刷新成员状态”
 取得最新状态。
 
+若历史软删除曾遗留 `user_members` 关联，旧版页面可能显示“可申请”，提交却返回“该成员已经注册账号”。
+Migration `0028_cleanup_deleted_member_links.sql` 会清理这些已删除账号的遗留关联；提交、审核、管理员
+新建同 ID 账号及修改档案稳定 ID 时也会清理同类旧关联。有效账号的关联仍会阻止重复注册。
+
 ## 2. 数据与安全边界
 
 - Migration `0023_dusty_hellion.sql` 新增 `account_registration_applications`，不修改已有用户、成员、

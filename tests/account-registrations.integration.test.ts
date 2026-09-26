@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { eq, sql } from 'drizzle-orm'
 import { closeDatabase, getDatabase } from '../server/db/client'
@@ -218,6 +220,110 @@ integration('成员账号注册申请', () => {
     expect(await authenticateCmsUser('duanquanyu', 'OldDuanPassword123!')).toBeNull()
     expect(await authenticateCmsUser('duanquanyu', 'NewDuanPassword123!'))
       .toMatchObject({ id: approved.userId, memberId: member!.id })
+  })
+
+  it('历史删除账号遗留成员关联时，列表、提交和审核仍允许重新注册', async () => {
+    const admin = await bootstrapCmsAdmin({
+      account: 'staleadmin', password: 'StaleAdminPassword123!'
+    })
+    const member = await createMember('staleprofile', '旧关联成员', admin!.id)
+    const oldUser = await createCmsUser({
+      account: 'staleprofile', password: 'OldProfilePassword123!', roles: ['member']
+    }, admin!.id)
+    await getDatabase().update(users).set({ deletedAt: new Date(), status: 'disabled' })
+      .where(eq(users.id, oldUser!.id))
+    expect(await getDatabase().select().from(userMembers)
+      .where(eq(userMembers.memberId, member!.id))).toHaveLength(1)
+    expect((await listAccountRegistrationMembers()).find(item => item.id === member!.id))
+      .toMatchObject({ account: 'staleprofile', registrationStatus: 'available' })
+
+    const application = await submitAccountRegistration({
+      memberId: member!.id, password: 'NewProfilePassword123!', ipHash: null
+    })
+    expect(application).toMatchObject({ account: 'staleprofile', status: 'pending' })
+    expect(await getDatabase().select().from(userMembers)
+      .where(eq(userMembers.memberId, member!.id))).toHaveLength(0)
+
+    const [anotherDeletedUser] = await getDatabase().insert(users).values({
+      account: 'oldstaleprofile', passwordHash: 'test-only-unused-hash',
+      status: 'disabled', deletedAt: new Date()
+    }).returning({ id: users.id })
+    await getDatabase().insert(userMembers).values({
+      userId: anotherDeletedUser!.id, memberId: member!.id
+    })
+    const approved = await reviewAccountRegistration(application.id, 'approve', '', admin!.id)
+    expect(approved).toMatchObject({ status: 'approved', account: 'staleprofile' })
+    expect(await getDatabase().select().from(userMembers)
+      .where(eq(userMembers.memberId, member!.id)))
+      .toEqual([expect.objectContaining({ userId: approved.userId })])
+  })
+
+  it('管理员新建同 ID 账号时清除已删除账号遗留的关联', async () => {
+    const admin = await bootstrapCmsAdmin({
+      account: 'recreateadmin', password: 'RecreateAdminPassword123!'
+    })
+    const member = await createMember('recreateprofile', '重建账号成员', admin!.id)
+    const oldUser = await createCmsUser({
+      account: 'recreateprofile', password: 'OldRecreatePassword123!', roles: ['member']
+    }, admin!.id)
+    await getDatabase().update(users).set({ deletedAt: new Date(), status: 'disabled' })
+      .where(eq(users.id, oldUser!.id))
+
+    const newUser = await createCmsUser({
+      account: 'recreateprofile', password: 'NewRecreatePassword123!', roles: ['member']
+    }, admin!.id)
+    expect(newUser).toMatchObject({ memberId: member!.id })
+    expect(await getDatabase().select().from(userMembers)
+      .where(eq(userMembers.memberId, member!.id)))
+      .toEqual([expect.objectContaining({ userId: newUser!.id })])
+  })
+
+  it('修改稳定 ID 时不更名已删除账号，也不保留其旧关联', async () => {
+    const admin = await bootstrapCmsAdmin({
+      account: 'stalekeyadmin', password: 'StaleKeyAdminPassword123!'
+    })
+    const member = await createMember('oldprofilekey', '改名成员', admin!.id)
+    const oldUser = await createCmsUser({
+      account: 'oldprofilekey', password: 'OldKeyPassword123!', roles: ['member']
+    }, admin!.id)
+    await getDatabase().update(users).set({ deletedAt: new Date(), status: 'disabled' })
+      .where(eq(users.id, oldUser!.id))
+
+    await updateCmsMember(member!.id, {
+      memberKey: 'newprofilekey', name: '改名成员', expectedVersion: member!.version
+    }, admin!.id)
+    expect((await getDatabase().select({ account: users.account }).from(users)
+      .where(eq(users.id, oldUser!.id)))[0]?.account).toBe('oldprofilekey')
+    expect(await getDatabase().select().from(userMembers)
+      .where(eq(userMembers.memberId, member!.id))).toHaveLength(0)
+    expect((await listAccountRegistrationMembers()).find(item => item.id === member!.id))
+      .toMatchObject({ account: 'newprofilekey', registrationStatus: 'available' })
+  })
+
+  it('数据迁移只清理已删除账号的成员关联，保留有效关联', async () => {
+    const admin = await bootstrapCmsAdmin({
+      account: 'migrationadmin', password: 'MigrationAdminPassword123!'
+    })
+    const staleMember = await createMember('stalehistory', '历史关联', admin!.id)
+    const activeMember = await createMember('activehistory', '有效关联', admin!.id)
+    const staleUser = await createCmsUser({
+      account: 'stalehistory', password: 'StaleHistoryPassword123!', roles: ['member']
+    }, admin!.id)
+    const activeUser = await createCmsUser({
+      account: 'activehistory', password: 'ActiveHistoryPassword123!', roles: ['member']
+    }, admin!.id)
+    await getDatabase().update(users).set({ deletedAt: new Date(), status: 'disabled' })
+      .where(eq(users.id, staleUser!.id))
+
+    const migration = await readFile(resolve('server/db/migrations/0028_cleanup_deleted_member_links.sql'), 'utf8')
+    await getDatabase().execute(sql.raw(migration))
+    expect(await getDatabase().select().from(userMembers)
+      .where(eq(userMembers.memberId, staleMember!.id))).toHaveLength(0)
+    expect(await getDatabase().select().from(userMembers)
+      .where(eq(userMembers.memberId, activeMember!.id)))
+      .toEqual([expect.objectContaining({ userId: activeUser!.id })])
+    expect(await getDatabase().select().from(users).where(eq(users.id, staleUser!.id)))
+      .toHaveLength(1)
   })
 
   it('待审核期间修改档案稳定 ID 会同步申请账号 ID', async () => {

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm'
 import type { CmsMember, CmsMemberInput } from '../../shared/types/cms-members'
 import { getDatabase } from '../db/client'
+import { getActiveMemberAccountLink } from './member-account-links'
 import {
   auditLogs,
   accountRegistrationApplications,
@@ -92,7 +93,7 @@ const loadMemberRows = async (id?: string, includeDeleted = true) => {
     .select(memberSelection)
     .from(members)
     .leftJoin(userMembers, eq(members.id, userMembers.memberId))
-    .leftJoin(users, eq(userMembers.userId, users.id))
+    .leftJoin(users, and(eq(userMembers.userId, users.id), isNull(users.deletedAt)))
     .orderBy(asc(members.sortOrder), asc(members.memberKey))
   const filters = [
     ...(id ? [eq(members.id, id)] : []),
@@ -307,9 +308,7 @@ export const updateCmsMember = async (
         .where(and(eq(members.memberKey, next.memberKey), isNull(members.deletedAt))).limit(1)
       if (otherMember && otherMember.id !== id) throw new CmsMemberKeyConflictError('该稳定 ID 已被其他有效成员使用')
 
-      const [binding] = await tx.select({ userId: userMembers.userId, account: users.account })
-        .from(userMembers).innerJoin(users, eq(userMembers.userId, users.id))
-        .where(eq(userMembers.memberId, id)).limit(1)
+      const binding = await getActiveMemberAccountLink(tx, id)
       const [targetUser] = await tx.select({ id: users.id }).from(users)
         .where(and(eq(users.account, next.memberKey), isNull(users.deletedAt))).limit(1)
       const [pendingForTarget] = await tx.select({ memberId: accountRegistrationApplications.memberId })
@@ -502,10 +501,14 @@ export const restoreCmsMemberRevision = async (
       updatedAt: new Date()
     }).where(eq(members.id, memberId))
     if (current.deletedAt) {
+      const existingLink = await getActiveMemberAccountLink(tx, memberId)
       const [matchingUser] = await tx.select({ id: users.id }).from(users).where(and(
         eq(users.account, current.memberKey), isNull(users.deletedAt)
       )).limit(1)
-      if (matchingUser) {
+      if (existingLink && existingLink.userId !== matchingUser?.id) {
+        throw new CmsMemberKeyConflictError('旧档案已关联其他有效账号，无法恢复')
+      }
+      if (matchingUser && !existingLink) {
         const [linked] = await tx.insert(userMembers).values({ userId: matchingUser.id, memberId })
           .onConflictDoNothing().returning({ userId: userMembers.userId })
         if (!linked) throw new CmsMemberKeyConflictError('同 ID 账号已关联其他成员，无法恢复旧档案')

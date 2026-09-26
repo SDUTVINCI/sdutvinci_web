@@ -18,6 +18,7 @@ import {
   verifyCmsPassword
 } from '../utils/cms-security'
 import { assertAccountNotReserved } from './account-registrations'
+import { getActiveMemberAccountLink } from './member-account-links'
 
 export interface CreateCmsUserInput {
   account: string
@@ -152,6 +153,9 @@ const linkMatchingMember = async (
     .where(and(eq(members.memberKey, normalizeAccount(account)), isNull(members.deletedAt)))
     .limit(1)
   if (matchingMember) {
+    if (await getActiveMemberAccountLink(tx, matchingMember.id)) {
+      throw new Error('CMS_MEMBER_ACCOUNT_ALREADY_LINKED')
+    }
     const [linked] = await tx.insert(userMembers).values({
       userId,
       memberId: matchingMember.id
@@ -356,6 +360,7 @@ export const deleteCmsUser = async (userId: string, actorUserId: string) => {
   if (userId === actorUserId) throw new CmsCurrentUserDeletionError()
   await getDatabase().transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(884021502)`)
+    await tx.execute(sql`select pg_advisory_xact_lock(884021503)`)
     const [target] = await tx.select({
       id: users.id,
       account: users.account,

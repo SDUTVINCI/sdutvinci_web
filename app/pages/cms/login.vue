@@ -34,6 +34,11 @@ const selectedRegistrationMember = computed(() => (
   registrationMembers.value.find(member => member.id === registrationMemberId.value) || null
 ))
 
+const refreshMemberOptions = async () => {
+  registrationError.value = ''
+  await refreshRegistrationMembers()
+}
+
 watch(registrationMemberId, () => {
   registrationError.value = ''
   registrationSuccess.value = ''
@@ -61,7 +66,7 @@ const switchMode = async (nextMode: 'login' | 'register') => {
   registrationError.value = ''
   registrationSuccess.value = ''
   if (nextMode === 'register') {
-    await refreshRegistrationMembers()
+    await refreshMemberOptions()
   }
 }
 
@@ -121,6 +126,7 @@ const submitRegistration = async () => {
     registrationError.value = error?.data?.message
       ?? error?.data?.statusMessage
       ?? '注册申请提交失败，请稍后重试'
+    await refreshRegistrationMembers()
   } finally {
     registrationSubmitting.value = false
   }
@@ -175,7 +181,7 @@ const submitRegistration = async () => {
             <span class="cms-login-field-label"><span>成员信息</span><small>MEMBER PROFILE</small></span>
             <CmsAccountRegistrationMemberPicker v-model="registrationMemberId" :members="registrationMembers" :loading="registrationStatus === 'pending'" />
           </label>
-          <button class="cms-button cms-button-quiet" type="button" :disabled="registrationStatus === 'pending'" @click="refreshRegistrationMembers()">刷新成员状态</button>
+          <button class="cms-button cms-button-quiet" type="button" :disabled="registrationStatus === 'pending'" @click="refreshMemberOptions()">刷新成员状态</button>
           <p v-if="registrationLoadError" class="cms-alert cms-alert-error" role="alert">成员信息加载失败，请稍后重试。</p>
           <p class="cms-registration-help">
             <span>找不到自己？</span>
