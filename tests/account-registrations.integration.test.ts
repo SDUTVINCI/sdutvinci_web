@@ -4,6 +4,7 @@ import { closeDatabase, getDatabase } from '../server/db/client'
 import { runMigrations } from '../server/db/migrate'
 import {
   AccountRegistrationAlreadyRegisteredError,
+  AccountRegistrationAccountUnavailableError,
   AccountRegistrationPendingError,
   assertAccountNotReserved,
   listAccountRegistrationMembers,
@@ -16,7 +17,7 @@ import {
   bootstrapCmsAdmin,
   createCmsUser
 } from '../server/services/cms-auth'
-import { createCmsMember } from '../server/services/cms-members'
+import { createCmsMember, updateCmsMember } from '../server/services/cms-members'
 import { verifyCmsPassword } from '../server/utils/cms-security'
 import {
   accountRegistrationApplications,
@@ -118,7 +119,7 @@ integration('成员账号注册申请', () => {
       .not.toContain('MemberPassword123!')
   })
 
-  it('账号冲突和同音成员按最小数字顺序分配，待审核 ID 会被保留', async () => {
+  it('账号必须等于档案稳定 ID；ID 被占用时明确拒绝', async () => {
     const admin = await bootstrapCmsAdmin({
       account: 'allocateadmin',
       password: 'AllocateAdminPassword123!'
@@ -134,23 +135,24 @@ integration('成员账号注册申请', () => {
       roleId: (await getDatabase().select({ id: roles.id }).from(roles)
         .where(eq(roles.code, 'member')).limit(1))[0]!.id
     })
-    const firstApplication = await submitAccountRegistration({
+    await expect(submitAccountRegistration({
       memberId: first!.id,
       password: 'FirstMemberPassword123!',
       ipHash: null
-    })
+    })).rejects.toBeInstanceOf(AccountRegistrationAccountUnavailableError)
     const secondApplication = await submitAccountRegistration({
       memberId: second!.id,
       password: 'SecondMemberPassword123!',
       ipHash: null
     })
-    expect(firstApplication.account).toBe('tongming1')
+    expect((await listAccountRegistrationMembers()).find(item => item.id === first!.id))
+      .toMatchObject({ account: 'tongming', registrationStatus: 'unavailable' })
     expect(secondApplication.account).toBe('tongming2')
     await expect(getDatabase().transaction(tx =>
-      assertAccountNotReserved(tx, 'tongming1')
+      assertAccountNotReserved(tx, 'tongming2')
     )).rejects.toBeInstanceOf(AccountRegistrationPendingError)
     await expect(createCmsUser({
-      account: 'tongming1',
+      account: 'tongming2',
       password: 'AdminCreatedPassword123!',
       roles: ['member']
     }, admin!.id)).rejects.toBeInstanceOf(AccountRegistrationPendingError)
@@ -180,6 +182,21 @@ integration('成员账号注册申请', () => {
     })).rejects.toBeInstanceOf(AccountRegistrationAlreadyRegisteredError)
     expect((await listAccountRegistrationMembers()).find(item => item.id === member!.id))
       .toMatchObject({ account: 'duplicatemember', registrationStatus: 'registered' })
+  })
+
+  it('待审核期间修改档案稳定 ID 会同步申请账号 ID', async () => {
+    const admin = await bootstrapCmsAdmin({ account: 'renameadmin', password: 'RenameAdminPassword123!' })
+    const member = await createMember('oldregistration', '改名成员', admin!.id)
+    const application = await submitAccountRegistration({
+      memberId: member!.id, password: 'RenameMemberPassword123!', ipHash: null
+    })
+    await updateCmsMember(member!.id, {
+      memberKey: 'newregistration', name: '改名成员', expectedVersion: member!.version
+    }, admin!.id)
+    expect((await getDatabase().select().from(accountRegistrationApplications)
+      .where(eq(accountRegistrationApplications.id, application.id)))[0]?.account).toBe('newregistration')
+    expect(await reviewAccountRegistration(application.id, 'approve', '', admin!.id))
+      .toMatchObject({ account: 'newregistration' })
   })
 
   it('拒绝申请后清除密码哈希，并允许成员重新提交', async () => {

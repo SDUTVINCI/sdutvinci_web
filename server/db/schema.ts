@@ -89,7 +89,8 @@ export const members = pgTable('members', {
 }, table => [
   check('members_version_check', sql`${table.version} >= 1`),
   check('members_sort_order_check', sql`${table.sortOrder} >= 0`),
-  uniqueIndex('members_member_key_unique').on(table.memberKey),
+  uniqueIndex('members_active_member_key_unique').on(table.memberKey)
+    .where(sql`${table.deletedAt} is null`),
   uniqueIndex('members_source_path_unique').on(table.sourcePath),
   index('members_deleted_at_index').on(table.deletedAt),
   index('members_sort_index').on(table.sortOrder, table.memberKey)

@@ -185,7 +185,7 @@ export const createArticleCreditIdentity = async (
   return getDatabase().transaction(async (tx) => {
     await assertLinkedMember(tx, normalized.memberId)
     const [memberCollision] = await tx.select({ id: members.id }).from(members)
-      .where(eq(members.memberKey, normalized.creditKey)).limit(1)
+      .where(and(eq(members.memberKey, normalized.creditKey), isNull(members.deletedAt))).limit(1)
     if (memberCollision) {
       throw new ArticleCreditIdentityConflictError('该稳定 ID 已属于正式成员，无需重复登记')
     }

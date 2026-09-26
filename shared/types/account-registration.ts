@@ -1,5 +1,5 @@
 export type AccountRegistrationStatus = 'pending' | 'approved' | 'rejected'
-export type AccountRegistrationMemberStatus = 'available' | 'pending' | 'registered'
+export type AccountRegistrationMemberStatus = 'available' | 'pending' | 'registered' | 'unavailable'
 
 export interface AccountRegistrationMemberOption {
   id: string

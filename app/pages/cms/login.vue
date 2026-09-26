@@ -96,6 +96,10 @@ const submitRegistration = async () => {
     registrationError.value = '该成员已有待审核的注册申请，请勿重复提交。'
     return
   }
+  if (member.registrationStatus === 'unavailable') {
+    registrationError.value = '档案稳定 ID 已被账号占用，请联系管理员处理。'
+    return
+  }
   if (registrationPassword.value !== registrationConfirmation.value) {
     registrationError.value = '两次输入的密码不一致。'
     return
@@ -183,6 +187,7 @@ const submitRegistration = async () => {
           </label>
           <p v-if="selectedRegistrationMember?.registrationStatus === 'registered'" class="cms-alert cms-alert-error" role="alert">该成员已经注册账号；如需找回密码，请联系 Vinci 机器人队管理员。</p>
           <p v-else-if="selectedRegistrationMember?.registrationStatus === 'pending' && !registrationSuccess" class="cms-alert" role="status">该成员已有待审核的注册申请，请等待管理员处理。</p>
+          <p v-else-if="selectedRegistrationMember?.registrationStatus === 'unavailable'" class="cms-alert cms-alert-error" role="alert">档案稳定 ID 已被账号占用，请联系管理员处理。</p>
           <label class="cms-login-field">
             <span class="cms-login-field-label"><span>密码</span><small>MIN {{ cmsPasswordMinLength }}</small></span>
             <span class="cms-login-input"><span class="cms-login-field-index" aria-hidden="true">02</span><input v-model="registrationPassword" type="password" autocomplete="new-password" :minlength="cmsPasswordMinLength" maxlength="1024" placeholder="至少 12 个字符" required></span>

@@ -1,6 +1,7 @@
 import { createError, getRouterParam, readValidatedBody } from 'h3'
 import { z } from 'zod'
-import { CmsMemberVersionConflictError, updateCmsMember } from '../../../services/cms-members'
+import { CmsMemberKeyConflictError, CmsMemberVersionConflictError, updateCmsMember } from '../../../services/cms-members'
+import { cmsAccountPattern } from '../../../../shared/types/cms-auth'
 import { isSafeMemberAvatarUrl } from '../../../services/member-profile'
 import {
   requireCmsCsrf,
@@ -16,6 +17,7 @@ const metadataSchema = z.record(z.string(), z.unknown()).refine(
 )
 
 const schema = z.object({
+  memberKey: z.string().trim().toLowerCase().regex(cmsAccountPattern).optional(),
   name: z.string().trim().min(1).max(100),
   avatarUrl: safeAvatarUrl.nullable().optional(),
   role: z.string().trim().max(100).nullable().optional(),
@@ -43,6 +45,9 @@ export default defineEventHandler(async (event) => {
     member = await updateCmsMember(id, input, auth.user.id)
   } catch (error) {
     if (error instanceof CmsMemberVersionConflictError) {
+      throw createError({ statusCode: 409, message: error.message })
+    }
+    if (error instanceof CmsMemberKeyConflictError) {
       throw createError({ statusCode: 409, message: error.message })
     }
     throw error

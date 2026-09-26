@@ -399,7 +399,7 @@ const changeOwnPassword = async () => {
               placeholder="例如 dongjiahui"
               required
             >
-            <small>建议与 member 的稳定 ID 一致，以便自动关联姓名和头像。</small>
+            <small>普通成员账号必须等于已上线档案的稳定 ID；管理员账号可单独创建。</small>
           </label>
           <label>
             <span>初始密码</span>

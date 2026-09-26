@@ -28,6 +28,7 @@ import { getDatabase } from '../db/client'
 import {
   articleRevisions,
   articleRedirects,
+  articleCreditIdentities,
   articles,
   members
 } from '../db/schema'
@@ -499,7 +500,14 @@ export const getPublicMemberFromDatabase = async (
       or(eq(members.memberKey, slug), eq(members.name, slug))
     ))
     .limit(1)
-  if (!row) return null
+  if (row) return toPublicMember(row)
 
-  return toPublicMember(row)
+  const [alias] = await getDatabase().select({ member: members }).from(articleCreditIdentities)
+    .innerJoin(members, eq(articleCreditIdentities.memberId, members.id))
+    .where(and(
+      eq(articleCreditIdentities.creditKey, slug),
+      isNull(members.deletedAt),
+      sql`${members.currentRevisionId} is not null`
+    )).limit(1)
+  return alias ? toPublicMember(alias.member) : null
 }

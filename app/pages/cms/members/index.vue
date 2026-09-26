@@ -35,7 +35,7 @@ const created = async () => {
       <div>
         <p class="cms-eyebrow">MEMBERS</p>
         <h1>成员管理</h1>
-        <p>共识别 {{ data?.members.length ?? 0 }} 份成员档案；成员 ID 与账号 ID 可一一对应。</p>
+        <p>共识别 {{ data?.members.length ?? 0 }} 份成员档案；成员稳定 ID 即登录账号 ID。</p>
       </div>
       <div v-if="isAdmin" class="cms-button-row cms-member-header-actions">
         <a class="cms-button cms-button-quiet" href="#article-credit-identities">文章署名</a>
@@ -55,7 +55,7 @@ const created = async () => {
     <div v-if="status !== 'pending' && !error" class="cms-toolbar cms-toolbar-compact">
       <label>
         <span>搜索成员</span>
-        <input v-model.trim="search" type="search" placeholder="姓名、稳定 ID 或绑定账号">
+        <input v-model.trim="search" type="search" placeholder="姓名或稳定 ID">
       </label>
     </div>
 
@@ -75,7 +75,7 @@ const created = async () => {
         <div>
           <h2>{{ member.name }}</h2>
           <code>{{ member.memberKey }}</code>
-          <p>{{ member.linkedAccount ? `已绑定 @${member.linkedAccount}` : '尚未绑定账号' }}</p>
+          <p>{{ member.linkedAccount ? `账号 @${member.linkedAccount}` : '尚未注册账号' }}</p>
         </div>
       </NuxtLink>
     </div>

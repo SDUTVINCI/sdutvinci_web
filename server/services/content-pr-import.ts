@@ -1136,7 +1136,7 @@ const importOneItem = async (
     const requestedCredits = [...new Set([...data.authorKeys, ...data.contributorKeys])]
     const creditRows = requestedCredits.length
       ? await tx.select({ id: members.id, key: members.memberKey }).from(members)
-          .where(inArray(members.memberKey, requestedCredits))
+          .where(and(inArray(members.memberKey, requestedCredits), isNull(members.deletedAt)))
       : []
     const memberIdByKey = new Map(creditRows.map(row => [row.key, row.id]))
     const knownAuthorKeys = [...new Set(data.authorKeys)].filter(key => memberIdByKey.has(key))

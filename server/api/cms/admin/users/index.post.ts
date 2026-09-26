@@ -24,11 +24,17 @@ export default defineEventHandler(async (event) => {
   const input = await readValidatedBody(event, createUserSchema.parse)
 
   try {
-    const user = await createCmsUser(input, auth.user.id)
+    const user = await createCmsUser(input, auth.user.id, 'user.create', true)
     return { user }
   } catch (error) {
     if (error instanceof AccountRegistrationPendingError) {
       throw createError({ statusCode: 409, message: '该账号 ID 已被待审核的注册申请占用' })
+    }
+    if (error instanceof Error && error.message === 'CMS_MEMBER_ACCOUNT_PROFILE_REQUIRED') {
+      throw createError({ statusCode: 409, message: '请先创建已上线成员档案，并使用档案稳定 ID 作为账号 ID' })
+    }
+    if (error instanceof Error && error.message === 'CMS_MEMBER_ACCOUNT_ALREADY_LINKED') {
+      throw createError({ statusCode: 409, message: '该成员档案已有关联账号' })
     }
     if (
       typeof error === 'object'

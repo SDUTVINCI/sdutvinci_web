@@ -2,6 +2,7 @@ import { createError, getRouterParam, readValidatedBody } from 'h3'
 import { z } from 'zod'
 import {
   AccountRegistrationAlreadyRegisteredError,
+  AccountRegistrationAccountUnavailableError,
   AccountRegistrationStateError,
   reviewAccountRegistration
 } from '../../../../services/account-registrations'
@@ -25,6 +26,9 @@ export default defineEventHandler(async (event) => {
     }
     if (error instanceof AccountRegistrationStateError) {
       throw createError({ statusCode: 409, message: '该注册申请已被处理，请刷新申请列表。' })
+    }
+    if (error instanceof AccountRegistrationAccountUnavailableError) {
+      throw createError({ statusCode: 409, message: '账号 ID 与档案稳定 ID 不一致或已被占用，请先在成员管理中处理。' })
     }
     throw error
   }

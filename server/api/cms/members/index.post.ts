@@ -1,7 +1,7 @@
 import { createError, readValidatedBody } from 'h3'
 import { z } from 'zod'
 import { cmsAccountPattern } from '../../../../shared/types/cms-auth'
-import { createCmsMember } from '../../../services/cms-members'
+import { CmsMemberKeyConflictError, createCmsMember } from '../../../services/cms-members'
 import { isSafeMemberAvatarUrl } from '../../../services/member-profile'
 import {
   requireCmsCsrf,
@@ -42,6 +42,9 @@ export default defineEventHandler(async (event) => {
   try {
     return { member: await createCmsMember(input, auth.user.id) }
   } catch (error) {
+    if (error instanceof CmsMemberKeyConflictError) {
+      throw createError({ statusCode: 409, message: error.message })
+    }
     if (
       typeof error === 'object'
       && error !== null

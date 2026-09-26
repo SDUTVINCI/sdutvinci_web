@@ -6,10 +6,9 @@ import { eq, sql } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { closeDatabase, getDatabase } from '../server/db/client'
 import { runMigrations } from '../server/db/migrate'
-import { auditLogs, contentExportJobs, memberRevisions, members, userMembers } from '../server/db/schema'
+import { auditLogs, contentExportJobs, memberRevisions, members, userMembers, users } from '../server/db/schema'
 import {
   applyCmsMemberMarkdownMigration,
-  bindCmsMemberAccount,
   createCmsMember,
   deleteCmsMember,
   listCmsMembers,
@@ -17,9 +16,10 @@ import {
   restoreCmsMemberRevision,
   updateCmsMember
 } from '../server/services/cms-members'
-import { bootstrapCmsAdmin } from '../server/services/cms-auth'
+import { bootstrapCmsAdmin, createCmsUser } from '../server/services/cms-auth'
 import { getPublicMemberFromDatabase, listPublicMembersFromDatabase } from '../server/services/public-content'
 import { loadDatabaseContentExportSnapshot } from '../server/services/content-export-snapshot'
+import { listPublicArticleCreditIdentities } from '../server/services/article-credit-identities'
 import { configureCmsTestDatabase } from './helpers/cms-test-database'
 
 const suite = configureCmsTestDatabase() ? describe : describe.skip
@@ -118,10 +118,11 @@ suite('V2 阶段 9 成员数据库权威与迁移', () => {
 
   it('删除成员使用乐观锁软删除并生成 Git 删除 Outbox', async () => {
     const admin = await bootstrapCmsAdmin({ account: 'deleteadmin', password: 'AdminPassword123' })
+    await createCmsUser({ account: 'memberdelete', password: 'MemberDeletePassword123!', roles: ['member'] }, admin!.id)
     const created = await createCmsMember({
       memberKey: 'memberdelete', name: 'Delete Me', body: 'preserved history'
     }, admin!.id)
-    await bindCmsMemberAccount(created!.id, admin!.id, admin!.id)
+    expect(await getDatabase().select().from(userMembers)).toHaveLength(1)
 
     await expect(deleteCmsMember(created!.id, 99, admin!.id))
       .rejects.toThrow('成员资料已被其他操作更新')
@@ -140,21 +141,58 @@ suite('V2 阶段 9 成员数据库权威与迁移', () => {
     expect(jobs.map(item => item.operation)).toEqual(['create', 'delete'])
     const audit = await getDatabase().select().from(auditLogs).where(eq(auditLogs.action, 'member.delete'))
     expect(audit).toHaveLength(1)
+    const replacement = await createCmsMember({ memberKey: 'memberdelete', name: 'Corrected Member' }, admin!.id)
+    expect(replacement).toMatchObject({ memberKey: 'memberdelete', linkedAccount: 'memberdelete' })
+    expect(replacement!.sourcePath).not.toBe(created!.sourcePath)
   })
 
-  it('账号绑定保持独立且公开列表/详情完全读取数据库字段', async () => {
+  it('同 ID 账号自动关联，公开列表/详情读取数据库资料', async () => {
     const admin = await bootstrapCmsAdmin({ account: 'phaseadmin', password: 'AdminPassword123' })
     const created = await createCmsMember({
       memberKey: 'membertwo', name: 'Two', seasons: ['2025'], advisorSeasons: ['2026'],
       affiliation: 'Vinci', links: { github: 'https://github.com/example' }, body: 'database body'
     }, admin!.id)
-    await bindCmsMemberAccount(created!.id, admin!.id, admin!.id)
+    await createCmsUser({ account: 'membertwo', password: 'MemberTwoPassword123!', roles: ['member'] }, admin!.id)
     expect(await getDatabase().select().from(userMembers)).toHaveLength(1)
     const detail = await getPublicMemberFromDatabase('membertwo')
     expect(detail).toMatchObject({ name: 'Two', time: '2025', advisor: '2026', body: 'database body' })
     expect(await listPublicMembersFromDatabase()).toHaveLength(1)
-    const audit = await getDatabase().select().from(auditLogs)
-    expect(audit.some(item => item.action === 'member.binding.update')).toBe(true)
+    expect((await getDatabase().select().from(userMembers))[0]?.memberId).toBe(created!.id)
+  })
+
+  it('已删除档案释放 ID，修改稳定 ID 时关联已有同名账号并保留旧版本', async () => {
+    const admin = await bootstrapCmsAdmin({ account: 'renameadmin', password: 'AdminPassword123' })
+    const old = await createCmsMember({ memberKey: 'duanquanyu', name: '段泉宇旧档案' }, admin!.id)
+    await deleteCmsMember(old!.id, old!.version, admin!.id)
+    const account = await createCmsUser({ account: 'duanquanyu', password: 'DuanQuanyuPassword123!', roles: ['member'] }, admin!.id)
+    const current = await createCmsMember({ memberKey: 'duanquanyu2', name: '段泉宇' }, admin!.id)
+    const renamed = await updateCmsMember(current!.id, {
+      memberKey: 'duanquanyu', name: '段泉宇', expectedVersion: current!.version
+    }, admin!.id)
+    expect(renamed).toMatchObject({ memberKey: 'duanquanyu', linkedUserId: account!.id, linkedAccount: 'duanquanyu', version: 2 })
+    expect((await getPublicMemberFromDatabase('duanquanyu'))?.id).toBe('duanquanyu')
+    expect((await getPublicMemberFromDatabase('duanquanyu2'))?.id).toBe('duanquanyu')
+    expect((await getDatabase().select().from(members).where(eq(members.id, old!.id)))[0]?.memberKey).toBe('duanquanyu')
+    const revisions = await getDatabase().select().from(memberRevisions).where(eq(memberRevisions.memberId, current!.id))
+    expect(revisions.map(row => row.memberKey)).toEqual(['duanquanyu2', 'duanquanyu'])
+    expect(await listPublicArticleCreditIdentities(['duanquanyu2'])).toEqual([
+      expect.objectContaining({ memberKey: 'duanquanyu2', path: '/team/duanquanyu' })
+    ])
+    const restored = await restoreCmsMemberRevision(current!.id, revisions[0]!.id, renamed!.version, admin!.id)
+    expect(restored).toMatchObject({ memberKey: 'duanquanyu', version: 3 })
+    const oldRevision = (await getDatabase().select().from(memberRevisions).where(eq(memberRevisions.memberId, old!.id)))[0]!
+    await expect(restoreCmsMemberRevision(old!.id, oldRevision.id, 2, admin!.id))
+      .rejects.toThrow('该稳定 ID 已由其他有效成员使用')
+    expect((await getDatabase().select().from(users).where(eq(users.id, account!.id)))[0]?.account).toBe('duanquanyu')
+  })
+
+  it('修改已有成员稳定 ID 时同步修改其账号 ID', async () => {
+    const admin = await bootstrapCmsAdmin({ account: 'renameadmin', password: 'AdminPassword123' })
+    const member = await createCmsMember({ memberKey: 'oldmember', name: 'Old Member' }, admin!.id)
+    const account = await createCmsUser({ account: 'oldmember', password: 'OldMemberPassword123!', roles: ['member'] }, admin!.id)
+    const updated = await updateCmsMember(member!.id, { memberKey: 'newmember', name: 'Old Member', expectedVersion: 1 }, admin!.id)
+    expect(updated).toMatchObject({ memberKey: 'newmember', linkedAccount: 'newmember', linkedUserId: account!.id })
+    expect((await getDatabase().select().from(users).where(eq(users.id, account!.id)))[0]?.account).toBe('newmember')
   })
 
   it('不会把数据库中额外成员静默丢失到 Markdown 迁移之外', async () => {

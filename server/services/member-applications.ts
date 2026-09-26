@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { DeleteObjectCommand, S3Client } from '@aws-sdk/client-s3'
-import { and, asc, eq, like, lt } from 'drizzle-orm'
+import { and, asc, eq, isNull, like, lt } from 'drizzle-orm'
 import { pinyin } from 'pinyin-pro'
 import { getDatabase } from '../db/client'
 import { memberApplications, memberCohorts, members } from '../db/schema'
@@ -144,7 +144,7 @@ const memberKeyFor = async (name: string) => {
   const base = pinyin(name, { toneType: 'none', type: 'array' }).join('').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 24)
   const readable = base.length >= 3 ? base : 'member'
   const existing = new Set((await getDatabase().select({ memberKey: members.memberKey }).from(members)
-    .where(like(members.memberKey, `${readable}%`))).map(item => item.memberKey))
+    .where(and(like(members.memberKey, `${readable}%`), isNull(members.deletedAt)))).map(item => item.memberKey))
   if (!existing.has(readable)) return readable
   for (let suffix = 1; suffix < 1_000_000; suffix += 1) {
     const candidate = `${readable.slice(0, 32 - String(suffix).length)}${suffix}`

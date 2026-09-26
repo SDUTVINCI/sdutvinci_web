@@ -24,7 +24,8 @@ const filteredMembers = computed(() => {
 const statusLabel = (status: AccountRegistrationMemberOption['registrationStatus']) => ({
   available: '可申请',
   pending: '审核中',
-  registered: '已注册'
+  registered: '已注册',
+  unavailable: '需管理员处理'
 })[status]
 const handleToggle = () => {
   if (picker.value?.open) nextTick(() => searchInput.value?.focus())

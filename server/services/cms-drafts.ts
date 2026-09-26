@@ -197,7 +197,7 @@ const resolveAuthorMembers = async (authorKeys: string[]) => {
   const rows = await getDatabase()
     .select({ id: members.id, memberKey: members.memberKey })
     .from(members)
-    .where(inArray(members.memberKey, keys))
+    .where(and(inArray(members.memberKey, keys), isNull(members.deletedAt)))
   const byKey = new Map(rows.map(row => [row.memberKey, row]))
   if (rows.length !== keys.length) {
     const missing = keys.filter(key => !byKey.has(key))

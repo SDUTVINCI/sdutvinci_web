@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { cmsPasswordMinLength } from '../../../shared/types/cms-auth'
 import {
   AccountRegistrationAlreadyRegisteredError,
+  AccountRegistrationAccountUnavailableError,
   AccountRegistrationPendingError,
   submitAccountRegistration
 } from '../../services/account-registrations'
@@ -56,6 +57,9 @@ export default defineEventHandler(async (event) => {
         message: '该成员已有待审核的注册申请，请勿重复提交。',
         data: { code: 'REGISTRATION_ALREADY_PENDING' }
       })
+    }
+    if (error instanceof AccountRegistrationAccountUnavailableError) {
+      throw createError({ statusCode: 409, message: '档案稳定 ID 已被账号占用，请联系管理员处理。' })
     }
     if (error instanceof Error && error.message === 'ACCOUNT_REGISTRATION_MEMBER_NOT_FOUND') {
       throw createError({ statusCode: 404, message: '没有找到可注册的正式成员信息' })

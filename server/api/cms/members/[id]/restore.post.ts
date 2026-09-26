@@ -1,6 +1,6 @@
 import { createError, getRouterParam, readValidatedBody } from 'h3'
 import { z } from 'zod'
-import { CmsMemberVersionConflictError, restoreCmsMemberRevision } from '../../../../services/cms-members'
+import { CmsMemberKeyConflictError, CmsMemberVersionConflictError, restoreCmsMemberRevision } from '../../../../services/cms-members'
 import { requireCmsCsrf, requireCmsRequestAuth } from '../../../../utils/cms-http'
 
 const schema = z.object({
@@ -19,6 +19,9 @@ export default defineEventHandler(async (event) => {
   } catch (error) {
     if (error instanceof CmsMemberVersionConflictError) {
       throw createError({ statusCode: 409, message: error.message })
+    }
+    if (error instanceof CmsMemberKeyConflictError || (typeof error === 'object' && error && 'code' in error && error.code === '23505')) {
+      throw createError({ statusCode: 409, message: error instanceof Error ? error.message : '该成员 ID 或文件路径已被占用' })
     }
     throw error
   }

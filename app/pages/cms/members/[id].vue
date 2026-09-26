@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { CmsMember } from '../../../../shared/types/cms-members'
-import type { CmsManagedUser } from '../../../../shared/types/cms-auth'
 import type { MemberProfileFormModel } from '../../../../shared/types/member-profile-form'
 import { resolveStaticMediaUrl } from '~~/shared/utils/static-media'
 
@@ -16,27 +15,25 @@ const { data, refresh } = await useAsyncData(`cms:member:${id}`, () =>
 const member = computed(() => data.value?.member)
 const { data: memberOptions } = await useFetch<any>('/api/member-options')
 const { data: auxiliary, refresh: refreshAuxiliary } = await useAsyncData(`cms:member:${id}:auxiliary`, async () => {
-  const [revisions, proposals, users] = await Promise.all([
+  const [revisions, proposals] = await Promise.all([
     requestFetch<{ revisions: Array<{ id: string, revisionNumber: number, sourceKind: string, contentHash: string, createdAt: string }> }>(`/api/cms/members/${id}/revisions`),
-    requestFetch<{ proposals: Array<{ id: string, action: string, status: string, fieldChanges: Record<string, unknown>, createdAt: string }> }>(`/api/cms/members/${id}/proposals`),
-    isAdmin.value ? requestFetch<{ users: CmsManagedUser[] }>('/api/cms/admin/users') : Promise.resolve({ users: [] })
+    requestFetch<{ proposals: Array<{ id: string, action: string, status: string, fieldChanges: Record<string, unknown>, createdAt: string }> }>(`/api/cms/members/${id}/proposals`)
   ])
-  return { revisions: revisions.revisions, proposals: proposals.proposals, users: users.users }
+  return { revisions: revisions.revisions, proposals: proposals.proposals }
 })
 const knownLinks = new Set(['github', 'home-page', 'homepage'])
 const initialLinks = member.value?.links || {}
 const form = reactive<MemberProfileFormModel & {
-  avatarUrl: string, metadata: string, otherLinks: string, sortOrder: number, linkedUserId: string
+  memberKey: string, avatarUrl: string, metadata: string, otherLinks: string, sortOrder: number
 }>({
-  name: member.value?.name || '', avatarUrl: member.value?.avatarUrl ? resolveStaticMediaUrl(member.value.avatarUrl) : '',
+  memberKey: member.value?.memberKey || '', name: member.value?.name || '', avatarUrl: member.value?.avatarUrl ? resolveStaticMediaUrl(member.value.avatarUrl) : '',
   groupName: member.value?.groupName || '', positions: [...(member.value?.positions || [])],
   seasons: [...(member.value?.seasons || [])], advisorSeasons: [...(member.value?.advisorSeasons || [])],
   grade: member.value?.grade || '', affiliation: member.value?.affiliation || '',
   links: { github: initialLinks.github || '', 'home-page': initialLinks['home-page'] || initialLinks.homepage || '' },
   otherLinks: JSON.stringify(Object.fromEntries(Object.entries(initialLinks).filter(([key]) => !knownLinks.has(key))), null, 2),
   metadata: JSON.stringify(member.value?.metadata || {}, null, 2),
-  body: member.value?.body || '', sortOrder: member.value?.sortOrder || 0,
-  linkedUserId: member.value?.linkedUserId || ''
+  body: member.value?.body || '', sortOrder: member.value?.sortOrder || 0
 })
 const submitting = ref(false)
 const avatarUploading = ref(false)
@@ -82,7 +79,7 @@ const save = async () => {
       method: 'PATCH',
       headers: csrfHeaders(),
       body: {
-        name: form.name, avatarUrl: form.avatarUrl || null,
+        memberKey: form.memberKey, name: form.name, avatarUrl: form.avatarUrl || null,
         groupName: form.groupName || null, positions: form.positions,
         seasons: form.seasons,
         advisorSeasons: form.advisorSeasons,
@@ -96,26 +93,13 @@ const save = async () => {
     if (session.value?.user.memberId === id) {
       await loadSession(true)
     }
-    message.value = '成员资料已保存，稳定 ID 未改变。'
+    form.memberKey = member.value?.memberKey || form.memberKey
+    message.value = '成员资料已保存。'
   } catch (error: any) {
     errorMessage.value = error?.data?.message || '保存失败'
   } finally {
     submitting.value = false
   }
-}
-
-const saveBinding = async () => {
-  submitting.value = true
-  errorMessage.value = ''
-  try {
-    await $fetch(`/api/cms/members/${id}/binding`, {
-      method: 'PATCH', headers: csrfHeaders(), body: { userId: form.linkedUserId || null }
-    })
-    await refresh()
-    message.value = '账号绑定已更新；资料版本没有改变。'
-  } catch (error: any) {
-    errorMessage.value = error?.data?.message || '绑定失败'
-  } finally { submitting.value = false }
 }
 
 const deleteMember = async () => {
@@ -193,6 +177,9 @@ const applyProposal = async (proposalId: string) => {
       />
       <MemberProfileFields v-model="form" :options="memberOptions" :disabled="!isAdmin" />
 
+      <label><span>稳定 ID（同时是成员登录账号）</span><input v-model.trim="form.memberKey" :disabled="!isAdmin" required maxlength="32" pattern="[a-z][a-z0-9]{2,31}" autocapitalize="none" spellcheck="false"></label>
+      <p class="cms-muted">修改后，成员主页地址和关联账号会同步更新；旧文章署名仍可解析。</p>
+
       <details class="member-edit-advanced">
         <summary>高级公开字段</summary>
         <div class="member-edit-advanced-fields">
@@ -206,13 +193,6 @@ const applyProposal = async (proposalId: string) => {
         <button class="cms-button cms-button-primary" :disabled="submitting || avatarUploading">{{ avatarUploading ? '正在上传头像…' : (submitting ? '正在保存…' : '保存成员资料') }}</button>
         <button class="cms-button cms-button-danger" type="button" :disabled="submitting || avatarUploading" @click="deleteMember">删除成员档案</button>
       </footer>
-    </form>
-
-    <form v-if="isAdmin" class="cms-panel cms-form" @submit.prevent="saveBinding">
-      <h2>账号绑定（独立于公开资料）</h2>
-      <p class="cms-muted">绑定只写入一对一关系表，不进入成员 Markdown、版本或导出仓库。</p>
-      <label><span>登录账号</span><select v-model="form.linkedUserId"><option value="">不绑定</option><option v-for="user in auxiliary?.users" :key="user.id" :value="user.id">@{{ user.account }}</option></select></label>
-      <button class="cms-button" :disabled="submitting">保存绑定</button>
     </form>
 
     <section class="cms-panel">

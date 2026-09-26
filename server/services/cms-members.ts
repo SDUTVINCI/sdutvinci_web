@@ -4,6 +4,7 @@ import type { CmsMember, CmsMemberInput } from '../../shared/types/cms-members'
 import { getDatabase } from '../db/client'
 import {
   auditLogs,
+  accountRegistrationApplications,
   articleCreditIdentities,
   contentExportJobs,
   memberProposals,
@@ -34,10 +35,10 @@ export class CmsMemberVersionConflictError extends Error {
   }
 }
 
-export class CmsMemberBindingConflictError extends Error {
-  constructor() {
-    super('账号或成员已经绑定其他对象')
-    this.name = 'CmsMemberBindingConflictError'
+export class CmsMemberKeyConflictError extends Error {
+  constructor(message = '稳定 ID 已被其他有效成员或账号占用') {
+    super(message)
+    this.name = 'CmsMemberKeyConflictError'
   }
 }
 
@@ -219,9 +220,9 @@ export const createCmsMember = async (
   input: CmsMemberInput & { memberKey: string },
   actorUserId: string
 ) => {
-  const profile = inputProfile(input, input.sourcePath || `cms/${input.memberKey.trim().toLowerCase()}.md`)
-  await assertMemberProfileOptions(profile)
   const memberId = randomUUID()
+  const profile = inputProfile(input, input.sourcePath || `cms/${input.memberKey.trim().toLowerCase()}-${memberId}.md`)
+  await assertMemberProfileOptions(profile)
   await getDatabase().transaction(async (tx) => {
     await tx.insert(members).values({ id: memberId, ...memberValues(profile) })
     await tx.update(articleCreditIdentities).set({
@@ -240,10 +241,11 @@ export const createCmsMember = async (
     await tx.update(members).set({ currentRevisionId: result.revisionId })
       .where(eq(members.id, memberId))
     const [matchingUser] = await tx.select({ id: users.id }).from(users)
-      .where(eq(users.account, profile.memberKey)).limit(1)
+      .where(and(eq(users.account, profile.memberKey), isNull(users.deletedAt))).limit(1)
     if (matchingUser) {
-      await tx.insert(userMembers).values({ userId: matchingUser.id, memberId })
-        .onConflictDoNothing()
+      const [linked] = await tx.insert(userMembers).values({ userId: matchingUser.id, memberId })
+        .onConflictDoNothing().returning({ userId: userMembers.userId })
+      if (!linked) throw new CmsMemberKeyConflictError('同 ID 账号已关联其他成员，请先在账号管理中处理')
     }
     await tx.insert(auditLogs).values({
       actorUserId,
@@ -263,18 +265,21 @@ export const createCmsMember = async (
 
 export const updateCmsMember = async (
   id: string,
-  input: Omit<CmsMemberInput, 'memberKey' | 'directory' | 'sourcePath'> & { expectedVersion?: number },
+  input: Omit<CmsMemberInput, 'directory' | 'sourcePath'> & { expectedVersion?: number },
   actorUserId: string
 ) => {
+  try {
   await getDatabase().transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(884021503)`)
     const [current] = await tx.select().from(members).where(eq(members.id, id)).limit(1).for('update')
     if (!current) return
+    if (current.deletedAt) throw new Error('MEMBER_NOT_FOUND')
     if (input.expectedVersion !== undefined && current.version !== input.expectedVersion) {
       throw new CmsMemberVersionConflictError()
     }
     const before = profileFromMemberRow(current)
     const next = inputProfile({
-      memberKey: current.memberKey,
+      memberKey: input.memberKey ?? current.memberKey,
       name: input.name,
       avatarUrl: input.avatarUrl === undefined ? before.avatarUrl : input.avatarUrl,
       groupName: input.groupName === undefined ? before.groupName : input.groupName,
@@ -289,6 +294,63 @@ export const updateCmsMember = async (
       metadata: input.metadata === undefined ? before.metadata : input.metadata
     }, before.sourcePath)
     const changes = memberFieldDiff(before, next)
+    if (next.memberKey !== before.memberKey) {
+      changes.memberKey = { from: before.memberKey, to: next.memberKey }
+      const [otherMember] = await tx.select({ id: members.id }).from(members)
+        .where(and(eq(members.memberKey, next.memberKey), isNull(members.deletedAt))).limit(1)
+      if (otherMember && otherMember.id !== id) throw new CmsMemberKeyConflictError('该稳定 ID 已被其他有效成员使用')
+
+      const [binding] = await tx.select({ userId: userMembers.userId, account: users.account })
+        .from(userMembers).innerJoin(users, eq(userMembers.userId, users.id))
+        .where(eq(userMembers.memberId, id)).limit(1)
+      const [targetUser] = await tx.select({ id: users.id }).from(users)
+        .where(eq(users.account, next.memberKey)).limit(1)
+      const [pendingForTarget] = await tx.select({ memberId: accountRegistrationApplications.memberId })
+        .from(accountRegistrationApplications).where(and(
+          eq(accountRegistrationApplications.account, next.memberKey),
+          eq(accountRegistrationApplications.status, 'pending')
+        )).limit(1)
+      if (pendingForTarget && pendingForTarget.memberId !== id) {
+        throw new CmsMemberKeyConflictError('目标 ID 已被其他待审核注册申请占用')
+      }
+      const [pendingForMember] = await tx.select({ id: accountRegistrationApplications.id })
+        .from(accountRegistrationApplications).where(and(
+          eq(accountRegistrationApplications.memberId, id),
+          eq(accountRegistrationApplications.status, 'pending')
+        )).limit(1)
+      if (pendingForMember && targetUser) {
+        throw new CmsMemberKeyConflictError('该成员已有待审核注册申请，请先处理申请或目标账号')
+      }
+      if (binding && targetUser && targetUser.id !== binding.userId) {
+        throw new CmsMemberKeyConflictError('目标 ID 已有其他账号；请先在账号管理中处理重复账号')
+      }
+      if (!binding && targetUser) {
+        const [targetBinding] = await tx.select({ memberId: userMembers.memberId }).from(userMembers)
+          .where(eq(userMembers.userId, targetUser.id)).limit(1)
+        if (targetBinding) throw new CmsMemberKeyConflictError('目标账号已关联其他成员')
+        await tx.insert(userMembers).values({ userId: targetUser.id, memberId: id })
+      } else if (binding && binding.account !== next.memberKey) {
+        await tx.update(users).set({ account: next.memberKey, updatedAt: new Date() })
+          .where(eq(users.id, binding.userId))
+      }
+      await tx.update(articleCreditIdentities).set({
+        memberId: id,
+        version: sql`${articleCreditIdentities.version} + 1`,
+        updatedAt: new Date()
+      }).where(inArray(articleCreditIdentities.creditKey, [before.memberKey, next.memberKey]))
+      await tx.insert(articleCreditIdentities).values({
+        creditKey: before.memberKey,
+        displayName: before.name,
+        memberId: id
+      }).onConflictDoNothing()
+      await tx.update(accountRegistrationApplications).set({
+        account: next.memberKey,
+        updatedAt: new Date()
+      }).where(and(
+        eq(accountRegistrationApplications.memberId, id),
+        eq(accountRegistrationApplications.status, 'pending')
+      ))
+    }
     await assertMemberProfileOptions(next)
     if (!Object.keys(changes).length) return
     const revisionNumber = (await tx.select({ value: sql<number>`coalesce(max(${memberRevisions.revisionNumber}), 0)::int` })
@@ -314,7 +376,7 @@ export const updateCmsMember = async (
       targetType: 'member',
       targetId: id,
       metadata: {
-        memberKey: current.memberKey,
+        memberKey: next.memberKey,
         previousRevisionId: current.currentRevisionId,
         revisionId: result.revisionId,
         exportJobId: result.jobId,
@@ -324,6 +386,12 @@ export const updateCmsMember = async (
       }
     })
   })
+  } catch (error) {
+    if (typeof error === 'object' && error && 'code' in error && error.code === '23505') {
+      throw new CmsMemberKeyConflictError()
+    }
+    throw error
+  }
   return getCmsMember(id)
 }
 
@@ -374,42 +442,6 @@ export const deleteCmsMember = async (
   return getCmsMember(id)
 }
 
-export const bindCmsMemberAccount = async (
-  memberId: string,
-  userId: string | null,
-  actorUserId: string
-) => {
-  try {
-    await getDatabase().transaction(async (tx) => {
-      const [member] = await tx.select({ id: members.id, memberKey: members.memberKey })
-        .from(members).where(eq(members.id, memberId)).limit(1).for('update')
-      if (!member) throw new Error('MEMBER_NOT_FOUND')
-      const [before] = await tx.select({ userId: userMembers.userId }).from(userMembers)
-        .where(eq(userMembers.memberId, memberId)).limit(1)
-      await tx.delete(userMembers).where(eq(userMembers.memberId, memberId))
-      if (userId) {
-        const [user] = await tx.select({ id: users.id }).from(users)
-          .where(eq(users.id, userId)).limit(1).for('update')
-        if (!user) throw new Error('USER_NOT_FOUND')
-        await tx.insert(userMembers).values({ userId, memberId })
-      }
-      await tx.insert(auditLogs).values({
-        actorUserId,
-        action: 'member.binding.update',
-        targetType: 'member',
-        targetId: memberId,
-        metadata: { memberKey: member.memberKey, previousUserId: before?.userId || null, userId }
-      })
-    })
-  } catch (error) {
-    if (typeof error === 'object' && error && 'code' in error && error.code === '23505') {
-      throw new CmsMemberBindingConflictError()
-    }
-    throw error
-  }
-  return getCmsMember(memberId)
-}
-
 export const listCmsMemberRevisions = async (memberId: string) =>
   getDatabase().select({
     id: memberRevisions.id,
@@ -436,8 +468,13 @@ export const restoreCmsMemberRevision = async (
       eq(memberRevisions.id, revisionId), eq(memberRevisions.memberId, memberId)
     )).limit(1)
     if (!target) throw new Error('MEMBER_REVISION_NOT_FOUND')
-    const profile = profileFromRecord(target.profile)
-    if (profile.memberKey !== current.memberKey) throw new Error('MEMBER_KEY_IMMUTABLE')
+    const profile = { ...profileFromRecord(target.profile), memberKey: current.memberKey }
+    if (current.deletedAt) {
+      const [activeCollision] = await tx.select({ id: members.id }).from(members).where(and(
+        eq(members.memberKey, current.memberKey), isNull(members.deletedAt)
+      )).limit(1)
+      if (activeCollision) throw new CmsMemberKeyConflictError('该稳定 ID 已由其他有效成员使用，无法恢复旧档案')
+    }
     const result = await appendRevisionAndOutbox(tx, {
       memberId,
       revisionNumber: target.revisionNumber > 0
@@ -457,6 +494,21 @@ export const restoreCmsMemberRevision = async (
       deletedByUserId: null,
       updatedAt: new Date()
     }).where(eq(members.id, memberId))
+    if (current.deletedAt) {
+      const [matchingUser] = await tx.select({ id: users.id }).from(users).where(and(
+        eq(users.account, current.memberKey), isNull(users.deletedAt)
+      )).limit(1)
+      if (matchingUser) {
+        const [linked] = await tx.insert(userMembers).values({ userId: matchingUser.id, memberId })
+          .onConflictDoNothing().returning({ userId: userMembers.userId })
+        if (!linked) throw new CmsMemberKeyConflictError('同 ID 账号已关联其他成员，无法恢复旧档案')
+      }
+      await tx.update(articleCreditIdentities).set({
+        memberId,
+        version: sql`${articleCreditIdentities.version} + 1`,
+        updatedAt: new Date()
+      }).where(eq(articleCreditIdentities.creditKey, current.memberKey))
+    }
     await tx.insert(auditLogs).values({
       actorUserId,
       action: 'member.revision.restore',

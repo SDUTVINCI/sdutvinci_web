@@ -14,7 +14,7 @@ import {
 } from '../server/services/member-applications'
 import { memberApplications, members } from '../server/db/schema'
 import { uploadCmsMemberAvatar } from '../server/services/cms-member-avatar'
-import { createCmsMember } from '../server/services/cms-members'
+import { createCmsMember, deleteCmsMember } from '../server/services/cms-members'
 import { configureCmsTestDatabase } from './helpers/cms-test-database'
 
 const integration = configureCmsTestDatabase() ? describe : describe.skip
@@ -102,6 +102,7 @@ integration('公开成员申请审核', () => {
 
   it('同名成员使用从 1 开始的最小可用数字后缀', async () => {
     const admin = await bootstrapCmsAdmin({ account: 'keyadmin', password: 'KeyAdminPassword123!' })
+    const created: Array<{ id: string, version: number }> = []
     for (const [index, expectedKey] of ['tongmingchengyuan', 'tongmingchengyuan1', 'tongmingchengyuan2'].entries()) {
       const application = await startMemberApplication()
       const image = await sharp({
@@ -119,7 +120,18 @@ integration('公开成员申请审核', () => {
       })
       const result = await reviewMemberApplication(application.id, 'approve', '', admin!.id)
       expect(result.member?.memberKey).toBe(expectedKey)
+      created.push({ id: result.member!.id, version: result.member!.version })
     }
+    await deleteCmsMember(created[0]!.id, created[0]!.version, admin!.id)
+    await deleteCmsMember(created[1]!.id, created[1]!.version, admin!.id)
+    const application = await startMemberApplication()
+    const image = await sharp({ create: { width: 32, height: 32, channels: 3, background: '#208090' } }).png().toBuffer()
+    await uploadMemberApplicationAvatar({ id: application.id, token: application.token, name: '同名成员', data: image, mimeType: 'image/png' })
+    await submitMemberApplication(application.id, application.token, {
+      name: '同名成员', grade: '2025', groupName: '软件算法组', positions: ['成员'], seasons: ['25']
+    })
+    expect((await reviewMemberApplication(application.id, 'approve', '', admin!.id)).member?.memberKey)
+      .toBe('tongmingchengyuan')
   })
 
   it('CMS 编辑头像复用 WebP 哈希命名并直接生成成员 Revision', async () => {

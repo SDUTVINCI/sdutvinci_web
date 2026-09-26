@@ -3,7 +3,6 @@ import type {
   AccountRegistrationMemberOption,
   CmsAccountRegistrationApplication
 } from '../../shared/types/account-registration'
-import { cmsAccountPattern } from '../../shared/types/cms-auth'
 import { getDatabase } from '../db/client'
 import {
   accountRegistrationApplications,
@@ -15,7 +14,6 @@ import {
   users
 } from '../db/schema'
 import { hashCmsPassword } from '../utils/cms-security'
-import { memberKeyFromName } from '../utils/member-key'
 
 type CmsTransaction = Parameters<
   Parameters<ReturnType<typeof getDatabase>['transaction']>[0]
@@ -37,29 +35,18 @@ export class AccountRegistrationPendingError extends Error {
   }
 }
 
+export class AccountRegistrationAccountUnavailableError extends Error {
+  constructor() {
+    super('ACCOUNT_REGISTRATION_ACCOUNT_UNAVAILABLE')
+    this.name = 'AccountRegistrationAccountUnavailableError'
+  }
+}
+
 export class AccountRegistrationStateError extends Error {
   constructor() {
     super('ACCOUNT_REGISTRATION_STATE_INVALID')
     this.name = 'AccountRegistrationStateError'
   }
-}
-
-const accountBaseForMember = (member: { memberKey: string, name: string }) => {
-  const key = member.memberKey.trim().toLowerCase()
-  if (cmsAccountPattern.test(key)) return key
-  return memberKeyFromName(member.name)
-}
-
-const allocateAccount = (base: string, used: Set<string>) => {
-  for (let suffix = 0; suffix < 1_000_000; suffix += 1) {
-    const suffixText = suffix ? String(suffix) : ''
-    const candidate = `${base.slice(0, 32 - suffixText.length)}${suffixText}`
-    if (cmsAccountPattern.test(candidate) && !used.has(candidate)) {
-      used.add(candidate)
-      return candidate
-    }
-  }
-  throw new Error('ACCOUNT_REGISTRATION_ID_EXHAUSTED')
 }
 
 const loadUsedAccounts = async (tx: CmsTransaction | ReturnType<typeof getDatabase>) => {
@@ -102,13 +89,10 @@ export const listAccountRegistrationMembers = async (): Promise<AccountRegistrat
       ? 'registered'
       : pendingAccounts.has(member.id)
         ? 'pending'
-        : 'available'
-    const base = accountBaseForMember(member)
+        : used.has(member.memberKey) ? 'unavailable' : 'available'
     return {
       ...member,
-      account: registeredAccounts.get(member.id)
-        || pendingAccounts.get(member.id)
-        || allocateAccount(base, new Set(used)),
+      account: member.memberKey,
       registrationStatus
     }
   })
@@ -142,7 +126,10 @@ export const submitAccountRegistration = async (input: {
       )).limit(1)
     if (pending) throw new AccountRegistrationPendingError()
 
-    const account = allocateAccount(accountBaseForMember(member), await loadUsedAccounts(tx))
+    const account = member.memberKey
+    if ((await loadUsedAccounts(tx)).has(account)) {
+      throw new AccountRegistrationAccountUnavailableError()
+    }
     const [application] = await tx.insert(accountRegistrationApplications).values({
       memberId: member.id,
       account,
@@ -247,13 +234,11 @@ export const reviewAccountRegistration = async (
     .from(userMembers).where(eq(userMembers.memberId, member.id)).limit(1)
   if (binding) throw new AccountRegistrationAlreadyRegisteredError()
 
-  const used = await loadUsedAccounts(tx)
-  used.delete(application.account)
+  const account = member.memberKey
+  if (application.account !== account) throw new AccountRegistrationAccountUnavailableError()
   const [accountCollision] = await tx.select({ id: users.id }).from(users)
-    .where(eq(users.account, application.account)).limit(1)
-  const account = accountCollision
-    ? allocateAccount(accountBaseForMember(member), used)
-    : application.account
+    .where(eq(users.account, account)).limit(1)
+  if (accountCollision) throw new AccountRegistrationAccountUnavailableError()
   const [memberRole] = await tx.select({ id: roles.id })
     .from(roles).where(eq(roles.code, 'member')).limit(1)
   if (!memberRole) throw new Error('数据库中的普通成员角色缺失，请重新运行迁移')

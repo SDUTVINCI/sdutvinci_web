@@ -143,19 +143,22 @@ const replaceRoles = async (
 const linkMatchingMember = async (
   tx: Parameters<Parameters<ReturnType<typeof getDatabase>['transaction']>[0]>[0],
   userId: string,
-  account: string
+  account: string,
+  required = false
 ) => {
   const [matchingMember] = await tx
     .select({ id: members.id })
     .from(members)
-    .where(eq(members.memberKey, normalizeAccount(account)))
+    .where(and(eq(members.memberKey, normalizeAccount(account)), isNull(members.deletedAt)))
     .limit(1)
   if (matchingMember) {
-    await tx.insert(userMembers).values({
+    const [linked] = await tx.insert(userMembers).values({
       userId,
       memberId: matchingMember.id
-    }).onConflictDoNothing()
+    }).onConflictDoNothing().returning({ userId: userMembers.userId })
+    if (!linked) throw new Error('CMS_MEMBER_ACCOUNT_ALREADY_LINKED')
   }
+  else if (required) throw new Error('CMS_MEMBER_ACCOUNT_PROFILE_REQUIRED')
 }
 
 export const listCmsUsers = async () => rowsToManagedUsers(await loadUserRows())
@@ -181,7 +184,8 @@ export const countAdmins = async () => {
 export const createCmsUser = async (
   input: CreateCmsUserInput,
   actorUserId: string | null,
-  auditAction = 'user.create'
+  auditAction = 'user.create',
+  requireMatchingMember = false
 ) => {
   const db = getDatabase()
   const passwordHash = await hashCmsPassword(input.password)
@@ -201,7 +205,7 @@ export const createCmsUser = async (
     }
 
     await replaceRoles(tx, created.id, input.roles)
-    await linkMatchingMember(tx, created.id, input.account)
+    await linkMatchingMember(tx, created.id, input.account, requireMatchingMember && input.roles.includes('member'))
     await tx.insert(auditLogs).values({
       actorUserId,
       action: auditAction,

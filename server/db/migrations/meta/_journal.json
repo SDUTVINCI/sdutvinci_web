@@ -183,6 +183,13 @@
       "when": 1787285096033,
       "tag": "0025_fat_marauders",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1790388228994,
+      "tag": "0026_material_grandmaster",
+      "breakpoints": true
     }
   ]
 }
