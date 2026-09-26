@@ -60,6 +60,7 @@ export default defineNuxtConfig({
     '/docs': { redirect: '/wiki' },
     '/recruitment': { prerender: true },
     '/links': { prerender: true },
+    '/downloads': { prerender: false },
     '/contact': { prerender: true },
     '/cms/**': { prerender: false },
     '/api/cms/**': { prerender: false },

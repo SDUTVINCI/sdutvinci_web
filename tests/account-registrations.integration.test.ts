@@ -15,7 +15,8 @@ import {
 import {
   authenticateCmsUser,
   bootstrapCmsAdmin,
-  createCmsUser
+  createCmsUser,
+  deleteCmsUser
 } from '../server/services/cms-auth'
 import { createCmsMember, updateCmsMember } from '../server/services/cms-members'
 import { verifyCmsPassword } from '../server/utils/cms-security'
@@ -182,6 +183,41 @@ integration('成员账号注册申请', () => {
     })).rejects.toBeInstanceOf(AccountRegistrationAlreadyRegisteredError)
     expect((await listAccountRegistrationMembers()).find(item => item.id === member!.id))
       .toMatchObject({ account: 'duplicatemember', registrationStatus: 'registered' })
+  })
+
+  it('删除账号后保留旧记录，并允许同一档案重新申请和注册同 ID 账号', async () => {
+    const admin = await bootstrapCmsAdmin({
+      account: 'reregisteradmin',
+      password: 'ReregisterAdminPassword123!'
+    })
+    const member = await createMember('duanquanyu', '段泉宇', admin!.id)
+    const oldUser = await createCmsUser({
+      account: 'duanquanyu',
+      password: 'OldDuanPassword123!',
+      roles: ['member']
+    }, admin!.id)
+    expect((await listAccountRegistrationMembers()).find(item => item.id === member!.id))
+      .toMatchObject({ registrationStatus: 'registered' })
+
+    await deleteCmsUser(oldUser!.id, admin!.id)
+    expect((await listAccountRegistrationMembers()).find(item => item.id === member!.id))
+      .toMatchObject({ account: 'duanquanyu', registrationStatus: 'available' })
+    const application = await submitAccountRegistration({
+      memberId: member!.id,
+      password: 'NewDuanPassword123!',
+      ipHash: null
+    })
+    const approved = await reviewAccountRegistration(application.id, 'approve', '', admin!.id)
+    expect(approved).toMatchObject({ status: 'approved', account: 'duanquanyu' })
+    expect(approved.userId).not.toBe(oldUser!.id)
+    expect((await getDatabase().select().from(users).where(eq(users.account, 'duanquanyu'))))
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: oldUser!.id, status: 'disabled', deletedAt: expect.any(Date) }),
+        expect.objectContaining({ id: approved.userId, status: 'active', deletedAt: null })
+      ]))
+    expect(await authenticateCmsUser('duanquanyu', 'OldDuanPassword123!')).toBeNull()
+    expect(await authenticateCmsUser('duanquanyu', 'NewDuanPassword123!'))
+      .toMatchObject({ id: approved.userId, memberId: member!.id })
   })
 
   it('待审核期间修改档案稳定 ID 会同步申请账号 ID', async () => {

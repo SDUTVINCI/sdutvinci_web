@@ -43,7 +43,8 @@ export const users = pgTable('users', {
   ...timestamps
 }, table => [
   check('users_account_format_check', sql`${table.account} ~ '^[a-z][a-z0-9]{2,31}$'`),
-  uniqueIndex('users_account_unique').on(table.account),
+  uniqueIndex('users_active_account_unique').on(table.account)
+    .where(sql`${table.deletedAt} is null`),
   index('users_status_index').on(table.status),
   index('users_deleted_at_index').on(table.deletedAt)
 ])

@@ -51,7 +51,7 @@ export class AccountRegistrationStateError extends Error {
 
 const loadUsedAccounts = async (tx: CmsTransaction | ReturnType<typeof getDatabase>) => {
   const [userRows, pendingRows] = await Promise.all([
-    tx.select({ account: users.account }).from(users),
+    tx.select({ account: users.account }).from(users).where(isNull(users.deletedAt)),
     tx.select({ account: accountRegistrationApplications.account })
       .from(accountRegistrationApplications)
       .where(eq(accountRegistrationApplications.status, 'pending'))
@@ -72,7 +72,8 @@ export const listAccountRegistrationMembers = async (): Promise<AccountRegistrat
       sql`${members.currentRevisionId} is not null`
     )).orderBy(asc(members.sortOrder), asc(members.memberKey)),
     db.select({ memberId: userMembers.memberId, account: users.account }).from(userMembers)
-      .innerJoin(users, eq(userMembers.userId, users.id)),
+      .innerJoin(users, eq(userMembers.userId, users.id))
+      .where(isNull(users.deletedAt)),
     db.select({
       memberId: accountRegistrationApplications.memberId,
       account: accountRegistrationApplications.account
@@ -237,7 +238,7 @@ export const reviewAccountRegistration = async (
   const account = member.memberKey
   if (application.account !== account) throw new AccountRegistrationAccountUnavailableError()
   const [accountCollision] = await tx.select({ id: users.id }).from(users)
-    .where(eq(users.account, account)).limit(1)
+    .where(and(eq(users.account, account), isNull(users.deletedAt))).limit(1)
   if (accountCollision) throw new AccountRegistrationAccountUnavailableError()
   const [memberRole] = await tx.select({ id: roles.id })
     .from(roles).where(eq(roles.code, 'member')).limit(1)

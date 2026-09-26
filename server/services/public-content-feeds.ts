@@ -29,6 +29,7 @@ export const buildPublicDatabaseSitemap = async () => {
     '/projects',
     '/recruitment',
     '/links',
+    '/downloads',
     '/contact'
   ]
   const paths = new Set([

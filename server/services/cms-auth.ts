@@ -459,7 +459,7 @@ export const authenticateCmsUser = async (account: string, password: string) => 
   const [user] = await db
     .select()
     .from(users)
-    .where(eq(users.account, normalizeAccount(account)))
+    .where(and(eq(users.account, normalizeAccount(account)), isNull(users.deletedAt)))
     .limit(1)
 
   const passwordHash = user?.passwordHash || dummyPasswordHash

@@ -311,7 +311,7 @@ export const updateCmsMember = async (
         .from(userMembers).innerJoin(users, eq(userMembers.userId, users.id))
         .where(eq(userMembers.memberId, id)).limit(1)
       const [targetUser] = await tx.select({ id: users.id }).from(users)
-        .where(eq(users.account, next.memberKey)).limit(1)
+        .where(and(eq(users.account, next.memberKey), isNull(users.deletedAt))).limit(1)
       const [pendingForTarget] = await tx.select({ memberId: accountRegistrationApplications.memberId })
         .from(accountRegistrationApplications).where(and(
           eq(accountRegistrationApplications.account, next.memberKey),
@@ -608,6 +608,7 @@ export const applyCmsMemberMarkdownMigration = async () => {
     }
     const links = await tx.select({ userId: users.id, memberId: members.id })
       .from(users).innerJoin(members, eq(users.account, members.memberKey))
+      .where(and(isNull(users.deletedAt), isNull(members.deletedAt)))
     if (links.length) await tx.insert(userMembers).values(links).onConflictDoNothing()
     await tx.insert(auditLogs).values({
       actorUserId: null,
