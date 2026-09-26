@@ -3577,19 +3577,9 @@
   gap: 30px;
 }
 
-.cms-registration-review-section {
-  padding: 22px;
-  border: 1px solid color-mix(in srgb, var(--cyan) 22%, var(--line));
-  border-radius: 18px;
-  background: color-mix(in srgb, var(--cyan) 4%, var(--surface));
-}
-
-.cms-account-list-heading h2 .cms-review-count {
-  vertical-align: middle;
-}
-
 .cms-registration-review-note {
   margin: 0;
+  max-width: 720px;
 }
 
 .cms-registration-review-note textarea {
@@ -3632,6 +3622,12 @@
 .cms-registration-review-card p,
 .cms-registration-review-card small {
   color: var(--muted);
+}
+
+.cms-review-account-feedback {
+  display: grid;
+  gap: 10px;
+  padding: 20px 24px 0;
 }
 
 .cms-account-create {

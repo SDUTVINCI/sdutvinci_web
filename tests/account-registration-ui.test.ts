@@ -24,11 +24,18 @@ describe('账号注册界面', () => {
     expect(styles).toContain(':root[data-theme="light"] .cms-registration-member-selected em')
   })
 
-  it('账号管理页集中审核注册并明确创建普通成员账号', async () => {
-    const page = await readFile('app/pages/cms/users.vue', 'utf8')
-    expect(page).toContain('注册申请审核')
-    expect(page).toContain('/api/cms/account-registration-applications')
-    expect(page).toContain('通过并创建普通成员账号')
-    expect(page).toContain("reviewRegistration(application, 'reject')")
+  it('审核中心处理账号注册申请，账号管理页只维护已有账号', async () => {
+    const [reviews, users] = await Promise.all([
+      readFile('app/pages/cms/reviews/index.vue', 'utf8'),
+      readFile('app/pages/cms/users.vue', 'utf8')
+    ])
+    expect(reviews).toContain("middleware: ['cms-auth', 'cms-admin']")
+    expect(reviews).toContain('data-stage="accounts"')
+    expect(reviews).toContain('账号注册申请')
+    expect(reviews).toContain('/api/cms/account-registration-applications')
+    expect(reviews).toContain('通过并创建普通成员账号')
+    expect(reviews).toContain("reviewRegistration(application, 'reject')")
+    expect(users).not.toContain('注册申请审核')
+    expect(users).not.toContain('/api/cms/account-registration-applications')
   })
 })

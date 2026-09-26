@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import type { CmsReviewSummary } from '../../../../shared/types/cms-reviews'
 import type { CmsBatchActionResult } from '../../../../shared/types/cms-drafts'
+import type { CmsAccountRegistrationApplication } from '../../../../shared/types/account-registration'
+import { resolveStaticMediaUrl } from '~~/shared/utils/static-media'
 
 const BATCH_APPROVE_CONFIRMATION = 'BATCH_APPROVE_DRAFTS'
 const BATCH_PUBLISH_CONFIRMATION = 'BATCH_PUBLISH_DRAFTS'
 
 definePageMeta({ layout: 'cms', middleware: ['cms-auth', 'cms-admin'] })
-useHead({ title: '待审核内容 · Vinci 内容管理后台' })
+useHead({ title: '审核中心 · Vinci 内容管理后台' })
 const requestFetch = import.meta.server ? useRequestFetch() : $fetch
 const { csrfHeaders } = useCmsSession()
 const { data, status, error, refresh } = await useAsyncData(
@@ -23,6 +25,24 @@ const { data, status, error, refresh } = await useAsyncData(
     }
   }
 )
+const {
+  data: registrationData,
+  status: registrationStatus,
+  error: registrationLoadError,
+  refresh: refreshRegistrations
+} = await useAsyncData('cms:account-registration-applications', () =>
+  requestFetch<{ applications: CmsAccountRegistrationApplication[] }>(
+    '/api/cms/account-registration-applications'
+  )
+)
+const registrationApplications = computed(() => registrationData.value?.applications ?? [])
+const registrationNote = ref('')
+const registrationReviewingId = ref('')
+const registrationMessage = ref('')
+const registrationError = ref('')
+const refreshAll = async () => {
+  await Promise.all([refresh(), refreshRegistrations()])
+}
 const note = ref('')
 const message = ref('')
 const errorMessage = ref('')
@@ -86,6 +106,39 @@ const reviewMember = async (id: string, action: 'approve' | 'reject') => {
     errorMessage.value = error?.data?.message || '成员审核失败'
   }
 }
+
+const reviewRegistration = async (
+  application: CmsAccountRegistrationApplication,
+  action: 'approve' | 'reject'
+) => {
+  const prompt = action === 'approve'
+    ? `确定通过 ${application.member.name} 的账号 @${application.account} 注册申请吗？通过后将创建普通成员账号。`
+    : `确定拒绝 ${application.member.name} 的注册申请吗？申请中的密码哈希会被清除。`
+  if (!confirm(prompt)) return
+  registrationReviewingId.value = application.id
+  registrationMessage.value = ''
+  registrationError.value = ''
+  try {
+    const result = await $fetch<{ account?: string }>(
+      `/api/cms/account-registration-applications/${application.id}/review`,
+      {
+        method: 'POST',
+        headers: csrfHeaders(),
+        body: { action, note: registrationNote.value }
+      }
+    )
+    registrationMessage.value = action === 'approve'
+      ? `账号 @${result.account || application.account} 已审核通过，身份为普通成员。`
+      : `${application.member.name} 的注册申请已拒绝。`
+    await refreshRegistrations()
+  } catch (error: any) {
+    registrationError.value = error?.data?.message
+      ?? error?.data?.statusMessage
+      ?? '注册申请审核失败'
+  } finally {
+    registrationReviewingId.value = ''
+  }
+}
 </script>
 
 <template>
@@ -93,10 +146,10 @@ const reviewMember = async (id: string, action: 'approve' | 'reject') => {
     <header class="cms-page-header cms-page-header-actions">
       <div>
         <p class="cms-eyebrow">REVIEWS</p>
-        <h1>待审核内容</h1>
-        <p>统一处理文章草稿和成员信息申请；成员申请通过后会立即创建正式成员并上线。</p>
+        <h1>审核中心</h1>
+        <p>统一处理文章草稿、成员信息与账号注册申请。</p>
       </div>
-      <button class="cms-button cms-button-quiet" type="button" @click="refresh()">
+      <button class="cms-button cms-button-quiet" type="button" @click="refreshAll()">
         刷新
       </button>
     </header>
@@ -105,8 +158,8 @@ const reviewMember = async (id: string, action: 'approve' | 'reject') => {
     <p v-if="errorMessage" class="cms-alert cms-alert-error">{{ errorMessage }}</p>
     <p v-if="status === 'pending'" class="cms-muted">正在加载待审核内容…</p>
     <p v-else-if="error" class="cms-alert cms-alert-error">加载失败，请稍后重试。</p>
-    <div v-else class="cms-review-workspace">
-      <section class="cms-review-lane" data-stage="pending">
+    <div class="cms-review-workspace">
+      <section v-if="status !== 'pending' && !error" class="cms-review-lane" data-stage="pending">
         <header class="cms-review-lane-header">
           <div class="cms-review-lane-title">
             <span class="cms-review-lane-index" aria-hidden="true">01</span>
@@ -156,7 +209,7 @@ const reviewMember = async (id: string, action: 'approve' | 'reject') => {
         </div>
       </section>
 
-      <section class="cms-review-lane" data-stage="approved">
+      <section v-if="status !== 'pending' && !error" class="cms-review-lane" data-stage="approved">
         <header class="cms-review-lane-header">
           <div class="cms-review-lane-title">
             <span class="cms-review-lane-index" aria-hidden="true">02</span>
@@ -198,7 +251,7 @@ const reviewMember = async (id: string, action: 'approve' | 'reject') => {
         </div>
       </section>
 
-      <section class="cms-review-lane" data-stage="members">
+      <section v-if="status !== 'pending' && !error" class="cms-review-lane" data-stage="members">
         <header class="cms-review-lane-header">
           <div class="cms-review-lane-title">
             <span class="cms-review-lane-index" aria-hidden="true">03</span>
@@ -237,6 +290,54 @@ const reviewMember = async (id: string, action: 'approve' | 'reject') => {
         <div v-else class="cms-review-empty">
           <span aria-hidden="true">◇</span>
           <div><strong>暂无成员申请</strong><p>新的公开申请提交后会显示在这里。</p></div>
+        </div>
+      </section>
+      <section class="cms-review-lane" data-stage="accounts">
+        <header class="cms-review-lane-header">
+          <div class="cms-review-lane-title">
+            <span class="cms-review-lane-index" aria-hidden="true">04</span>
+            <div>
+              <p class="cms-eyebrow">ACCOUNT REGISTRATION</p>
+              <div class="cms-review-lane-heading">
+                <h2>账号注册申请</h2>
+                <span class="cms-review-count">{{ registrationApplications.length }} 项</span>
+              </div>
+              <p>核对成员身份后创建普通成员账号；注册申请不能直接获得管理员权限。</p>
+            </div>
+          </div>
+          <div class="cms-review-lane-actions">
+            <button class="cms-button cms-button-quiet" type="button" :disabled="registrationStatus === 'pending'" @click="refreshRegistrations()">刷新申请</button>
+          </div>
+        </header>
+        <div v-if="registrationMessage || registrationError" class="cms-review-account-feedback">
+          <p v-if="registrationMessage" class="cms-alert" role="status">{{ registrationMessage }}</p>
+          <p v-if="registrationError" class="cms-alert cms-alert-error" role="alert">{{ registrationError }}</p>
+        </div>
+        <div v-if="registrationApplications.length && !registrationLoadError" class="cms-review-member-body">
+          <label class="cms-form cms-registration-review-note">
+            <span>本次审核备注</span>
+            <textarea v-model="registrationNote" rows="2" maxlength="1000" placeholder="可选，不会显示密码等敏感信息" />
+          </label>
+          <div class="cms-registration-review-list">
+            <article v-for="application in registrationApplications" :key="application.id" class="cms-panel cms-registration-review-card">
+              <img :src="resolveStaticMediaUrl(application.member.avatarUrl || '/images/logo.png')" alt="" loading="lazy">
+              <div>
+                <h3>{{ application.member.name }}</h3>
+                <p>@{{ application.account }} · 成员 ID：{{ application.member.memberKey }}</p>
+                <small>提交于 {{ new Date(application.submittedAt).toLocaleString('zh-CN') }}</small>
+              </div>
+              <div class="cms-button-row">
+                <button class="cms-button cms-button-primary" type="button" :disabled="!!registrationReviewingId || registrationStatus === 'pending'" @click="reviewRegistration(application, 'approve')">通过并创建普通成员账号</button>
+                <button class="cms-button" type="button" :disabled="!!registrationReviewingId || registrationStatus === 'pending'" @click="reviewRegistration(application, 'reject')">拒绝</button>
+              </div>
+            </article>
+          </div>
+        </div>
+        <div v-else-if="registrationStatus === 'pending'" class="cms-review-empty">正在加载注册申请…</div>
+        <div v-else-if="registrationLoadError" class="cms-review-empty cms-alert-error" role="alert">注册申请加载失败，请稍后重试。</div>
+        <div v-else class="cms-review-empty">
+          <span aria-hidden="true">✓</span>
+          <div><strong>暂无账号注册申请</strong><p>成员从登录页提交申请后会显示在这里。</p></div>
         </div>
       </section>
     </div>
