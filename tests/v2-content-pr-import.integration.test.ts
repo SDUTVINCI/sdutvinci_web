@@ -716,7 +716,7 @@ suite('V2 阶段 8 本地 Markdown PR 导入与三方冲突', () => {
     fake.contents.set(`${HEAD}:${safe.path}`, safe.baseSource.replace('name: Safe', 'name: Safe Proposed'))
     fake.contents.set(`${HEAD}:${merge.path}`, merge.baseSource.replace('grade: 2024', 'grade: 2025'))
     fake.contents.set(`${HEAD}:${conflict.path}`, conflict.baseSource.replace('role: Member', 'role: Advisor'))
-    fake.contents.set(`${HEAD}:${sensitive.path}`, sensitive.baseSource.replace(/grade:.*\n/, 'metadata:\n  account: stolen\n'))
+    fake.contents.set(`${HEAD}:${sensitive.path}`, sensitive.baseSource.replace('metadata: null', 'metadata:\n  account: stolen'))
     fake.files = [
       { filename: safe.path, status: 'modified', changes: 2 },
       { filename: merge.path, status: 'modified', changes: 2 },
