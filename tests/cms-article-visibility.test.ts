@@ -43,9 +43,9 @@ describe('文章访问权限入口与 Wiki 文章计数', () => {
       readFile('app/assets/css/wiki.css', 'utf8')
     ])
 
-    expect(api).toContain('listRestrictedWikiDocumentsFromDatabase')
-    expect(api).toContain('restrictedDocuments')
-    expect(service).toContain('eq(articles.requiresAuth, true)')
+    expect(api).toContain('listPublicWikiIndexFromDatabase')
+    expect(service).toContain('restrictedDocuments')
+    expect(service).toContain('if (!row.requiresAuth) continue')
     expect(service).toContain('PublicRestrictedWikiDocument[]')
     expect(component).toContain('成员资料')
     expect(component).toContain('完整文档仅限成员')

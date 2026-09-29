@@ -51,6 +51,9 @@ const allMembers = computed(() =>
 const availableSeasons = computed(() => {
   const seasons = new Set<string>()
 
+  for (const cohort of memberOptions.value?.cohorts ?? []) {
+    if (cohort.season) seasons.add(cohort.season)
+  }
   for (const member of allMembers.value) {
     splitSeason(member.time).forEach((season) => seasons.add(season))
     splitSeason(member.advisor).forEach((season) => seasons.add(season))
@@ -59,7 +62,11 @@ const availableSeasons = computed(() => {
   return [...seasons].sort((a, b) => Number(b) - Number(a))
 })
 
-const selectedSeason = ref('all')
+const chosenSeason = ref<string | null>(null)
+const selectedSeason = computed({
+  get: () => chosenSeason.value ?? availableSeasons.value[0] ?? 'all',
+  set: value => { chosenSeason.value = value }
+})
 
 const configuredGroups = computed(() => {
   const cohorts = memberOptions.value?.cohorts ?? []

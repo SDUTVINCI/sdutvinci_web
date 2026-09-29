@@ -19,6 +19,7 @@ import {
   getPublicArticleFromDatabase,
   getPublicMemberFromDatabase,
   listPublicArticlesFromDatabase,
+  listPublicWikiIndexFromDatabase,
   listPublicMembersFromDatabase,
   listRestrictedWikiDocumentsFromDatabase,
   resolvePublicArticleAccessFromDatabase,
@@ -272,6 +273,15 @@ databaseSuite('V2 阶段 4 正式内容查询、缓存与候选 Feed', () => {
       tags: ['嵌入式组', '软件算法组'],
       frontmatter: { tags: ['嵌入式组', '软件算法组'] }
     })
+
+    const directory = await listPublicWikiIndexFromDatabase()
+    expect(directory.restrictedDocuments).toEqual([])
+    expect(directory.items).toHaveLength(3)
+    expect(directory.items.map(item => item.path)).toEqual(pages.map(page => page.path))
+    expect(directory.items.every(item =>
+      !('body' in item) && !('markdownSource' in item) && !('frontmatter' in item)
+    )).toBe(true)
+    expect(directory.items[0]?.tags).toEqual(['嵌入式组', '软件算法组'])
   })
 
   it('Wiki 缺失或包含非法 index 标签时明确返回未分类', async () => {
@@ -353,6 +363,10 @@ databaseSuite('V2 阶段 4 正式内容查询、缓存与候选 Feed', () => {
       )).toBeNull()
       expect(await searchPublicArticlesFromDatabase('机器人')).toEqual([])
       expect(await listPublicArticlesFromDatabase('wiki')).toHaveLength(2)
+      const directory = await listPublicWikiIndexFromDatabase()
+      expect(directory.items).toHaveLength(2)
+      expect(directory.items.every(item => !item.requiresAuth)).toBe(true)
+      expect(directory.restrictedDocuments).toHaveLength(1)
       expect(await listRestrictedWikiDocumentsFromDatabase()).toEqual([{
         docKey: '2026-07-29-jie-duan-si-ce-shi',
         path: '/wiki/2026-07-29-jie-duan-si-ce-shi/0100-kai-shi',
@@ -371,6 +385,13 @@ databaseSuite('V2 阶段 4 正式内容查询、缓存与候选 Feed', () => {
       invalidatePublicContentCache({ articleId: articleIds['wiki-second'] })
 
       expect(await listPublicArticlesFromDatabase('wiki')).toEqual([])
+      const lockedDirectory = await listPublicWikiIndexFromDatabase()
+      expect(lockedDirectory.items).toEqual([])
+      expect(lockedDirectory.restrictedDocuments).toHaveLength(1)
+      expect(lockedDirectory.restrictedDocuments[0]).not.toHaveProperty('chapters')
+      expect(lockedDirectory.restrictedDocuments[0]).not.toHaveProperty('body')
+      expect((await listPublicWikiIndexFromDatabase({ includeRestricted: true })).items)
+        .toHaveLength(3)
       expect(await listRestrictedWikiDocumentsFromDatabase()).toEqual([{
         docKey: '2026-07-29-jie-duan-si-ce-shi',
         path: '/wiki/2026-07-29-jie-duan-si-ce-shi',

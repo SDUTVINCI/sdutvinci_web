@@ -1,21 +1,10 @@
 <script setup lang="ts">
-import type { PublicRestrictedWikiDocument } from '~~/shared/types/public-content'
+import type { PublicWikiIndexResponse } from '~~/shared/types/public-content'
 
-interface WikiMetaItem {
-  path: string
-  date?: string
-  docKey?: string
-  isWikiDoc?: boolean
-}
-
-interface WikiIndexResponse {
-  items: WikiMetaItem[]
-  restrictedDocuments: PublicRestrictedWikiDocument[]
-}
-
-const { data: wikiResponse } = await usePublicContentQuery<WikiIndexResponse>({
-  key: 'wiki:index-stats',
-  database: requestFetch => requestFetch<WikiIndexResponse>('/api/v2/content/wiki')
+const { data: wikiResponse, pending } = await usePublicContentQuery<PublicWikiIndexResponse>({
+  key: 'wiki:index',
+  lazy: true,
+  database: requestFetch => requestFetch<PublicWikiIndexResponse>('/api/v2/content/wiki')
 })
 
 useContentSeo({
@@ -82,7 +71,7 @@ const wikiStats = computed(() => {
         <p>按文档浏览公开教程；成员资料和部分受限内容会明确标注，登录后即可继续阅读。</p>
       </div>
 
-      <WikiList />
+      <WikiList :response="wikiResponse" :pending="pending" />
     </section>
   </main>
 </template>

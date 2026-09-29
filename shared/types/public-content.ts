@@ -66,6 +66,29 @@ export interface PublicRestrictedWikiDocument {
   tags: WikiDocumentCategory[]
 }
 
+export interface PublicWikiListItem {
+  path: string
+  title: string
+  stem: string
+  date?: string
+  chapter?: string
+  chapterOrder?: string
+  chapterDepth?: number
+  docKey?: string
+  docRoot?: string
+  docTitle?: string
+  isWikiDoc?: boolean
+  isWikiIndex?: boolean
+  wikiDepth?: number
+  requiresAuth: boolean
+  tags: WikiDocumentCategory[]
+}
+
+export interface PublicWikiIndexResponse {
+  items: PublicWikiListItem[]
+  restrictedDocuments: PublicRestrictedWikiDocument[]
+}
+
 export interface PublicContentCacheInvalidationInput {
   collection?: PublicArticleCollection
   articleId?: string

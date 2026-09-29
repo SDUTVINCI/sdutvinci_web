@@ -14,7 +14,8 @@ import type {
   PublicArticleCollection,
   PublicContentSearchResult,
   PublicMember,
-  PublicRestrictedWikiDocument
+  PublicRestrictedWikiDocument,
+  PublicWikiIndexResponse
 } from '../../shared/types/public-content'
 import { resolveStaticMediaUrl } from '../../shared/utils/static-media'
 import {
@@ -265,65 +266,91 @@ export const listPublicArticlesFromDatabase = async (
   })
 }
 
-export const listRestrictedWikiDocumentsFromDatabase = async (): Promise<
-  PublicRestrictedWikiDocument[]
-> => {
-  const [rows, tagSources] = await Promise.all([
-    getDatabase()
-      .select({
-        relativePath: articles.relativePath,
-        articleTitle: articles.title,
-        frontmatter: articleRevisions.frontmatter
-      })
-      .from(articles)
-      .innerJoin(
-        articleRevisions,
-        eq(articles.currentRevisionId, articleRevisions.id)
-      )
-      .where(and(
-        publishedArticleFilters('wiki', { includeRestricted: true }),
-        eq(articles.requiresAuth, true)
-      ))
-      .orderBy(asc(articles.relativePath)),
-    listWikiDocumentTagSources()
-  ])
+export const listPublicWikiIndexFromDatabase = async (
+  options: PublicArticleAccessOptions = {}
+): Promise<PublicWikiIndexResponse> => {
+  const rows = await getDatabase()
+    .select({
+      relativePath: articles.relativePath,
+      publicPath: articles.publicPath,
+      articleTitle: articles.title,
+      requiresAuth: articles.requiresAuth,
+      frontmatter: articleRevisions.frontmatter
+    })
+    .from(articles)
+    .innerJoin(
+      articleRevisions,
+      eq(articles.currentRevisionId, articleRevisions.id)
+    )
+    .where(publishedArticleFilters('wiki', { includeRestricted: true }))
+    .orderBy(asc(articles.relativePath))
+
+  const tagSources = new Map(rows
+    .filter(row => isWikiDocumentIndexPath(row.relativePath))
+    .map(row => [
+      row.relativePath,
+      normalizeWikiDocumentTags(row.frontmatter?.tags)
+    ]))
+
+  const items = rows
+    .filter(row => options.includeRestricted || !row.requiresAuth)
+    .map((row) => {
+      const stem = `wiki/${row.relativePath.slice(0, -extname(row.relativePath).length)}`
+      const indexPath = wikiDocumentIndexPath(row.relativePath)
+      return {
+        ...getWikiContentMeta(stem),
+        stem,
+        path: row.publicPath,
+        title: stringField(row.frontmatter || {}, 'title') || row.articleTitle,
+        requiresAuth: row.requiresAuth,
+        tags: indexPath
+          ? tagSources.get(indexPath) || uncategorizedWikiTagSource().tags
+          : uncategorizedWikiTagSource().tags
+      }
+    })
+
+  if (options.includeRestricted) return { items, restrictedDocuments: [] }
 
   const documents = new Map<string, PublicRestrictedWikiDocument>()
-
   for (const row of rows) {
+    if (!row.requiresAuth) continue
     const stem = `wiki/${row.relativePath.slice(0, -extname(row.relativePath).length)}`
     const meta = getWikiContentMeta(stem)
     if (!meta) continue
 
     const current = documents.get(meta.docKey)
     const indexPath = wikiDocumentIndexPath(row.relativePath)
-    const tags = indexPath
-      ? tagSources.get(indexPath)?.tags || uncategorizedWikiTagSource().tags
-      : uncategorizedWikiTagSource().tags
     const document = current || {
       docKey: meta.docKey,
       path: meta.path,
       title: meta.docTitle,
       ...(meta.date ? { date: meta.date } : {}),
-      tags
+      tags: indexPath
+        ? tagSources.get(indexPath) || uncategorizedWikiTagSource().tags
+        : uncategorizedWikiTagSource().tags
     }
 
     if (meta.isWikiIndex) {
-      const frontmatter = (row.frontmatter || {}) as Record<string, unknown>
       document.path = meta.docRoot
-      document.title = stringField(frontmatter, 'title')
+      document.title = stringField(row.frontmatter || {}, 'title')
         || row.articleTitle
         || meta.docTitle
     }
-
     documents.set(meta.docKey, document)
   }
 
-  return [...documents.values()].sort((a, b) =>
-    String(b.date || '').localeCompare(String(a.date || ''))
-    || a.title.localeCompare(b.title, 'zh-CN')
-  )
+  return {
+    items,
+    restrictedDocuments: [...documents.values()].sort((a, b) =>
+      String(b.date || '').localeCompare(String(a.date || ''))
+      || a.title.localeCompare(b.title, 'zh-CN')
+    )
+  }
 }
+
+export const listRestrictedWikiDocumentsFromDatabase = async (): Promise<
+  PublicRestrictedWikiDocument[]
+> => (await listPublicWikiIndexFromDatabase()).restrictedDocuments
 
 export const getPublicArticleFromDatabase = async (
   collection: PublicArticleCollection,

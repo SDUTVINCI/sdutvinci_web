@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import mediumZoom from 'medium-zoom'
 import { cmsAccountPattern } from '~~/shared/types/cms-auth'
 import type { PublicArticleCreditIdentity } from '~~/shared/types/article-credit-identities'
+import type { PublicWikiListItem } from '~~/shared/types/public-content'
 import { isPublicArticleAuthRequiredError } from '~~/shared/utils/public-article-access'
 import {
   WIKI_UNCATEGORIZED_TAG,
@@ -70,10 +71,10 @@ if (isPublicArticleAuthRequiredError(pageError.value)) {
 
 const pageDocKey = computed(() => page.value?.docKey || '')
 
-const { data: allWikiItems } = await usePublicContentQuery<WikiPage[]>({
+const { data: allWikiItems } = await usePublicContentQuery<PublicWikiListItem[]>({
   key: 'wiki-navigation-items',
   database: async requestFetch => (
-    await requestFetch<{ items: WikiPage[] }>('/api/v2/content/wiki')
+    await requestFetch<{ items: PublicWikiListItem[] }>('/api/v2/content/wiki')
   ).items
 })
 
