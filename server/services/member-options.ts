@@ -28,6 +28,8 @@ export const listMemberOptions = async (includeInactive = false) => {
       updatedAt: row.updatedAt.toISOString()
     })),
     positions: MEMBER_POSITION_OPTIONS.filter(position => position !== '顾问'),
+    teamPositions: ['队长', '副队长', '机电创新学会会长'],
+    groupPositions: ['组长', '成员'],
     colleges: [...MEMBER_COLLEGE_OPTIONS]
   }
 }
@@ -53,7 +55,15 @@ export const saveMemberCohort = async (input: {
   return row!
 }
 
-export const assertMemberProfileOptions = async (profile: Pick<MemberProfileSnapshot, 'grade' | 'seasons' | 'advisorSeasons' | 'groupName'>) => {
+export const newlyUnavailableMemberSeasons = (next: readonly string[], allowed: ReadonlySet<string>, previous: readonly string[] = []) => {
+  const retained = new Set(previous)
+  return next.filter(season => !allowed.has(season) && !retained.has(season))
+}
+
+export const assertMemberProfileOptions = async (
+  profile: Pick<MemberProfileSnapshot, 'grade' | 'seasons' | 'advisorSeasons' | 'groupName'>,
+  previous?: Pick<MemberProfileSnapshot, 'seasons' | 'advisorSeasons'>
+) => {
   if (!profile.grade) return
   const gradeYear = Number(profile.grade)
   const [cohort] = await getDatabase().select().from(memberCohorts)
@@ -63,6 +73,6 @@ export const assertMemberProfileOptions = async (profile: Pick<MemberProfileSnap
   const active = await getDatabase().select({ season: memberCohorts.season }).from(memberCohorts)
     .where(eq(memberCohorts.active, true))
   const seasons = new Set(active.map(item => item.season))
-  if (profile.seasons.some(season => !seasons.has(season))) throw new Error('MEMBER_SEASON_INVALID')
-  if (profile.advisorSeasons.some(season => !seasons.has(season))) throw new Error('MEMBER_ADVISOR_SEASON_INVALID')
+  if (newlyUnavailableMemberSeasons(profile.seasons, seasons, previous?.seasons).length) throw new Error('MEMBER_SEASON_INVALID')
+  if (newlyUnavailableMemberSeasons(profile.advisorSeasons, seasons, previous?.advisorSeasons).length) throw new Error('MEMBER_ADVISOR_SEASON_INVALID')
 }

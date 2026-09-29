@@ -37,7 +37,8 @@ const memberPath = computed(() =>
 
 const seasonText = computed(() => {
   const time = props.member.time ? `${formatSeasonList(props.member.time)} 赛季` : ''
-  const advisor = props.member.advisor ? `顾问 ${formatSeasonList(props.member.advisor)}` : ''
+  const teacher = props.member.positions?.includes('指导老师') || String(props.member.type || '').includes('指导老师')
+  const advisor = props.member.advisor ? `${teacher ? '指导' : '顾问'} ${formatSeasonList(props.member.advisor)}` : ''
   return [time, advisor].filter(Boolean).join(' / ')
 })
 

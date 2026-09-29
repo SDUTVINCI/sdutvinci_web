@@ -4,6 +4,16 @@ import type { CmsBatchActionResult } from '../../../../shared/types/cms-drafts'
 import type { CmsAccountRegistrationApplication } from '../../../../shared/types/account-registration'
 import { resolveStaticMediaUrl } from '~~/shared/utils/static-media'
 
+interface MemberProposalReview {
+  id: string
+  memberId: string
+  action: 'update' | 'delete'
+  fieldChanges: Record<string, { from: unknown, to: unknown }>
+  createdAt: string
+  needsMerge: boolean
+  member: { name: string, memberKey: string, avatarUrl: string | null, version: number, deleted: boolean }
+}
+
 const BATCH_APPROVE_CONFIRMATION = 'BATCH_APPROVE_DRAFTS'
 const BATCH_PUBLISH_CONFIRMATION = 'BATCH_PUBLISH_DRAFTS'
 
@@ -14,14 +24,16 @@ const { csrfHeaders } = useCmsSession()
 const { data, status, error, refresh } = await useAsyncData(
   'cms:reviews',
   async () => {
-    const [articleReviews, memberReviews] = await Promise.all([
+    const [articleReviews, memberReviews, memberProposals] = await Promise.all([
       requestFetch<{ reviews: CmsReviewSummary[], approved: CmsReviewSummary[] }>('/api/cms/reviews'),
-      requestFetch<{ applications: any[] }>('/api/cms/member-applications')
+      requestFetch<{ applications: any[] }>('/api/cms/member-applications'),
+      requestFetch<{ proposals: MemberProposalReview[] }>('/api/cms/member-proposals')
     ])
     return {
       reviews: articleReviews.reviews,
       approved: articleReviews.approved || [],
-      applications: memberReviews.applications
+      applications: memberReviews.applications,
+      proposals: memberProposals.proposals
     }
   }
 )
@@ -49,6 +61,16 @@ const errorMessage = ref('')
 const selectedPendingIds = ref<string[]>([])
 const selectedApprovedIds = ref<string[]>([])
 const batchBusy = ref(false)
+const proposalReviewingId = ref('')
+const memberChangeLabels: Record<string, string> = {
+  name: '姓名', image: '头像', role: '显示职务', type: '成员类型', group: '组别',
+  positions: '身份与职务', time: '参加过的赛季', advisor: '指导届次', grade: '年级',
+  affiliation: '学院 / 单位', links: '公开链接', body: '简介', metadata: '扩展字段', sortOrder: '排序号'
+}
+const changeValue = (value: unknown) => value === null || value === undefined || value === ''
+  ? '未填写'
+  : Array.isArray(value) ? value.join('、') || '未填写'
+    : typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)
 
 const toggleAll = (kind: 'pending' | 'approved') => {
   const source = kind === 'pending' ? data.value?.reviews || [] : data.value?.approved || []
@@ -104,6 +126,30 @@ const reviewMember = async (id: string, action: 'approve' | 'reject') => {
     await refresh()
   } catch (error: any) {
     errorMessage.value = error?.data?.message || '成员审核失败'
+  }
+}
+
+const reviewProposal = async (proposal: MemberProposalReview, action: 'approve' | 'reject') => {
+  const label = proposal.action === 'delete' ? '删除成员档案' : '修改成员资料'
+  if (!confirm(action === 'approve'
+    ? `确定通过 ${proposal.member.name} 的“${label}”提案吗？系统会检查并合并当前版本。`
+    : `确定拒绝 ${proposal.member.name} 的“${label}”提案吗？`)) return
+  proposalReviewingId.value = proposal.id
+  message.value = ''
+  errorMessage.value = ''
+  try {
+    await $fetch(`/api/cms/member-proposals/${proposal.id}/${action === 'approve' ? 'apply' : 'reject'}`, {
+      method: 'POST', headers: csrfHeaders(),
+      body: action === 'approve'
+        ? { expectedVersion: proposal.member.version, confirmation: 'APPLY_MEMBER_PROPOSAL' }
+        : { note: note.value }
+    })
+    message.value = action === 'approve' ? `${proposal.member.name} 的成员提案已通过。` : `${proposal.member.name} 的成员提案已拒绝。`
+    await refresh()
+  } catch (error: any) {
+    errorMessage.value = error?.data?.message || '成员提案审核失败'
+  } finally {
+    proposalReviewingId.value = ''
   }
 }
 
@@ -259,29 +305,56 @@ const reviewRegistration = async (
               <p class="cms-eyebrow">MEMBER APPLICATIONS</p>
               <div class="cms-review-lane-heading">
                 <h2>成员信息申请</h2>
-                <span class="cms-review-count">{{ data?.applications.length ?? 0 }} 项</span>
+                <span class="cms-review-count">{{ (data?.applications.length ?? 0) + (data?.proposals.length ?? 0) }} 项</span>
               </div>
-              <p>核对公开资料；通过后会立即创建正式成员并上线。</p>
+              <p>统一审核新成员资料登记、已有成员资料修改与删除提案。</p>
             </div>
           </div>
         </header>
-        <div v-if="data?.applications.length" class="cms-review-member-body">
+        <div v-if="data?.applications.length || data?.proposals.length" class="cms-review-member-body">
           <label class="cms-form cms-review-note"><span>本次审核备注</span><textarea v-model="note" rows="3" maxlength="1000" /></label>
           <div class="cms-review-cards">
             <article v-for="item in data.applications" :key="item.id" class="cms-panel cms-member-review-card">
               <img v-if="item.avatarPublicUrl" class="cms-member-avatar" :src="item.avatarPublicUrl" alt="申请头像">
               <div class="cms-member-review-content">
+                <span class="cms-badge">新成员资料登记</span>
                 <h3>{{ item.profile.name }}</h3>
                 <dl>
-                  <div><dt>年级 / 赛季</dt><dd>{{ item.profile.grade }} 级 · {{ item.profile.seasons?.join('、') }}</dd></div>
+                  <div><dt>年级 / 赛季</dt><dd>{{ item.profile.grade ? `${item.profile.grade} 级` : '无年级' }} · {{ item.profile.seasons?.join('、') || '无参与赛季' }}</dd></div>
                   <div><dt>组别</dt><dd>{{ item.profile.groupName || '无' }}</dd></div>
-                  <div><dt>职责</dt><dd>{{ item.profile.positions?.join('、') }}</dd></div>
+                  <div><dt>身份与职务</dt><dd>{{ item.profile.positions?.join('、') }}</dd></div>
+                  <div><dt>指导届次</dt><dd>{{ item.profile.advisorSeasons?.join('、') || '无' }}</dd></div>
                   <div><dt>学院</dt><dd>{{ item.profile.affiliation || '未填写' }}</dd></div>
                 </dl>
                 <p v-if="item.profile.body">{{ item.profile.body }}</p>
                 <div class="cms-button-row">
                   <button class="cms-button cms-button-primary" @click="reviewMember(item.id, 'approve')">审核通过并上线</button>
                   <button class="cms-button" @click="reviewMember(item.id, 'reject')">拒绝</button>
+                </div>
+              </div>
+            </article>
+            <article v-for="proposal in data.proposals" :key="proposal.id" class="cms-panel cms-member-review-card">
+              <img class="cms-member-avatar" :src="resolveStaticMediaUrl(proposal.member.avatarUrl || '/images/logo.png')" alt="成员头像" loading="lazy">
+              <div class="cms-member-review-content">
+                <span class="cms-badge">{{ proposal.action === 'delete' ? '删除成员档案提案' : '成员资料修改提案' }}</span>
+                <h3>{{ proposal.member.name }}</h3>
+                <p>成员 ID：{{ proposal.member.memberKey }} · 提交于 {{ new Date(proposal.createdAt).toLocaleString('zh-CN') }}</p>
+                <p v-if="proposal.needsMerge" class="cms-muted">提交后成员资料有更新；通过时会检查并合并不同字段，如有冲突会提示重新提交。</p>
+                <p v-if="proposal.member.deleted" class="cms-alert cms-alert-error">该成员档案已删除，无法通过此提案。</p>
+                <details v-if="proposal.action === 'update'" class="cms-member-proposal-changes">
+                  <summary>查看修改内容：{{ Object.keys(proposal.fieldChanges).map(field => memberChangeLabels[field] || field).join('、') || '无字段变化' }}</summary>
+                  <dl>
+                    <div v-for="(change, field) in proposal.fieldChanges" :key="field">
+                      <dt>{{ memberChangeLabels[String(field)] || field }}</dt>
+                      <dd><span>原值：</span><pre>{{ changeValue(change.from) }}</pre><span>提议：</span><pre>{{ changeValue(change.to) }}</pre></dd>
+                    </div>
+                  </dl>
+                </details>
+                <p v-else>通过后将软删除此成员档案，保留历史版本。</p>
+                <div class="cms-button-row">
+                  <NuxtLink class="cms-button" :to="`/cms/members/${proposal.memberId}`">查看当前档案</NuxtLink>
+                  <button class="cms-button cms-button-primary" type="button" :disabled="!!proposalReviewingId || proposal.member.deleted" @click="reviewProposal(proposal, 'approve')">{{ proposalReviewingId === proposal.id ? '处理中…' : '审核通过' }}</button>
+                  <button class="cms-button" type="button" :disabled="!!proposalReviewingId" @click="reviewProposal(proposal, 'reject')">拒绝</button>
                 </div>
               </div>
             </article>

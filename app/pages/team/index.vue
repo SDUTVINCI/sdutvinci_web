@@ -178,9 +178,9 @@ const stats = computed(() => {
     isTeacher(member) && hasSeason(member, season)
   )
   const advisors = allMembers.value.filter((member) =>
-    season === 'all'
+    !isTeacher(member) && (season === 'all'
       ? splitSeason(member.advisor).length > 0
-      : splitSeason(member.advisor).includes(season)
+      : splitSeason(member.advisor).includes(season))
   )
 
   return [

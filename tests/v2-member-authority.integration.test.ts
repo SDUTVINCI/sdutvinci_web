@@ -6,16 +6,22 @@ import { eq, sql } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { closeDatabase, getDatabase } from '../server/db/client'
 import { runMigrations } from '../server/db/migrate'
-import { auditLogs, contentExportJobs, memberRevisions, members, userMembers, users } from '../server/db/schema'
+import { auditLogs, contentExportJobs, memberProposals, memberRevisions, members, userMembers, users } from '../server/db/schema'
 import {
   applyCmsMemberMarkdownMigration,
+  applyCurrentMemberFrontmatterNormalization,
+  applyMemberProposal,
   createCmsMember,
   deleteCmsMember,
   listCmsMembers,
+  listPendingMemberProposalsForReview,
   planCmsMemberMarkdownMigration,
+  planCurrentMemberFrontmatterNormalization,
+  rejectMemberProposal,
   restoreCmsMemberRevision,
   updateCmsMember
 } from '../server/services/cms-members'
+import { sha256ContentBytes } from '../server/services/content-export-serialization'
 import { bootstrapCmsAdmin, createCmsUser } from '../server/services/cms-auth'
 import { getPublicMemberFromDatabase, listPublicMembersFromDatabase } from '../server/services/public-content'
 import { loadDatabaseContentExportSnapshot } from '../server/services/content-export-snapshot'
@@ -114,6 +120,80 @@ suite('V2 阶段 9 成员数据库权威与迁移', () => {
     const restored = await restoreCmsMemberRevision(created!.id, revisions.find(item => item.revisionNumber === 1)!.id, 2, admin!.id)
     expect(restored).toMatchObject({ version: 3, name: 'One', body: 'original' })
     expect(await getDatabase().select().from(contentExportJobs).where(eq(contentExportJobs.targetId, created!.id))).toHaveLength(3)
+  })
+
+  it('旧 17 届次不阻碍王骁增加 26、27；统一 frontmatter 保留旧指导老师资料', async () => {
+    const admin = await bootstrapCmsAdmin({ account: 'normalizeadmin', password: 'AdminPassword123' })
+    const student = await createCmsMember({
+      memberKey: 'wangxiao', name: '王虓', grade: '2016', groupName: '机械组',
+      positions: ['成员'], seasons: ['18'], advisorSeasons: ['18', '19']
+    }, admin!.id)
+    await getDatabase().update(members).set({ advisorSeasons: ['17', '18', '19'] }).where(eq(members.id, student!.id))
+    const updated = await updateCmsMember(student!.id, {
+      name: '王虓', advisorSeasons: ['17', '18', '19', '26', '27'], expectedVersion: student!.version
+    }, admin!.id)
+    expect(updated?.advisorSeasons).toEqual(['17', '18', '19', '26', '27'])
+
+    const teacher = await createCmsMember({
+      memberKey: 'oldteacher', name: '旧指导老师', positions: ['指导老师'], grade: null
+    }, admin!.id)
+    const oldSource = '---\nid: oldteacher\nname: 旧指导老师\nrole: 指导老师，教授\ntype: 指导老师\ntime: 16,17\nadvisor: null\ngrade: null\n---\n'
+    await getDatabase().update(members).set({
+      role: '指导老师，教授', seasons: ['16', '17'], advisorSeasons: []
+    }).where(eq(members.id, teacher!.id))
+    await getDatabase().update(memberRevisions).set({
+      markdownSource: oldSource, contentHash: sha256ContentBytes(oldSource)
+    }).where(eq(memberRevisions.id, teacher!.currentRevisionId!))
+
+    const plan = await planCurrentMemberFrontmatterNormalization()
+    expect(plan.items.find(item => item.memberKey === 'oldteacher')?.moveTeacherSeasons).toBe(true)
+    const applied = await applyCurrentMemberFrontmatterNormalization()
+    expect(applied.changes).toBeGreaterThanOrEqual(1)
+    const [after] = await getDatabase().select().from(members).where(eq(members.id, teacher!.id))
+    expect(after).toMatchObject({ id: teacher!.id, role: '指导老师，教授', seasons: [], advisorSeasons: ['16', '17'] })
+    const [revision] = await getDatabase().select().from(memberRevisions).where(eq(memberRevisions.id, after!.currentRevisionId!))
+    expect(revision?.markdownSource).toContain('schemaVersion: 2')
+    expect(revision?.markdownSource).toContain('isTeacher: true')
+    expect((await applyCurrentMemberFrontmatterNormalization()).changes).toBe(0)
+  })
+
+  it('审核中心列出资料修改提案，并安全合并旧版本提案或拒绝', async () => {
+    const admin = await bootstrapCmsAdmin({ account: 'proposaladmin', password: 'AdminPassword123' })
+    const member = await createCmsMember({ memberKey: 'proposalmember', name: '原姓名', body: '原简介' }, admin!.id)
+    const [base] = await getDatabase().select().from(memberRevisions)
+      .where(eq(memberRevisions.id, member!.currentRevisionId!))
+    const [proposal] = await getDatabase().insert(memberProposals).values({
+      memberId: member!.id, baseRevisionId: base!.id, currentRevisionId: base!.id,
+      action: 'update', proposedProfile: { ...base!.profile, body: '提议的新简介' },
+      fieldChanges: { body: { from: '原简介', to: '提议的新简介' } }
+    }).returning()
+    await updateCmsMember(member!.id, { name: '当前姓名', expectedVersion: member!.version }, admin!.id)
+    expect((await listPendingMemberProposalsForReview())[0]).toMatchObject({
+      id: proposal!.id, needsMerge: true, member: { name: '当前姓名', version: 2 }
+    })
+    const accepted = await applyMemberProposal(proposal!.id, 2, 'APPLY_MEMBER_PROPOSAL', admin!.id)
+    expect(accepted.member).toMatchObject({ name: '当前姓名', body: '提议的新简介', version: 3 })
+    expect(await listPendingMemberProposalsForReview()).toEqual([])
+
+    const [acceptedRevision] = await getDatabase().select().from(memberRevisions)
+      .where(eq(memberRevisions.id, accepted.member!.currentRevisionId!))
+    const [conflicting] = await getDatabase().insert(memberProposals).values({
+      memberId: member!.id, baseRevisionId: acceptedRevision!.id, currentRevisionId: acceptedRevision!.id,
+      action: 'update', proposedProfile: { ...acceptedRevision!.profile, body: '另一份提议' },
+      fieldChanges: { body: { from: '提议的新简介', to: '另一份提议' } }
+    }).returning()
+    await updateCmsMember(member!.id, { name: '当前姓名', body: '更近的修改', expectedVersion: 3 }, admin!.id)
+    await expect(applyMemberProposal(conflicting!.id, 4, 'APPLY_MEMBER_PROPOSAL', admin!.id))
+      .rejects.toThrow('字段冲突')
+    expect((await listCmsMembers())[0]?.body).toBe('更近的修改')
+    await rejectMemberProposal(conflicting!.id, '已冲突', admin!.id)
+
+    const [rejected] = await getDatabase().insert(memberProposals).values({
+      memberId: member!.id, baseRevisionId: base!.id,
+      currentRevisionId: accepted.member!.currentRevisionId!, action: 'delete', fieldChanges: {}
+    }).returning()
+    await rejectMemberProposal(rejected!.id, '资料仍需保留', admin!.id)
+    expect((await getDatabase().select().from(memberProposals).where(eq(memberProposals.id, rejected!.id)))[0]?.status).toBe('rejected')
   })
 
   it('删除成员使用乐观锁软删除并生成 Git 删除 Outbox', async () => {

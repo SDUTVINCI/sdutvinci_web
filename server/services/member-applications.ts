@@ -104,21 +104,25 @@ export const submitMemberApplication = async (id: string, token: string, profile
   const application = await ownedApplication(id, token)
   if (application.status !== 'editing' || application.expiresAt < new Date()) throw new Error('MEMBER_APPLICATION_STATE_INVALID')
   const name = safeName(String(profile.name || ''))
-  const grade = Number(profile.grade)
-  const [cohort] = await getDatabase().select().from(memberCohorts).where(and(eq(memberCohorts.gradeYear, grade), eq(memberCohorts.active, true))).limit(1)
+  const gradeValue = String(profile.grade ?? '').trim()
+  const grade = /^\d{4}$/.test(gradeValue) ? Number(gradeValue) : null
+  const [cohort] = grade === null ? [] : await getDatabase().select().from(memberCohorts)
+    .where(and(eq(memberCohorts.gradeYear, grade), eq(memberCohorts.active, true))).limit(1)
   const groupName = String(profile.groupName || '').trim()
   const affiliation = String(profile.affiliation || '').trim()
   const positions = normalizeMemberPositions(profile.positions)
+  const isTeacher = positions.includes('指导老师')
   const requestedSeasons = Array.isArray(profile.seasons) ? [...new Set(profile.seasons.map(value => String(value).trim()).filter(Boolean))] : []
   const advisorSeasons = Array.isArray(profile.advisorSeasons) ? [...new Set(profile.advisorSeasons.map(value => String(value).trim()).filter(Boolean))] : []
   const activeSeasons = new Set((await getDatabase().select({ season: memberCohorts.season }).from(memberCohorts).where(eq(memberCohorts.active, true))).map(item => item.season))
   if (!name || !application.avatarObjectKey || !application.avatarPublicUrl
-    || !cohort || (groupName && !cohort.groups.includes(groupName)) || !positions.length
-    || !requestedSeasons.length || requestedSeasons.some(season => !activeSeasons.has(season))
+    || (!isTeacher && !cohort) || (gradeValue && !cohort)
+    || (groupName && !cohort?.groups.includes(groupName)) || !positions.length
+    || (!isTeacher && !requestedSeasons.length) || requestedSeasons.some(season => !activeSeasons.has(season))
     || advisorSeasons.some(season => !activeSeasons.has(season))
     || (affiliation && !(MEMBER_COLLEGE_OPTIONS as readonly string[]).includes(affiliation))) throw new Error('MEMBER_APPLICATION_PROFILE_INVALID')
   const normalized = {
-    name, grade: String(grade), seasons: requestedSeasons, advisorSeasons,
+    name, grade: cohort ? String(cohort.gradeYear) : null, seasons: requestedSeasons, advisorSeasons,
     groupName: groupName || null, positions, affiliation: affiliation || null,
     links: normalizeApplicationLinks(profile.links), body: String(profile.body || ''),
     avatarUrl: application.avatarPublicUrl

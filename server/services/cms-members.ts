@@ -22,6 +22,7 @@ import {
   deriveMemberType,
   memberProfileFromMarkdown,
   memberFieldDiff,
+  mergeMemberProfiles,
   profileFromRecord,
   profileRecord,
   normalizeMemberPositions,
@@ -30,8 +31,8 @@ import {
 } from './member-profile'
 
 export class CmsMemberVersionConflictError extends Error {
-  constructor() {
-    super('成员资料已被其他操作更新，请刷新后重试')
+  constructor(message = '成员资料已被其他操作更新，请刷新后重试') {
+    super(message)
     this.name = 'CmsMemberVersionConflictError'
   }
 }
@@ -301,6 +302,14 @@ export const updateCmsMember = async (
       sortOrder: input.sortOrder === undefined ? before.sortOrder : input.sortOrder,
       metadata: input.metadata === undefined ? before.metadata : input.metadata
     }, before.sourcePath)
+    const samePositions = next.positions.length === before.positions.length
+      && next.positions.every(position => before.positions.includes(position))
+    if (samePositions && next.groupName === before.groupName) {
+      next.role = before.role
+      next.memberType = before.memberType
+    } else if (before.positions.includes('指导老师') && next.positions.includes('指导老师') && before.role?.startsWith('指导老师，')) {
+      next.role = `${next.role}，${before.role.slice('指导老师，'.length)}`
+    }
     const changes = memberFieldDiff(before, next)
     if (next.memberKey !== before.memberKey) {
       changes.memberKey = { from: before.memberKey, to: next.memberKey }
@@ -357,7 +366,7 @@ export const updateCmsMember = async (
         eq(accountRegistrationApplications.status, 'pending')
       ))
     }
-    await assertMemberProfileOptions(next)
+    await assertMemberProfileOptions(next, before)
     if (!Object.keys(changes).length) return
     const revisionNumber = (await tx.select({ value: sql<number>`coalesce(max(${memberRevisions.revisionNumber}), 0)::int` })
       .from(memberRevisions).where(eq(memberRevisions.memberId, id)))[0]!.value + 1
@@ -623,6 +632,77 @@ export const applyCmsMemberMarkdownMigration = async () => {
   return { memberCount: plan.markdownCount, memberKeys: plan.items.map(item => item.memberKey) }
 }
 
+const normalizedCurrentProfile = (row: typeof members.$inferSelect, currentMarkdown: string) => {
+  const profile = profileFromMemberRow(row)
+  const moveTeacherSeasons = !/^schemaVersion:\s*2\s*$/m.test(currentMarkdown)
+    && profile.positions.includes('指导老师') && !profile.grade
+    && profile.seasons.length > 0 && profile.advisorSeasons.length === 0
+  if (moveTeacherSeasons) {
+    profile.advisorSeasons = [...profile.seasons]
+    profile.seasons = []
+  }
+  return { profile, moveTeacherSeasons }
+}
+
+export const planCurrentMemberFrontmatterNormalization = async () => {
+  const rows = await getDatabase().select().from(members)
+    .where(isNull(members.deletedAt)).orderBy(asc(members.memberKey))
+  const items = []
+  for (const row of rows) {
+    if (!row.currentRevisionId) throw new Error(`MEMBER_CURRENT_REVISION_MISSING:${row.memberKey}`)
+    const [revision] = await getDatabase().select().from(memberRevisions)
+      .where(eq(memberRevisions.id, row.currentRevisionId)).limit(1)
+    if (!revision) throw new Error(`MEMBER_CURRENT_REVISION_MISSING:${row.memberKey}`)
+    const { profile, moveTeacherSeasons } = normalizedCurrentProfile(row, revision.markdownSource)
+    const serialized = serializeMemberProfile(profile)
+    if (serialized.sha256 !== revision.contentHash) {
+      const [activeProposal] = await getDatabase().select({ id: memberProposals.id }).from(memberProposals)
+        .where(and(eq(memberProposals.memberId, row.id), eq(memberProposals.status, 'pending'),
+          eq(memberProposals.currentRevisionId, row.currentRevisionId))).limit(1)
+      items.push({ memberKey: row.memberKey, moveTeacherSeasons,
+        previousHash: revision.contentHash, nextHash: serialized.sha256,
+        activeProposalId: activeProposal?.id || null })
+    }
+  }
+  return { scanned: rows.length, changes: items.length, items }
+}
+
+export const applyCurrentMemberFrontmatterNormalization = async () => getDatabase().transaction(async (tx) => {
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended('vinci:v2:member-frontmatter-normalization', 0))`)
+  const rows = await tx.select({ id: members.id }).from(members)
+    .where(isNull(members.deletedAt)).orderBy(asc(members.memberKey))
+  const changed: string[] = []
+  for (const item of rows) {
+    const [row] = await tx.select().from(members).where(eq(members.id, item.id)).limit(1).for('update')
+    if (!row?.currentRevisionId) throw new Error('MEMBER_CURRENT_REVISION_MISSING')
+    const [currentRevision] = await tx.select().from(memberRevisions)
+      .where(eq(memberRevisions.id, row.currentRevisionId)).limit(1)
+    if (!currentRevision) throw new Error('MEMBER_CURRENT_REVISION_MISSING')
+    const { profile, moveTeacherSeasons } = normalizedCurrentProfile(row, currentRevision.markdownSource)
+    if (serializeMemberProfile(profile).sha256 === currentRevision.contentHash) continue
+    const [activeProposal] = await tx.select({ id: memberProposals.id }).from(memberProposals)
+      .where(and(eq(memberProposals.memberId, row.id), eq(memberProposals.status, 'pending'),
+        eq(memberProposals.currentRevisionId, row.currentRevisionId))).limit(1)
+    if (activeProposal) throw new Error(`MEMBER_NORMALIZATION_ACTIVE_PROPOSAL:${row.memberKey}`)
+    const revisionNumber = (await tx.select({ value: sql<number>`coalesce(max(${memberRevisions.revisionNumber}), 0)::int` })
+      .from(memberRevisions).where(eq(memberRevisions.memberId, row.id)))[0]!.value + 1
+    const result = await appendRevisionAndOutbox(tx, {
+      memberId: row.id, revisionNumber, profile, sourceKind: 'cms_update', actorUserId: null
+    })
+    await tx.update(members).set({
+      ...memberValues(profile), currentRevisionId: result.revisionId,
+      version: row.version + 1, updatedAt: new Date()
+    }).where(and(eq(members.id, row.id), eq(members.version, row.version)))
+    await tx.insert(auditLogs).values({
+      actorUserId: null, action: 'member.frontmatter.normalize', targetType: 'member', targetId: row.id,
+      metadata: { previousRevisionId: row.currentRevisionId, revisionId: result.revisionId,
+        exportJobId: result.jobId, moveTeacherSeasons }
+    })
+    changed.push(row.memberKey)
+  }
+  return { scanned: rows.length, changes: changed.length, memberKeys: changed }
+})
+
 // Kept only for old test/operations callers during the blue/green compatibility
 // window. Normal CMS reads never invoke this function after phase 9.
 export const synchronizeCmsMembers = async () => {
@@ -639,6 +719,51 @@ export const getMemberProposal = async (proposalId: string) => {
 export const listMemberProposals = async (memberId: string) => getDatabase().select()
   .from(memberProposals).where(eq(memberProposals.memberId, memberId))
   .orderBy(asc(memberProposals.createdAt))
+
+export const listPendingMemberProposalsForReview = async () => {
+  const rows = await getDatabase().select({
+    id: memberProposals.id,
+    memberId: memberProposals.memberId,
+    action: memberProposals.action,
+    currentRevisionId: memberProposals.currentRevisionId,
+    fieldChanges: memberProposals.fieldChanges,
+    createdAt: memberProposals.createdAt,
+    memberName: members.name,
+    memberKey: members.memberKey,
+    avatarUrl: members.avatarUrl,
+    memberVersion: members.version,
+    memberCurrentRevisionId: members.currentRevisionId,
+    deletedAt: members.deletedAt
+  }).from(memberProposals).innerJoin(members, eq(memberProposals.memberId, members.id))
+    .where(eq(memberProposals.status, 'pending')).orderBy(asc(memberProposals.createdAt))
+  return rows.map(row => ({
+    id: row.id,
+    memberId: row.memberId,
+    action: row.action,
+    fieldChanges: row.fieldChanges,
+    createdAt: row.createdAt.toISOString(),
+    member: { name: row.memberName, memberKey: row.memberKey, avatarUrl: row.avatarUrl,
+      version: row.memberVersion, deleted: !!row.deletedAt },
+    needsMerge: row.currentRevisionId !== row.memberCurrentRevisionId
+  }))
+}
+
+export const rejectMemberProposal = async (proposalId: string, note: string, actorUserId: string) => {
+  await getDatabase().transaction(async (tx) => {
+    const [proposal] = await tx.select().from(memberProposals)
+      .where(eq(memberProposals.id, proposalId)).limit(1).for('update')
+    if (!proposal) throw new Error('MEMBER_PROPOSAL_NOT_FOUND')
+    if (proposal.status !== 'pending') throw new Error('MEMBER_PROPOSAL_NOT_PENDING')
+    await tx.update(memberProposals).set({
+      status: 'rejected', resolvedAt: new Date()
+    }).where(eq(memberProposals.id, proposalId))
+    await tx.insert(auditLogs).values({
+      actorUserId, action: 'member.proposal.reject', targetType: 'member_proposal', targetId: proposalId,
+      metadata: { memberId: proposal.memberId, note }
+    })
+  })
+  return getMemberProposal(proposalId)
+}
 
 export const applyMemberProposal = async (
   proposalId: string,
@@ -657,13 +782,27 @@ export const applyMemberProposal = async (
     const [current] = await tx.select().from(members)
       .where(eq(members.id, proposal.memberId)).limit(1).for('update')
     if (!current) throw new Error('MEMBER_NOT_FOUND')
-    if (current.version !== expectedVersion || current.currentRevisionId !== proposal.currentRevisionId) {
-      throw new CmsMemberVersionConflictError()
-    }
-    const profile = proposal.action === 'update'
+    if (current.version !== expectedVersion) throw new CmsMemberVersionConflictError()
+    if (current.deletedAt) throw new CmsMemberVersionConflictError('该成员档案已删除，请刷新审核队列')
+    const before = profileFromMemberRow(current)
+    let profile = proposal.action === 'update'
       ? profileFromRecord(proposal.proposedProfile || {})
-      : profileFromMemberRow(current)
+      : before
+    if (current.currentRevisionId !== proposal.currentRevisionId) {
+      if (proposal.action === 'delete') {
+        throw new CmsMemberVersionConflictError('删除提案的成员资料已变化，请重新提交提案')
+      }
+      const [proposalBase] = await tx.select({ profile: memberRevisions.profile }).from(memberRevisions)
+        .where(eq(memberRevisions.id, proposal.currentRevisionId)).limit(1)
+      if (!proposalBase) throw new CmsMemberVersionConflictError('提案基准版本已不存在，请重新提交提案')
+      const merged = mergeMemberProfiles(profileFromRecord(proposalBase.profile), before, profile)
+      if (!merged.merged) {
+        throw new CmsMemberVersionConflictError(`提案与当前资料的 ${merged.conflicts.join('、')} 字段冲突，请重新提交提案`)
+      }
+      profile = merged.merged
+    }
     if (profile.memberKey !== current.memberKey) throw new Error('MEMBER_KEY_IMMUTABLE')
+    if (proposal.action === 'update') await assertMemberProfileOptions(profile, before)
     const revisionNumber = (await tx.select({ value: sql<number>`coalesce(max(${memberRevisions.revisionNumber}), 0)::int` })
       .from(memberRevisions).where(eq(memberRevisions.memberId, current.id)))[0]!.value + 1
     const result = await appendRevisionAndOutbox(tx, {

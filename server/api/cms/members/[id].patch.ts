@@ -16,6 +16,13 @@ const metadataSchema = z.record(z.string(), z.unknown()).refine(
   '成员元数据不能超过 100 KB'
 )
 
+const memberOptionErrors: Record<string, string> = {
+  MEMBER_GRADE_INVALID: '年级不在可选范围内，请重新选择',
+  MEMBER_GROUP_INVALID: '组别与年级不匹配，请重新选择',
+  MEMBER_SEASON_INVALID: '参加过的赛季中有不可选的新届次，请重新选择',
+  MEMBER_ADVISOR_SEASON_INVALID: '指导届次中有不可选的新届次，请重新选择'
+}
+
 const schema = z.object({
   memberKey: z.string().trim().toLowerCase().regex(cmsAccountPattern).optional(),
   name: z.string().trim().min(1).max(100),
@@ -49,6 +56,9 @@ export default defineEventHandler(async (event) => {
     }
     if (error instanceof CmsMemberKeyConflictError) {
       throw createError({ statusCode: 409, message: error.message })
+    }
+    if (error instanceof Error && memberOptionErrors[error.message]) {
+      throw createError({ statusCode: 400, message: memberOptionErrors[error.message] })
     }
     throw error
   }

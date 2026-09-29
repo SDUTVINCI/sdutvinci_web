@@ -54,10 +54,10 @@ const submit = async () => {
     return
   }
   if (!form.positions.length) {
-    errorMessage.value = '请至少选择一项职责'
+    errorMessage.value = '请至少选择一项身份或职务'
     return
   }
-  if (!form.seasons.length) {
+  if (!form.positions.includes('指导老师') && !form.seasons.length) {
     errorMessage.value = '请至少选择一个参加过的赛季'
     return
   }

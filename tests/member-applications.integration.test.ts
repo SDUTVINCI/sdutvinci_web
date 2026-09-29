@@ -100,6 +100,36 @@ integration('公开成员申请审核', () => {
     })).rejects.toThrow('MEMBER_APPLICATION_PROFILE_INVALID')
   })
 
+  it('指导老师可不填年级和参赛赛季，仍能保存指导届次', async () => {
+    const admin = await bootstrapCmsAdmin({ account: 'teacheradmin', password: 'TeacherAdminPassword123!' })
+    const application = await startMemberApplication()
+    const image = await sharp({
+      create: { width: 32, height: 32, channels: 3, background: '#208090' }
+    }).png().toBuffer()
+    await uploadMemberApplicationAvatar({
+      id: application.id,
+      token: application.token,
+      name: '测试指导老师',
+      data: image,
+      mimeType: 'image/png'
+    })
+    await expect(submitMemberApplication(application.id, application.token, {
+      name: '测试指导老师', positions: ['成员'], seasons: [], advisorSeasons: ['27']
+    })).rejects.toThrow('MEMBER_APPLICATION_PROFILE_INVALID')
+    await submitMemberApplication(application.id, application.token, {
+      name: '测试指导老师', positions: ['指导老师'], seasons: [], advisorSeasons: ['27']
+    })
+    const submitted = (await listSubmittedMemberApplications())[0]!
+    expect(submitted.profile).toMatchObject({ grade: null, seasons: [], advisorSeasons: ['27'] })
+    const result = await reviewMemberApplication(application.id, 'approve', '', admin!.id)
+    expect(result.member).toMatchObject({
+      grade: null,
+      memberType: '指导老师',
+      seasons: [],
+      advisorSeasons: ['27']
+    })
+  })
+
   it('同名成员使用从 1 开始的最小可用数字后缀', async () => {
     const admin = await bootstrapCmsAdmin({ account: 'keyadmin', password: 'KeyAdminPassword123!' })
     const created: Array<{ id: string, version: number }> = []

@@ -1,12 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import { deriveMemberRole, deriveMemberType, normalizeMemberPositions } from '../server/services/member-profile'
-import { defaultGroupsForGrade } from '../server/services/member-options'
+import { defaultGroupsForGrade, newlyUnavailableMemberSeasons } from '../server/services/member-options'
 import { readFile } from 'node:fs/promises'
 import { resolveMarkdownMediaUrls } from '../shared/utils/static-media'
 import { MEMBER_COLLEGE_OPTIONS } from '../shared/constants/member-colleges'
 import { WIKI_PDF_CSS } from '../server/services/wiki-pdf'
 
 describe('成员选项、自动归类与 Markdown 图床', () => {
+  it('保留王骁已有的 17 届次并允许新增 26、27，拒绝新增未知届次', () => {
+    const active = new Set(['18', '19', '20', '21', '22', '23', '24', '25', '26', '27'])
+    const previous = ['17', '18', '19', '20', '21', '22', '23', '24', '25']
+    expect(newlyUnavailableMemberSeasons([...previous, '26', '27'], active, previous)).toEqual([])
+    expect(newlyUnavailableMemberSeasons([...previous, '28'], active, previous)).toEqual(['28'])
+    expect(newlyUnavailableMemberSeasons(['17'], active)).toEqual(['17'])
+  })
   it('按年级提供指定组别', () => {
     expect(defaultGroupsForGrade(2021)).toEqual(['机械组', '电控组', '运营组'])
     expect(defaultGroupsForGrade(2024)).toEqual(['机械组', '控制组', '电路组', '视觉算法组', '运营组'])
@@ -54,7 +61,9 @@ describe('成员选项、自动归类与 Markdown 图床', () => {
       readFile('server/api/cms/members/[id]/avatar.post.ts', 'utf8'),
       readFile('server/services/member-options.ts', 'utf8')
     ])
-    expect(fields).toContain('参加过的赛季 <strong v-if="required" class="member-required-marker">必填</strong>（可多选）')
+    expect(fields).toContain('参加过的赛季 <strong v-if="seasonRequired" class="member-required-marker">必填</strong>（可多选）')
+    expect(fields).toContain(':required="gradeRequired"')
+    expect(fields).toContain('指导老师可不填年级和参赛赛季')
     expect(fields).toContain('指导届次（可选、多选）')
     expect(fields).not.toContain('仅顾问或指导老师需要选择所指导的届次')
     expect(fields).toContain('GitHub 链接（可选）')
@@ -66,8 +75,9 @@ describe('成员选项、自动归类与 Markdown 图床', () => {
     expect(avatar).toContain('disabled || uploading || !name.trim()')
     expect(form).toContain('MemberAvatarUpload')
     expect(form).toContain('请上传头像后再提交')
-    expect(form).toContain('请至少选择一项职责')
+    expect(form).toContain('请至少选择一项身份或职务')
     expect(form).toContain('请至少选择一个参加过的赛季')
+    expect(form).toContain("!form.positions.includes('指导老师')")
     expect(form).toContain('MemberProfileFields')
     expect(form).toContain('<MemberProfileFields v-model="form" :options="options" required />')
     expect(form).toContain(':disabled="submitting || avatarUploading"')
