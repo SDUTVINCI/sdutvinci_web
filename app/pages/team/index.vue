@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { memberSeasonGroup } from '~~/shared/utils/member-season-group'
+import { memberSeasonGroup, orderMembersInGroup } from '~~/shared/utils/member-season-group'
 type Member = Record<string, any>
 
 const { data: rawMembers } = await usePublicContentQuery<Member[]>({
@@ -23,8 +23,7 @@ const selectedGroup = ref('all')
 
 const fixedGroupDefs = [
   { key: 'all', label: '全部' },
-  { key: 'teachers', label: '指导老师' },
-  { key: 'leaders', label: '团队负责人' }
+  { key: 'teachers', label: '指导老师' }
 ]
 
 const trailingGroupDefs = [
@@ -69,12 +68,26 @@ const selectedSeason = computed({
   set: value => { chosenSeason.value = value }
 })
 
+const hasSeason = (member: Member, season: string) => {
+  if (season === 'all') return true
+
+  const memberSeasons = [...splitSeason(member.time), ...splitSeason(member.advisor)]
+  const isTeacher = normalize(member.type).includes('指导老师') || normalize(member.role).includes('指导老师')
+  if (isTeacher && !memberSeasons.length) return true
+
+  return memberSeasons.includes(season)
+}
+
 const configuredGroups = computed(() => {
   const cohorts = memberOptions.value?.cohorts ?? []
   const relevant = selectedSeason.value === 'all'
     ? cohorts
     : cohorts.filter(cohort => cohort.season === selectedSeason.value)
-  return [...new Set(relevant.flatMap(cohort => cohort.groups))]
+  const memberGroups = allMembers.value
+    .filter(member => hasSeason(member, selectedSeason.value))
+    .map(member => String(member.group || '').trim())
+    .filter(Boolean)
+  return [...new Set([...relevant.flatMap(cohort => cohort.groups), ...memberGroups])]
 })
 
 const groupDefs = computed(() => [
@@ -96,18 +109,16 @@ const seasonTabs = computed(() => {
   ]
 })
 
-const hasSeason = (member: Member, season: string) => {
-  if (season === 'all') return true
-
-  const memberSeasons = [...splitSeason(member.time), ...splitSeason(member.advisor)]
-  const isTeacher = normalize(member.type).includes('指导老师') || normalize(member.role).includes('指导老师')
-  if (isTeacher && !memberSeasons.length) return true
-
-  return memberSeasons.includes(season)
-}
-
 const groupFor = (member: Member, season = selectedSeason.value) =>
   memberSeasonGroup(member, season, configuredGroups.value)
+
+const isTeacher = (member: Member) =>
+  normalize(member.type).includes('指导老师') || normalize(member.role).includes('指导老师')
+
+const isAdvisorForSeason = (member: Member, season: string) =>
+  !isTeacher(member) && (season === 'all'
+    ? splitSeason(member.advisor).length > 0
+    : splitSeason(member.advisor).includes(season))
 
 const matchesSearch = (member: Member) => {
   const keyword = normalize(search.value).trim()
@@ -129,7 +140,10 @@ const matchesSearch = (member: Member) => {
 const filteredMembers = computed(() =>
   allMembers.value.filter((member) => {
     const group = groupFor(member)
-    const groupMatched = selectedGroup.value === 'all' || selectedGroup.value === group
+    const groupMatched = selectedGroup.value === 'all'
+      || (selectedGroup.value === 'advisors'
+        ? isAdvisorForSeason(member, selectedSeason.value)
+        : selectedGroup.value === group)
     return hasSeason(member, selectedSeason.value) && groupMatched && matchesSearch(member)
   })
 )
@@ -138,13 +152,10 @@ const groupedMembers = computed(() =>
   visibleGroupDefs.value
     .map((group) => ({
       ...group,
-      members: filteredMembers.value.filter((member) => groupFor(member) === group.key)
+      members: orderMembersInGroup(filteredMembers.value.filter((member) => groupFor(member) === group.key))
     }))
     .filter((group) => group.members.length)
 )
-
-const isTeacher = (member: Member) =>
-  normalize(member.type).includes('指导老师') || normalize(member.role).includes('指导老师')
 
 const stats = computed(() => {
   const season = selectedSeason.value
@@ -152,14 +163,14 @@ const stats = computed(() => {
     isTeacher(member) && hasSeason(member, season)
   )
   const advisors = allMembers.value.filter((member) =>
-    !isTeacher(member) && hasSeason(member, season) && groupFor(member, season) === 'advisors'
+    isAdvisorForSeason(member, season)
   )
 
   return [
     { value: allMembers.value.length, label: '成员档案' },
     { value: filteredMembers.value.length, label: season === 'all' ? '当前筛选' : `${season} 赛季展示` },
     { value: teachers.length, label: season === 'all' ? '全部赛季指导老师' : `${season} 赛季指导老师` },
-    { value: advisors.length, label: season === 'all' ? '顾问组展示' : `${season} 赛季顾问组` }
+    { value: advisors.length, label: season === 'all' ? '顾问人数' : `${season} 赛季顾问人数` }
   ]
 })
 </script>

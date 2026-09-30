@@ -42,7 +42,7 @@ const seasonText = computed(() => {
   return [time, advisor].filter(Boolean).join(' / ')
 })
 
-const roleText = computed(() => uniq(splitPhrases(props.member.role)).join('，'))
+const roleText = computed(() => uniq(splitPhrases(props.member.role).filter(item => item !== '顾问')).join('，'))
 
 const linkLabels: Record<string, string> = {
   github: 'GitHub',

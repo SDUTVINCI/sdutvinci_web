@@ -64,7 +64,7 @@ const splitSeason = (value: unknown) =>
 const formatSeasonList = (value: unknown) => splitSeason(value).join('、')
 
 const displayName = computed(() => String(member.value?.name || '成员'))
-const roleText = computed(() => uniq(splitPhrases(member.value?.role)).join('，'))
+const roleText = computed(() => uniq(splitPhrases(member.value?.role).filter(item => item !== '顾问')).join('，'))
 
 const linkLabels: Record<string, string> = {
   github: 'GitHub',
@@ -88,7 +88,7 @@ const groupLabel = (value: Member | null | undefined) => {
   const role = String(value?.role ?? '')
   const type = String(value?.type ?? '')
   if (type.includes('指导老师') || role.includes('指导老师')) return '指导老师'
-  if (type.includes('团队负责人')) return '团队负责人'
+  if (value?.group) return String(value.group)
   if (type.includes('机械') || role.includes('机械')) return '机械组'
   if (type.includes('控制') || role.includes('控制') || role.includes('电控')) return '控制组'
   if (type.includes('电路') || role.includes('电路')) return '电路组'
