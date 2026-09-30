@@ -64,7 +64,7 @@ const batchBusy = ref(false)
 const proposalReviewingId = ref('')
 const memberChangeLabels: Record<string, string> = {
   name: '姓名', image: '头像', role: '显示职务', type: '成员类型', group: '组别',
-  positions: '身份与职务', time: '参加过的赛季', advisor: '指导届次', grade: '年级',
+  positions: '身份与职务', time: '参加过的赛季', advisor: '顾问届次', grade: '年级',
   affiliation: '学院 / 单位', links: '公开链接', body: '简介', metadata: '扩展字段', sortOrder: '排序号'
 }
 const changeValue = (value: unknown) => value === null || value === undefined || value === ''
@@ -323,7 +323,7 @@ const reviewRegistration = async (
                   <div><dt>年级 / 赛季</dt><dd>{{ item.profile.grade ? `${item.profile.grade} 级` : '无年级' }} · {{ item.profile.seasons?.join('、') || '无参与赛季' }}</dd></div>
                   <div><dt>组别</dt><dd>{{ item.profile.groupName || '无' }}</dd></div>
                   <div><dt>身份与职务</dt><dd>{{ item.profile.positions?.join('、') }}</dd></div>
-                  <div><dt>指导届次</dt><dd>{{ item.profile.advisorSeasons?.join('、') || '无' }}</dd></div>
+                  <div><dt>顾问届次</dt><dd>{{ item.profile.advisorSeasons?.join('、') || '无' }}</dd></div>
                   <div><dt>学院</dt><dd>{{ item.profile.affiliation || '未填写' }}</dd></div>
                 </dl>
                 <p v-if="item.profile.body">{{ item.profile.body }}</p>

@@ -71,6 +71,10 @@ const save = async () => {
     errorMessage.value = '请等待头像上传完成后再保存'
     return
   }
+  if (!form.seasons.length) {
+    errorMessage.value = '请至少选择一个参加过的赛季'
+    return
+  }
   submitting.value = true
   message.value = ''
   errorMessage.value = ''

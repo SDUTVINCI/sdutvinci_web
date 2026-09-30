@@ -107,6 +107,7 @@ integration('CMS 成员与文章只读管理', () => {
     const created = await createCmsMember({
       memberKey: 'dongjiahui',
       name: '董佳辉',
+      seasons: ['25'],
       avatarUrl: '/old.jpg'
     }, admin!.id)
     expect(created).toMatchObject({

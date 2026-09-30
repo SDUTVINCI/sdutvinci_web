@@ -64,12 +64,13 @@ export const assertMemberProfileOptions = async (
   profile: Pick<MemberProfileSnapshot, 'grade' | 'seasons' | 'advisorSeasons' | 'groupName'>,
   previous?: Pick<MemberProfileSnapshot, 'seasons' | 'advisorSeasons'>
 ) => {
-  if (!profile.grade) return
-  const gradeYear = Number(profile.grade)
-  const [cohort] = await getDatabase().select().from(memberCohorts)
-    .where(eq(memberCohorts.gradeYear, gradeYear)).limit(1)
-  if (!cohort || !cohort.active) throw new Error('MEMBER_GRADE_INVALID')
-  if (profile.groupName && !cohort.groups.includes(profile.groupName)) throw new Error('MEMBER_GROUP_INVALID')
+  if (profile.grade) {
+    const gradeYear = Number(profile.grade)
+    const [cohort] = await getDatabase().select().from(memberCohorts)
+      .where(eq(memberCohorts.gradeYear, gradeYear)).limit(1)
+    if (!cohort || !cohort.active) throw new Error('MEMBER_GRADE_INVALID')
+    if (profile.groupName && !cohort.groups.includes(profile.groupName)) throw new Error('MEMBER_GROUP_INVALID')
+  }
   const active = await getDatabase().select({ season: memberCohorts.season }).from(memberCohorts)
     .where(eq(memberCohorts.active, true))
   const seasons = new Set(active.map(item => item.season))

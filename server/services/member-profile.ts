@@ -58,6 +58,29 @@ export const normalizeMemberPositions = (value: unknown): string[] => {
   return normalized
 }
 
+export const normalizeEditableMemberRoles = (input: {
+  positions: unknown
+  seasons: readonly string[]
+  advisorSeasons: readonly string[]
+  grade: string | null
+  groupName: string | null
+}) => {
+  const positions = normalizeMemberPositions(input.positions)
+  if (!input.seasons.length) throw new Error('MEMBER_SEASON_REQUIRED')
+  if (positions.includes('指导老师')) {
+    if (positions.some(position => position !== '指导老师') || input.grade
+      || input.groupName || input.advisorSeasons.length) {
+      throw new Error('MEMBER_TEACHER_FIELDS_INVALID')
+    }
+    return ['指导老师']
+  }
+  if (positions.includes('组长') && positions.includes('成员')) {
+    throw new Error('MEMBER_GROUP_POSITION_INVALID')
+  }
+  const withoutAdvisor = positions.filter(position => position !== '顾问')
+  return input.advisorSeasons.length ? [...withoutAdvisor, '顾问'] : withoutAdvisor
+}
+
 export const deriveMemberType = (positions: readonly string[], groupName: string | null) => {
   if (positions.includes('指导老师')) return '指导老师'
   if (positions.some(position => ['队长', '副队长', '机电创新学会会长'].includes(position))) {

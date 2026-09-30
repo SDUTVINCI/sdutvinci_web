@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { memberSeasonGroup } from '~~/shared/utils/member-season-group'
 type Member = Record<string, any>
 
 const { data: rawMembers } = await usePublicContentQuery<Member[]>({
@@ -105,35 +106,8 @@ const hasSeason = (member: Member, season: string) => {
   return memberSeasons.includes(season)
 }
 
-const isAdvisorForSeason = (member: Member, season: string) => {
-  const advisorSeasons = splitSeason(member.advisor)
-  if (!advisorSeasons.length) return false
-  if (season === 'all') return selectedGroup.value === 'advisors'
-
-  return advisorSeasons.includes(season) && !splitSeason(member.time).includes(season)
-}
-
-const isLeaderForSeason = (member: Member, season: string) => {
-  if (!normalize(member.type).includes('团队负责人')) return false
-  if (season === 'all') return true
-
-  return splitSeason(member.time).includes(season)
-}
-
-const groupFor = (member: Member, season = selectedSeason.value) => {
-  const role = normalize(member.role)
-  const type = normalize(member.type)
-  const group = normalize(member.group)
-
-  if (type.includes('指导老师') || role.includes('指导老师')) return 'teachers'
-  if (type.includes('顾问') || member.positions?.includes('顾问')) return 'advisors'
-  if (isAdvisorForSeason(member, season)) return 'advisors'
-  if (isLeaderForSeason(member, season) || type.includes('团队负责人')) return 'leaders'
-  const exactGroup = configuredGroups.value.find(item => normalize(item) === group)
-  if (exactGroup) return `group:${exactGroup}`
-  if (member.advisor) return 'advisors'
-  return 'others'
-}
+const groupFor = (member: Member, season = selectedSeason.value) =>
+  memberSeasonGroup(member, season, configuredGroups.value)
 
 const matchesSearch = (member: Member) => {
   const keyword = normalize(search.value).trim()
@@ -178,16 +152,14 @@ const stats = computed(() => {
     isTeacher(member) && hasSeason(member, season)
   )
   const advisors = allMembers.value.filter((member) =>
-    !isTeacher(member) && (season === 'all'
-      ? splitSeason(member.advisor).length > 0
-      : splitSeason(member.advisor).includes(season))
+    !isTeacher(member) && hasSeason(member, season) && groupFor(member, season) === 'advisors'
   )
 
   return [
     { value: allMembers.value.length, label: '成员档案' },
     { value: filteredMembers.value.length, label: season === 'all' ? '当前筛选' : `${season} 赛季展示` },
     { value: teachers.length, label: season === 'all' ? '全部赛季指导老师' : `${season} 赛季指导老师` },
-    { value: advisors.length, label: season === 'all' ? '全部赛季顾问记录' : `${season} 赛季顾问` }
+    { value: advisors.length, label: season === 'all' ? '顾问组展示' : `${season} 赛季顾问组` }
   ]
 })
 </script>

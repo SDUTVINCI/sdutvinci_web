@@ -20,7 +20,10 @@ const memberOptionErrors: Record<string, string> = {
   MEMBER_GRADE_INVALID: '年级不在可选范围内，请重新选择',
   MEMBER_GROUP_INVALID: '组别与年级不匹配，请重新选择',
   MEMBER_SEASON_INVALID: '参加过的赛季中有不可选的新届次，请重新选择',
-  MEMBER_ADVISOR_SEASON_INVALID: '指导届次中有不可选的新届次，请重新选择'
+  MEMBER_ADVISOR_SEASON_INVALID: '顾问届次中有不可选的新届次，请重新选择',
+  MEMBER_SEASON_REQUIRED: '请至少选择一个参加过的赛季',
+  MEMBER_TEACHER_FIELDS_INVALID: '指导老师不能填写年级、组别、职务或顾问届次',
+  MEMBER_GROUP_POSITION_INVALID: '组内职务只能选择一项'
 }
 
 const schema = z.object({

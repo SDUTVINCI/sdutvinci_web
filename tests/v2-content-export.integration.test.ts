@@ -553,7 +553,7 @@ suite('V2 阶段 6 独立内容仓库与异步增量导出', () => {
     const article = await seedArticle('news', 'member-export-base.md', 'Base', 'base\n')
     await takeOver([article])
     const created = await createCmsMember({
-      memberKey: 'phase6member', name: 'Phase 6 Member', role: 'Member', body: 'member v1'
+      memberKey: 'phase6member', name: 'Phase 6 Member', role: 'Member', seasons: ['25'], body: 'member v1'
     }, actorUserId)
     expect((await runContentExportWorkerOnce()).state).toBe('succeeded')
     expect(await remoteFile('members/cms/phase6member.md')).toContain('member v1')

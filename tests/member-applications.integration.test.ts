@@ -100,7 +100,7 @@ integration('公开成员申请审核', () => {
     })).rejects.toThrow('MEMBER_APPLICATION_PROFILE_INVALID')
   })
 
-  it('指导老师可不填年级和参赛赛季，仍能保存指导届次', async () => {
+  it('指导老师必须选择参加赛季且不能填写学生或顾问字段', async () => {
     const admin = await bootstrapCmsAdmin({ account: 'teacheradmin', password: 'TeacherAdminPassword123!' })
     const application = await startMemberApplication()
     const image = await sharp({
@@ -116,17 +116,36 @@ integration('公开成员申请审核', () => {
     await expect(submitMemberApplication(application.id, application.token, {
       name: '测试指导老师', positions: ['成员'], seasons: [], advisorSeasons: ['27']
     })).rejects.toThrow('MEMBER_APPLICATION_PROFILE_INVALID')
-    await submitMemberApplication(application.id, application.token, {
+    await expect(submitMemberApplication(application.id, application.token, {
       name: '测试指导老师', positions: ['指导老师'], seasons: [], advisorSeasons: ['27']
+    })).rejects.toThrow('MEMBER_APPLICATION_PROFILE_INVALID')
+    await expect(submitMemberApplication(application.id, application.token, {
+      name: '测试指导老师', positions: ['指导老师'], seasons: ['27'], advisorSeasons: ['27']
+    })).rejects.toThrow('MEMBER_APPLICATION_PROFILE_INVALID')
+    await submitMemberApplication(application.id, application.token, {
+      name: '测试指导老师', positions: ['指导老师'], seasons: ['27'], advisorSeasons: []
     })
     const submitted = (await listSubmittedMemberApplications())[0]!
-    expect(submitted.profile).toMatchObject({ grade: null, seasons: [], advisorSeasons: ['27'] })
+    expect(submitted.profile).toMatchObject({ grade: null, seasons: ['27'], advisorSeasons: [] })
     const result = await reviewMemberApplication(application.id, 'approve', '', admin!.id)
     expect(result.member).toMatchObject({
       grade: null,
       memberType: '指导老师',
-      seasons: [],
-      advisorSeasons: ['27']
+      seasons: ['27'],
+      advisorSeasons: []
+    })
+  })
+
+  it('普通学生的顾问身份跟随顾问届次', async () => {
+    const application = await startMemberApplication()
+    const image = await sharp({ create: { width: 32, height: 32, channels: 3, background: '#208090' } }).png().toBuffer()
+    await uploadMemberApplicationAvatar({ id: application.id, token: application.token,
+      name: '测试顾问', data: image, mimeType: 'image/png' })
+    await submitMemberApplication(application.id, application.token, {
+      name: '测试顾问', grade: '2025', positions: ['成员'], seasons: ['26'], advisorSeasons: ['27']
+    })
+    expect((await listSubmittedMemberApplications())[0]!.profile).toMatchObject({
+      positions: ['成员', '顾问'], seasons: ['26'], advisorSeasons: ['27']
     })
   })
 

@@ -6,7 +6,7 @@ import { getDatabase } from '../db/client'
 import { memberApplications, memberCohorts, members } from '../db/schema'
 import { getCmsMediaConfig } from '../utils/cms-media-config'
 import { createCmsMember } from './cms-members'
-import { deriveMemberRole, deriveMemberType, normalizeMemberPositions } from './member-profile'
+import { deriveMemberRole, deriveMemberType, normalizeEditableMemberRoles } from './member-profile'
 import { MEMBER_COLLEGE_OPTIONS } from '../../shared/constants/member-colleges'
 import {
   deleteMemberAvatarObject,
@@ -110,15 +110,26 @@ export const submitMemberApplication = async (id: string, token: string, profile
     .where(and(eq(memberCohorts.gradeYear, grade), eq(memberCohorts.active, true))).limit(1)
   const groupName = String(profile.groupName || '').trim()
   const affiliation = String(profile.affiliation || '').trim()
-  const positions = normalizeMemberPositions(profile.positions)
-  const isTeacher = positions.includes('指导老师')
   const requestedSeasons = Array.isArray(profile.seasons) ? [...new Set(profile.seasons.map(value => String(value).trim()).filter(Boolean))] : []
   const advisorSeasons = Array.isArray(profile.advisorSeasons) ? [...new Set(profile.advisorSeasons.map(value => String(value).trim()).filter(Boolean))] : []
+  let positions: string[]
+  try {
+    positions = normalizeEditableMemberRoles({
+      positions: profile.positions,
+      seasons: requestedSeasons,
+      advisorSeasons,
+      grade: gradeValue || null,
+      groupName: groupName || null
+    })
+  } catch {
+    throw new Error('MEMBER_APPLICATION_PROFILE_INVALID')
+  }
+  const isTeacher = positions.includes('指导老师')
   const activeSeasons = new Set((await getDatabase().select({ season: memberCohorts.season }).from(memberCohorts).where(eq(memberCohorts.active, true))).map(item => item.season))
   if (!name || !application.avatarObjectKey || !application.avatarPublicUrl
     || (!isTeacher && !cohort) || (gradeValue && !cohort)
     || (groupName && !cohort?.groups.includes(groupName)) || !positions.length
-    || (!isTeacher && !requestedSeasons.length) || requestedSeasons.some(season => !activeSeasons.has(season))
+    || requestedSeasons.some(season => !activeSeasons.has(season))
     || advisorSeasons.some(season => !activeSeasons.has(season))
     || (affiliation && !(MEMBER_COLLEGE_OPTIONS as readonly string[]).includes(affiliation))) throw new Error('MEMBER_APPLICATION_PROFILE_INVALID')
   const normalized = {

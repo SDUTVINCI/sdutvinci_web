@@ -26,6 +26,7 @@ import {
   profileFromRecord,
   profileRecord,
   normalizeMemberPositions,
+  normalizeEditableMemberRoles,
   serializeMemberProfile,
   type MemberProfileSnapshot
 } from './member-profile'
@@ -194,7 +195,13 @@ const inputProfile = (
   sourcePath: string
 ): MemberProfileSnapshot => {
   const groupName = input.groupName?.trim() || null
-  const positions = normalizeMemberPositions(input.positions || [])
+  const positions = normalizeEditableMemberRoles({
+    positions: input.positions || [],
+    seasons: input.seasons || [],
+    advisorSeasons: input.advisorSeasons || [],
+    grade: input.grade?.trim() || null,
+    groupName
+  })
   const profile: MemberProfileSnapshot = {
     memberKey: input.memberKey.trim().toLowerCase(),
     name: input.name.trim(),
@@ -215,6 +222,30 @@ const inputProfile = (
   }
   assertSafeMemberAvatarUrl(profile.avatarUrl)
   serializeMemberProfile(profile)
+  return profile
+}
+
+const canonicalizeHistoricalProfile = (source: MemberProfileSnapshot): MemberProfileSnapshot => {
+  const profile = { ...source, positions: [...source.positions], seasons: [...source.seasons],
+    advisorSeasons: [...source.advisorSeasons] }
+  if (profile.positions.includes('指导老师')) {
+    profile.seasons = [...new Set([...profile.seasons, ...profile.advisorSeasons])]
+    profile.advisorSeasons = []
+    profile.positions = ['指导老师']
+    profile.grade = null
+    profile.groupName = null
+    profile.memberType = '指导老师'
+    if (!profile.role?.startsWith('指导老师')) profile.role = '指导老师'
+  } else {
+    const positions = profile.positions.filter(position => position !== '顾问')
+    if (profile.advisorSeasons.length) positions.push('顾问')
+    if (positions.join('|') !== profile.positions.join('|')) {
+      profile.positions = positions
+      profile.role = deriveMemberRole(positions, profile.groupName)
+      profile.memberType = deriveMemberType(positions, profile.groupName)
+    }
+  }
+  normalizeEditableMemberRoles(profile)
   return profile
 }
 
@@ -483,7 +514,7 @@ export const restoreCmsMemberRevision = async (
       eq(memberRevisions.id, revisionId), eq(memberRevisions.memberId, memberId)
     )).limit(1)
     if (!target) throw new Error('MEMBER_REVISION_NOT_FOUND')
-    const profile = { ...profileFromRecord(target.profile), memberKey: current.memberKey }
+    const profile = canonicalizeHistoricalProfile({ ...profileFromRecord(target.profile), memberKey: current.memberKey })
     if (current.deletedAt) {
       const [activeCollision] = await tx.select({ id: members.id }).from(members).where(and(
         eq(members.memberKey, current.memberKey), isNull(members.deletedAt)
@@ -637,11 +668,7 @@ const normalizedCurrentProfile = (row: typeof members.$inferSelect, currentMarkd
   const moveTeacherSeasons = !/^schemaVersion:\s*2\s*$/m.test(currentMarkdown)
     && profile.positions.includes('指导老师') && !profile.grade
     && profile.seasons.length > 0 && profile.advisorSeasons.length === 0
-  if (moveTeacherSeasons) {
-    profile.advisorSeasons = [...profile.seasons]
-    profile.seasons = []
-  }
-  return { profile, moveTeacherSeasons }
+  return { profile: canonicalizeHistoricalProfile(profile), moveTeacherSeasons }
 }
 
 export const planCurrentMemberFrontmatterNormalization = async () => {
@@ -802,6 +829,7 @@ export const applyMemberProposal = async (
       profile = merged.merged
     }
     if (profile.memberKey !== current.memberKey) throw new Error('MEMBER_KEY_IMMUTABLE')
+    if (proposal.action === 'update') profile = canonicalizeHistoricalProfile(profile)
     if (proposal.action === 'update') await assertMemberProfileOptions(profile, before)
     const revisionNumber = (await tx.select({ value: sql<number>`coalesce(max(${memberRevisions.revisionNumber}), 0)::int` })
       .from(memberRevisions).where(eq(memberRevisions.memberId, current.id)))[0]!.value + 1

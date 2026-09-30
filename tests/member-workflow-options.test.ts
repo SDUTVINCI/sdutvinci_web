@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { deriveMemberRole, deriveMemberType, normalizeMemberPositions } from '../server/services/member-profile'
+import { deriveMemberRole, deriveMemberType, normalizeEditableMemberRoles, normalizeMemberPositions } from '../server/services/member-profile'
 import { defaultGroupsForGrade, newlyUnavailableMemberSeasons } from '../server/services/member-options'
 import { readFile } from 'node:fs/promises'
 import { resolveMarkdownMediaUrls } from '../shared/utils/static-media'
@@ -29,6 +29,17 @@ describe('成员选项、自动归类与 Markdown 图床', () => {
     expect(deriveMemberRole(['成员'], '机械组')).toBe('机械组成员')
     expect(deriveMemberRole(['成员', '组长'], '软件算法组')).toBe('软件算法组成员，软件算法组组长')
     expect(() => normalizeMemberPositions(['随便填写'])).toThrow('MEMBER_POSITION_INVALID')
+  })
+
+  it('按顾问届次推导身份并限制指导老师字段', () => {
+    expect(normalizeEditableMemberRoles({ positions: ['成员'], seasons: ['26'], advisorSeasons: ['27'], grade: '2025', groupName: null }))
+      .toEqual(['成员', '顾问'])
+    expect(normalizeEditableMemberRoles({ positions: ['成员', '顾问'], seasons: ['26'], advisorSeasons: [], grade: '2025', groupName: null }))
+      .toEqual(['成员'])
+    expect(() => normalizeEditableMemberRoles({ positions: ['指导老师'], seasons: [], advisorSeasons: [], grade: null, groupName: null }))
+      .toThrow('MEMBER_SEASON_REQUIRED')
+    expect(() => normalizeEditableMemberRoles({ positions: ['指导老师'], seasons: ['27'], advisorSeasons: ['27'], grade: null, groupName: null }))
+      .toThrow('MEMBER_TEACHER_FIELDS_INVALID')
   })
 
   it('为 Markdown 根路径图片补齐固定 CDN，不改绝对和协议相对 URL', () => {
@@ -61,10 +72,11 @@ describe('成员选项、自动归类与 Markdown 图床', () => {
       readFile('server/api/cms/members/[id]/avatar.post.ts', 'utf8'),
       readFile('server/services/member-options.ts', 'utf8')
     ])
-    expect(fields).toContain('参加过的赛季 <strong v-if="seasonRequired" class="member-required-marker">必填</strong>（可多选）')
+    expect(fields).toContain('参加过的赛季 <strong class="member-required-marker">必填</strong>（可多选）')
     expect(fields).toContain(':required="gradeRequired"')
-    expect(fields).toContain('指导老师可不填年级和参赛赛季')
-    expect(fields).toContain('指导届次（可选、多选）')
+    expect(fields).toContain('顾问届次（可选、多选）')
+    expect(fields).not.toContain("label: '无'")
+    expect(fields).not.toContain('其他身份')
     expect(fields).not.toContain('仅顾问或指导老师需要选择所指导的届次')
     expect(fields).toContain('GitHub 链接（可选）')
     expect(fields).toContain('个人主页链接（可选）')
@@ -77,7 +89,7 @@ describe('成员选项、自动归类与 Markdown 图床', () => {
     expect(form).toContain('请上传头像后再提交')
     expect(form).toContain('请至少选择一项身份或职务')
     expect(form).toContain('请至少选择一个参加过的赛季')
-    expect(form).toContain("!form.positions.includes('指导老师')")
+    expect(form).toContain('if (!form.seasons.length)')
     expect(form).toContain('MemberProfileFields')
     expect(form).toContain('<MemberProfileFields v-model="form" :options="options" required />')
     expect(form).toContain(':disabled="submitting || avatarUploading"')

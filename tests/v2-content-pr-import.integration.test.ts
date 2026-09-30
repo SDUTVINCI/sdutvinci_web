@@ -702,7 +702,7 @@ suite('V2 阶段 8 本地 Markdown PR 导入与三方冲突', () => {
 
   it('成员 PR 只生成字段级提案，冲突和敏感字段阻止，明确接受后才创建 Revision', async () => {
     const source = (id: string, name: string, extra = '') =>
-      `---\nid: ${id}\nname: ${name}\nrole: Member\ngrade: 2024\n${extra}---\nprofile\n`
+      `---\nid: ${id}\nname: ${name}\nrole: Member\ngrade: 2024\ntime: 25\n${extra}---\nprofile\n`
     const safe = await seedMember('membersafe', source('membersafe', 'Safe'))
     const merge = await seedMember('membermerge', source('membermerge', 'Merge'), value => value.replace('role: Member', 'role: Captain'))
     const conflict = await seedMember('memberconflict', source('memberconflict', 'Conflict'), value => value.replace('role: Member', 'role: Captain'))
