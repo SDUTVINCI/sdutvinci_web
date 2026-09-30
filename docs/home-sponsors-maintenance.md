@@ -8,14 +8,14 @@
 ```ts
 {
   name: '对外展示名称',
-  role: '赞助商',
+  role: '合作伙伴',
   logo: sponsorAsset('文件名.webp'),
   href: 'https://官网地址/',
   logoClass: 'footer-partner-logo-wordmark'
 }
 ```
 
-- `role` 按实际关系填写“赞助商”或“合作伙伴”，不要将高校、社团、实践基地或赛事填入此名单。
+- 首页和页脚的单项身份统一显示“合作伙伴”；不要将高校、社团、实践基地或赛事填入此名单。
 - Logo 使用透明背景图片，建议先上传至 `cdn.sdutvinci.cn/site-assets/images/sponsors/`。
 - 横向文字标志可使用 `footer-partner-logo-wordmark`；圆形或方形标志可使用
   `footer-partner-logo-symbol`。首页图片会按自身比例缩放，不裁切。

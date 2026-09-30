@@ -51,7 +51,7 @@ const competition: FooterPartner = {
   logoClass: 'footer-partner-logo-wide footer-partner-logo-competition'
 }
 
-// 首页与页脚共用此列表。新增赞助商时在这里补齐名称、身份、Logo 和官网链接。
+// 首页与页脚共用此列表。新增合作伙伴时在这里补齐名称、身份、Logo 和页面链接。
 export const sponsorPartners: FooterPartner[] = [
   {
     name: '宇树科技',
@@ -69,56 +69,56 @@ export const sponsorPartners: FooterPartner[] = [
   },
   {
     name: '大疆创新 DJI',
-    role: '赞助商',
+    role: '合作伙伴',
     logo: newSponsorAsset('dji-logo.webp'),
     href: 'https://www.dji.com/cn',
     logoClass: 'footer-partner-logo-wordmark'
   },
   {
     name: '萝马车圈',
-    role: '赞助商',
+    role: '合作伙伴',
     logo: newSponsorAsset('roma-club-logo.webp'),
     href: 'https://rcbbs.top/',
     logoClass: 'footer-partner-logo-wordmark'
   },
   {
     name: '超核电子 HiPNUC',
-    role: '赞助商',
+    role: '合作伙伴',
     logo: newSponsorAsset('hipnuc-logo.webp'),
     href: 'https://www.hipnuc.com/',
     logoClass: 'footer-partner-logo-wordmark'
   },
   {
     name: '嘉立创',
-    role: '赞助商',
+    role: '合作伙伴',
     logo: newSponsorAsset('jlc-logo.webp'),
     href: 'https://www.jlc.com/',
     logoClass: 'footer-partner-logo-wide'
   },
   {
     name: '臻碳工坊',
-    role: '赞助商',
+    role: '合作伙伴',
     logo: newSponsorAsset('zhentan-workshop-logo.webp'),
     href: 'https://space.bilibili.com/371929474',
     logoClass: 'footer-partner-logo-symbol'
   },
   {
     name: '格瑞普电池 GREPOW',
-    role: '赞助商',
+    role: '合作伙伴',
     logo: newSponsorAsset('grepow-logo.webp'),
     href: 'https://www.grepow.cn/',
     logoClass: 'footer-partner-logo-grepow'
   },
   {
     name: 'MPS 芯源系统',
-    role: '赞助商',
+    role: '合作伙伴',
     logo: newSponsorAsset('mps-logo.webp'),
     href: 'https://www.monolithicpower.cn/',
     logoClass: 'footer-partner-logo-wordmark'
   },
   {
     name: '创芯工坊',
-    role: '赞助商',
+    role: '合作伙伴',
     logo: newSponsorAsset('icworkshop-logo.webp'),
     href: 'https://www.icworkshop.com/',
     logoClass: 'footer-partner-logo-symbol'

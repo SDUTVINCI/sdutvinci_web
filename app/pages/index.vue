@@ -182,7 +182,7 @@ const stats = computed(() => [
       <div class="home-support-inner">
         <header class="home-support-heading">
           <p class="eyebrow">OUR COMMUNITY</p>
-          <h2 id="home-support-title">同行的力量</h2>
+          <h2 id="home-support-title">赞助与合作伙伴</h2>
           <p>从校园实践到全国赛场，感谢一路支持 Vinci 机器人队的伙伴。</p>
         </header>
 
@@ -206,7 +206,7 @@ const stats = computed(() => [
 
         <div class="home-support-group home-sponsors" aria-labelledby="home-sponsors-title">
           <div class="home-sponsors-heading">
-            <h3 id="home-sponsors-title">赞助与合作伙伴</h3>
+            <h3 id="home-sponsors-title">合作伙伴</h3>
             <NuxtLink to="/contact">合作洽谈 <span aria-hidden="true">→</span></NuxtLink>
           </div>
           <div class="home-sponsors-list">
