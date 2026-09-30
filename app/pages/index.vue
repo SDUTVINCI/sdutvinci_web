@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { homePromoAutoplayMs, homePromoSlides } from '~/data/home-promos'
+import { homeAffiliations, sponsorPartners } from '~/data/footer-partners'
 import { roboconRecordedYearCount } from '~/data/robocon-achievements'
 
 type Member = Record<string, any>
@@ -175,6 +176,55 @@ const stats = computed(() => [
           <a class="text-link" :href="section.href">{{ section.cta }}</a>
         </div>
       </article>
+    </section>
+
+    <section class="home-support" aria-labelledby="home-support-title">
+      <div class="home-support-inner">
+        <header class="home-support-heading">
+          <p class="eyebrow">OUR COMMUNITY</p>
+          <h2 id="home-support-title">同行的力量</h2>
+          <p>从校园实践到全国赛场，感谢一路支持 Vinci 机器人队的伙伴。</p>
+        </header>
+
+        <div class="home-support-group" aria-labelledby="home-affiliations-title">
+          <h3 id="home-affiliations-title">指导、实践与赛事平台</h3>
+          <div class="home-affiliations-list">
+            <a
+              v-for="item in homeAffiliations"
+              :key="item.name"
+              class="home-support-card home-affiliation-card"
+              :href="item.href"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <span class="home-support-logo"><img :class="item.logoClass" :src="item.logo" alt="" loading="lazy" decoding="async"></span>
+              <span class="home-support-name">{{ item.name }}</span>
+              <span class="home-support-role">{{ item.role }}</span>
+            </a>
+          </div>
+        </div>
+
+        <div class="home-support-group home-sponsors" aria-labelledby="home-sponsors-title">
+          <div class="home-sponsors-heading">
+            <h3 id="home-sponsors-title">赞助与合作伙伴</h3>
+            <NuxtLink to="/contact">合作洽谈 <span aria-hidden="true">→</span></NuxtLink>
+          </div>
+          <div class="home-sponsors-list">
+            <a
+              v-for="item in sponsorPartners"
+              :key="item.name"
+              class="home-support-card home-sponsor-card"
+              :href="item.href"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <span class="home-support-logo"><img :class="item.logoClass" :src="item.logo" alt="" loading="lazy" decoding="async"></span>
+              <span class="home-support-name">{{ item.name }}</span>
+              <span class="home-support-role">{{ item.role }}</span>
+            </a>
+          </div>
+        </div>
+      </div>
     </section>
   </main>
 </template>

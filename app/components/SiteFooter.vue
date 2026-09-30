@@ -57,7 +57,7 @@ const footerPartners = footerPartnerGroups.flatMap(group =>
                 :href="item.href"
                 target="_blank"
                 rel="noopener noreferrer"
-                :aria-label="`访问${item.name}官网`"
+                :aria-label="`访问${item.name}页面`"
               >
                 <span class="footer-partner-logo">
                   <img :class="item.logoClass" :src="item.logo" :alt="`${item.name} Logo`" loading="lazy" decoding="async">

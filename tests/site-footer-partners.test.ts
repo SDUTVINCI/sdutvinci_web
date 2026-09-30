@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { describe, expect, it } from 'vitest'
-import { footerPartnerGroups } from '../app/data/footer-partners'
+import { footerPartnerGroups, homeAffiliations, sponsorPartners } from '../app/data/footer-partners'
 
 describe('网站 Footer 合作与支持', () => {
   it('区分组织平台、核心赛事和合作伙伴，并链接官方页面', () => {
@@ -17,6 +17,35 @@ describe('网站 Footer 合作与支持', () => {
     expect(footerPartnerGroups.flatMap(group => group.items).every(item =>
       item.logo.startsWith('https://cdn.sdutvinci.cn/site-assets/images/sponsors/')
     )).toBe(true)
+  })
+
+  it('首页机构区域与赞助区域分开，页脚复用完整赞助名单', async () => {
+    expect(homeAffiliations.map(item => item.name)).toEqual([
+      '山东理工大学',
+      '机电创新学会',
+      '智能机器人创新实践基地',
+      '全国大学生机器人大赛 ROBOCON'
+    ])
+    expect(sponsorPartners.map(item => item.name)).toEqual([
+      '宇树科技',
+      '库犸科技 MAMMOTION',
+      '大疆创新 DJI',
+      '萝马车圈',
+      '超核电子 HiPNUC',
+      '嘉立创',
+      '臻碳工坊',
+      '格瑞普电池 GREPOW',
+      'MPS 芯源系统',
+      '创芯工坊'
+    ])
+    expect(new Set(sponsorPartners.map(item => item.name)).size).toBe(sponsorPartners.length)
+    expect(sponsorPartners.every(item => /\.webp(?:\?v=\d+)?$/.test(item.logo))).toBe(true)
+    expect(footerPartnerGroups[2]?.items.slice(1)).toEqual(sponsorPartners)
+
+    const homePage = await readFile('app/pages/index.vue', 'utf8')
+    expect(homePage).toContain('v-for="item in homeAffiliations"')
+    expect(homePage).toContain('v-for="item in sponsorPartners"')
+    expect(homePage.indexOf('home-affiliations-list')).toBeLessThan(homePage.indexOf('home-sponsors-list'))
   })
 
   it('整项 Logo 可点击，显示中文名称和身份，并提供紧凑响应式布局', async () => {
@@ -37,7 +66,7 @@ describe('网站 Footer 合作与支持', () => {
     expect(component).toContain('to="/contact"')
     expect(footerStyles).not.toMatch(/\.footer-partner-grid\s*\{[^}]*border/)
     expect(footerStyles).not.toMatch(/\.footer-partner-logo\s*\{[^}]*background/)
-    expect(footerStyles).toContain('animation: footer-partner-scroll 36s linear infinite')
+    expect(footerStyles).toContain('animation: footer-partner-scroll 72s linear infinite')
     expect(footerStyles).toContain('.footer-partner-marquee:hover .footer-partner-track')
     expect(footerStyles).toMatch(/\.footer-partners-contact\s*\{[^}]*font-size:\s*0\.9rem;/)
     expect(footerStyles).toContain('@media (prefers-reduced-motion: reduce)')

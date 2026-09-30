@@ -394,6 +394,231 @@
   font-size: 1.04rem;
 }
 
+.home-support {
+  border-top: 1px solid var(--line);
+  background: var(--surface-tint);
+}
+
+.home-support-inner {
+  display: grid;
+  width: min(var(--content), calc(100% - 48px));
+  margin: 0 auto;
+  gap: 38px;
+  padding: 72px 0 80px;
+}
+
+.home-support-heading {
+  display: grid;
+  gap: 8px;
+}
+
+.home-support-heading .eyebrow {
+  margin: 0;
+}
+
+.home-support-heading h2 {
+  font-size: clamp(1.8rem, 3vw, 2.4rem);
+}
+
+.home-support-heading > p:last-child {
+  color: var(--muted);
+}
+
+.home-support-group {
+  display: grid;
+  gap: 18px;
+}
+
+.home-support-group h3 {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 1.08rem;
+}
+
+.home-affiliations-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.home-sponsors {
+  border-top: 1px solid var(--line);
+  padding-top: 34px;
+}
+
+.home-sponsors-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.home-sponsors-heading a {
+  color: var(--cyan);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.home-sponsors-heading a:hover {
+  text-decoration: underline;
+}
+
+.home-sponsors-list {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+}
+
+.home-support-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 194px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 22px 16px;
+  background: var(--surface);
+  color: var(--ink);
+  text-align: center;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.home-support-card:hover,
+.home-support-card:focus-visible {
+  border-color: var(--cyan);
+  box-shadow: var(--shadow-soft);
+  transform: translateY(-3px);
+}
+
+.home-support-card:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 3px;
+}
+
+.home-sponsor-card {
+  width: clamp(210px, calc((100% - 42px) / 4), 280px);
+}
+
+.home-support-logo {
+  display: flex;
+  width: 100%;
+  height: 90px;
+  align-items: center;
+  justify-content: center;
+}
+
+.home-support-logo img {
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.home-support-logo .footer-partner-logo-symbol {
+  max-width: 82px;
+}
+
+.home-support-logo .footer-partner-logo-lab {
+  max-width: 150px;
+}
+
+.home-support-name {
+  font-size: 0.94rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.home-support-role {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+:root[data-theme="dark"] .home-support-logo .footer-partner-logo-school,
+:root[data-theme="dark"] .home-support-logo .footer-partner-logo-lab {
+  filter: brightness(1.75) saturate(0.82);
+}
+
+:root[data-theme="dark"] .home-support-logo .footer-partner-logo-wordmark {
+  filter: invert(1) grayscale(1) brightness(1.16);
+}
+
+:root[data-theme="dark"] .home-support-logo .footer-partner-logo-grepow {
+  filter: brightness(1.8);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .home-support-logo .footer-partner-logo-school,
+  :root:not([data-theme="light"]) .home-support-logo .footer-partner-logo-lab {
+    filter: brightness(1.75) saturate(0.82);
+  }
+
+  :root:not([data-theme="light"]) .home-support-logo .footer-partner-logo-wordmark {
+    filter: invert(1) grayscale(1) brightness(1.16);
+  }
+
+  :root:not([data-theme="light"]) .home-support-logo .footer-partner-logo-grepow {
+    filter: brightness(1.8);
+  }
+}
+
+@media (max-width: 920px) {
+  .home-affiliations-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .home-support-inner {
+    width: calc(100% - 32px);
+    gap: 30px;
+    padding: 56px 0 64px;
+  }
+
+  .home-affiliations-list,
+  .home-sponsors-list {
+    gap: 10px;
+  }
+
+  .home-support-card {
+    min-height: 166px;
+    padding: 16px 10px;
+  }
+
+  .home-support-logo {
+    height: 72px;
+  }
+
+  .home-support-name {
+    font-size: 0.82rem;
+  }
+
+  .home-sponsor-card {
+    width: calc((100% - 10px) / 2);
+  }
+}
+
+@media (max-width: 340px) {
+  .home-affiliations-list,
+  .home-sponsors-list {
+    grid-template-columns: 1fr;
+  }
+
+  .home-sponsor-card {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-support-card {
+    transition: none;
+  }
+}
+
 @media (max-width: 920px) {
   .promo-viewport {
     min-height: 520px;

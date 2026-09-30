@@ -252,7 +252,7 @@
   }
 
   .footer-partner-track {
-    animation-duration: 30s;
+    animation-duration: 60s;
   }
 
   .footer-partner-set {
@@ -281,7 +281,8 @@
   }
 
   .footer-partner-logo .footer-partner-logo-wide,
-  .footer-partner-logo .footer-partner-logo-wordmark {
+  .footer-partner-logo .footer-partner-logo-wordmark,
+  .footer-partner-logo .footer-partner-logo-grepow {
     max-width: 196px;
     max-height: 62px;
   }

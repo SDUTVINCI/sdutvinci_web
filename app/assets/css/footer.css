@@ -131,7 +131,7 @@
 .footer-partner-track {
   display: flex;
   width: max-content;
-  animation: footer-partner-scroll 36s linear infinite;
+  animation: footer-partner-scroll 72s linear infinite;
   will-change: transform;
 }
 
@@ -231,6 +231,11 @@
   max-height: 68px;
 }
 
+.footer-partner-logo .footer-partner-logo-grepow {
+  max-width: 210px;
+  max-height: 68px;
+}
+
 .footer-partner-copy {
   display: grid;
   width: fit-content;
@@ -301,6 +306,10 @@
   filter: invert(1) grayscale(1) brightness(1.16);
 }
 
+:root[data-theme="dark"] .footer-partner-logo .footer-partner-logo-grepow {
+  filter: brightness(1.8);
+}
+
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .footer-partner-logo .footer-partner-logo-school,
   :root:not([data-theme="light"]) .footer-partner-logo .footer-partner-logo-lab {
@@ -309,6 +318,10 @@
 
   :root:not([data-theme="light"]) .footer-partner-logo .footer-partner-logo-wordmark {
     filter: invert(1) grayscale(1) brightness(1.16);
+  }
+
+  :root:not([data-theme="light"]) .footer-partner-logo .footer-partner-logo-grepow {
+    filter: brightness(1.8);
   }
 }
 
