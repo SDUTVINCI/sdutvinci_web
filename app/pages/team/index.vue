@@ -27,7 +27,7 @@ const fixedGroupDefs = [
 ]
 
 const trailingGroupDefs = [
-  { key: 'advisors', label: '顾问' },
+  { key: 'advisors', label: '顾问组' },
   { key: 'others', label: '其他' }
 ]
 

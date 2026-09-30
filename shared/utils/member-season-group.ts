@@ -26,10 +26,14 @@ export const memberSeasonGroup = (member: TeamMember, season: string, configured
   return 'others'
 }
 
-const teamOfficePositions = new Set(['队长', '副队长', '机电创新学会会长'])
+const positionOrder = ['队长', '副队长', '机电创新学会会长', '组长', '成员'] as const
+const positionPriority = (member: TeamMember) => Math.min(
+  ...(member.positions ?? []).map(position => {
+    const index = positionOrder.findIndex(item => item === position)
+    return index < 0 ? positionOrder.length : index
+  }),
+  positionOrder.length
+)
 
 export const orderMembersInGroup = <T extends TeamMember>(members: readonly T[]) =>
-  [...members].sort((left, right) =>
-    Number(Boolean(right.positions?.some(position => teamOfficePositions.has(position))))
-    - Number(Boolean(left.positions?.some(position => teamOfficePositions.has(position))))
-  )
+  [...members].sort((left, right) => positionPriority(left) - positionPriority(right))
