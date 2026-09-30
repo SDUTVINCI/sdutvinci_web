@@ -15,10 +15,12 @@ export const memberSeasonGroup = (member: TeamMember, season: string, configured
   const type = String(member.type ?? '').toLowerCase()
   if (type.includes('指导老师') || role.includes('指导老师')) return 'teachers'
 
+  const participation = seasons(member.time)
   const consulting = seasons(member.advisor)
+  const participates = season === 'all' || participation.includes(season)
   const group = configuredGroups.find(item => item.toLowerCase() === String(member.group ?? '').toLowerCase())
-  if (group) return `group:${group}`
-  if (consulting.length && (season === 'all' || consulting.includes(season))) {
+  if (participates && group) return `group:${group}`
+  if (consulting.length && (season === 'all' || consulting.includes(season) && !participation.includes(season))) {
     return 'advisors'
   }
   return 'others'

@@ -84,7 +84,7 @@ const configuredGroups = computed(() => {
     ? cohorts
     : cohorts.filter(cohort => cohort.season === selectedSeason.value)
   const memberGroups = allMembers.value
-    .filter(member => hasSeason(member, selectedSeason.value))
+    .filter(member => selectedSeason.value === 'all' || splitSeason(member.time).includes(selectedSeason.value))
     .map(member => String(member.group || '').trim())
     .filter(Boolean)
   return [...new Set([...relevant.flatMap(cohort => cohort.groups), ...memberGroups])]
@@ -115,11 +115,6 @@ const groupFor = (member: Member, season = selectedSeason.value) =>
 const isTeacher = (member: Member) =>
   normalize(member.type).includes('指导老师') || normalize(member.role).includes('指导老师')
 
-const isAdvisorForSeason = (member: Member, season: string) =>
-  !isTeacher(member) && (season === 'all'
-    ? splitSeason(member.advisor).length > 0
-    : splitSeason(member.advisor).includes(season))
-
 const matchesSearch = (member: Member) => {
   const keyword = normalize(search.value).trim()
   if (!keyword) return true
@@ -140,10 +135,7 @@ const matchesSearch = (member: Member) => {
 const filteredMembers = computed(() =>
   allMembers.value.filter((member) => {
     const group = groupFor(member)
-    const groupMatched = selectedGroup.value === 'all'
-      || (selectedGroup.value === 'advisors'
-        ? isAdvisorForSeason(member, selectedSeason.value)
-        : selectedGroup.value === group)
+    const groupMatched = selectedGroup.value === 'all' || selectedGroup.value === group
     return hasSeason(member, selectedSeason.value) && groupMatched && matchesSearch(member)
   })
 )
@@ -163,14 +155,14 @@ const stats = computed(() => {
     isTeacher(member) && hasSeason(member, season)
   )
   const advisors = allMembers.value.filter((member) =>
-    isAdvisorForSeason(member, season)
+    !isTeacher(member) && hasSeason(member, season) && groupFor(member, season) === 'advisors'
   )
 
   return [
     { value: allMembers.value.length, label: '成员档案' },
     { value: filteredMembers.value.length, label: season === 'all' ? '当前筛选' : `${season} 赛季展示` },
     { value: teachers.length, label: season === 'all' ? '全部赛季指导老师' : `${season} 赛季指导老师` },
-    { value: advisors.length, label: season === 'all' ? '顾问人数' : `${season} 赛季顾问人数` }
+    { value: advisors.length, label: season === 'all' ? '顾问组展示' : `${season} 赛季顾问组` }
   ]
 })
 </script>
