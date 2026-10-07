@@ -56,6 +56,7 @@ stat -c '%a %U:%G %n' .env # 预期：600 <当前用户>:<当前组> .env
 | `APP_PORT` | 当前服务器保持 `3000` | 这是宿主机 gateway 端口；1Panel 的 `18080 → 127.0.0.1:3000` 反代无需修改。端口必须空闲。 |
 | `NODE_ENV` | 固定 `production` | 不要在生产改成 `test`；多个测试保护开关依赖它拒绝生产误用。Compose 运行时也会固定 production。 |
 | `NUXT_PUBLIC_SITE_URL` | 浏览器最终访问站点的完整外部 origin，例如 `https://www.example.com` | 包含协议和非默认端口，不带后台路径。它参与绝对链接和 CMS 同源/CSRF 判断；必须与反向代理对外地址一致。生产应使用 HTTPS。 |
+| `NUXT_PUBLIC_BAIDU_SITE_VERIFICATION` | 可选；百度搜索资源平台 HTML 验证标签的 `content` 值 | 默认留空。运行容器更新后输出 `baidu-site-verification` 标签；不是 API 推送 Token。站点验证、网址提交和旧域名迁移见 [`SEO.md`](../SEO.md)。 |
 
 对于当前 1Panel 场景，应用侧保持：
 

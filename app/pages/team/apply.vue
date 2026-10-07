@@ -1,5 +1,10 @@
 <script setup lang="ts">
-useHead({ title: '申请成员信息 · Vinci 机器人队' })
+useContentSeo({
+  title: '申请成员信息 | 山东理工大学 Vinci 机器人队',
+  description: '提交 Vinci 机器人队成员资料，审核通过后公开展示。',
+  path: '/team/apply',
+  noindex: true
+})
 </script>
 
 <template>

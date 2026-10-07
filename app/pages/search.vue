@@ -36,9 +36,9 @@ const results = computed(() => data.value?.items ?? [])
 useContentSeo({
   title: '全站搜索 | 山东理工大学 Vinci 机器人队',
   description: '搜索 Vinci 机器人队的新闻、工程教程和 Wiki 正文。',
-  path: '/search'
+  path: '/search',
+  noindex: true
 })
-useSeoMeta({ robots: 'noindex, follow' })
 
 watch(query, value => { input.value = value })
 

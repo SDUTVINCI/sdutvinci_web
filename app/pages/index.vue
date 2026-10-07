@@ -2,6 +2,7 @@
 import { homePromoAutoplayMs, homePromoSlides } from '~/data/home-promos'
 import { homeAffiliations, sponsorPartners } from '~/data/footer-partners'
 import { roboconRecordedYearCount } from '~/data/robocon-achievements'
+import { SITE_DESCRIPTION } from '~~/shared/utils/site-seo'
 
 type Member = Record<string, any>
 
@@ -14,8 +15,8 @@ const { data: rawMembers, pending, error, refresh } = await usePublicContentQuer
 })
 
 useContentSeo({
-  title: '山东理工大学 Vinci 机器人队',
-  description: '山东理工大学 Vinci 机器人队、机电创新学会，以全国大学生机器人大赛 Robocon 为核心。',
+  title: '山东理工大学 Vinci 机器人队官网',
+  description: SITE_DESCRIPTION,
   path: '/'
 })
 

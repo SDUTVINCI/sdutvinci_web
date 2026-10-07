@@ -1,4 +1,5 @@
 <script setup lang="ts">
+useSeoMeta({ robots: 'noindex, nofollow' })
 import { resolveStaticMediaUrl } from '~~/shared/utils/static-media'
 
 const { session, logout } = useCmsSession()

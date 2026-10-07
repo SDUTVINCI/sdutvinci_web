@@ -1,6 +1,9 @@
 <script setup lang="ts">
-useHead({
-  title: '项目 | 山东理工大学 Vinci 机器人队'
+useContentSeo({
+  title: '项目 | 山东理工大学 Vinci 机器人队',
+  description: 'Vinci 机器人队项目展示内容正在整理。',
+  path: '/projects',
+  noindex: true
 })
 </script>
 

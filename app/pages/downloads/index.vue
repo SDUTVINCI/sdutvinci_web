@@ -16,9 +16,10 @@ type DownloadListing = {
   entries: DownloadEntry[]
 }
 
-useHead({
+useContentSeo({
   title: '资料下载 | 山东理工大学 Vinci 机器人队',
-  meta: [{ name: 'description', content: '浏览和下载 Vinci 机器人队公开资料。' }]
+  description: '浏览和下载山东理工大学 Vinci 机器人队公开资料，按文件夹查找工程文件、学习资料与团队共享资源。',
+  path: '/downloads'
 })
 
 const route = useRoute()

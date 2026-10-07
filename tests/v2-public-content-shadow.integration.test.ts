@@ -13,7 +13,8 @@ import {
 import { getCmsArticlePublicPath } from '../server/services/cms-articles'
 import {
   buildPublicDatabaseRss,
-  buildPublicDatabaseSitemap
+  buildPublicDatabaseSitemap,
+  buildPublicDatabaseSitemapText
 } from '../server/services/public-content-feeds'
 import {
   getPublicArticleFromDatabase,
@@ -345,6 +346,10 @@ databaseSuite('V2 阶段 4 正式内容查询、缓存与候选 Feed', () => {
       '<loc>https://phase4.test/team/phase4member</loc>'
     )
     expect(sitemap).not.toContain('phase4-test-deleted')
+    expect(sitemap).toContain('<loc>https://phase4.test/team/organization</loc>')
+    expect(sitemap).not.toContain('<loc>https://phase4.test/projects</loc>')
+    const publicNews = await getPublicArticleFromDatabase('news', '/news/phase4-test-news')
+    expect(sitemap).toContain(`<lastmod>${publicNews!.updatedAt}</lastmod>`)
     expect(rss).toContain('<title>阶段四数据库新闻</title>')
     expect(rss).not.toContain('已删除候选')
   })
@@ -470,6 +475,7 @@ databaseSuite('V2 阶段 4 正式内容查询、缓存与候选 Feed', () => {
         buildPublicDatabaseRss()
       ])
       expect(sitemap).not.toContain('phase4-test-news')
+      expect(await buildPublicDatabaseSitemapText()).not.toContain('phase4-test-news')
       expect(rss).not.toContain('阶段四数据库新闻')
     } finally {
       await getDatabase().update(articles)

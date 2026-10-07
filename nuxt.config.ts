@@ -45,12 +45,14 @@ export default defineNuxtConfig({
   },
   runtimeConfig: {
     public: {
-      siteUrl: process.env.NUXT_PUBLIC_SITE_URL || ''
+      siteUrl: process.env.NUXT_PUBLIC_SITE_URL || '',
+      baiduSiteVerification: ''
     }
   },
   routeRules: {
     '/': { prerender: false },
-    '/research': { prerender: true },
+    // SEO origins and verification codes come from the deployed runtime, not the image build.
+    '/research': { prerender: false },
     '/team': { prerender: false },
     '/team/**': { prerender: false },
     '/news': { prerender: false },
@@ -61,21 +63,18 @@ export default defineNuxtConfig({
     },
     '/wiki': { prerender: false },
     '/wiki/**': { prerender: false },
-    '/docs': { redirect: '/wiki' },
-    '/recruitment': { prerender: true },
-    '/links': { prerender: true },
+    '/docs': { redirect: { to: '/wiki', statusCode: 301 } },
+    '/projects': { prerender: false },
+    '/recruitment': { prerender: false },
+    '/links': { prerender: false },
     '/downloads': { prerender: false },
-    '/contact': { prerender: true },
+    '/contact': { prerender: false },
     '/cms/**': { prerender: false },
     '/api/cms/**': { prerender: false },
     '/api/v2/**': { prerender: false },
     '/sitemap.xml': { prerender: false },
+    '/sitemap.txt': { prerender: false },
+    '/robots.txt': { prerender: false },
     '/rss.xml': { prerender: false }
-  },
-  nitro: {
-    prerender: {
-      crawlLinks: true,
-      routes: ['/research', '/projects', '/recruitment', '/links', '/contact']
-    }
   }
 })

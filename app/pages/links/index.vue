@@ -1,9 +1,8 @@
 <script setup lang="ts">
-useHead({
+useContentSeo({
   title: '常用链接 | 山东理工大学 Vinci 机器人队',
-  meta: [
-    { name: 'description', content: '山东理工大学 Vinci 机器人队资料与相关服务入口汇总。' }
-  ]
+  description: '山东理工大学 Vinci 机器人队常用服务导航，汇总公开资料下载、文件目录、访问统计与团队管理服务入口。',
+  path: '/links'
 })
 
 const groups = [

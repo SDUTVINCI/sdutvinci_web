@@ -148,17 +148,24 @@ const { data: articleCreditIdentities } = await useAsyncData(
 )
 
 useContentSeo({
-  title: () => `${pageTitle.value} | Vinci Wiki`,
+  title: () => `${pageTitle.value}${docTitle.value !== page.value?.title ? ` - ${docTitle.value}` : ''} | 山东理工大学 Vinci Wiki`,
   description: () => String(
-    page.value?.frontmatter && typeof page.value.frontmatter === 'object'
-      ? (page.value.frontmatter as Record<string, unknown>).description
-        || page.value?.title
-        || 'Vinci Wiki'
-      : page.value?.title || 'Vinci Wiki'
+    page.value?.description || page.value?.title || 'Vinci Wiki'
   ),
   path: cleanPath,
   image: () => page.value?.image ? String(page.value.image) : undefined,
-  type: 'article'
+  type: 'article',
+  noindex: () => Boolean(page.value?.requiresAuth),
+  articleKind: 'TechArticle',
+  headline: () => String(page.value?.title || 'Wiki'),
+  publishedAt: () => page.value?.date,
+  modifiedAt: () => typeof page.value?.updatedAt === 'string' ? page.value.updatedAt : undefined,
+  breadcrumbs: () => [
+    { name: 'Wiki 知识库', path: '/wiki' },
+    ...(docIndex.value && docIndex.value.path !== cleanPath.value
+      ? [{ name: docTitle.value, path: docIndex.value.path }] : []),
+    { name: String(page.value?.title || 'Wiki'), path: cleanPath.value }
+  ]
 })
 
 const showDocNav = ref(false)

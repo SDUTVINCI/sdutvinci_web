@@ -30,7 +30,7 @@ const { data: rawMembers } = await usePublicContentQuery<Member[]>({
 })
 
 useContentSeo({
-  title: () => `${member.value?.name || '成员'} | Vinci 机器人队`,
+  title: () => `${member.value?.name || '成员'} | 山东理工大学 Vinci 机器人队`,
   description: () => String(
     member.value?.description
     || member.value?.role
@@ -38,7 +38,11 @@ useContentSeo({
   ),
   path: `/team/${encodeURIComponent(slug)}`,
   image: () => member.value?.image ? String(member.value.image) : undefined,
-  type: 'profile'
+  type: 'profile',
+  breadcrumbs: () => [
+    { name: '团队成员', path: '/team' },
+    { name: String(member.value?.name || '成员'), path: `/team/${encodeURIComponent(slug)}` }
+  ]
 })
 
 const cleanText = (value: unknown) =>
