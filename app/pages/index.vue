@@ -5,10 +5,11 @@ import { roboconRecordedYearCount } from '~/data/robocon-achievements'
 
 type Member = Record<string, any>
 
-const { data: rawMembers } = await usePublicContentQuery<Member[]>({
+const { data: rawMembers, pending, error, refresh } = await usePublicContentQuery<Member[]>({
   key: 'members:home-total',
-  database: async () => (
-    await $fetch<{ items: Member[] }>('/api/v2/content/members')
+  lazy: true,
+  database: async requestFetch => (
+    await requestFetch<{ items: Member[] }>('/api/v2/content/members')
   ).items
 })
 
@@ -18,7 +19,7 @@ useContentSeo({
   path: '/'
 })
 
-const totalMemberCount = computed(() => rawMembers.value?.length ?? 0)
+const totalMemberCount = computed(() => pending.value || error.value ? '—' : rawMembers.value?.length ?? 0)
 
 const heroLinks = [
   { label: 'Bilibili', href: 'https://space.bilibili.com/471524675', external: true },
@@ -154,6 +155,16 @@ const stats = computed(() => [
       </div>
     </section>
 
+    <PublicContentState
+      v-if="pending || error"
+      class="home-member-state"
+      :pending="pending"
+      :error="Boolean(error)"
+      loading-message="正在加载成员统计…"
+      error-message="成员统计暂时无法加载，请稍后重试。"
+      @retry="refresh()"
+    />
+
     <HomePromoCarousel :slides="homePromoSlides" :autoplay-ms="homePromoAutoplayMs" />
 
     <section class="feature-stack" aria-label="首页内容">
@@ -164,7 +175,7 @@ const stats = computed(() => [
         :class="{ reversed: index % 2 === 1 }"
       >
         <div class="feature-media">
-          <img :src="section.image" :alt="section.imageAlt">
+          <img :src="section.image" :alt="section.imageAlt" loading="lazy" decoding="async">
         </div>
 
         <div class="feature-copy">

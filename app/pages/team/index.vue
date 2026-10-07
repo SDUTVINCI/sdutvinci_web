@@ -2,10 +2,11 @@
 import { memberSeasonGroup, orderMembersInGroup } from '~~/shared/utils/member-season-group'
 type Member = Record<string, any>
 
-const { data: rawMembers } = await usePublicContentQuery<Member[]>({
+const { data: rawMembers, pending, error, refresh } = await usePublicContentQuery<Member[]>({
   key: 'members:list',
-  database: async () => (
-    await $fetch<{ items: Member[] }>('/api/v2/content/members')
+  lazy: true,
+  database: async requestFetch => (
+    await requestFetch<{ items: Member[] }>('/api/v2/content/members')
   ).items
 })
 const { data: memberOptions } = await useFetch<{
@@ -184,7 +185,7 @@ const stats = computed(() => {
 
     <section class="stats-band members-stats" aria-label="成员概览">
       <div v-for="item in stats" :key="item.label" class="stat-item">
-        <strong>{{ item.value }}</strong>
+        <strong>{{ pending || error ? '—' : item.value }}</strong>
         <span>{{ item.label }}</span>
       </div>
     </section>
@@ -223,7 +224,16 @@ const stats = computed(() => {
     </section>
 
     <section class="member-directory" aria-label="成员列表">
-      <div v-if="groupedMembers.length" class="member-groups">
+      <PublicContentState
+        v-if="pending || error || !groupedMembers.length"
+        :pending="pending"
+        :error="Boolean(error)"
+        loading-message="正在加载成员档案…"
+        error-message="成员档案暂时无法加载，请稍后重试。"
+        :empty-message="allMembers.length ? '没有匹配的成员，试试其他筛选条件。' : '暂时没有成员档案。'"
+        @retry="refresh()"
+      />
+      <div v-else class="member-groups">
         <section v-for="group in groupedMembers" :key="group.key" class="member-group">
           <div class="section-heading compact">
             <p class="eyebrow">{{ group.members.length }} people</p>
@@ -236,9 +246,6 @@ const stats = computed(() => {
         </section>
       </div>
 
-      <div v-else class="empty-state">
-        没有匹配的成员。
-      </div>
     </section>
   </main>
 </template>

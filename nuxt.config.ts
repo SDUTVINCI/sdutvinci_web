@@ -55,6 +55,10 @@ export default defineNuxtConfig({
     '/team/**': { prerender: false },
     '/news': { prerender: false },
     '/news/**': { prerender: false },
+    '/search': {
+      prerender: false,
+      headers: { 'cache-control': 'private, no-store' }
+    },
     '/wiki': { prerender: false },
     '/wiki/**': { prerender: false },
     '/docs': { redirect: '/wiki' },

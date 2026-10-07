@@ -18,6 +18,7 @@ import type {
   PublicWikiIndexResponse
 } from '../../shared/types/public-content'
 import { resolveStaticMediaUrl } from '../../shared/utils/static-media'
+import { createSearchSnippet } from '../../shared/utils/public-search'
 import {
   isWikiDocumentIndexPath,
   normalizeWikiDocumentTags,
@@ -441,7 +442,7 @@ export const searchPublicArticlesFromDatabase = async (
   const normalizedQuery = query.trim()
   if (!normalizedQuery) return []
   const pattern = `%${
-    normalizedQuery.replaceAll('%', '\\%').replaceAll('_', '\\_')
+    normalizedQuery.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_')
   }%`
   const rows = await getDatabase()
     .select(articleSelection)
@@ -458,7 +459,12 @@ export const searchPublicArticlesFromDatabase = async (
         ilike(articleRevisions.body, pattern)
       )!
     ))
-    .orderBy(asc(articles.collection), asc(articles.relativePath))
+    .orderBy(
+      sql`case when lower(${articles.title}) = lower(${normalizedQuery}) then 0
+        when ${articles.title} ilike ${pattern} then 1 else 2 end`,
+      asc(articles.collection),
+      asc(articles.relativePath)
+    )
     .limit(100)
 
   return rows.map((row) => {
@@ -469,6 +475,8 @@ export const searchPublicArticlesFromDatabase = async (
       path: item.path,
       title: item.title,
       description: item.description,
+      snippet: createSearchSnippet(row.body, normalizedQuery) || item.description,
+      requiresAuth: item.requiresAuth,
       revisionId: item.revisionId,
       contentHash: item.contentHash
     }

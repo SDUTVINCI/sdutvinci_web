@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { PublicWikiIndexResponse } from '~~/shared/types/public-content'
 
-const { data: wikiResponse, pending } = await usePublicContentQuery<PublicWikiIndexResponse>({
+const { data: wikiResponse, pending, error, refresh } = await usePublicContentQuery<PublicWikiIndexResponse>({
   key: 'wiki:index',
   lazy: true,
   database: requestFetch => requestFetch<PublicWikiIndexResponse>('/api/v2/content/wiki')
@@ -28,9 +28,9 @@ const wikiStats = computed(() => {
     .sort((a, b) => String(b).localeCompare(String(a)))[0]
 
   return [
-    { index: '01', value: docs.size, label: '教程文档' },
-    { index: '02', value: wikiPages.value.length, label: '可浏览页面与章节' },
-    { index: '03', value: latestDate || '持续整理', label: '最近文档日期' }
+    { index: '01', value: pending.value || error.value ? '—' : docs.size, label: '教程文档' },
+    { index: '02', value: pending.value || error.value ? '—' : wikiPages.value.length, label: '可浏览页面与章节' },
+    { index: '03', value: pending.value || error.value ? '—' : latestDate || '持续整理', label: '最近文档日期' }
   ]
 })
 </script>
@@ -71,7 +71,15 @@ const wikiStats = computed(() => {
         <p>按文档浏览公开教程；成员资料和部分受限内容会明确标注，登录后即可继续阅读。</p>
       </div>
 
-      <WikiList :response="wikiResponse" :pending="pending" />
+      <PublicContentState
+        v-if="pending || error"
+        :pending="pending"
+        :error="Boolean(error)"
+        loading-message="正在加载 Wiki 知识库…"
+        error-message="Wiki 知识库暂时无法加载，请稍后重试。"
+        @retry="refresh()"
+      />
+      <WikiList v-else :response="wikiResponse" />
     </section>
   </main>
 </template>

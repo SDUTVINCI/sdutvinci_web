@@ -784,3 +784,8 @@
     transition: none;
   }
 }
+
+.home-member-state {
+  width: min(var(--content), calc(100% - 32px));
+  margin: 20px auto;
+}

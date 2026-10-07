@@ -1,8 +1,9 @@
 <script setup lang="ts">
 type NewsItem = Record<string, any>
 
-const { data: rawNews } = await usePublicContentQuery<NewsItem[]>({
+const { data: rawNews, pending, error, refresh } = await usePublicContentQuery<NewsItem[]>({
   key: 'news:list',
+  lazy: true,
   database: async requestFetch => (
     await requestFetch<{ items: NewsItem[] }>('/api/v2/content/news')
   ).items
@@ -26,8 +27,8 @@ const formatDate = (value: unknown) => {
 }
 
 const stats = computed(() => [
-  { value: newsList.value.length, label: '新闻记录' },
-  { value: newsList.value[0]?.date ? formatDate(newsList.value[0].date) : '持续更新', label: '最近更新' },
+  { value: pending.value || error.value ? '—' : newsList.value.length, label: '新闻记录' },
+  { value: pending.value || error.value ? '—' : newsList.value[0]?.date ? formatDate(newsList.value[0].date) : '暂无记录', label: '最近更新' },
   { value: 'Robocon', label: '主要动态方向' }
 ])
 </script>
@@ -57,7 +58,17 @@ const stats = computed(() => [
         <h2>最新记录</h2>
       </div>
 
-      <div v-if="newsList.length" class="news-list">
+      <PublicContentState
+        v-if="pending || error || !newsList.length"
+        :pending="pending"
+        :error="Boolean(error)"
+        loading-message="正在加载新闻…"
+        error-message="新闻暂时无法加载，请稍后重试。"
+        empty-message="还没有新闻内容。"
+        @retry="refresh()"
+      />
+
+      <div v-else class="news-list">
         <article v-for="item in newsList" :key="item.path" class="news-card">
           <NuxtLink class="news-card-main" :to="item.path">
             <span v-if="item.image" class="news-card-media">
@@ -77,7 +88,6 @@ const stats = computed(() => [
         </article>
       </div>
 
-      <div v-else class="empty-state">还没有新闻内容。</div>
     </section>
   </main>
 </template>

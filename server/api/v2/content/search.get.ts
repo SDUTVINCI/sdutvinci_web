@@ -1,4 +1,4 @@
-import { createError, getQuery } from 'h3'
+import { createError, getQuery, setResponseHeader } from 'h3'
 import { z } from 'zod'
 import type { PublicArticleCollection } from '../../../../shared/types/public-content'
 import { searchPublicArticlesFromDatabase } from '../../../services/public-content'
@@ -10,6 +10,7 @@ const querySchema = z.object({
 })
 
 export default defineEventHandler(async (event) => {
+  setResponseHeader(event, 'cache-control', 'private, no-store')
   const parsed = querySchema.safeParse(getQuery(event))
   if (!parsed.success) {
     throw createError({ statusCode: 400, message: '搜索参数无效' })

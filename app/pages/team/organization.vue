@@ -3,8 +3,9 @@ import OrganizationGalaxyBackground from '../../components/OrganizationGalaxyBac
 import type { PublicOrganizationResponse } from '../../../shared/types/organization'
 
 const requestFetch = import.meta.server ? useRequestFetch() : $fetch
-const { data, error } = await useAsyncData('organization:public', () =>
-  requestFetch<PublicOrganizationResponse>('/api/organization')
+const { data, error, pending, refresh } = await useAsyncData('organization:public', () =>
+  requestFetch<PublicOrganizationResponse>('/api/organization'),
+  { lazy: true }
 )
 
 useContentSeo({
@@ -33,14 +34,24 @@ useContentSeo({
 
     <TeamSectionNav />
 
-    <section v-if="data" class="organization-page-content">
-      <OrganizationChart :structure="data.structure" />
-      <footer class="organization-update-note">
-        <span>LAST PUBLISHED</span>
-        <p>本页只描述组织关系，不关联成员档案；架构调整以后台最新发布版本为准。</p>
-        <time :datetime="data.publishedAt">版本 {{ data.publishedVersion }}</time>
-      </footer>
+    <section class="organization-page-content">
+      <PublicContentState
+        v-if="pending || error || !data"
+        :pending="pending"
+        :error="Boolean(error)"
+        loading-message="正在加载组织架构…"
+        error-message="组织架构暂时无法加载，请稍后重试。"
+        empty-message="暂时没有发布的组织架构。"
+        @retry="refresh()"
+      />
+      <template v-else>
+        <OrganizationChart :structure="data.structure" />
+        <footer class="organization-update-note">
+          <span>LAST PUBLISHED</span>
+          <p>本页只描述组织关系，不关联成员档案；架构调整以后台最新发布版本为准。</p>
+          <time :datetime="data.publishedAt">版本 {{ data.publishedVersion }}</time>
+        </footer>
+      </template>
     </section>
-    <p v-else-if="error" class="organization-load-error">组织架构暂时无法加载，请稍后重试。</p>
   </main>
 </template>

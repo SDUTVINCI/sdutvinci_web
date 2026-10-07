@@ -54,6 +54,8 @@ export interface PublicContentSearchResult {
   path: string
   title: string
   description: string
+  snippet: string
+  requiresAuth: boolean
   revisionId: string
   contentHash: string
 }
