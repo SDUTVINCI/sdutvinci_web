@@ -1,9 +1,16 @@
 <script setup lang="ts">
+import { resolveBaiduSiteVerification, resolveSiteOrigin } from '~~/shared/utils/site-seo'
+
 const config = useRuntimeConfig()
+const requestUrl = useRequestURL()
 useHead(() => ({
-  meta: config.public.baiduSiteVerification
-    ? [{ name: 'baidu-site-verification', content: String(config.public.baiduSiteVerification).trim() }]
-    : []
+  meta: [{
+    name: 'baidu-site-verification',
+    content: resolveBaiduSiteVerification(
+      config.public.baiduSiteVerification,
+      resolveSiteOrigin(config.public.siteUrl, requestUrl.origin)
+    )
+  }].filter(tag => tag.content)
 }))
 </script>
 

@@ -7,8 +7,10 @@
 名称在搜索结果中缺少上下文。结构化数据包含 Organization、WebSite、WebPage、面包屑；新闻使用
 NewsArticle，Wiki 使用 TechArticle。只使用既有真实信息，缺失日期不补成当前日期。
 
-这些页面由运行时 SSR 生成，`NUXT_PUBLIC_SITE_URL` 和百度验证值从运行容器读取。镜像构建时无需
-写入站点域名或验证值，修改环境变量后重建运行容器即可；不能仅 reload 反向代理。
+这些页面由运行时 SSR 生成，`NUXT_PUBLIC_SITE_URL` 和百度验证值支持运行容器配置。正式 HTTPS
+域名默认使用维护者提供的公开验证值 `codeva-FERDraaDA8`，其他域名不使用这个默认值；非空
+`NUXT_PUBLIC_BAIDU_SITE_VERIFICATION` 优先覆盖。修改环境变量后重建运行容器即可；不能仅 reload
+反向代理。
 
 - `/robots.txt`：允许公开页面与 `/_nuxt/` 等渲染资源抓取，声明 XML Sitemap，禁止抓取 API。
 - `/sitemap.xml`：公开核心栏目、组织架构、已发布的公开新闻/Wiki 与成员档案；文章和成员输出
@@ -27,7 +29,9 @@ robots 不屏蔽 CMS、搜索页或占位页，保证爬虫能够读到 noindex�
 当前正式主域名为 `https://vinci.sdut.edu.cn`。在[百度搜索资源平台](https://ziyuan.baidu.com/)
 添加这个准确的 HTTPS 站点，查看账号当前支持的验证方式和提交权限。
 
-选择 HTML 标签验证时，将平台给出的标签中 **content 的值**写入生产 `.env`：
+2026-10-08 已接入维护者提供的 HTML 验证标签。正式站点可直接使用默认值完成平台验证；这是
+公开的站点归属验证值，不是 API Token。更换账号或验证值时，将平台给出的标签中 **content 的值**
+写入生产 `.env`：
 
 ```dotenv
 NUXT_PUBLIC_SITE_URL=https://vinci.sdut.edu.cn
@@ -36,7 +40,7 @@ NUXT_PUBLIC_BAIDU_SITE_VERIFICATION=平台给出的content值
 
 不粘贴整个 HTML 标签，也不把 API 推送 Token 填在此处。按现行蓝绿更新流程重建运行容器后，
 查看首页原始 HTML 是否包含正确的 `baidu-site-verification` 标签，再回平台完成验证。
-如果使用 DNS 验证，则此变量保持空值。
+如果使用 DNS 验证，则无需额外设置此变量。
 
 验证通过后，在平台当前可用的“普通收录”入口执行：
 

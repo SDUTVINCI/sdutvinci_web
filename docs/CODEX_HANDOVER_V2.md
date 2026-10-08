@@ -2251,3 +2251,10 @@ Vitest、完整 `npm test` 和 `npm run test:cms` 三种入口都能拒绝同库
 - GitHub Actions verify 增加 SEO 元数据/Feed 和生产 HTTP 回归，后续镜像构建继续依赖 verify。
 - 测试使用本次独立 PostgreSQL 容器与回环应用；不修改既有本地服务、生产数据库、S3/COS、正式
   Markdown 或独立内容仓库。没有 Schema/Migration 或依赖变更；页面视觉样式保持不变。
+
+## 2026-10-08：接入百度站点 HTML 验证
+
+- 维护者提供公开验证值 `codeva-FERDraaDA8`。正式 HTTPS origin 默认输出该验证标签；本地和
+  其他域名不使用默认值，非空运行时环境变量继续优先覆盖，避免等待服务器配置权限。
+- 使用现有 Actions 与自动部署上线，不新增 API Token、数据库 Migration 或视觉改动。
+- 站点归属验证仍需维护者在百度平台点击完成；HTML 标签上线不代表验证或收录已完成。

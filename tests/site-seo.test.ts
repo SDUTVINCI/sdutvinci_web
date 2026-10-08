@@ -2,11 +2,19 @@ import { parseFragment } from 'parse5'
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_SITE_URL, buildSeoGraph, canonicalSiteUrl,
-  resolveSiteOrigin, seoDate, seoDescription, serializeSeoJson
+  resolveBaiduSiteVerification, resolveSiteOrigin, seoDate, seoDescription, serializeSeoJson
 } from '../shared/utils/site-seo'
 import { buildSiteRobots } from '../server/services/site-robots'
 
 describe('官网 SEO 元数据', () => {
+  it('正式域名提供公开百度验证值，其他环境默认不带验证标签且保留配置覆盖', () => {
+    expect(resolveBaiduSiteVerification('', DEFAULT_SITE_URL)).toBe('codeva-FERDraaDA8')
+    expect(resolveBaiduSiteVerification(undefined, 'http://localhost:3000')).toBe('')
+    expect(resolveBaiduSiteVerification('', 'https://preview.example')).toBe('')
+    expect(resolveBaiduSiteVerification('  runtime-verification  ', DEFAULT_SITE_URL))
+      .toBe('runtime-verification')
+  })
+
   it('只使用 HTTP(S) origin，规范化参数、锚点和中文路径', () => {
     expect(resolveSiteOrigin('https://vinci.example/base/')).toBe('https://vinci.example')
     expect(resolveSiteOrigin('javascript:alert(1)')).toBe(DEFAULT_SITE_URL)

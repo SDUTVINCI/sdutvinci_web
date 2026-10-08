@@ -34,6 +34,12 @@ export const resolveSiteOrigin = (configured: unknown, fallback = DEFAULT_SITE_U
   return DEFAULT_SITE_URL
 }
 
+export const resolveBaiduSiteVerification = (configured: unknown, origin: string): string => {
+  const override = String(configured || '').trim()
+  // This public ownership tag belongs only to the official HTTPS site.
+  return override || (origin === DEFAULT_SITE_URL ? 'codeva-FERDraaDA8' : '')
+}
+
 export const canonicalSiteUrl = (origin: string, path: string): string => {
   // Public paths must stay on the configured site, even when supplied by content.
   if (!path.startsWith('/') || path.startsWith('//') || path.includes('\\')) {
