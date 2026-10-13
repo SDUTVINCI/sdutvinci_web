@@ -745,7 +745,9 @@
   transition: background .15s ease, border-color .15s ease;
 }
 .member-choice input[type="radio"] { border-radius: 50%; }
-.member-choice input:checked { border-color: var(--cyan); background: var(--cyan); }
+/* Keep the selected fill above the shared CMS input focus styles. */
+.member-choice input[type="checkbox"]:checked,
+.member-choice input[type="radio"]:checked { border-color: var(--cyan); background: var(--cyan); }
 .member-choice input[type="checkbox"]:checked::after { content: ''; width: 10px; height: 6px; border: solid white; border-width: 0 0 2px 2px; transform: translateY(-1px) rotate(-45deg); }
 .member-choice input[type="radio"]:checked::after { content: ''; width: 8px; height: 8px; background: white; border-radius: 50%; }
 .member-choice:has(input:disabled) { opacity: .55; cursor: not-allowed; background: var(--surface-soft); transform: none; }
