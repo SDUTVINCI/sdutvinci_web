@@ -8,6 +8,8 @@ export const MEMBER_MARKDOWN_EDITABLE_FIELDS = [
   'image',
   'role',
   'type',
+  'group',
+  'positions',
   'time',
   'advisor',
   'grade',
@@ -16,9 +18,7 @@ export const MEMBER_MARKDOWN_EDITABLE_FIELDS = [
   'body',
   'metadata',
   'sortOrder',
-  'isLearner',
-  'group',
-  'positions'
+  'isLearner'
 ] as const
 
 export type MemberEditableField = typeof MEMBER_MARKDOWN_EDITABLE_FIELDS[number]
@@ -49,6 +49,7 @@ export const MEMBER_POSITION_OPTIONS = [
 
 export type MemberPosition = typeof MEMBER_POSITION_OPTIONS[number]
 const memberPositionSet = new Set<string>(MEMBER_POSITION_OPTIONS)
+const teamPositionSet = new Set<string>(['队长', '副队长', '机电创新学会会长'])
 
 export const normalizeMemberPositions = (value: unknown): string[] => {
   const values = Array.isArray(value) ? value : String(value ?? '').split(/[,，]/)
@@ -59,10 +60,36 @@ export const normalizeMemberPositions = (value: unknown): string[] => {
   return normalized
 }
 
-export const assertLearnerProfile = (profile: Pick<MemberProfileSnapshot, 'isLearner' | 'positions' | 'seasons' | 'advisorSeasons'>) => {
-  if (profile.isLearner && (profile.positions.length || profile.seasons.length || profile.advisorSeasons.length)) {
-    throw new Error('MEMBER_LEARNER_FIELDS_INVALID')
+export const assertLearnerProfile = (profile: { isLearner?: boolean, positions: readonly string[], seasons: readonly string[], advisorSeasons: readonly string[] }) => {
+  if (profile.isLearner && (profile.positions.length || profile.seasons.length || profile.advisorSeasons.length)) throw new Error('MEMBER_LEARNER_FIELDS_INVALID')
+}
+
+export const normalizeEditableMemberRoles = (input: {
+  isLearner?: boolean
+  positions: unknown
+  seasons: readonly string[]
+  advisorSeasons: readonly string[]
+  grade: string | null
+  groupName: string | null
+}) => {
+  const positions = normalizeMemberPositions(input.positions)
+  if (input.isLearner) {
+    assertLearnerProfile({ ...input, positions })
+    return []
   }
+  if (!input.seasons.length) throw new Error('MEMBER_SEASON_REQUIRED')
+  if (positions.includes('指导老师')) {
+    if (positions.some(position => position !== '指导老师') || input.grade
+      || input.groupName || input.advisorSeasons.length) {
+      throw new Error('MEMBER_TEACHER_FIELDS_INVALID')
+    }
+    return ['指导老师']
+  }
+  if (positions.includes('组长') && positions.includes('成员')) {
+    throw new Error('MEMBER_GROUP_POSITION_INVALID')
+  }
+  const withoutAdvisor = positions.filter(position => position !== '顾问')
+  return input.advisorSeasons.length ? [...withoutAdvisor, '顾问'] : withoutAdvisor
 }
 
 export const deriveMemberType = (positions: readonly string[], groupName: string | null, isLearner = false) => {
@@ -107,7 +134,8 @@ const memberKeyPattern = /^[a-z][a-z0-9]{2,31}$/
 const sensitiveKeyPattern = /^(?:account|accounts|login|loginid|login_id|username|user_id|userid|password|password_hash|roles?|permissions?|binding|member_id|sessions?|security|status|token|secret)$/i
 const knownFrontmatterKeys = new Set([
   'id', 'name', 'image', 'role', 'type', 'time', 'advisor', 'grade',
-  'affiliation', 'links', 'metadata', 'sortOrder', 'group', 'positions', 'isLearner'
+  'affiliation', 'links', 'metadata', 'sortOrder', 'group', 'positions',
+  'schemaVersion', 'isTeacher', 'teamPositions', 'groupPosition', 'isAdvisor', 'isLearner'
 ])
 
 const stringOrNull = (value: unknown) => {
@@ -257,10 +285,44 @@ export const memberProfileFromMarkdown = (
   if (parsed.frontmatter.isLearner !== undefined && typeof parsed.frontmatter.isLearner !== 'boolean') throw new Error('MEMBER_LEARNER_FLAG_INVALID')
   const legacyRole = stringOrNull(parsed.frontmatter.role)
   const legacyType = stringOrNull(parsed.frontmatter.type)
-  const groupName = stringOrNull(parsed.frontmatter.group) || inferLegacyGroup(legacyRole, legacyType)
-  const positions = parsed.frontmatter.positions === undefined
-    ? (parsed.frontmatter.isLearner === true ? [] : inferLegacyPositions(legacyRole, legacyType))
-    : normalizeMemberPositions(parsed.frontmatter.positions)
+  if (parsed.frontmatter.schemaVersion !== undefined && parsed.frontmatter.schemaVersion !== 2) {
+    throw new Error('MEMBER_SCHEMA_VERSION_INVALID')
+  }
+  const hasStructuredRoles = parsed.frontmatter.schemaVersion === 2
+  const groupName = hasStructuredRoles
+    ? stringOrNull(parsed.frontmatter.group)
+    : stringOrNull(parsed.frontmatter.group) || inferLegacyGroup(legacyRole, legacyType)
+  const teamPositions = hasStructuredRoles ? normalizeMemberPositions(parsed.frontmatter.teamPositions) : []
+  const groupPosition = hasStructuredRoles ? stringOrNull(parsed.frontmatter.groupPosition) : null
+  if (hasStructuredRoles && (
+    teamPositions.some(position => !teamPositionSet.has(position))
+    || (groupPosition !== null && !['组长', '成员'].includes(groupPosition))
+    || typeof parsed.frontmatter.isTeacher !== 'boolean'
+    || typeof parsed.frontmatter.isAdvisor !== 'boolean'
+  )) throw new Error('MEMBER_POSITION_FIELDS_INVALID')
+  const structuredPositions = hasStructuredRoles
+    ? normalizeMemberPositions([
+        ...(parsed.frontmatter.isTeacher === true ? ['指导老师'] : []),
+        ...teamPositions,
+        ...(groupPosition ? [groupPosition] : []),
+        ...(parsed.frontmatter.isAdvisor === true ? ['顾问'] : [])
+      ])
+    : []
+  const positions = parsed.frontmatter.positions !== undefined
+    ? normalizeMemberPositions(parsed.frontmatter.positions)
+    : hasStructuredRoles ? structuredPositions : parsed.frontmatter.isLearner === true ? [] : inferLegacyPositions(legacyRole, legacyType)
+  if (hasStructuredRoles && parsed.frontmatter.positions !== undefined && (
+    positions.includes('指导老师') !== (parsed.frontmatter.isTeacher === true)
+    || positions.includes('顾问') !== (parsed.frontmatter.isAdvisor === true)
+    || positions.filter(position => teamPositionSet.has(position)).length !== teamPositions.length
+    || teamPositions.some(position => !positions.includes(position))
+    || (positions.includes('组长') ? '组长' : positions.includes('成员') ? '成员' : null) !== groupPosition
+  )) throw new Error('MEMBER_POSITION_FIELDS_CONFLICT')
+  const grade = stringOrNull(parsed.frontmatter.grade)
+  const legacySeasons = normalizeMemberSeasons(parsed.frontmatter.time)
+  const legacyAdvisorSeasons = normalizeMemberSeasons(parsed.frontmatter.advisor)
+  const legacyTeacherSeasons = !hasStructuredRoles && positions.includes('指导老师')
+    && !grade && legacySeasons.length > 0 && legacyAdvisorSeasons.length === 0
 
   return {
     memberKey,
@@ -272,9 +334,9 @@ export const memberProfileFromMarkdown = (
     memberType: parsed.frontmatter.isLearner === true ? '学员' : legacyType || deriveMemberType(positions, groupName),
     groupName,
     positions,
-    seasons: normalizeMemberSeasons(parsed.frontmatter.time),
-    advisorSeasons: normalizeMemberSeasons(parsed.frontmatter.advisor),
-    grade: stringOrNull(parsed.frontmatter.grade),
+    seasons: legacyTeacherSeasons ? [] : legacySeasons,
+    advisorSeasons: legacyTeacherSeasons ? legacySeasons : legacyAdvisorSeasons,
+    grade,
     affiliation: stringOrNull(parsed.frontmatter.affiliation),
     links,
     body: parsed.body.replace(/\r\n?/g, '\n'),
@@ -304,25 +366,27 @@ export const serializeMemberProfile = (profile: MemberProfileSnapshot) => {
     if (value !== null && !isSafeMemberPublicUrl(value)) throw new Error('MEMBER_LINK_URL_UNSAFE')
   }
   const frontmatter: Record<string, unknown> = {
+    schemaVersion: 2,
     id: profile.memberKey,
     name: profile.name,
     image: profile.avatarUrl,
     role: profile.role,
     type: profile.memberType,
+    isTeacher: profile.positions.includes('指导老师'),
+    teamPositions: profile.positions.filter(position => teamPositionSet.has(position)),
+    groupPosition: profile.positions.includes('组长') ? '组长' : profile.positions.includes('成员') ? '成员' : null,
+    isAdvisor: profile.positions.includes('顾问'),
+    group: profile.groupName,
+    positions: profile.positions,
     time: profile.seasons.length ? profile.seasons.join(',') : null,
     advisor: profile.advisorSeasons.length ? profile.advisorSeasons.join(',') : null,
     grade: profile.grade,
     affiliation: profile.affiliation,
-    links: Object.keys(profile.links).length ? normalizeValue(profile.links) : null
+    links: Object.keys(profile.links).length ? normalizeValue(profile.links) : null,
+    sortOrder: profile.sortOrder,
+    metadata: Object.keys(profile.metadata).length ? normalizeValue(profile.metadata) : null
   }
   if (profile.isLearner) frontmatter.isLearner = true
-  // Explicit group and positions preserve learner direction and future role transitions.
-  if (profile.isLearner) {
-    frontmatter.group = profile.groupName
-    frontmatter.positions = profile.positions
-  }
-  if (profile.sortOrder !== 0) frontmatter.sortOrder = profile.sortOrder
-  if (Object.keys(profile.metadata).length) frontmatter.metadata = normalizeValue(profile.metadata)
   const yaml = stringify(frontmatter, {
     lineWidth: 0,
     defaultStringType: 'PLAIN',
@@ -391,9 +455,9 @@ export const memberFieldDiff = (
   for (const field of MEMBER_MARKDOWN_EDITABLE_FIELDS) {
       const key = field === 'image' ? 'avatarUrl'
         : field === 'type' ? 'memberType'
+          : field === 'group' ? 'groupName'
           : field === 'time' ? 'seasons'
             : field === 'advisor' ? 'advisorSeasons'
-            : field === 'group' ? 'groupName'
               : field
       const left = field === 'isLearner' ? base.isLearner === true : base[key as keyof MemberProfileSnapshot]
       const right = field === 'isLearner' ? next.isLearner === true : next[key as keyof MemberProfileSnapshot]
@@ -420,9 +484,9 @@ export const mergeMemberProfiles = (
   for (const field of Object.keys(proposedDiff) as MemberEditableField[]) {
     const sourceKey = field === 'image' ? 'avatarUrl'
       : field === 'type' ? 'memberType'
+        : field === 'group' ? 'groupName'
         : field === 'time' ? 'seasons'
           : field === 'advisor' ? 'advisorSeasons'
-            : field === 'group' ? 'groupName'
             : field
     ;(merged as unknown as Record<string, unknown>)[sourceKey] =
       (proposed as unknown as Record<string, unknown>)[sourceKey]

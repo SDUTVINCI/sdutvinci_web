@@ -10,6 +10,9 @@ exec ./node_modules/.bin/vitest run \
   tests/cms-auth.integration.test.ts \
   tests/account-registrations.integration.test.ts \
   tests/account-registration-ui.test.ts \
+  tests/learner-profiles.integration.test.ts \
+  tests/member-workflow-options.test.ts \
+  tests/public-downloads.test.ts \
   tests/cms-content.integration.test.ts \
   tests/cms-drafts.integration.test.ts \
   tests/cms-workflow.integration.test.ts \

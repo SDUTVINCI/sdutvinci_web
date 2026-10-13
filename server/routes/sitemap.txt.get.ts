@@ -1,0 +1,8 @@
+import { setResponseHeader } from 'h3'
+import { buildPublicDatabaseSitemapText } from '../services/public-content-feeds'
+
+export default defineEventHandler(async (event) => {
+  setResponseHeader(event, 'content-type', 'text/plain; charset=utf-8')
+  setResponseHeader(event, 'cache-control', 'no-store')
+  return buildPublicDatabaseSitemapText()
+})

@@ -54,6 +54,8 @@ export interface PublicContentSearchResult {
   path: string
   title: string
   description: string
+  snippet: string
+  requiresAuth: boolean
   revisionId: string
   contentHash: string
 }
@@ -64,6 +66,29 @@ export interface PublicRestrictedWikiDocument {
   title: string
   date?: string
   tags: WikiDocumentCategory[]
+}
+
+export interface PublicWikiListItem {
+  path: string
+  title: string
+  stem: string
+  date?: string
+  chapter?: string
+  chapterOrder?: string
+  chapterDepth?: number
+  docKey?: string
+  docRoot?: string
+  docTitle?: string
+  isWikiDoc?: boolean
+  isWikiIndex?: boolean
+  wikiDepth?: number
+  requiresAuth: boolean
+  tags: WikiDocumentCategory[]
+}
+
+export interface PublicWikiIndexResponse {
+  items: PublicWikiListItem[]
+  restrictedDocuments: PublicRestrictedWikiDocument[]
 }
 
 export interface PublicContentCacheInvalidationInput {

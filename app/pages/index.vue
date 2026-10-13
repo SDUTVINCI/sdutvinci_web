@@ -1,23 +1,26 @@
 <script setup lang="ts">
 import { homePromoAutoplayMs, homePromoSlides } from '~/data/home-promos'
+import { homeAffiliations, sponsorPartners } from '~/data/footer-partners'
 import { roboconRecordedYearCount } from '~/data/robocon-achievements'
+import { SITE_DESCRIPTION } from '~~/shared/utils/site-seo'
 
 type Member = Record<string, any>
 
-const { data: rawMembers } = await usePublicContentQuery<Member[]>({
+const { data: rawMembers, pending, error, refresh } = await usePublicContentQuery<Member[]>({
   key: 'members:home-total',
-  database: async () => (
-    await $fetch<{ items: Member[] }>('/api/v2/content/members')
+  lazy: true,
+  database: async requestFetch => (
+    await requestFetch<{ items: Member[] }>('/api/v2/content/members')
   ).items
 })
 
 useContentSeo({
-  title: '山东理工大学 Vinci 机器人队',
-  description: '山东理工大学 Vinci 机器人队、机电创新学会，以全国大学生机器人大赛 Robocon 为核心。',
+  title: '山东理工大学 Vinci 机器人队官网',
+  description: SITE_DESCRIPTION,
   path: '/'
 })
 
-const totalMemberCount = computed(() => rawMembers.value?.length ?? 0)
+const totalMemberCount = computed(() => pending.value || error.value ? '—' : rawMembers.value?.length ?? 0)
 
 const heroLinks = [
   { label: 'Bilibili', href: 'https://space.bilibili.com/471524675', external: true },
@@ -153,6 +156,16 @@ const stats = computed(() => [
       </div>
     </section>
 
+    <PublicContentState
+      v-if="pending || error"
+      class="home-member-state"
+      :pending="pending"
+      :error="Boolean(error)"
+      loading-message="正在加载成员统计…"
+      error-message="成员统计暂时无法加载，请稍后重试。"
+      @retry="refresh()"
+    />
+
     <HomePromoCarousel :slides="homePromoSlides" :autoplay-ms="homePromoAutoplayMs" />
 
     <section class="feature-stack" aria-label="首页内容">
@@ -163,7 +176,7 @@ const stats = computed(() => [
         :class="{ reversed: index % 2 === 1 }"
       >
         <div class="feature-media">
-          <img :src="section.image" :alt="section.imageAlt">
+          <img :src="section.image" :alt="section.imageAlt" loading="lazy" decoding="async">
         </div>
 
         <div class="feature-copy">
@@ -175,6 +188,55 @@ const stats = computed(() => [
           <a class="text-link" :href="section.href">{{ section.cta }}</a>
         </div>
       </article>
+    </section>
+
+    <section class="home-support" aria-labelledby="home-support-title">
+      <div class="home-support-inner">
+        <header class="home-support-heading">
+          <p class="eyebrow">OUR COMMUNITY</p>
+          <h2 id="home-support-title">赞助与合作伙伴</h2>
+          <p>从校园实践到全国赛场，感谢一路支持 Vinci 机器人队的伙伴。</p>
+        </header>
+
+        <div class="home-support-group" aria-labelledby="home-affiliations-title">
+          <h3 id="home-affiliations-title">指导、实践与赛事平台</h3>
+          <div class="home-affiliations-list">
+            <a
+              v-for="item in homeAffiliations"
+              :key="item.name"
+              class="home-support-card home-affiliation-card"
+              :href="item.href"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <span class="home-support-logo"><img :class="item.logoClass" :src="item.logo" alt="" loading="lazy" decoding="async"></span>
+              <span class="home-support-name">{{ item.name }}</span>
+              <span class="home-support-role">{{ item.role }}</span>
+            </a>
+          </div>
+        </div>
+
+        <div class="home-support-group home-sponsors" aria-labelledby="home-sponsors-title">
+          <div class="home-sponsors-heading">
+            <h3 id="home-sponsors-title">合作伙伴</h3>
+            <NuxtLink to="/contact">合作洽谈 <span aria-hidden="true">→</span></NuxtLink>
+          </div>
+          <div class="home-sponsors-list">
+            <a
+              v-for="item in sponsorPartners"
+              :key="item.name"
+              class="home-support-card home-sponsor-card"
+              :href="item.href"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <span class="home-support-logo"><img :class="item.logoClass" :src="item.logo" alt="" loading="lazy" decoding="async"></span>
+              <span class="home-support-name">{{ item.name }}</span>
+              <span class="home-support-role">{{ item.role }}</span>
+            </a>
+          </div>
+        </div>
+      </div>
     </section>
   </main>
 </template>

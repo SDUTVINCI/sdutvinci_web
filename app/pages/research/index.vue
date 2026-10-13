@@ -5,8 +5,10 @@ import {
   roboconYearRange
 } from '~/data/robocon-achievements'
 
-useHead({
-  title: '成果 | 山东理工大学 Vinci 机器人队'
+useContentSeo({
+  title: 'ROBOCON 赛事成果 | 山东理工大学 Vinci 机器人队',
+  description: '查看山东理工大学 Vinci 机器人队历年 ROBOCON 参赛记录与获奖成果，了解机械、电控、算法与团队协作的赛场实践。',
+  path: '/research'
 })
 
 const highlights = [

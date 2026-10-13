@@ -6,7 +6,7 @@ import { getDatabase } from '../db/client'
 import { memberApplications, memberCohorts, members } from '../db/schema'
 import { getCmsMediaConfig } from '../utils/cms-media-config'
 import { createCmsMember } from './cms-members'
-import { deriveMemberRole, deriveMemberType, normalizeMemberPositions } from './member-profile'
+import { deriveMemberRole, deriveMemberType, normalizeEditableMemberRoles } from './member-profile'
 import { MEMBER_COLLEGE_OPTIONS } from '../../shared/constants/member-colleges'
 import {
   deleteMemberAvatarObject,
@@ -104,23 +104,37 @@ export const submitMemberApplication = async (id: string, token: string, profile
   const application = await ownedApplication(id, token)
   if (application.status !== 'editing' || application.expiresAt < new Date()) throw new Error('MEMBER_APPLICATION_STATE_INVALID')
   const name = safeName(String(profile.name || ''))
-  const grade = Number(profile.grade)
-  const [cohort] = await getDatabase().select().from(memberCohorts).where(and(eq(memberCohorts.gradeYear, grade), eq(memberCohorts.active, true))).limit(1)
+  const gradeValue = String(profile.grade ?? '').trim()
+  const grade = /^\d{4}$/.test(gradeValue) ? Number(gradeValue) : null
+  const [cohort] = grade === null ? [] : await getDatabase().select().from(memberCohorts)
+    .where(and(eq(memberCohorts.gradeYear, grade), eq(memberCohorts.active, true))).limit(1)
   const groupName = String(profile.groupName || '').trim()
   const affiliation = String(profile.affiliation || '').trim()
   const isLearner = profile.isLearner === true
-  const positions = normalizeMemberPositions(profile.positions)
   const requestedSeasons = Array.isArray(profile.seasons) ? [...new Set(profile.seasons.map(value => String(value).trim()).filter(Boolean))] : []
   const advisorSeasons = Array.isArray(profile.advisorSeasons) ? [...new Set(profile.advisorSeasons.map(value => String(value).trim()).filter(Boolean))] : []
+  let positions: string[]
+  try {
+    positions = normalizeEditableMemberRoles({
+      isLearner, positions: profile.positions,
+      seasons: requestedSeasons,
+      advisorSeasons,
+      grade: gradeValue || null,
+      groupName: groupName || null
+    })
+  } catch {
+    throw new Error('MEMBER_APPLICATION_PROFILE_INVALID')
+  }
+  const isTeacher = positions.includes('指导老师')
   const activeSeasons = new Set((await getDatabase().select({ season: memberCohorts.season }).from(memberCohorts).where(eq(memberCohorts.seasonEnabled, true))).map(item => item.season).filter(Boolean))
   if (!name || !application.avatarObjectKey || !application.avatarPublicUrl
-    || !cohort || (groupName && !cohort.groups.includes(groupName)) || (!isLearner && !positions.length)
-    || (!isLearner && !positions.includes('指导老师') && !requestedSeasons.length)
-    || (isLearner && (positions.length > 0 || requestedSeasons.length > 0 || advisorSeasons.length > 0)) || requestedSeasons.some(season => !activeSeasons.has(season))
+    || (!isTeacher && !cohort) || (gradeValue && !cohort)
+    || (groupName && !cohort?.groups.includes(groupName)) || (!isLearner && !positions.length)
+    || requestedSeasons.some(season => !activeSeasons.has(season))
     || advisorSeasons.some(season => !activeSeasons.has(season))
     || (affiliation && !(MEMBER_COLLEGE_OPTIONS as readonly string[]).includes(affiliation))) throw new Error('MEMBER_APPLICATION_PROFILE_INVALID')
   const normalized = {
-    isLearner, name, grade: String(grade), seasons: requestedSeasons, advisorSeasons,
+    isLearner, name, grade: cohort ? String(cohort.gradeYear) : null, seasons: requestedSeasons, advisorSeasons,
     groupName: groupName || null, positions, affiliation: affiliation || null,
     links: normalizeApplicationLinks(profile.links), body: String(profile.body || ''),
     avatarUrl: application.avatarPublicUrl

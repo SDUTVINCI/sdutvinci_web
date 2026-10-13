@@ -1,4 +1,5 @@
 <script setup lang="ts">
+useSeoMeta({ robots: 'noindex, nofollow' })
 type Theme = 'light' | 'dark'
 const theme = ref<Theme>('light')
 const themeLabel = computed(() => theme.value === 'dark' ? '切换浅色模式' : '切换深色模式')

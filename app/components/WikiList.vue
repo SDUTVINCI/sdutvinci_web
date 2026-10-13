@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import type { PublicRestrictedWikiDocument } from '~~/shared/types/public-content'
+import type {
+  PublicWikiIndexResponse,
+  PublicWikiListItem
+} from '~~/shared/types/public-content'
 import {
   WIKI_DOCUMENT_TAGS,
   WIKI_UNCATEGORIZED_TAG,
@@ -11,23 +14,7 @@ import { compareWikiChapters, numberWikiChapters } from '~~/utils/wiki-chapters'
 const WIKI_ALL_CATEGORIES = '全部资料' as const
 type WikiCategoryFilter = typeof WIKI_ALL_CATEGORIES | WikiDocumentCategory
 
-interface WikiListItem {
-  path: string
-  stem?: string
-  title?: string
-  date?: string
-  chapter?: string
-  chapterOrder?: string
-  chapterDepth?: number
-  docKey?: string
-  docRoot?: string
-  docTitle?: string
-  isWikiDoc?: boolean
-  isWikiIndex?: boolean
-  requiresAuth?: boolean
-  wikiDepth?: number
-  tags?: unknown
-}
+type WikiListItem = PublicWikiListItem & { chapter?: string }
 
 interface WikiDocGroup {
   key: string
@@ -39,20 +26,13 @@ interface WikiDocGroup {
   chapters: Array<WikiListItem & { depth: number }>
 }
 
-interface WikiListResponse {
-  items: WikiListItem[]
-  restrictedDocuments: PublicRestrictedWikiDocument[]
-}
-
 const props = withDefaults(defineProps<{
   limit?: number
+  response?: PublicWikiIndexResponse
+  pending?: boolean
 }>(), {
-  limit: Number.POSITIVE_INFINITY
-})
-
-const { data: wikiResponse, pending } = await usePublicContentQuery<WikiListResponse>({
-  key: 'wiki-list-meta',
-  database: requestFetch => requestFetch<WikiListResponse>('/api/v2/content/wiki')
+  limit: Number.POSITIVE_INFINITY,
+  pending: false
 })
 
 const route = useRoute()
@@ -74,9 +54,9 @@ watch(() => route.query.tag, () => {
   selectedCategory.value = categoryFromQuery()
 })
 
-const wikiPages = computed(() => wikiResponse.value?.items ?? [])
+const wikiPages = computed(() => props.response?.items ?? [])
 const restrictedWikiDocuments = computed(() => (
-  wikiResponse.value?.restrictedDocuments ?? []
+  props.response?.restrictedDocuments ?? []
 ))
 
 const docGroups = computed<WikiDocGroup[]>(() => {
@@ -311,14 +291,14 @@ function matchesQuery(wiki: WikiListItem, query: string) {
       </aside>
 
       <div class="wiki-directory-results">
-        <div v-if="!pending" class="wiki-result-summary" aria-live="polite">
+        <div v-if="!props.pending" class="wiki-result-summary" aria-live="polite">
           <span>{{ selectedCategory }} · 当前显示 {{ filteredDocGroups.length + filteredLockedDocuments.length }} 份文档</span>
           <span v-if="filteredLockedDocuments.length">
             {{ filteredLockedDocuments.length }} 份完整文档登录后可见
           </span>
         </div>
 
-        <div v-if="pending" class="wiki-loading">正在扫描 Wiki...</div>
+        <div v-if="props.pending" class="wiki-loading">正在扫描 Wiki...</div>
 
         <template v-else>
           <section

@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import mediumZoom from 'medium-zoom'
 import { cmsAccountPattern } from '~~/shared/types/cms-auth'
 import type { PublicArticleCreditIdentity } from '~~/shared/types/article-credit-identities'
+import type { PublicWikiListItem } from '~~/shared/types/public-content'
 import { isPublicArticleAuthRequiredError } from '~~/shared/utils/public-article-access'
 import {
   WIKI_UNCATEGORIZED_TAG,
@@ -70,10 +71,10 @@ if (isPublicArticleAuthRequiredError(pageError.value)) {
 
 const pageDocKey = computed(() => page.value?.docKey || '')
 
-const { data: allWikiItems } = await usePublicContentQuery<WikiPage[]>({
+const { data: allWikiItems } = await usePublicContentQuery<PublicWikiListItem[]>({
   key: 'wiki-navigation-items',
   database: async requestFetch => (
-    await requestFetch<{ items: WikiPage[] }>('/api/v2/content/wiki')
+    await requestFetch<{ items: PublicWikiListItem[] }>('/api/v2/content/wiki')
   ).items
 })
 
@@ -147,17 +148,24 @@ const { data: articleCreditIdentities } = await useAsyncData(
 )
 
 useContentSeo({
-  title: () => `${pageTitle.value} | Vinci Wiki`,
+  title: () => `${pageTitle.value}${docTitle.value !== page.value?.title ? ` - ${docTitle.value}` : ''} | 山东理工大学 Vinci Wiki`,
   description: () => String(
-    page.value?.frontmatter && typeof page.value.frontmatter === 'object'
-      ? (page.value.frontmatter as Record<string, unknown>).description
-        || page.value?.title
-        || 'Vinci Wiki'
-      : page.value?.title || 'Vinci Wiki'
+    page.value?.description || page.value?.title || 'Vinci Wiki'
   ),
   path: cleanPath,
   image: () => page.value?.image ? String(page.value.image) : undefined,
-  type: 'article'
+  type: 'article',
+  noindex: () => Boolean(page.value?.requiresAuth),
+  articleKind: 'TechArticle',
+  headline: () => String(page.value?.title || 'Wiki'),
+  publishedAt: () => page.value?.date,
+  modifiedAt: () => typeof page.value?.updatedAt === 'string' ? page.value.updatedAt : undefined,
+  breadcrumbs: () => [
+    { name: 'Wiki 知识库', path: '/wiki' },
+    ...(docIndex.value && docIndex.value.path !== cleanPath.value
+      ? [{ name: docTitle.value, path: docIndex.value.path }] : []),
+    { name: String(page.value?.title || 'Wiki'), path: cleanPath.value }
+  ]
 })
 
 const showDocNav = ref(false)

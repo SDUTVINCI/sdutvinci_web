@@ -1,4 +1,5 @@
 import { listPublicArticlesFromDatabase, listPublicMembersFromDatabase } from './public-content'
+import { PUBLIC_SITE_PAGES, canonicalSiteUrl, resolveSiteOrigin, seoDate } from '../../shared/utils/site-seo'
 
 const xmlEscape = (value: unknown) => String(value ?? '')
   .replaceAll('&', '&amp;')
@@ -7,46 +8,42 @@ const xmlEscape = (value: unknown) => String(value ?? '')
   .replaceAll('"', '&quot;')
   .replaceAll('\'', '&apos;')
 
-const publicSiteUrl = () => {
-  const configured = String(
-    Reflect.get(process.env, 'NUXT_PUBLIC_SITE_URL') || 'http://localhost:3000'
-  ).trim()
-  return configured.replace(/\/+$/, '')
-}
+const publicSiteUrl = () => resolveSiteOrigin(process.env.NUXT_PUBLIC_SITE_URL)
 
-export const buildPublicDatabaseSitemap = async () => {
+export const listPublicDatabaseSitemapEntries = async () => {
   const [news, wiki, members] = await Promise.all([
     listPublicArticlesFromDatabase('news'),
     listPublicArticlesFromDatabase('wiki'),
     listPublicMembersFromDatabase()
   ])
-  const staticPaths = [
-    '/',
-    '/research',
-    '/team',
-    '/news',
-    '/wiki',
-    '/projects',
-    '/recruitment',
-    '/links',
-    '/downloads',
-    '/contact'
-  ]
-  const paths = new Set([
-    ...staticPaths,
-    ...news.map(item => item.path),
-    ...wiki.map(item => item.path),
-    ...members.map(item => item.path)
-  ])
+  const paths = new Map<string, string | undefined>(PUBLIC_SITE_PAGES.map(page => [page.path, undefined]))
+  for (const item of [...news, ...wiki, ...members]) {
+    const modified = seoDate(item.updatedAt)
+    const previous = paths.get(item.path)
+    paths.set(item.path, previous && modified ? [previous, modified].sort().at(-1) : previous || modified)
+  }
+  // Channel modification dates reflect actual public revisions, never request time.
+  for (const [path, items] of [['/news', news], ['/wiki', wiki], ['/team', members]] as const) {
+    const dates = items.map(item => seoDate(item.updatedAt)).filter((date): date is string => Boolean(date))
+    if (dates.length) paths.set(path, dates.sort().at(-1))
+  }
   const base = publicSiteUrl()
-  const entries = [...paths]
-    .sort()
-    .map(path => `  <url><loc>${xmlEscape(`${base}${path}`)}</loc></url>`)
+  return [...paths].sort(([a], [b]) => a.localeCompare(b)).map(([path, lastmod]) => ({
+    loc: canonicalSiteUrl(base, path), lastmod
+  }))
+}
+
+export const buildPublicDatabaseSitemap = async () => {
+  const entries = (await listPublicDatabaseSitemapEntries())
+    .map(entry => `  <url><loc>${xmlEscape(entry.loc)}</loc>${entry.lastmod ? `<lastmod>${xmlEscape(entry.lastmod)}</lastmod>` : ''}</url>`)
     .join('\n')
   return `<?xml version="1.0" encoding="UTF-8"?>\n`
     + `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`
     + `${entries}\n</urlset>\n`
 }
+
+export const buildPublicDatabaseSitemapText = async () =>
+  `${(await listPublicDatabaseSitemapEntries()).map(entry => entry.loc).join('\n')}\n`
 
 export const buildPublicDatabaseRss = async () => {
   const base = publicSiteUrl()

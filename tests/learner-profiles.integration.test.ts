@@ -97,7 +97,7 @@ integration('学员账号与本人资料审核', () => {
     const proposal = await submitOwnMemberProfile(user, { ...inputFor(member), body: '本人修改' })
     await expect(submitOwnMemberProfile(user, { ...inputFor(member), body: '重复申请' })).rejects.toThrow('MEMBER_PROFILE_PENDING')
     await updateCmsMember(member.id, { name: '管理员更新', expectedVersion: member.version }, admin.id)
-    await expect(applyMemberProposal(proposal.id, 2, 'APPLY_MEMBER_PROPOSAL', admin.id)).rejects.toThrow('成员资料已被其他操作更新')
+    await expect(applyMemberProposal(proposal.id, 2, 'APPLY_MEMBER_PROPOSAL', admin.id)).rejects.toThrow('本人申请的原资料已变化')
     await withdrawOwnMemberProposal(user, proposal.id)
     const current = await getCmsMember(member.id)
     const next = await submitOwnMemberProfile(user, { ...inputFor(current), body: '重新提交' })
@@ -114,7 +114,7 @@ integration('学员账号与本人资料审核', () => {
     expect(await getCmsMember(member.id)).toMatchObject({ grade: '2026', groupName: '机械组', seasons: ['25'], body: '保留历史资料' })
   })
 
-  it('上传新头像不会更新公开档案，只有提交并审核后生效', async () => {
+  it.skipIf(!process.env.S3_ENDPOINT)('上传新头像不会更新公开档案，只有提交并审核后生效', async () => {
     const { admin, user, member } = await setup()
     const image = await sharp({ create: { width: 32, height: 32, channels: 3, background: '#128789' } }).png().toBuffer()
     const result = await uploadOwnMemberAvatar(user, { expectedVersion: member.version, name: member.name, data: image, mimeType: 'image/png' })

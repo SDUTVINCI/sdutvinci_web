@@ -183,6 +183,37 @@
   background: color-mix(in srgb, var(--cyan) 10%, var(--surface));
 }
 
+.member-choice-button {
+  width: 100%;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+}
+
+.member-choice-button[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--cyan) 70%, var(--line));
+  background: color-mix(in srgb, var(--cyan) 10%, var(--surface));
+}
+
+.member-choice-dot {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  border: 1px solid var(--ink-soft);
+  border-radius: 50%;
+}
+
+.member-choice-button[aria-pressed="true"] .member-choice-dot {
+  border: 5px solid var(--red-dark);
+}
+
+.member-choice-fieldset:disabled .member-choice,
+.member-choice-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .member-choice input {
   width: 18px !important;
   min-height: 18px !important;

@@ -1,6 +1,7 @@
-import { listPendingMemberProfileProposals } from '../../../services/member-self-profile'
+import { listPendingMemberProposalsForReview } from '../../../services/cms-members'
 import { requireCmsRequestAuth } from '../../../utils/cms-http'
-export default defineEventHandler(async event => {
+
+export default defineEventHandler(async (event) => {
   await requireCmsRequestAuth(event, 'admin')
-  return { items: await listPendingMemberProfileProposals() }
+  return { proposals: await listPendingMemberProposalsForReview() }
 })

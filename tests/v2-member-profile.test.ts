@@ -5,11 +5,28 @@ import {
   isSafeMemberPublicUrl,
   isSafeMemberAvatarUrl,
   memberProfileFromMarkdown,
+  memberFieldDiff,
   mergeMemberProfiles,
   serializeMemberProfile
 } from '../server/services/member-profile'
+import { parseCmsMarkdown } from '../server/utils/cms-frontmatter'
 
 describe('V2 阶段 9 成员资料边界与确定性序列化', () => {
+  it('将旧指导老师届次正确归入指导记录，并给所有成员输出同一套 frontmatter 字段', () => {
+    const teacher = memberProfileFromMarkdown('---\nid: teachertest\nname: Teacher\nrole: 指导老师，教授\ntype: 指导老师\ntime: 16,17,18\ngrade: null\n---\n简介\n', 'teacher/test.md')
+    const student = memberProfileFromMarkdown('---\nid: studenttest\nname: Student\nrole: 机械组成员\ntype: 机械组\ntime: 18\nadvisor: 17,18\ngrade: 2016\n---\n', '2018/test.md')
+    expect(teacher.seasons).toEqual([])
+    expect(teacher.advisorSeasons).toEqual(['16', '17', '18'])
+    const teacherSource = serializeMemberProfile(teacher).source
+    const studentSource = serializeMemberProfile(student).source
+    expect(Object.keys(parseCmsMarkdown(teacherSource).frontmatter)).toEqual(Object.keys(parseCmsMarkdown(studentSource).frontmatter))
+    expect(memberProfileFromMarkdown(teacherSource, 'teacher/test.md')).toMatchObject({
+      positions: ['指导老师'], seasons: [], advisorSeasons: ['16', '17', '18'], role: '指导老师，教授'
+    })
+    expect(memberProfileFromMarkdown(studentSource, '2018/test.md')).toMatchObject({
+      positions: ['成员'], seasons: ['18'], advisorSeasons: ['17', '18']
+    })
+  })
   it('完整解析全部既有成员资料且序列化结果确定', async () => {
     const snapshotSource = process.env.V2_CONTENT_SNAPSHOT_SOURCE
     expect(snapshotSource, 'V2_CONTENT_SNAPSHOT_SOURCE 必须指向独立内容仓库快照')
@@ -71,5 +88,9 @@ describe('V2 阶段 9 成员资料边界与确定性序列化', () => {
     const conflict = mergeMemberProfiles(base, current, { ...base, role: 'Advisor' })
     expect(conflict.merged).toBeNull()
     expect(conflict.conflicts).toEqual(['role'])
+    const groupChange = { ...base, groupName: '机械组', positions: ['组长'] }
+    expect(memberFieldDiff(base, groupChange)).toMatchObject({
+      group: { to: '机械组' }, positions: { to: ['组长'] }
+    })
   })
 })

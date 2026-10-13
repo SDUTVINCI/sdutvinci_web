@@ -1,6 +1,8 @@
 <script setup lang="ts">
-useHead({
-  title: '联系 | 山东理工大学 Vinci 机器人队'
+useContentSeo({
+  title: '联系我们与合作洽谈 | 山东理工大学 Vinci 机器人队',
+  description: '联系山东理工大学 Vinci 机器人队，咨询招新、企业赞助、项目合作与赛事交流，查看团队邮箱、实验室地址及官方线上入口。',
+  path: '/contact'
 })
 
 const contactCards = [

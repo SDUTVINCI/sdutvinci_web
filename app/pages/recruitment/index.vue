@@ -1,6 +1,8 @@
 <script setup lang="ts">
-useHead({
-  title: '纳新 | 山东理工大学 Vinci 机器人队'
+useContentSeo({
+  title: '招新指南与报名 | 山东理工大学 Vinci 机器人队',
+  description: '山东理工大学 Vinci 机器人队招新指南：了解机械结构、电控与嵌入式、视觉算法及运营方向，查看报名表、咨询群和入队流程。',
+  path: '/recruitment'
 })
 
 const quickLinks = [

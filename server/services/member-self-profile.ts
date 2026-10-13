@@ -4,8 +4,8 @@ import type { CmsUser } from '../../shared/types/cms-auth'
 import type { MemberProfileFormModel } from '../../shared/types/member-profile-form'
 import { getDatabase } from '../db/client'
 import { auditLogs, memberProfileUploads, memberProposals, members } from '../db/schema'
-import { CmsMemberVersionConflictError, getCmsMember } from './cms-members'
-import { assertLearnerProfile, deriveMemberRole, deriveMemberType, memberFieldDiff, normalizeMemberPositions, profileFromRecord, profileRecord, serializeMemberProfile } from './member-profile'
+import { CmsMemberVersionConflictError, getCmsMember, rejectMemberProposal } from './cms-members'
+import { assertLearnerProfile, deriveMemberRole, deriveMemberType, memberFieldDiff, normalizeEditableMemberRoles, profileFromRecord, profileRecord, serializeMemberProfile } from './member-profile'
 import { assertMemberProfileOptions } from './member-options'
 import { MEMBER_COLLEGE_OPTIONS } from '../../shared/constants/member-colleges'
 import { deleteMemberAvatarObject, prepareMemberAvatar, uploadMemberAvatarObject } from './member-avatar-storage'
@@ -35,8 +35,8 @@ export const submitOwnMemberProfile = async (
     .where(and(eq(memberProposals.memberId, current.id), eq(memberProposals.createdByUserId, user.id), eq(memberProposals.status, 'pending'))).limit(1)
   if (pending) throw new Error('MEMBER_PROFILE_PENDING')
   const before = profileFromRecord({ ...current, sourcePath: current.sourcePath || `cms/${current.memberKey}.md` })
-  const positions = normalizeMemberPositions(input.positions)
   const isLearner = input.isLearner === true
+  const positions = normalizeEditableMemberRoles({ ...input, isLearner, grade: input.grade || null, groupName: input.groupName || null })
   const links = { ...before.links }
   for (const [field, value] of Object.entries(input.links)) {
     const key = field === 'home-page' && !('home-page' in links) && 'homepage' in links ? 'homepage' : field
@@ -108,13 +108,7 @@ export const listPendingMemberProfileProposals = async () => getDatabase().selec
   .where(and(eq(memberProposals.status, 'pending'), isNull(members.deletedAt)))
   .orderBy(asc(memberProposals.createdAt))
 
-export const rejectMemberProfileProposal = async (id: string, note: string, actorUserId: string) => getDatabase().transaction(async tx => {
-  const [proposal] = await tx.select().from(memberProposals).where(eq(memberProposals.id, id)).for('update')
-  if (!proposal || proposal.status !== 'pending') throw new Error('MEMBER_PROPOSAL_NOT_PENDING')
-  await tx.update(memberProposals).set({ status: 'rejected', reviewNote: note, appliedByUserId: actorUserId, resolvedAt: new Date() }).where(eq(memberProposals.id, id))
-  await tx.update(memberProfileUploads).set({ proposalId: null, expiresAt: new Date() }).where(eq(memberProfileUploads.proposalId, id))
-  await tx.insert(auditLogs).values({ actorUserId, action: 'member.profile.reject', targetType: 'member_proposal', targetId: id, metadata: { memberId: proposal.memberId, note } })
-})
+export const rejectMemberProfileProposal = async (id: string, note: string, actorUserId: string) => rejectMemberProposal(id, note, actorUserId)
 
 export const withdrawOwnMemberProposal = async (user: CmsUser, id: string) => getDatabase().transaction(async tx => {
   const [proposal] = await tx.select().from(memberProposals).where(and(

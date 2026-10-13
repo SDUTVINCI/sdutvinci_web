@@ -13,12 +13,14 @@ import {
 import { getCmsArticlePublicPath } from '../server/services/cms-articles'
 import {
   buildPublicDatabaseRss,
-  buildPublicDatabaseSitemap
+  buildPublicDatabaseSitemap,
+  buildPublicDatabaseSitemapText
 } from '../server/services/public-content-feeds'
 import {
   getPublicArticleFromDatabase,
   getPublicMemberFromDatabase,
   listPublicArticlesFromDatabase,
+  listPublicWikiIndexFromDatabase,
   listPublicMembersFromDatabase,
   listRestrictedWikiDocumentsFromDatabase,
   resolvePublicArticleAccessFromDatabase,
@@ -272,6 +274,15 @@ databaseSuite('V2 阶段 4 正式内容查询、缓存与候选 Feed', () => {
       tags: ['嵌入式组', '软件算法组'],
       frontmatter: { tags: ['嵌入式组', '软件算法组'] }
     })
+
+    const directory = await listPublicWikiIndexFromDatabase()
+    expect(directory.restrictedDocuments).toEqual([])
+    expect(directory.items).toHaveLength(3)
+    expect(directory.items.map(item => item.path)).toEqual(pages.map(page => page.path))
+    expect(directory.items.every(item =>
+      !('body' in item) && !('markdownSource' in item) && !('frontmatter' in item)
+    )).toBe(true)
+    expect(directory.items[0]?.tags).toEqual(['嵌入式组', '软件算法组'])
   })
 
   it('Wiki 缺失或包含非法 index 标签时明确返回未分类', async () => {
@@ -317,8 +328,12 @@ databaseSuite('V2 阶段 4 正式内容查询、缓存与候选 Feed', () => {
   it('数据库搜索仅返回公开 current revision，Sitemap/RSS 使用候选数据', async () => {
     expect(await searchPublicArticlesFromDatabase('机器人')).toMatchObject([{
       path: '/news/phase4-test-news',
+      snippet: '正文 可搜索的机器人候选内容。',
+      requiresAuth: false,
       revisionId: revisionIds.news
     }])
+    expect(await searchPublicArticlesFromDatabase('机器人', 'wiki')).toEqual([])
+    expect(await searchPublicArticlesFromDatabase('机器人', 'news')).toHaveLength(1)
     expect(await searchPublicArticlesFromDatabase('不应公开')).toEqual([])
     const [sitemap, rss] = await Promise.all([
       buildPublicDatabaseSitemap(),
@@ -331,6 +346,10 @@ databaseSuite('V2 阶段 4 正式内容查询、缓存与候选 Feed', () => {
       '<loc>https://phase4.test/team/phase4member</loc>'
     )
     expect(sitemap).not.toContain('phase4-test-deleted')
+    expect(sitemap).toContain('<loc>https://phase4.test/team/organization</loc>')
+    expect(sitemap).not.toContain('<loc>https://phase4.test/projects</loc>')
+    const publicNews = await getPublicArticleFromDatabase('news', '/news/phase4-test-news')
+    expect(sitemap).toContain(`<lastmod>${publicNews!.updatedAt}</lastmod>`)
     expect(rss).toContain('<title>阶段四数据库新闻</title>')
     expect(rss).not.toContain('已删除候选')
   })
@@ -353,6 +372,10 @@ databaseSuite('V2 阶段 4 正式内容查询、缓存与候选 Feed', () => {
       )).toBeNull()
       expect(await searchPublicArticlesFromDatabase('机器人')).toEqual([])
       expect(await listPublicArticlesFromDatabase('wiki')).toHaveLength(2)
+      const directory = await listPublicWikiIndexFromDatabase()
+      expect(directory.items).toHaveLength(2)
+      expect(directory.items.every(item => !item.requiresAuth)).toBe(true)
+      expect(directory.restrictedDocuments).toHaveLength(1)
       expect(await listRestrictedWikiDocumentsFromDatabase()).toEqual([{
         docKey: '2026-07-29-jie-duan-si-ce-shi',
         path: '/wiki/2026-07-29-jie-duan-si-ce-shi/0100-kai-shi',
@@ -371,6 +394,13 @@ databaseSuite('V2 阶段 4 正式内容查询、缓存与候选 Feed', () => {
       invalidatePublicContentCache({ articleId: articleIds['wiki-second'] })
 
       expect(await listPublicArticlesFromDatabase('wiki')).toEqual([])
+      const lockedDirectory = await listPublicWikiIndexFromDatabase()
+      expect(lockedDirectory.items).toEqual([])
+      expect(lockedDirectory.restrictedDocuments).toHaveLength(1)
+      expect(lockedDirectory.restrictedDocuments[0]).not.toHaveProperty('chapters')
+      expect(lockedDirectory.restrictedDocuments[0]).not.toHaveProperty('body')
+      expect((await listPublicWikiIndexFromDatabase({ includeRestricted: true })).items)
+        .toHaveLength(3)
       expect(await listRestrictedWikiDocumentsFromDatabase()).toEqual([{
         docKey: '2026-07-29-jie-duan-si-ce-shi',
         path: '/wiki/2026-07-29-jie-duan-si-ce-shi',
@@ -434,13 +464,18 @@ databaseSuite('V2 阶段 4 正式内容查询、缓存与候选 Feed', () => {
         '机器人',
         undefined,
         { includeRestricted: true }
-      )).toHaveLength(1)
+      )).toMatchObject([{
+        path: '/news/phase4-test-news',
+        requiresAuth: true,
+        snippet: '正文 可搜索的机器人候选内容。'
+      }])
 
       const [sitemap, rss] = await Promise.all([
         buildPublicDatabaseSitemap(),
         buildPublicDatabaseRss()
       ])
       expect(sitemap).not.toContain('phase4-test-news')
+      expect(await buildPublicDatabaseSitemapText()).not.toContain('phase4-test-news')
       expect(rss).not.toContain('阶段四数据库新闻')
     } finally {
       await getDatabase().update(articles)
@@ -475,6 +510,42 @@ databaseSuite('V2 阶段 4 正式内容查询、缓存与候选 Feed', () => {
       articleId: articleIds.news,
       revisionId: revisionIds.news
     })).toEqual({ removed: 1, remaining: 0 })
+  })
+
+  it('搜索将通配符和反斜杠作为字面字符，标题命中优先于正文', async () => {
+    const originalBody = '# 正文\n\n可搜索的机器人候选内容。'
+    await seedArticle({
+      key: 'search-exact', collection: 'wiki', relativePath: 'search-exact.md',
+      publicPath: '/wiki/search-exact', title: '排序关键词', body: '精确标题优先'
+    })
+    await seedArticle({
+      key: 'search-title', collection: 'wiki', relativePath: 'search-title.md',
+      publicPath: '/wiki/search-title', title: '包含排序关键词的标题', body: '标题匹配优先'
+    })
+    await getDatabase().update(articleRevisions).set({
+      body: `${originalBody}\n排序关键词 literal%marker literal_marker C:\\robot`
+    }).where(eq(articleRevisions.id, revisionIds.news!))
+
+    try {
+      for (const query of ['literal%marker', 'literal_marker', 'C:\\robot']) {
+        expect(await searchPublicArticlesFromDatabase(query)).toMatchObject([{
+          path: '/news/phase4-test-news', requiresAuth: false
+        }])
+      }
+      expect(await searchPublicArticlesFromDatabase('literal%missing')).toEqual([])
+      expect((await searchPublicArticlesFromDatabase('排序关键词')).map(item => item.path))
+        .toEqual(['/wiki/search-exact', '/wiki/search-title', '/news/phase4-test-news'])
+      expect(await searchPublicArticlesFromDatabase('   ')).toEqual([])
+    } finally {
+      await getDatabase().update(articleRevisions).set({ body: originalBody })
+        .where(eq(articleRevisions.id, revisionIds.news!))
+      for (const key of ['search-exact', 'search-title']) {
+        await getDatabase().update(articles).set({ currentRevisionId: null })
+          .where(eq(articles.id, articleIds[key]!))
+        await getDatabase().delete(articleRevisions).where(eq(articleRevisions.articleId, articleIds[key]!))
+        await getDatabase().delete(articles).where(eq(articles.id, articleIds[key]!))
+      }
+    }
   })
 
   it('前台和 CMS 最终预览复用 VinciMarkdownRenderer，发布事务未接缓存接口', async () => {

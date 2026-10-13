@@ -27,6 +27,8 @@ export const listMemberOptions = async (includeInactive = false) => {
     })),
     seasons: rows.filter(row => row.seasonEnabled && row.season).map(row => row.season!),
     positions: MEMBER_POSITION_OPTIONS.filter(position => position !== '顾问'),
+    teamPositions: ['队长', '副队长', '机电创新学会会长'],
+    groupPositions: ['组长', '成员'],
     colleges: [...MEMBER_COLLEGE_OPTIONS]
   }
 }
@@ -55,11 +57,15 @@ export const saveMemberCohort = async (input: {
   return row!
 }
 
+export const newlyUnavailableMemberSeasons = (next: readonly string[], allowed: ReadonlySet<string>, previous: readonly string[] = []) => {
+  const retained = new Set(previous)
+  return next.filter(season => !allowed.has(season) && !retained.has(season))
+}
+
 export const assertMemberProfileOptions = async (
   profile: Pick<MemberProfileSnapshot, 'grade' | 'seasons' | 'advisorSeasons' | 'groupName'>,
   previous?: Pick<MemberProfileSnapshot, 'grade' | 'seasons' | 'advisorSeasons' | 'groupName'>
 ) => {
-  if (!profile.grade && !previous) return
   if (profile.grade) {
     const gradeYear = Number(profile.grade)
     const [cohort] = await getDatabase().select().from(memberCohorts)
@@ -71,11 +77,11 @@ export const assertMemberProfileOptions = async (
   }
   const enabled = await getDatabase().select().from(memberCohorts)
     .where(eq(memberCohorts.seasonEnabled, true))
-  const seasons = new Set(enabled.map(item => item.season).filter(Boolean))
-  if (profile.seasons.some(season => !seasons.has(season) && !previous?.seasons.includes(season))) {
+  const seasons = new Set(enabled.map(item => item.season).filter((season): season is string => Boolean(season)))
+  if (newlyUnavailableMemberSeasons(profile.seasons, seasons, previous?.seasons).length) {
     throw new Error('MEMBER_SEASON_INVALID')
   }
-  if (profile.advisorSeasons.some(season => !seasons.has(season) && !previous?.advisorSeasons.includes(season))) {
+  if (newlyUnavailableMemberSeasons(profile.advisorSeasons, seasons, previous?.advisorSeasons).length) {
     throw new Error('MEMBER_ADVISOR_SEASON_INVALID')
   }
 }

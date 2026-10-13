@@ -29,13 +29,23 @@ if (isPublicArticleAuthRequiredError(pageError.value)) {
 }
 
 useContentSeo({
-  title: () => `${page.value?.title || '新闻'} | Vinci 机器人队`,
+  title: () => `${page.value?.title || '新闻'} | 山东理工大学 Vinci 机器人队`,
   description: () => String(
     page.value?.description || page.value?.summary || page.value?.title || ''
   ),
   path: newsPath,
   image: () => page.value?.image ? String(page.value.image) : undefined,
-  type: 'article'
+  type: 'article',
+  noindex: () => Boolean(page.value?.requiresAuth),
+  articleKind: 'NewsArticle',
+  headline: () => String(page.value?.title || '新闻'),
+  publishedAt: () => typeof page.value?.date === 'string' ? page.value.date : undefined,
+  modifiedAt: () => page.value?.updatedAt,
+  author: () => typeof page.value?.author === 'string' ? page.value.author : undefined,
+  breadcrumbs: () => [
+    { name: '新闻动态', path: '/news' },
+    { name: String(page.value?.title || '新闻'), path: newsPath }
+  ]
 })
 
 const formatDate = (value: unknown) => {

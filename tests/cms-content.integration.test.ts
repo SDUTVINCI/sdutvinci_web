@@ -18,7 +18,7 @@ import {
   synchronizeCmsMembers,
   updateCmsMember
 } from '../server/services/cms-members'
-import { bootstrapCmsAdmin } from '../server/services/cms-auth'
+import { bootstrapCmsAdmin, createCmsUser } from '../server/services/cms-auth'
 import { allocateMemberKey, memberKeyFromName } from '../server/utils/member-key'
 import { resetCmsV2FlagsForTests } from '../server/utils/cms-v2-flags'
 import { configureCmsTestDatabase } from './helpers/cms-test-database'
@@ -107,6 +107,7 @@ integration('CMS 成员与文章只读管理', () => {
     const created = await createCmsMember({
       memberKey: 'dongjiahui',
       name: '董佳辉',
+      seasons: ['25'],
       avatarUrl: '/old.jpg'
     }, admin!.id)
     expect(created).toMatchObject({
@@ -114,10 +115,13 @@ integration('CMS 成员与文章只读管理', () => {
       linkedAccount: 'dongjiahui'
     })
 
+    await expect(updateCmsMember(created!.id, { name: '本人直接修改' }, admin!.id))
+      .rejects.toThrow('MEMBER_SELF_REVIEW_REQUIRED')
+    const reviewer = await createCmsUser({ account: 'otherreviewer', password: 'OtherReviewerPassword123', roles: ['admin'] }, admin!.id)
     const updated = await updateCmsMember(created!.id, {
       name: '董佳辉（测试）',
       avatarUrl: '/new.jpg'
-    }, admin!.id)
+    }, reviewer!.id)
     expect(updated).toMatchObject({
       memberKey: 'dongjiahui',
       name: '董佳辉（测试）',

@@ -105,8 +105,37 @@ jobs:
       - name: Run type checking
         run: npm run typecheck
 
+      - name: Run SEO metadata and feed checks
+        run: npx vitest run tests/site-seo.test.ts tests/seo-feeds.test.ts
+
       - name: Run production build
         run: npm run build
+
+      - name: Run production SEO HTTP and visibility checks
+        env:
+          SEO_TEST_BASE_URL: http://127.0.0.1:34177
+          NUXT_PUBLIC_SITE_URL: https://seo-runtime.example
+          NUXT_PUBLIC_BAIDU_SITE_VERIFICATION: seo-verification-test
+          CMS_SECURE_COOKIES: 'false'
+        run: |
+          seo_log="$RUNNER_TEMP/vinci-seo-http.log"
+          HOST=127.0.0.1 PORT=34177 DATABASE_URL="$TEST_DATABASE_URL" \
+            node .output/server/index.mjs > "$seo_log" 2>&1 &
+          seo_app_pid=$!
+          trap 'kill "$seo_app_pid" 2>/dev/null || true; wait "$seo_app_pid" 2>/dev/null || true' EXIT
+          seo_ready=false
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent "$SEO_TEST_BASE_URL/api/health" > /dev/null; then
+              seo_ready=true
+              break
+            fi
+            sleep 1
+          done
+          if [ "$seo_ready" != true ]; then
+            cat "$seo_log"
+            exit 1
+          fi
+          npx vitest run tests/site-seo.http.integration.test.ts
 
   build-runtime:
     needs: [verify]

@@ -5907,6 +5907,36 @@
   margin: 3px 0 0;
 }
 
+.cms-member-proposal-changes {
+  margin: 14px 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.cms-member-proposal-changes summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.cms-member-review-content .cms-member-proposal-changes dl {
+  grid-template-columns: 1fr;
+  margin: 12px 0 0;
+}
+
+.cms-member-proposal-changes dl > div {
+  min-width: 0;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.cms-member-proposal-changes pre {
+  margin: 3px 0 9px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+}
+
 @media (max-width: 720px) {
   .cms-review-lane-header {
     grid-template-columns: 1fr;

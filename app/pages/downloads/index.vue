@@ -17,9 +17,11 @@ type DownloadListing = {
 }
 
 definePageMeta({ middleware: 'site-auth' })
-useHead({
+useContentSeo({
   title: '资料下载 | 山东理工大学 Vinci 机器人队',
-  meta: [{ name: 'description', content: '登录后浏览和下载 Vinci 机器人队成员资料。' }, { name: 'robots', content: 'noindex, nofollow' }]
+  description: '登录后浏览和下载 Vinci 机器人队成员资料。',
+  path: '/downloads',
+  noindex: true
 })
 
 const route = useRoute()

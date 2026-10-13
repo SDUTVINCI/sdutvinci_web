@@ -4,6 +4,7 @@ interface PublicContentQueryOptions<T> {
   key: string | Ref<string>
   database: (requestFetch: ReturnType<typeof useRequestFetch>) => Promise<T>
   watch?: WatchSource[]
+  lazy?: boolean
 }
 
 interface PublicContentQueryEnvelope<T> {
@@ -18,7 +19,7 @@ export const usePublicContentQuery = async <T>(
   const result = await useAsyncData<PublicContentQueryEnvelope<T>>(
     options.key,
     async () => ({ value: await options.database(requestFetch) }),
-    { watch: [...(options.watch || []), session] }
+    { watch: [...(options.watch || []), session], lazy: options.lazy }
   )
 
   return {
