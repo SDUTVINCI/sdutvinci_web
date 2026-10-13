@@ -12,12 +12,13 @@ export default defineEventHandler(async (event) => {
   const files = parts?.filter(part => part.name === 'image' && part.filename) || []
   const versionPart = parts?.find(part => part.name === 'expectedVersion' && !part.filename)
   if (!parts || files.length !== 1 || !versionPart
-    || parts.some(part => !['image', 'expectedVersion'].includes(part.name || ''))) {
+    || parts.some(part => !['image', 'expectedVersion', 'name'].includes(part.name || ''))) {
     throw createError({ statusCode: 400, message: '头像上传字段无效' })
   }
   try {
     return await uploadCmsMemberAvatar({
       memberId,
+      name: parts.find(part => part.name === 'name' && !part.filename)?.data.toString('utf8'),
       expectedVersion: z.coerce.number().int().positive().parse(versionPart.data.toString('utf8')),
       data: files[0]!.data,
       mimeType: files[0]!.type || '',

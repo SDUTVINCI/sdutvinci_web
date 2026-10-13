@@ -134,11 +134,13 @@ export const submitMemberApplication = async (id: string, token: string, profile
     || advisorSeasons.some(season => !activeSeasons.has(season))
     || (affiliation && !(MEMBER_COLLEGE_OPTIONS as readonly string[]).includes(affiliation))) throw new Error('MEMBER_APPLICATION_PROFILE_INVALID')
   const normalized = {
+    teacherDetails: isTeacher ? String(profile.teacherDetails || '').trim() : null,
     isLearner, name, grade: cohort ? String(cohort.gradeYear) : null, seasons: requestedSeasons, advisorSeasons,
     groupName: groupName || null, positions, affiliation: affiliation || null,
     links: normalizeApplicationLinks(profile.links), body: String(profile.body || ''),
     avatarUrl: application.avatarPublicUrl
   }
+  if (normalized.teacherDetails && (normalized.teacherDetails.length > 200 || /[\r\n\u0000-\u001f]/u.test(normalized.teacherDetails))) throw new Error('MEMBER_APPLICATION_PROFILE_INVALID')
   await getDatabase().update(memberApplications).set({ profile: normalized, status: 'submitted', submittedAt: new Date(), updatedAt: new Date() }).where(eq(memberApplications.id, id))
   return { id, status: 'submitted' }
 }
@@ -169,12 +171,12 @@ const memberKeyFor = async (name: string) => {
   throw new Error('MEMBER_KEY_EXHAUSTED')
 }
 
-export const reviewMemberApplication = async (id: string, action: 'approve' | 'reject', note: string, actorUserId: string) => {
-  const [application] = await getDatabase().select().from(memberApplications).where(eq(memberApplications.id, id)).limit(1)
+export const reviewMemberApplication = async (id: string, action: 'approve' | 'reject', note: string, actorUserId: string) => getDatabase().transaction(async tx => {
+  const [application] = await tx.select().from(memberApplications).where(eq(memberApplications.id, id)).limit(1).for('update')
   if (!application || application.status !== 'submitted') throw new Error('MEMBER_APPLICATION_STATE_INVALID')
   if (action === 'reject') {
     if (application.avatarObjectKey) { const { config, client } = storage(); await client.send(new DeleteObjectCommand({ Bucket: config.S3_BUCKET, Key: application.avatarObjectKey })) }
-    await getDatabase().update(memberApplications).set({ status: 'rejected', reviewNote: note, reviewedAt: new Date(), reviewedByUserId: actorUserId, updatedAt: new Date() }).where(eq(memberApplications.id, id))
+    await tx.update(memberApplications).set({ status: 'rejected', reviewNote: note, reviewedAt: new Date(), reviewedByUserId: actorUserId, updatedAt: new Date() }).where(eq(memberApplications.id, id))
     return { status: 'rejected' }
   }
   const profile = application.profile as any
@@ -201,7 +203,7 @@ export const reviewMemberApplication = async (id: string, action: 'approve' | 'r
     if (promotedAvatar) await deleteMemberAvatarObject(promotedAvatar.key).catch(() => undefined)
     throw error
   }
-  await getDatabase().update(memberApplications).set({
+  await tx.update(memberApplications).set({
     status: 'approved',
     approvedMemberId: member!.id,
     avatarObjectKey: promotedAvatar?.key || application.avatarObjectKey,
@@ -215,4 +217,4 @@ export const reviewMemberApplication = async (id: string, action: 'approve' | 'r
     await deleteMemberAvatarObject(application.avatarObjectKey).catch(() => undefined)
   }
   return { status: 'approved', member }
-}
+})

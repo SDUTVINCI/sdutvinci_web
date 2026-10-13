@@ -4,6 +4,7 @@ import { parseCmsMarkdown } from '../utils/cms-frontmatter'
 import { sha256ContentBytes } from './content-export-serialization'
 
 export const MEMBER_MARKDOWN_EDITABLE_FIELDS = [
+  'memberKey',
   'name',
   'image',
   'role',
@@ -18,7 +19,8 @@ export const MEMBER_MARKDOWN_EDITABLE_FIELDS = [
   'body',
   'metadata',
   'sortOrder',
-  'isLearner'
+  'isLearner',
+  'teacherDetails'
 ] as const
 
 export type MemberEditableField = typeof MEMBER_MARKDOWN_EDITABLE_FIELDS[number]
@@ -27,6 +29,7 @@ export interface MemberProfileSnapshot {
   memberKey: string
   name: string
   isLearner?: boolean
+  teacherDetails?: string | null
   avatarUrl: string | null
   sourcePath: string
   role: string | null
@@ -102,8 +105,14 @@ export const deriveMemberType = (positions: readonly string[], groupName: string
   return groupName || '普通成员'
 }
 
-export const deriveMemberRole = (positions: readonly string[], groupName: string | null, isLearner = false) => {
+export const memberTeacherDetails = (profile: { positions?: readonly string[], role?: string | null, teacherDetails?: string | null }) => {
+  if (!profile.positions?.includes('指导老师')) return ''
+  return profile.teacherDetails ?? profile.role?.match(/^指导老师[，,]\s*(.*)$/u)?.[1] ?? ''
+}
+
+export const deriveMemberRole = (positions: readonly string[], groupName: string | null, isLearner = false, teacherDetails = '') => {
   if (isLearner) return '智能机器人创新实践基地学员'
+  if (positions.includes('指导老师')) return teacherDetails.trim() ? `指导老师，${teacherDetails.trim()}` : '指导老师'
   const labels = positions.map((position) => {
     if (!groupName) return position
     if (position === '组长') return `${groupName}组长`
@@ -135,7 +144,7 @@ const sensitiveKeyPattern = /^(?:account|accounts|login|loginid|login_id|usernam
 const knownFrontmatterKeys = new Set([
   'id', 'name', 'image', 'role', 'type', 'time', 'advisor', 'grade',
   'affiliation', 'links', 'metadata', 'sortOrder', 'group', 'positions',
-  'schemaVersion', 'isTeacher', 'teamPositions', 'groupPosition', 'isAdvisor', 'isLearner'
+  'schemaVersion', 'isTeacher', 'teamPositions', 'groupPosition', 'isAdvisor', 'isLearner', 'teacherDetails'
 ])
 
 const stringOrNull = (value: unknown) => {
@@ -282,6 +291,7 @@ export const memberProfileFromMarkdown = (
   }
   if (Buffer.byteLength(parsed.body) > 1_000_000) throw new Error('MEMBER_BODY_TOO_LARGE')
 
+  if (parsed.frontmatter.teacherDetails !== undefined && parsed.frontmatter.teacherDetails !== null && typeof parsed.frontmatter.teacherDetails !== 'string') throw new Error('MEMBER_TEACHER_DETAILS_INVALID')
   if (parsed.frontmatter.isLearner !== undefined && typeof parsed.frontmatter.isLearner !== 'boolean') throw new Error('MEMBER_LEARNER_FLAG_INVALID')
   const legacyRole = stringOrNull(parsed.frontmatter.role)
   const legacyType = stringOrNull(parsed.frontmatter.type)
@@ -327,6 +337,7 @@ export const memberProfileFromMarkdown = (
   return {
     memberKey,
     name,
+    teacherDetails: parsed.frontmatter.teacherDetails === undefined ? undefined : stringOrNull(parsed.frontmatter.teacherDetails),
     isLearner: parsed.frontmatter.isLearner === true,
     avatarUrl,
     sourcePath,
@@ -357,6 +368,7 @@ const normalizeValue = (value: unknown): unknown => {
 
 export const serializeMemberProfile = (profile: MemberProfileSnapshot) => {
   assertLearnerProfile(profile)
+  if (profile.teacherDetails && (!profile.positions.includes('指导老师') || profile.teacherDetails.length > 200 || /[\r\n\u0000-\u001f]/u.test(profile.teacherDetails))) throw new Error('MEMBER_TEACHER_DETAILS_INVALID')
   if (!memberKeyPattern.test(profile.memberKey)) throw new Error('MEMBER_KEY_INVALID')
   if (!profile.name.trim() || profile.name.length > 100) throw new Error('MEMBER_NAME_INVALID')
   assertSafeMemberAvatarUrl(profile.avatarUrl)
@@ -387,6 +399,7 @@ export const serializeMemberProfile = (profile: MemberProfileSnapshot) => {
     metadata: Object.keys(profile.metadata).length ? normalizeValue(profile.metadata) : null
   }
   if (profile.isLearner) frontmatter.isLearner = true
+  if (profile.teacherDetails) frontmatter.teacherDetails = profile.teacherDetails
   const yaml = stringify(frontmatter, {
     lineWidth: 0,
     defaultStringType: 'PLAIN',
@@ -404,6 +417,7 @@ export const serializeMemberProfile = (profile: MemberProfileSnapshot) => {
 
 export const profileRecord = (profile: MemberProfileSnapshot): Record<string, unknown> => ({
   isLearner: profile.isLearner === true,
+  ...(profile.teacherDetails !== undefined ? { teacherDetails: profile.teacherDetails } : {}),
   memberKey: profile.memberKey,
   name: profile.name,
   avatarUrl: profile.avatarUrl,
@@ -424,6 +438,7 @@ export const profileRecord = (profile: MemberProfileSnapshot): Record<string, un
 
 export const profileFromRecord = (value: Record<string, unknown>): MemberProfileSnapshot => ({
   isLearner: value.isLearner === true,
+  teacherDetails: value.teacherDetails === undefined ? undefined : typeof value.teacherDetails === 'string' ? value.teacherDetails : null,
   memberKey: String(value.memberKey || ''),
   name: String(value.name || ''),
   avatarUrl: typeof value.avatarUrl === 'string' ? value.avatarUrl : null,
@@ -459,8 +474,8 @@ export const memberFieldDiff = (
           : field === 'time' ? 'seasons'
             : field === 'advisor' ? 'advisorSeasons'
               : field
-      const left = field === 'isLearner' ? base.isLearner === true : base[key as keyof MemberProfileSnapshot]
-      const right = field === 'isLearner' ? next.isLearner === true : next[key as keyof MemberProfileSnapshot]
+      const left = field === 'teacherDetails' ? memberTeacherDetails(base) : field === 'isLearner' ? base.isLearner === true : base[key as keyof MemberProfileSnapshot]
+      const right = field === 'teacherDetails' ? memberTeacherDetails(next) : field === 'isLearner' ? next.isLearner === true : next[key as keyof MemberProfileSnapshot]
       if (JSON.stringify(left) !== JSON.stringify(right)) {
         changes[field] = { from: left ?? null, to: right ?? null }
       }

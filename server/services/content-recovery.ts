@@ -435,6 +435,7 @@ export const applyContentRecovery = async (
           role: item.profile.role,
           memberType: item.profile.memberType,
           isLearner: item.profile.isLearner === true,
+          teacherDetails: item.profile.teacherDetails ?? null,
           groupName: item.profile.groupName,
           positions: item.profile.positions,
           seasons: item.profile.seasons,

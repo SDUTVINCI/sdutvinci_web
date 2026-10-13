@@ -5,7 +5,7 @@ import type { MemberProfileFormModel } from '../../shared/types/member-profile-f
 import { getDatabase } from '../db/client'
 import { auditLogs, memberProfileUploads, memberProposals, members } from '../db/schema'
 import { CmsMemberVersionConflictError, getCmsMember, rejectMemberProposal } from './cms-members'
-import { assertLearnerProfile, deriveMemberRole, deriveMemberType, memberFieldDiff, normalizeEditableMemberRoles, profileFromRecord, profileRecord, serializeMemberProfile } from './member-profile'
+import { assertLearnerProfile, memberTeacherDetails, deriveMemberRole, deriveMemberType, memberFieldDiff, normalizeEditableMemberRoles, profileFromRecord, profileRecord, serializeMemberProfile } from './member-profile'
 import { assertMemberProfileOptions } from './member-options'
 import { MEMBER_COLLEGE_OPTIONS } from '../../shared/constants/member-colleges'
 import { deleteMemberAvatarObject, prepareMemberAvatar, uploadMemberAvatarObject } from './member-avatar-storage'
@@ -47,8 +47,9 @@ export const submitOwnMemberProfile = async (
     grade: input.grade || null, groupName: input.groupName || null, positions,
     seasons: [...new Set(input.seasons)], advisorSeasons: [...new Set(input.advisorSeasons)],
     affiliation: input.affiliation || null, body: input.body,
+    teacherDetails: positions.includes('指导老师') ? (input.teacherDetails === undefined ? memberTeacherDetails(before) : input.teacherDetails?.trim() || '') : null,
     links,
-    role: deriveMemberRole(positions, input.groupName || null, isLearner),
+    role: deriveMemberRole(positions, input.groupName || null, isLearner, positions.includes('指导老师') ? (input.teacherDetails === undefined ? memberTeacherDetails(before) : input.teacherDetails || '') : ''),
     memberType: deriveMemberType(positions, input.groupName || null, isLearner)
   }
   assertLearnerProfile(next)
@@ -79,17 +80,23 @@ export const submitOwnMemberProfile = async (
   return proposal!
 })
 
-export const uploadOwnMemberAvatar = async (user: CmsUser, input: { expectedVersion: number, name: string, data: Buffer, mimeType: string }) => {
-  const member = await getOwnMemberProfile(user)
+export const uploadMemberProfileAvatar = async (actorUserId: string, memberId: string, input: { expectedVersion: number, name: string, data: Buffer, mimeType: string }) => {
+  const member = await getCmsMember(memberId)
+  if (!member || member.deletedAt) throw new Error('MEMBER_NOT_FOUND')
   if (member.version !== input.expectedVersion) throw new CmsMemberVersionConflictError()
   const { output, filename } = await prepareMemberAvatar(input)
   const key = `site-assets/images/member_photo/proposals/${randomUUID()}/${filename}`
   const { url } = await uploadMemberAvatarObject({ key, output, cacheControl: 'private, max-age=86400', metadata: { 'member-id': member.id } })
   try {
-    await getDatabase().insert(memberProfileUploads).values({ userId: user.id, memberId: member.id, objectKey: key, url,
+    await getDatabase().insert(memberProfileUploads).values({ userId: actorUserId, memberId: member.id, objectKey: key, url,
       expiresAt: new Date(Date.now() + 24 * 60 * 60_000) })
   } catch (error) { await deleteMemberAvatarObject(key).catch(() => undefined); throw error }
   return { url, filename }
+}
+
+export const uploadOwnMemberAvatar = async (user: CmsUser, input: Parameters<typeof uploadMemberProfileAvatar>[2]) => {
+  const member = await getOwnMemberProfile(user)
+  return uploadMemberProfileAvatar(user.id, member.id, input)
 }
 
 export const cleanupUnusedMemberProfileUploads = async () => {
@@ -98,7 +105,7 @@ export const cleanupUnusedMemberProfileUploads = async () => {
   for (const upload of expired) await getDatabase().transaction(async tx => {
     const [current] = await tx.select().from(memberProfileUploads).where(eq(memberProfileUploads.id, upload.id)).for('update')
     if (!current || current.proposalId || current.expiresAt >= new Date()) return
-    try { await deleteMemberAvatarObject(current.objectKey) } catch { return }
+    try { if (current.objectKey) await deleteMemberAvatarObject(current.objectKey) } catch { return }
     await tx.delete(memberProfileUploads).where(eq(memberProfileUploads.id, current.id))
   })
 }

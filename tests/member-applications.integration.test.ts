@@ -15,7 +15,7 @@ import {
 } from '../server/services/member-applications'
 import { memberApplications, members } from '../server/db/schema'
 import { uploadCmsMemberAvatar } from '../server/services/cms-member-avatar'
-import { createCmsMember, deleteCmsMember } from '../server/services/cms-members'
+import { createCmsMember, deleteCmsMember, submitCmsMemberProfile, applyMemberProposal, getCmsMember } from '../server/services/cms-members'
 import { configureCmsTestDatabase } from './helpers/cms-test-database'
 
 const integration = configureCmsTestDatabase() ? describe : describe.skip
@@ -196,7 +196,7 @@ integration('公开成员申请审核', () => {
       .toBe('tongmingchengyuan')
   })
 
-  it('CMS 编辑头像复用 WebP 哈希命名并直接生成成员 Revision', async () => {
+  it('CMS 编辑头像只准备候选图片，提交并审核后才生成成员 Revision', async () => {
     const admin = await bootstrapCmsAdmin({ account: 'avataradmin', password: 'AvatarAdminPassword123!' })
     const member = await createCmsMember({
       memberKey: 'avatarmember',
@@ -219,6 +219,9 @@ integration('公开成员申请审核', () => {
     })
     expect(result.filename).toMatch(/^头像成员-[0-9a-f]{8}\.webp$/)
     expect(result.url).toContain('/site-assets/images/member_photo/')
-    expect(result.member).toMatchObject({ avatarUrl: result.url, version: 2 })
+    expect(await getCmsMember(member!.id)).toMatchObject({ avatarUrl: null, version: 1 })
+    const proposal = await submitCmsMemberProfile(member!.id, { name: member!.name, avatarUrl: result.url, expectedVersion: 1 }, admin!.id)
+    await applyMemberProposal(proposal.id, 1, 'APPLY_MEMBER_PROPOSAL', admin!.id)
+    expect(await getCmsMember(member!.id)).toMatchObject({ avatarUrl: result.url, version: 2 })
   })
 })

@@ -1,6 +1,6 @@
 import { createError, getRouterParam, readValidatedBody } from 'h3'
 import { z } from 'zod'
-import { applyMemberProposal, CmsMemberVersionConflictError } from '../../../../services/cms-members'
+import { applyMemberProposal, CmsMemberVersionConflictError, CmsMemberKeyConflictError } from '../../../../services/cms-members'
 import { requireCmsCsrf, requireCmsRequestAuth } from '../../../../utils/cms-http'
 
 const schema = z.object({
@@ -17,7 +17,7 @@ export default defineEventHandler(async (event) => {
   try {
     return await applyMemberProposal(proposalId, input.expectedVersion, input.confirmation, auth.user.id, input.note)
   } catch (error) {
-    if (error instanceof CmsMemberVersionConflictError) {
+    if (error instanceof CmsMemberVersionConflictError || error instanceof CmsMemberKeyConflictError) {
       throw createError({ statusCode: 409, message: error.message })
     }
     if (error instanceof Error && error.message === 'MEMBER_PROPOSAL_NOT_PENDING') {

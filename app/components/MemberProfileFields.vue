@@ -68,6 +68,7 @@ watch([isTeacher, () => form.value.advisorSeasons.join(',')], () => {
     form.value.groupName = ''
     return
   }
+  form.value.teacherDetails = ''
   form.value.positions = form.value.positions.filter(position => position !== '顾问')
   if (form.value.advisorSeasons.length) form.value.positions.push('顾问')
 }, { immediate: true })
@@ -80,6 +81,7 @@ const toggleGroupPosition = (position: string) => {
 
 <template>
   <fieldset class="member-choice-fieldset"><legend>特殊成员身份（可选，正式成员不要选）</legend><div class="member-choice-grid"><label class="member-choice"><input v-model="isTeacher" type="checkbox" :disabled="disabled || form.isLearner"><span>指导老师</span></label><label class="member-choice"><input v-model="form.isLearner" type="checkbox" :disabled="disabled || isTeacher"><span>新学员</span></label></div><p v-if="form.isLearner">新学员将在“智能机器人创新实践基地学员”中展示，暂不填写职务、参赛赛季和顾问届次。</p></fieldset>
+<label v-if="isTeacher"><span>任职与职称补充信息（可选）</span><input v-model.trim="form.teacherDetails" :disabled="disabled" maxlength="200" placeholder="例如：机械电子工程系，教授，博导"><small>公开展示：指导老师{{ form.teacherDetails ? `，${form.teacherDetails}` : '' }}</small></label>
   <fieldset class="member-choice-fieldset" :disabled="disabled || form.isLearner || isTeacher"><legend>团队内的职务（可多选）</legend><div class="member-choice-grid"><label v-for="position in options?.teamPositions || teamPositionOptions" :key="position" class="member-choice"><input v-model="teamPositions" type="checkbox" :value="position" :disabled="disabled || form.isLearner || isTeacher"><span>{{ position }}</span></label></div></fieldset>
   <fieldset class="member-choice-fieldset" :disabled="disabled || form.isLearner || isTeacher"><legend>组内的职务（单选，可再次点击取消）</legend><div class="member-choice-grid"><button v-for="position in [{ value: '组长', label: '组长' }, { value: '成员', label: '组员' }]" :key="position.value" type="button" class="member-choice member-choice-button" :aria-pressed="groupPosition === position.value" :disabled="disabled || form.isLearner || isTeacher" @click="toggleGroupPosition(position.value)"><span class="member-choice-dot" aria-hidden="true" /><span>{{ position.label }}</span></button></div></fieldset>
   <div class="member-application-grid">

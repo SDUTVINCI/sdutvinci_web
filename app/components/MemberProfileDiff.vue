@@ -1,6 +1,6 @@
 <script setup lang="ts">
 defineProps<{ changes: Record<string, any> }>()
-const labels: Record<string, string> = { name: '姓名', image: '头像', role: '身份／职务', type: '成员类型', time: '参加过的赛季', advisor: '顾问届次', grade: '年级', affiliation: '学院／单位', links: '个人链接', body: '简介', metadata: '扩展资料', sortOrder: '排序', isLearner: '是否为新学员', group: '组别', positions: '职务' }
+const labels: Record<string, string> = { memberKey: '成员稳定 ID', teacherDetails: '任职与职称补充信息', name: '姓名', image: '头像', role: '身份／职务', type: '成员类型', time: '参加过的赛季', advisor: '顾问届次', grade: '年级', affiliation: '学院／单位', links: '个人链接', body: '简介', metadata: '扩展资料', sortOrder: '排序', isLearner: '是否为新学员', group: '组别', positions: '职务' }
 const display = (value: unknown) => typeof value === 'boolean' ? (value ? '是' : '否') : value == null || value === '' ? '未填写' : Array.isArray(value) ? (value.join('、') || '未填写') : typeof value === 'object' ? JSON.stringify(value) : String(value)
 </script>
 <template>

@@ -11,6 +11,7 @@ exec ./node_modules/.bin/vitest run \
   tests/account-registrations.integration.test.ts \
   tests/account-registration-ui.test.ts \
   tests/learner-profiles.integration.test.ts \
+  tests/member-review.integration.test.ts \
   tests/member-workflow-options.test.ts \
   tests/public-downloads.test.ts \
   tests/cms-content.integration.test.ts \

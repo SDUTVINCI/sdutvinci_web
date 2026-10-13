@@ -1,6 +1,6 @@
 import { createError, getRouterParam, readValidatedBody } from 'h3'
 import { z } from 'zod'
-import { CmsMemberKeyConflictError, CmsMemberVersionConflictError, updateCmsMember } from '../../../services/cms-members'
+import { CmsMemberKeyConflictError, CmsMemberVersionConflictError, submitCmsMemberProfile } from '../../../services/cms-members'
 import { cmsAccountPattern } from '../../../../shared/types/cms-auth'
 import { isSafeMemberAvatarUrl } from '../../../services/member-profile'
 import {
@@ -17,6 +17,10 @@ const metadataSchema = z.record(z.string(), z.unknown()).refine(
 )
 
 const memberOptionErrors: Record<string, string> = {
+  MEMBER_PROFILE_PENDING: '已有待审核修改，请先审核或拒绝后再提交',
+  MEMBER_PROFILE_UNCHANGED: '没有需要提交的修改',
+  MEMBER_AVATAR_UPLOAD_INVALID: '请重新上传此成员的头像后提交',
+  MEMBER_TEACHER_DETAILS_INVALID: '老师补充信息仅老师可填，最多 200 字',
   MEMBER_GRADE_INVALID: '年级不在可选范围内，请重新选择',
   MEMBER_GROUP_INVALID: '组别与年级不匹配，请重新选择',
   MEMBER_SEASON_INVALID: '参加过的赛季中有不可选的新届次，请重新选择',
@@ -28,6 +32,7 @@ const memberOptionErrors: Record<string, string> = {
 
 const schema = z.object({
   memberKey: z.string().trim().toLowerCase().regex(cmsAccountPattern).optional(),
+  teacherDetails: z.string().trim().max(200).nullable().optional(),
   isLearner: z.boolean().optional(),
   name: z.string().trim().min(1).max(100),
   avatarUrl: safeAvatarUrl.nullable().optional(),
@@ -51,9 +56,9 @@ export default defineEventHandler(async (event) => {
   requireCmsCsrf(event, auth)
   const id = z.string().uuid().parse(getRouterParam(event, 'id'))
   const input = await readValidatedBody(event, schema.parse)
-  let member
+  let proposal
   try {
-    member = await updateCmsMember(id, input, auth.user.id)
+    proposal = await submitCmsMemberProfile(id, input, auth.user.id)
   } catch (error) {
     if (error instanceof Error && error.message === 'MEMBER_SELF_REVIEW_REQUIRED') {
       throw createError({ statusCode: 403, message: '修改自己的资料请进入个人中心提交审核' })
@@ -69,6 +74,6 @@ export default defineEventHandler(async (event) => {
     }
     throw error
   }
-  if (!member) throw createError({ statusCode: 404, message: '成员不存在' })
-  return { member }
+  if (!proposal) throw createError({ statusCode: 404, message: '成员不存在' })
+  return { proposal }
 })

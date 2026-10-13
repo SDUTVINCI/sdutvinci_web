@@ -71,6 +71,7 @@ export const members = pgTable('members', {
   role: text('role'),
   memberType: text('member_type'),
   isLearner: boolean('is_learner').default(false).notNull(),
+  teacherDetails: text('teacher_details'),
   groupName: varchar('group_name', { length: 64 }),
   positions: jsonb('positions').$type<string[]>().default([]).notNull(),
   seasons: jsonb('seasons').$type<string[]>().default([]).notNull(),

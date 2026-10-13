@@ -3582,7 +3582,8 @@
   max-width: 720px;
 }
 
-.cms-registration-review-note textarea {
+.cms-registration-review-note textarea,
+.cms-review-note textarea {
   width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--line);
@@ -5877,6 +5878,8 @@
 }
 
 .cms-review-note {
+  display: grid;
+  gap: 8px;
   max-width: 720px;
 }
 
@@ -6627,3 +6630,11 @@
 .cms-reconciliation-actions small {
   color: var(--cms-muted);
 }
+
+.cms-review-request-select { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; font-weight: 700; cursor: pointer; }
+.cms-review-request-select input { width: 20px; height: 20px; margin: 0; accent-color: var(--cyan); cursor: pointer; }
+.cms-review-request-select:has(input:disabled) { opacity: .6; cursor: not-allowed; }
+.cms-batch-results { margin: 18px 0; padding: 18px 36px; }
+
+.cms-review-note textarea:focus,
+.cms-registration-review-note textarea:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 0 3px var(--cyan-soft); }

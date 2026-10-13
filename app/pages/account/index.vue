@@ -20,7 +20,7 @@ const member = computed(() => data.value?.member)
 const pending = computed(() => data.value?.proposals.find(item => item.status === 'pending'))
 const isAdmin = computed(() => session.value?.user.roles.includes('admin'))
 const editing = ref(false)
-const form = reactive<MemberProfileFormModel>({ isLearner: false, name: '', grade: '', groupName: '', positions: [], seasons: [], advisorSeasons: [], affiliation: '', body: '', links: { github: '', 'home-page': '' } })
+const form = reactive<MemberProfileFormModel>({ isLearner: false, teacherDetails: '', name: '', grade: '', groupName: '', positions: [], seasons: [], advisorSeasons: [], affiliation: '', body: '', links: { github: '', 'home-page': '' } })
 const avatarUrl = ref('')
 const busy = ref(false)
 const uploading = ref(false)
@@ -30,7 +30,7 @@ useFormNotices(message, errorMessage)
 const resetForm = () => {
   if (!member.value) return
   const current = member.value
-  Object.assign(form, { isLearner: current.isLearner === true, name: current.name, grade: current.grade || '', groupName: current.groupName || '',
+  Object.assign(form, { isLearner: current.isLearner === true, teacherDetails: current.teacherDetails || '', name: current.name, grade: current.grade || '', groupName: current.groupName || '',
     positions: [...current.positions], seasons: [...current.seasons], advisorSeasons: [...current.advisorSeasons], affiliation: current.affiliation || '',
     body: current.body, links: { github: current.links.github || '', 'home-page': current.links['home-page'] || current.links.homepage || '' } })
   avatarUrl.value = current.avatarUrl || ''
@@ -59,20 +59,6 @@ const submitProfile = async () => {
     editing.value = false; await refresh()
     message.value = '修改已提交审核，公开资料和账号权限将在审核通过后更新。'
   } catch (error: any) { errorMessage.value = error?.data?.message || '提交失败' }
-  finally { busy.value = false }
-}
-const reviewOwn = async (action: 'approve' | 'reject') => {
-  if (!pending.value || !member.value || !isAdmin.value) return
-  if (!await confirmAction(action === 'approve' ? '明确审核通过本次修改，并更新公开资料吗？' : '拒绝本次修改吗？')) return
-  busy.value = true; errorMessage.value = ''
-  try {
-    await $fetch(`/api/cms/member-proposals/${pending.value.id}/${action === 'approve' ? 'apply' : 'reject'}`, {
-      method: 'POST', headers: csrfHeaders(), body: action === 'approve'
-        ? { expectedVersion: member.value.version, confirmation: 'APPLY_MEMBER_PROPOSAL', note: '管理员明确审核本人资料' }
-        : { note: '管理员拒绝本人本次修改' }
-    })
-    await refresh(); await loadSession(true); message.value = action === 'approve' ? '资料已审核通过并生效。' : '修改已拒绝，可以重新编辑提交。'
-  } catch (error: any) { errorMessage.value = error?.data?.message || '审核失败' }
   finally { busy.value = false }
 }
 const withdraw = async () => {
@@ -105,7 +91,7 @@ const changePassword = async () => {
       <p v-else>账号尚未关联成员档案，请联系管理员处理。</p>
       <div class="account-actions"><button v-if="member && !pending && !editing" type="button" @click="startEdit">{{ member.isLearner ? '修改资料／申请转为正式成员' : '修改资料' }}</button><NuxtLink v-if="member" :to="`/team/${member.memberKey}`">查看公开资料</NuxtLink><NuxtLink v-if="session?.user.roles.some(role => role === 'admin' || role === 'member')" to="/cms">进入 CMS</NuxtLink></div>
     </section>
-    <section v-if="pending" class="account-panel"><h2>待审核的资料修改</h2><p>审核前继续展示原资料，身份与权限保持原状态。</p><MemberProfileDiff :changes="pending.fieldChanges" /><div class="account-actions"><button type="button" :disabled="busy" @click="withdraw">撤回修改</button></div><div v-if="isAdmin" class="account-actions"><button type="button" :disabled="busy" @click="reviewOwn('approve')">审核通过并生效</button><button type="button" :disabled="busy" @click="reviewOwn('reject')">拒绝本次修改</button></div></section>
+    <section v-if="pending" class="account-panel"><h2>待审核的资料修改</h2><p>审核前继续展示原资料，身份与权限保持原状态。</p><MemberProfileDiff :changes="pending.fieldChanges" /><div class="account-actions"><button type="button" :disabled="busy" @click="withdraw">撤回修改</button></div><div v-if="isAdmin" class="account-actions"><NuxtLink to="/cms/reviews">前往审核中心审核</NuxtLink></div></section>
     <form v-if="editing && member && !pending" class="account-panel cms-form member-application-form" @submit.prevent="submitProfile"><h2>修改个人资料</h2><p v-if="member.isLearner">申请转为正式成员时，取消“新学员”并补齐职务和参赛信息。审核通过后同步更新身份和权限。</p><MemberAvatarUpload :name="form.name" :current-url="resolveStaticMediaUrl(avatarUrl)" required :disabled="busy" :uploading="uploading" @select="uploadAvatar" /><MemberProfileFields v-model="form" :options="options" :disabled="busy || uploading" :allow-empty-grade="!member.grade" required /><div class="account-actions"><button :disabled="busy || uploading">{{ busy ? '正在提交…' : '提交修改审核' }}</button><button type="button" :disabled="busy || uploading" @click="editing = false">取消编辑</button></div></form>
     <section v-if="data?.proposals.some(item => item.status !== 'pending')" class="account-panel"><h2>修改记录</h2><details v-for="item in [...(data?.proposals || [])].reverse().filter(item => item.status !== 'pending')" :key="item.id"><summary>{{ item.status === 'applied' ? '已通过' : item.status === 'rejected' ? '已拒绝' : '需要重新提交' }} · {{ new Date(item.createdAt).toLocaleDateString('zh-CN') }}</summary><p v-if="item.reviewNote">审核备注：{{ item.reviewNote }}</p><MemberProfileDiff :changes="item.fieldChanges" /></details></section>
     <form class="account-panel account-password" @submit.prevent="changePassword"><h2>修改密码</h2><label>当前密码<input v-model="password.current" type="password" autocomplete="current-password" required></label><label>新密码<input v-model="password.next" type="password" autocomplete="new-password" :minlength="cmsPasswordMinLength" required></label><label>确认新密码<input v-model="password.confirm" type="password" autocomplete="new-password" :minlength="cmsPasswordMinLength" required></label><div class="account-actions"><button :disabled="busy">修改密码</button></div></form>

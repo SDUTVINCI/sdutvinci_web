@@ -29,9 +29,17 @@ import {
   profileRecord,
   normalizeMemberPositions,
   normalizeEditableMemberRoles,
+  memberTeacherDetails,
   serializeMemberProfile,
   type MemberProfileSnapshot
 } from './member-profile'
+
+const memberFieldLabels: Record<string, string> = {
+  memberKey: '成员稳定 ID', name: '姓名', image: '头像', role: '身份与职务', type: '成员类型',
+  group: '组别', positions: '职务', time: '参加过的赛季', advisor: '顾问届次', grade: '年级',
+  affiliation: '学院 / 单位', links: '个人链接', body: '简介', metadata: '扩展资料',
+  sortOrder: '排序', isLearner: '学员身份', teacherDetails: '任职与职称补充信息'
+}
 
 export class CmsMemberVersionConflictError extends Error {
   constructor(message = '成员资料已被其他操作更新，请刷新后重试') {
@@ -66,6 +74,7 @@ const memberSelection = {
   role: members.role,
   memberType: members.memberType,
   isLearner: members.isLearner,
+  teacherDetails: members.teacherDetails,
   groupName: members.groupName,
   positions: members.positions,
   seasons: members.seasons,
@@ -87,6 +96,7 @@ const memberSelection = {
 
 const toCmsMember = (row: Awaited<ReturnType<typeof loadMemberRows>>[number]): CmsMember => ({
   ...row,
+  teacherDetails: memberTeacherDetails(row),
   sourcePath: row.sourcePath || '',
   createdAt: row.createdAt.toISOString(),
   updatedAt: row.updatedAt.toISOString(),
@@ -115,6 +125,7 @@ export const getCmsMember = async (id: string) =>
 
 const profileFromMemberRow = (row: typeof members.$inferSelect): MemberProfileSnapshot => ({
   isLearner: row.isLearner,
+  teacherDetails: row.teacherDetails ?? undefined,
   memberKey: row.memberKey,
   name: row.name,
   avatarUrl: row.avatarUrl,
@@ -135,6 +146,7 @@ const profileFromMemberRow = (row: typeof members.$inferSelect): MemberProfileSn
 
 const memberValues = (profile: MemberProfileSnapshot) => ({
   isLearner: profile.isLearner === true,
+  teacherDetails: profile.teacherDetails ?? null,
   memberKey: profile.memberKey,
   name: profile.name,
   avatarUrl: profile.avatarUrl,
@@ -213,7 +225,8 @@ const inputProfile = (
     avatarUrl: input.avatarUrl ?? null,
     sourcePath: safeSourcePath(sourcePath),
     isLearner: input.isLearner === true,
-    role: deriveMemberRole(positions, groupName, input.isLearner),
+    teacherDetails: positions.includes('指导老师') ? input.teacherDetails?.trim() || null : null,
+    role: deriveMemberRole(positions, groupName, input.isLearner, input.teacherDetails || ''),
     memberType: deriveMemberType(positions, groupName, input.isLearner),
     groupName,
     positions,
@@ -310,6 +323,60 @@ export const createCmsMember = async (
   return getCmsMember(memberId)
 }
 
+const renameMemberIdentity = async (tx: Parameters<Parameters<ReturnType<typeof getDatabase>['transaction']>[0]>[0], id: string, before: MemberProfileSnapshot, next: MemberProfileSnapshot) => {
+  const [otherMember] = await tx.select({ id: members.id }).from(members)
+    .where(and(eq(members.memberKey, next.memberKey), isNull(members.deletedAt))).limit(1)
+  if (otherMember && otherMember.id !== id) throw new CmsMemberKeyConflictError('该稳定 ID 已被其他有效成员使用')
+
+  const binding = await getActiveMemberAccountLink(tx, id)
+  const [targetUser] = await tx.select({ id: users.id }).from(users)
+    .where(and(eq(users.account, next.memberKey), isNull(users.deletedAt))).limit(1)
+  const [pendingForTarget] = await tx.select({ memberId: accountRegistrationApplications.memberId })
+    .from(accountRegistrationApplications).where(and(
+      eq(accountRegistrationApplications.account, next.memberKey),
+      eq(accountRegistrationApplications.status, 'pending')
+    )).limit(1)
+  if (pendingForTarget && pendingForTarget.memberId !== id) {
+    throw new CmsMemberKeyConflictError('目标 ID 已被其他待审核注册申请占用')
+  }
+  const [pendingForMember] = await tx.select({ id: accountRegistrationApplications.id })
+    .from(accountRegistrationApplications).where(and(
+      eq(accountRegistrationApplications.memberId, id),
+      eq(accountRegistrationApplications.status, 'pending')
+    )).limit(1)
+  if (pendingForMember && targetUser) {
+    throw new CmsMemberKeyConflictError('该成员已有待审核注册申请，请先处理申请或目标账号')
+  }
+  if (binding && targetUser && targetUser.id !== binding.userId) {
+    throw new CmsMemberKeyConflictError('目标 ID 已有其他账号；请先在账号管理中处理重复账号')
+  }
+  if (!binding && targetUser) {
+    const [targetBinding] = await tx.select({ memberId: userMembers.memberId }).from(userMembers)
+      .where(eq(userMembers.userId, targetUser.id)).limit(1)
+    if (targetBinding) throw new CmsMemberKeyConflictError('目标账号已关联其他成员')
+    await tx.insert(userMembers).values({ userId: targetUser.id, memberId: id })
+  } else if (binding && binding.account !== next.memberKey) {
+    await tx.update(users).set({ account: next.memberKey, updatedAt: new Date() })
+      .where(eq(users.id, binding.userId))
+  }
+  await tx.update(articleCreditIdentities).set({
+    memberId: id,
+    version: sql`${articleCreditIdentities.version} + 1`,
+    updatedAt: new Date()
+  }).where(inArray(articleCreditIdentities.creditKey, [before.memberKey, next.memberKey]))
+  await tx.insert(articleCreditIdentities).values({
+    creditKey: before.memberKey,
+    displayName: before.name,
+    memberId: id
+  }).onConflictDoNothing()
+  await tx.update(accountRegistrationApplications).set({
+    account: next.memberKey,
+    updatedAt: new Date()
+  }).where(and(
+    eq(accountRegistrationApplications.memberId, id),
+    eq(accountRegistrationApplications.status, 'pending')
+  ))
+}
 export const updateCmsMember = async (
   id: string,
   input: Omit<CmsMemberInput, 'directory' | 'sourcePath'> & { expectedVersion?: number },
@@ -329,6 +396,7 @@ export const updateCmsMember = async (
     const next = inputProfile({
       memberKey: input.memberKey ?? current.memberKey,
       isLearner: input.isLearner ?? before.isLearner,
+      teacherDetails: input.teacherDetails === undefined ? memberTeacherDetails(before) : input.teacherDetails,
       name: input.name,
       avatarUrl: input.avatarUrl === undefined ? before.avatarUrl : input.avatarUrl,
       groupName: input.groupName === undefined ? before.groupName : input.groupName,
@@ -344,67 +412,14 @@ export const updateCmsMember = async (
     }, before.sourcePath)
     const samePositions = next.positions.length === before.positions.length
       && next.positions.every(position => before.positions.includes(position))
-    if (samePositions && next.groupName === before.groupName && next.isLearner === before.isLearner) {
+    if (samePositions && next.groupName === before.groupName && next.isLearner === before.isLearner && memberTeacherDetails(next) === memberTeacherDetails(before)) {
       next.role = before.role
       next.memberType = before.memberType
-    } else if (before.positions.includes('指导老师') && next.positions.includes('指导老师') && before.role?.startsWith('指导老师，')) {
-      next.role = `${next.role}，${before.role.slice('指导老师，'.length)}`
     }
     const changes = memberFieldDiff(before, next)
     if (next.memberKey !== before.memberKey) {
       changes.memberKey = { from: before.memberKey, to: next.memberKey }
-      const [otherMember] = await tx.select({ id: members.id }).from(members)
-        .where(and(eq(members.memberKey, next.memberKey), isNull(members.deletedAt))).limit(1)
-      if (otherMember && otherMember.id !== id) throw new CmsMemberKeyConflictError('该稳定 ID 已被其他有效成员使用')
-
-      const binding = await getActiveMemberAccountLink(tx, id)
-      const [targetUser] = await tx.select({ id: users.id }).from(users)
-        .where(and(eq(users.account, next.memberKey), isNull(users.deletedAt))).limit(1)
-      const [pendingForTarget] = await tx.select({ memberId: accountRegistrationApplications.memberId })
-        .from(accountRegistrationApplications).where(and(
-          eq(accountRegistrationApplications.account, next.memberKey),
-          eq(accountRegistrationApplications.status, 'pending')
-        )).limit(1)
-      if (pendingForTarget && pendingForTarget.memberId !== id) {
-        throw new CmsMemberKeyConflictError('目标 ID 已被其他待审核注册申请占用')
-      }
-      const [pendingForMember] = await tx.select({ id: accountRegistrationApplications.id })
-        .from(accountRegistrationApplications).where(and(
-          eq(accountRegistrationApplications.memberId, id),
-          eq(accountRegistrationApplications.status, 'pending')
-        )).limit(1)
-      if (pendingForMember && targetUser) {
-        throw new CmsMemberKeyConflictError('该成员已有待审核注册申请，请先处理申请或目标账号')
-      }
-      if (binding && targetUser && targetUser.id !== binding.userId) {
-        throw new CmsMemberKeyConflictError('目标 ID 已有其他账号；请先在账号管理中处理重复账号')
-      }
-      if (!binding && targetUser) {
-        const [targetBinding] = await tx.select({ memberId: userMembers.memberId }).from(userMembers)
-          .where(eq(userMembers.userId, targetUser.id)).limit(1)
-        if (targetBinding) throw new CmsMemberKeyConflictError('目标账号已关联其他成员')
-        await tx.insert(userMembers).values({ userId: targetUser.id, memberId: id })
-      } else if (binding && binding.account !== next.memberKey) {
-        await tx.update(users).set({ account: next.memberKey, updatedAt: new Date() })
-          .where(eq(users.id, binding.userId))
-      }
-      await tx.update(articleCreditIdentities).set({
-        memberId: id,
-        version: sql`${articleCreditIdentities.version} + 1`,
-        updatedAt: new Date()
-      }).where(inArray(articleCreditIdentities.creditKey, [before.memberKey, next.memberKey]))
-      await tx.insert(articleCreditIdentities).values({
-        creditKey: before.memberKey,
-        displayName: before.name,
-        memberId: id
-      }).onConflictDoNothing()
-      await tx.update(accountRegistrationApplications).set({
-        account: next.memberKey,
-        updatedAt: new Date()
-      }).where(and(
-        eq(accountRegistrationApplications.memberId, id),
-        eq(accountRegistrationApplications.status, 'pending')
-      ))
+      await renameMemberIdentity(tx, id, before, next)
     }
     await assertMemberProfileOptions(next, before)
     if (!Object.keys(changes).length) return
@@ -449,6 +464,64 @@ export const updateCmsMember = async (
     throw error
   }
   return getCmsMember(id)
+}
+
+export const submitCmsMemberProfile = async (
+  id: string,
+  input: Omit<CmsMemberInput, 'directory' | 'sourcePath'> & { expectedVersion: number },
+  actorUserId: string
+) => getDatabase().transaction(async tx => {
+  const [current] = await tx.select().from(members).where(eq(members.id, id)).for('update')
+  if (!current || current.deletedAt || !current.currentRevisionId) throw new Error('MEMBER_NOT_FOUND')
+  if (current.version !== input.expectedVersion) throw new CmsMemberVersionConflictError()
+  const before = profileFromMemberRow(current)
+  const next = inputProfile({ ...before, ...input,
+    memberKey: input.memberKey ?? before.memberKey,
+    teacherDetails: input.teacherDetails === undefined ? memberTeacherDetails(before) : input.teacherDetails
+  }, before.sourcePath)
+  if (next.positions.join('|') === before.positions.join('|') && next.groupName === before.groupName
+    && next.isLearner === before.isLearner && memberTeacherDetails(next) === memberTeacherDetails(before)) {
+    next.role = before.role; next.memberType = before.memberType
+  }
+  await assertMemberProfileOptions(next, before)
+  const [pending] = await tx.select({ id: memberProposals.id }).from(memberProposals).where(and(
+    eq(memberProposals.memberId, id), eq(memberProposals.createdByUserId, actorUserId), eq(memberProposals.status, 'pending')
+  )).limit(1)
+  if (pending) throw new Error('MEMBER_PROFILE_PENDING')
+  const changes = memberFieldDiff(before, next)
+  if (!Object.keys(changes).length) throw new Error('MEMBER_PROFILE_UNCHANGED')
+  let uploadId: string | undefined
+  if (next.avatarUrl !== current.avatarUrl && next.avatarUrl) {
+    const [upload] = await tx.select().from(memberProfileUploads).where(and(
+      eq(memberProfileUploads.userId, actorUserId), eq(memberProfileUploads.memberId, id),
+      eq(memberProfileUploads.url, next.avatarUrl), isNull(memberProfileUploads.proposalId)
+    )).limit(1).for('update')
+    if (!upload || upload.expiresAt < new Date()) throw new Error('MEMBER_AVATAR_UPLOAD_INVALID')
+    uploadId = upload.id
+  }
+  const [proposal] = await tx.insert(memberProposals).values({ memberId: id,
+    baseRevisionId: current.currentRevisionId, currentRevisionId: current.currentRevisionId,
+    action: 'update', proposedProfile: profileRecord(next), fieldChanges: changes, createdByUserId: actorUserId
+  }).returning()
+  if (uploadId) await tx.update(memberProfileUploads).set({ proposalId: proposal!.id }).where(eq(memberProfileUploads.id, uploadId))
+  await tx.insert(auditLogs).values({ actorUserId, action: 'member.profile.cms.submit', targetType: 'member_proposal', targetId: proposal!.id,
+    metadata: { memberId: id, changedFields: Object.keys(changes) } })
+  return proposal!
+})
+
+export const submitCmsMemberRestore = async (memberId: string, revisionId: string, expectedVersion: number, actorUserId: string) => {
+  const current = await getCmsMember(memberId)
+  if (!current || current.deletedAt) throw new Error('MEMBER_NOT_FOUND')
+  const [revision] = await getDatabase().select().from(memberRevisions)
+    .where(and(eq(memberRevisions.id, revisionId), eq(memberRevisions.memberId, memberId))).limit(1)
+  if (!revision) throw new Error('MEMBER_REVISION_NOT_FOUND')
+  const profile = canonicalizeHistoricalProfile({ ...profileFromRecord(revision.profile), memberKey: current.memberKey })
+  // An existing historical avatar is an approved asset, not a newly supplied URL.
+  const [receipt] = profile.avatarUrl && profile.avatarUrl !== current.avatarUrl ? await getDatabase().insert(memberProfileUploads).values({
+    userId: actorUserId, memberId, objectKey: '', url: profile.avatarUrl, expiresAt: new Date(Date.now() + 86400000)
+  }).returning({ id: memberProfileUploads.id }) : []
+  try { return await submitCmsMemberProfile(memberId, { ...profile, expectedVersion }, actorUserId) }
+  catch (error) { if (receipt) await getDatabase().delete(memberProfileUploads).where(eq(memberProfileUploads.id, receipt.id)); throw error }
 }
 
 export const deleteCmsMember = async (
@@ -815,6 +888,7 @@ export const applyMemberProposal = async (
   if (confirmation !== 'APPLY_MEMBER_PROPOSAL') throw new Error('MEMBER_PROPOSAL_CONFIRMATION_INVALID')
   let memberId = ''
   await getDatabase().transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(884021503)`)
     const [proposal] = await tx.select().from(memberProposals)
       .where(eq(memberProposals.id, proposalId)).limit(1).for('update')
     if (!proposal) throw new Error('MEMBER_PROPOSAL_NOT_FOUND')
@@ -841,11 +915,14 @@ export const applyMemberProposal = async (
       if (!proposalBase) throw new CmsMemberVersionConflictError('提案基准版本已不存在，请重新提交提案')
       const merged = mergeMemberProfiles(profileFromRecord(proposalBase.profile), before, profile)
       if (!merged.merged) {
-        throw new CmsMemberVersionConflictError(`提案与当前资料的 ${merged.conflicts.join('、')} 字段冲突，请重新提交提案`)
+        throw new CmsMemberVersionConflictError(`提案与当前资料的 ${merged.conflicts.map(field => memberFieldLabels[field] || field).join('、')} 字段冲突，请重新提交提案`)
       }
       profile = merged.merged
     }
-    if (profile.memberKey !== current.memberKey) throw new Error('MEMBER_KEY_IMMUTABLE')
+    if (profile.memberKey !== current.memberKey && proposal.sourceImportItemId) throw new Error('MEMBER_KEY_IMMUTABLE')
+    if (profile.memberKey !== current.memberKey) {
+      await renameMemberIdentity(tx, current.id, before, profile)
+    }
     if (proposal.action === 'update') profile = canonicalizeHistoricalProfile(profile)
     if (proposal.action === 'update') await assertMemberProfileOptions(profile, before)
     const revisionNumber = (await tx.select({ value: sql<number>`coalesce(max(${memberRevisions.revisionNumber}), 0)::int` })

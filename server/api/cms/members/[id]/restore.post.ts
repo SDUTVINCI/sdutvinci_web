@@ -1,6 +1,7 @@
 import { createError, getRouterParam, readValidatedBody } from 'h3'
 import { z } from 'zod'
-import { CmsMemberKeyConflictError, CmsMemberVersionConflictError, restoreCmsMemberRevision } from '../../../../services/cms-members'
+import { CmsMemberKeyConflictError, CmsMemberVersionConflictError, submitCmsMemberRestore } from '../../../../services/cms-members'
+import { throwMemberProfileError } from '../../../../utils/member-profile-http'
 import { requireCmsCsrf, requireCmsRequestAuth } from '../../../../utils/cms-http'
 
 const schema = z.object({
@@ -15,7 +16,7 @@ export default defineEventHandler(async (event) => {
   const memberId = z.string().uuid().parse(getRouterParam(event, 'id'))
   const input = await readValidatedBody(event, schema.parse)
   try {
-    return { member: await restoreCmsMemberRevision(memberId, input.revisionId, input.expectedVersion, auth.user.id) }
+    return { proposal: await submitCmsMemberRestore(memberId, input.revisionId, input.expectedVersion, auth.user.id) }
   } catch (error) {
     if (error instanceof Error && error.message === 'MEMBER_SELF_REVIEW_REQUIRED') throw createError({ statusCode: 403, message: '修改自己的资料请进入个人中心提交审核' })
     if (error instanceof CmsMemberVersionConflictError) {
@@ -24,6 +25,7 @@ export default defineEventHandler(async (event) => {
     if (error instanceof CmsMemberKeyConflictError || (typeof error === 'object' && error && 'code' in error && error.code === '23505')) {
       throw createError({ statusCode: 409, message: error instanceof Error ? error.message : '该成员 ID 或文件路径已被占用' })
     }
-    throw error
+    if (error instanceof Error && error.message === 'MEMBER_REVISION_NOT_FOUND') throw createError({ statusCode: 404, message: '历史版本不存在' })
+    throwMemberProfileError(error)
   }
 })

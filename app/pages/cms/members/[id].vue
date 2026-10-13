@@ -4,6 +4,7 @@ import type { MemberProfileFormModel } from '../../../../shared/types/member-pro
 import { resolveStaticMediaUrl } from '~~/shared/utils/static-media'
 
 definePageMeta({ layout: 'cms', middleware: 'cms-auth' })
+const { confirm: confirmAction } = useSiteConfirm()
 const route = useRoute()
 const id = String(route.params.id)
 const { session, csrfHeaders, loadSession } = useCmsSession()
@@ -28,7 +29,8 @@ const form = reactive<MemberProfileFormModel & {
   memberKey: string, avatarUrl: string, metadata: string, otherLinks: string, sortOrder: number
 }>({
   isLearner: member.value?.isLearner === true,
-  memberKey: member.value?.memberKey || '', name: member.value?.name || '', avatarUrl: member.value?.avatarUrl ? resolveStaticMediaUrl(member.value.avatarUrl) : '',
+  teacherDetails: member.value?.teacherDetails || '',
+  memberKey: member.value?.memberKey || '', name: member.value?.name || '', avatarUrl: member.value?.avatarUrl || '',
   groupName: member.value?.groupName || '', positions: [...(member.value?.positions || [])],
   seasons: [...(member.value?.seasons || [])], advisorSeasons: [...(member.value?.advisorSeasons || [])],
   grade: member.value?.grade || '', affiliation: member.value?.affiliation || '',
@@ -53,6 +55,7 @@ const uploadAvatar = async (file: File) => {
   const body = new FormData()
   body.append('expectedVersion', String(member.value.version))
   body.append('image', file)
+  body.append('name', form.name)
   try {
     const result = await $fetch<{ url: string }>(`/api/cms/members/${id}/avatar`, {
       method: 'POST',
@@ -60,8 +63,7 @@ const uploadAvatar = async (file: File) => {
       body
     })
     form.avatarUrl = result.url
-    await refresh()
-    message.value = '头像已转换为 WebP、上传并生成新的成员版本。'
+    message.value = '头像已准备好，提交资料并审核通过后才会公开更新。'
   } catch (error: any) {
     errorMessage.value = error?.data?.message || '头像上传失败'
   } finally {
@@ -74,7 +76,7 @@ const save = async () => {
     errorMessage.value = '请等待头像上传完成后再保存'
     return
   }
-  if (!form.seasons.length) {
+  if (!form.isLearner && !form.seasons.length) {
     errorMessage.value = '请至少选择一个参加过的赛季'
     return
   }
@@ -82,17 +84,23 @@ const save = async () => {
   message.value = ''
   errorMessage.value = ''
   try {
+    const links = { ...JSON.parse(form.otherLinks || '{}') }
+    for (const [field, value] of Object.entries(form.links)) {
+      const key = field === 'home-page' && !('home-page' in initialLinks) && 'homepage' in initialLinks ? 'homepage' : field
+      if (value.trim()) links[key] = value.trim()
+      else if (key in initialLinks) links[key] = null
+    }
     await $fetch(`/api/cms/members/${id}`, {
       method: 'PATCH',
       headers: csrfHeaders(),
       body: {
-        isLearner: form.isLearner === true, memberKey: form.memberKey, name: form.name, avatarUrl: form.avatarUrl || null,
+        teacherDetails: form.teacherDetails || '', isLearner: form.isLearner === true, memberKey: form.memberKey, name: form.name, avatarUrl: form.avatarUrl || null,
         groupName: form.groupName || null, positions: form.positions,
         seasons: form.seasons,
         advisorSeasons: form.advisorSeasons,
         grade: form.grade || null, affiliation: form.affiliation || null,
-        links: { ...JSON.parse(form.otherLinks || '{}'), github: form.links.github || null, 'home-page': form.links['home-page'] || null },
-        body: form.body, sortOrder: Number(form.sortOrder), expectedVersion: member.value!.version
+        links,
+        metadata: JSON.parse(form.metadata || '{}'), body: form.body, sortOrder: Number(form.sortOrder), expectedVersion: member.value!.version
       }
     })
     await refresh()
@@ -101,7 +109,7 @@ const save = async () => {
       await loadSession(true)
     }
     form.memberKey = member.value?.memberKey || form.memberKey
-    message.value = '成员资料已保存。'
+    message.value = '资料修改已提交审核，当前公开资料保持原状态，请到审核中心处理。'
   } catch (error: any) {
     errorMessage.value = error?.data?.message || '保存失败'
   } finally {
@@ -111,11 +119,17 @@ const save = async () => {
 
 const deleteMember = async () => {
   if (!isAdmin.value || !member.value) return
-  if (!confirm(`确定删除成员档案“${member.value.name}”？公开页面将不再展示，并生成内容仓库删除任务。`)) return
+  if (!await confirmAction(`确定删除成员档案“${member.value.name}”？公开页面将不再展示，并生成内容仓库删除任务。`)) return
   submitting.value = true
   message.value = ''
   errorMessage.value = ''
   try {
+    const links = { ...JSON.parse(form.otherLinks || '{}') }
+    for (const [field, value] of Object.entries(form.links)) {
+      const key = field === 'home-page' && !('home-page' in initialLinks) && 'homepage' in initialLinks ? 'homepage' : field
+      if (value.trim()) links[key] = value.trim()
+      else if (key in initialLinks) links[key] = null
+    }
     await $fetch(`/api/cms/members/${id}`, {
       method: 'DELETE',
       headers: csrfHeaders(),
@@ -132,7 +146,7 @@ const deleteMember = async () => {
 }
 
 const restoreRevision = async (revisionId: string) => {
-  if (!confirm('这会从旧版本创建一个新的不可变版本，确定继续吗？')) return
+  if (!await confirmAction('将旧版本内容提交为资料恢复申请，审核通过后才生效。确定提交吗？')) return
   submitting.value = true
   try {
     await $fetch(`/api/cms/members/${id}/restore`, {
@@ -141,21 +155,10 @@ const restoreRevision = async (revisionId: string) => {
     })
     await refresh()
     await refreshAuxiliary()
-    message.value = '旧版本已恢复为新版本。'
+    message.value = '恢复申请已提交审核，当前资料保持原状态。'
   } catch (error: any) { errorMessage.value = error?.data?.message || '恢复失败' } finally { submitting.value = false }
 }
 
-const applyProposal = async (proposalId: string) => {
-  if (!confirm('提案不会自动生效。现在明确接受并创建新的成员版本吗？')) return
-  submitting.value = true
-  try {
-    await $fetch(`/api/cms/member-proposals/${proposalId}/apply`, {
-      method: 'POST', headers: csrfHeaders(),
-      body: { expectedVersion: member.value!.version, confirmation: 'APPLY_MEMBER_PROPOSAL' }
-    })
-    await refresh(); await refreshAuxiliary(); message.value = '成员提案已明确接受并生成新版本。'
-  } catch (error: any) { errorMessage.value = error?.data?.message || '应用提案失败' } finally { submitting.value = false }
-}
 </script>
 
 <template>
@@ -177,7 +180,7 @@ const applyProposal = async (proposalId: string) => {
 
       <MemberAvatarUpload
         :name="form.name"
-        :current-url="form.avatarUrl"
+        :current-url="resolveStaticMediaUrl(form.avatarUrl)"
         :disabled="!isAdmin"
         :uploading="avatarUploading"
         @select="uploadAvatar"
@@ -185,7 +188,7 @@ const applyProposal = async (proposalId: string) => {
       <MemberProfileFields v-model="form" :options="memberOptions" :disabled="!isAdmin" />
 
       <label><span>稳定 ID（同时是成员登录账号）</span><input v-model.trim="form.memberKey" :disabled="!isAdmin" required maxlength="32" pattern="[a-z][a-z0-9]{2,31}" autocapitalize="none" spellcheck="false"></label>
-      <p class="cms-muted">修改后，成员主页地址和关联账号会同步更新；旧文章署名仍可解析。</p>
+      <p class="cms-muted">审核通过后，成员主页地址和关联账号会同步更新；旧文章署名仍可解析。</p>
 
       <details class="member-edit-advanced">
         <summary>高级公开字段</summary>
@@ -197,18 +200,19 @@ const applyProposal = async (proposalId: string) => {
       </details>
 
       <footer v-if="isAdmin" class="member-application-actions">
-        <button class="cms-button cms-button-primary" :disabled="submitting || avatarUploading">{{ avatarUploading ? '正在上传头像…' : (submitting ? '正在保存…' : '保存成员资料') }}</button>
+        <button class="cms-button cms-button-primary" :disabled="submitting || avatarUploading">{{ avatarUploading ? '正在上传头像…' : (submitting ? '正在提交…' : '提交修改审核') }}</button>
         <button class="cms-button cms-button-danger" type="button" :disabled="submitting || avatarUploading" @click="deleteMember">删除成员档案</button>
       </footer>
     </form>
 
     <section class="cms-panel">
-      <h2>PR 成员提案</h2>
-      <p class="cms-muted">导入 PR 只会创建这里的提案；必须由管理员再次明确接受才会修改权威资料。</p>
+      <h2>成员资料修改申请</h2>
+      <p class="cms-muted">资料修改、恢复和 PR 提案统一在审核中心审核，通过后才会更新公开资料。</p>
       <ul v-if="auxiliary?.proposals.length">
         <li v-for="proposal in [...auxiliary.proposals].reverse()" :key="proposal.id">
-          {{ proposal.action }} · {{ proposal.status }} · {{ Object.keys(proposal.fieldChanges).join('、') || '删除提案' }}
-          <button v-if="isAdmin && proposal.status === 'pending'" class="cms-button" type="button" :disabled="submitting" @click="applyProposal(proposal.id)">明确接受提案</button>
+          {{ proposal.action === 'delete' ? '删除档案' : '资料修改' }} · {{ ({ pending: '待审核', applied: '已通过', rejected: '已拒绝', withdrawn: '已撤回' } as Record<string, string>)[proposal.status] || proposal.status }}
+          <MemberProfileDiff v-if="proposal.action === 'update'" :changes="proposal.fieldChanges" />
+          <NuxtLink v-if="isAdmin && proposal.status === 'pending'" class="cms-button" to="/cms/reviews">前往审核中心</NuxtLink>
         </li>
       </ul>
       <p v-else class="cms-muted">暂无提案。</p>
@@ -219,7 +223,7 @@ const applyProposal = async (proposalId: string) => {
       <ul>
         <li v-for="revision in [...(auxiliary?.revisions || [])].reverse()" :key="revision.id">
           v{{ revision.revisionNumber }} · {{ revision.sourceKind }} · <code>{{ revision.contentHash.slice(0, 12) }}</code>
-          <button v-if="isAdmin && revision.id !== member.currentRevisionId" class="cms-button" type="button" :disabled="submitting" @click="restoreRevision(revision.id)">恢复为新版本</button>
+          <button v-if="isAdmin && revision.id !== member.currentRevisionId" class="cms-button" type="button" :disabled="submitting" @click="restoreRevision(revision.id)">提交恢复审核</button>
         </li>
       </ul>
     </section>

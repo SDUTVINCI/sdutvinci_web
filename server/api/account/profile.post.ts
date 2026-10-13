@@ -5,6 +5,7 @@ import { requireCmsCsrf, requireSiteRequestAuth } from '../../utils/cms-http'
 import { throwMemberProfileError } from '../../utils/member-profile-http'
 
 const schema = z.object({
+  teacherDetails: z.string().trim().max(200).nullable().optional(),
   isLearner: z.boolean(), name: z.string().trim().min(1).max(100),
   avatarUrl: z.string().trim().min(1).max(2048), grade: z.string().trim().max(32),
   groupName: z.string().trim().max(64), affiliation: z.string().trim().max(200),

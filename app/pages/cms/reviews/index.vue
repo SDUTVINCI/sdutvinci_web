@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { CMS_MEMBER_REVIEW_CONFIRMATION, CMS_MEMBER_REVIEW_MAX_ITEMS, type CmsMemberReviewKind, type CmsMemberReviewAction, type CmsMemberReviewResult } from '~~/shared/types/cms-member-review'
 import type { CmsReviewSummary } from '../../../../shared/types/cms-reviews'
 import type { CmsBatchActionResult } from '../../../../shared/types/cms-drafts'
 import type { CmsAccountRegistrationApplication } from '../../../../shared/types/account-registration'
@@ -65,8 +66,10 @@ const selectedPendingIds = ref<string[]>([])
 const selectedApprovedIds = ref<string[]>([])
 const batchBusy = ref(false)
 const proposalReviewingId = ref('')
+const applicationReviewingId = ref('')
+const memberReviewBusy = computed(() => memberBatchBusy.value || !!proposalReviewingId.value || !!registrationReviewingId.value || !!applicationReviewingId.value)
 const memberChangeLabels: Record<string, string> = {
-  isLearner: '是否为新学员', name: '姓名', image: '头像', role: '显示职务', type: '成员类型', group: '组别',
+  memberKey: '成员稳定 ID', teacherDetails: '任职与职称补充信息', isLearner: '是否为新学员', name: '姓名', image: '头像', role: '显示职务', type: '成员类型', group: '组别',
   positions: '身份与职务', time: '参加过的赛季', advisor: '顾问届次', grade: '年级',
   affiliation: '学院 / 单位', links: '公开链接', body: '简介', metadata: '扩展字段', sortOrder: '排序号'
 }
@@ -74,6 +77,46 @@ const changeValue = (value: unknown) => value === null || value === undefined ||
   ? '未填写'
   : Array.isArray(value) ? value.join('、') || '未填写'
     : typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)
+
+const requestSelections = reactive<Record<CmsMemberReviewKind, string[]>>({ application: [], proposal: [], registration: [] })
+const memberBatchBusy = ref(false)
+const batchFeedback = ref<Array<CmsMemberReviewResult & { name: string }>>([])
+const requestItems = (kind: CmsMemberReviewKind) => kind === 'application'
+  ? (data.value?.applications || []).map(item => ({ id: item.id, name: item.profile.name }))
+  : kind === 'proposal' ? (data.value?.proposals || []).filter(item => item.action === 'update' && !item.member.deleted)
+    .map(item => ({ id: item.id, name: item.member.name, version: item.member.version }))
+    : registrationApplications.value.map(item => ({ id: item.id, name: item.member.name }))
+const toggleRequestSelection = (kind: CmsMemberReviewKind) => {
+  const ids = requestItems(kind).map(item => item.id)
+  requestSelections[kind] = ids.every(id => requestSelections[kind].includes(id)) ? [] : ids
+}
+watch([data, registrationData], () => {
+  for (const kind of ['application', 'proposal', 'registration'] as const) {
+    const ids = new Set(requestItems(kind).map(item => item.id))
+    requestSelections[kind] = requestSelections[kind].filter(id => ids.has(id))
+  }
+})
+const reviewRequestsBatch = async (kind: CmsMemberReviewKind, action: CmsMemberReviewAction) => {
+  const selected = requestItems(kind).filter(item => requestSelections[kind].includes(item.id))
+  if (!selected.length || memberReviewBusy.value) return
+  if (selected.length > CMS_MEMBER_REVIEW_MAX_ITEMS) { errorMessage.value = `每批最多 ${CMS_MEMBER_REVIEW_MAX_ITEMS} 项，请减少选择`; return }
+  const reviewNote = kind === 'registration' ? registrationNote.value : note.value
+  if (action === 'reject' && !reviewNote.trim()) { errorMessage.value = '批量拒绝前请填写审核原因'; return }
+  if (!await confirmAction(`确定${action === 'approve' ? '通过' : '拒绝'}选中的 ${selected.length} 项申请吗？${action === 'approve' ? '通过后立即生效；每项分别检查，失败项会保留。' : '拒绝后可重新提交。'}`)) return
+  memberBatchBusy.value = true; errorMessage.value = ''; message.value = ''; batchFeedback.value = []
+  try {
+    const result = await $fetch<{ results: CmsMemberReviewResult[] }>('/api/cms/reviews/batch-members', {
+      method: 'POST', headers: csrfHeaders(), body: { kind, action, note: reviewNote, confirm: CMS_MEMBER_REVIEW_CONFIRMATION,
+        items: selected.map(item => ({ id: item.id, ...('version' in item ? { version: item.version } : {}) })) }
+    })
+    batchFeedback.value = result.results.map(item => ({ ...item, name: selected.find(request => request.id === item.id)?.name || item.id }))
+    const failures = result.results.filter(item => !item.ok)
+    requestSelections[kind] = failures.map(item => item.id)
+    message.value = `批量审核完成：成功 ${result.results.length - failures.length} 项，失败 ${failures.length} 项。`
+    await refreshAll(); await loadSession(true)
+  } catch (error: any) { errorMessage.value = error?.data?.message || '批量审核失败，选择已保留，请刷新后重试' }
+  finally { memberBatchBusy.value = false }
+}
 
 const toggleAll = (kind: 'pending' | 'approved') => {
   const source = kind === 'pending' ? data.value?.reviews || [] : data.value?.approved || []
@@ -89,7 +132,7 @@ const runBatch = async (action: 'approve' | 'publish') => {
   const prompt = action === 'approve'
     ? `确定批量审核通过 ${items.length} 篇草稿吗？系统会逐篇检查版本和正式内容基线。`
     : `确定把 ${items.length} 篇已通过草稿正式发布吗？发布会逐篇创建正式 Revision 和导出任务。`
-  if (!window.confirm(prompt)) return
+  if (!await confirmAction(prompt)) return
   batchBusy.value = true
   message.value = ''
   errorMessage.value = ''
@@ -119,7 +162,9 @@ const runBatch = async (action: 'approve' | 'publish') => {
   } finally { batchBusy.value = false }
 }
 const reviewMember = async (id: string, action: 'approve' | 'reject') => {
-  if (!await confirmAction(action === 'approve' ? '审核通过后将立即创建正式成员并上线，确定吗？' : '拒绝后将删除临时头像，确定吗？')) return
+  if (memberReviewBusy.value) return
+  if (!await confirmAction(action === 'approve' ? '审核通过后将立即创建成员档案并上线，确定吗？' : '拒绝后将删除临时头像，确定吗？')) return
+  applicationReviewingId.value = id
   try {
     await $fetch(`/api/cms/member-applications/${id}/review`, {
       method: 'POST', headers: csrfHeaders(), body: { action, note: note.value }
@@ -129,12 +174,13 @@ const reviewMember = async (id: string, action: 'approve' | 'reject') => {
     await refresh()
   } catch (error: any) {
     errorMessage.value = error?.data?.message || '成员审核失败'
-  }
+  } finally { applicationReviewingId.value = '' }
 }
 
 const reviewProposal = async (proposal: MemberProposalReview, action: 'approve' | 'reject') => {
+  if (memberReviewBusy.value) return
   const label = proposal.action === 'delete' ? '删除成员档案' : '修改成员资料'
-  if (!confirm(action === 'approve'
+  if (!await confirmAction(action === 'approve'
     ? `确定通过 ${proposal.member.name} 的“${label}”提案吗？系统会检查并合并当前版本。`
     : `确定拒绝 ${proposal.member.name} 的“${label}”提案吗？`)) return
   proposalReviewingId.value = proposal.id
@@ -160,10 +206,11 @@ const reviewRegistration = async (
   application: CmsAccountRegistrationApplication,
   action: 'approve' | 'reject'
 ) => {
+  if (memberReviewBusy.value) return
   const prompt = action === 'approve'
     ? `确定通过 ${application.member.name} 的账号 @${application.account} 注册申请吗？通过后将根据档案身份创建成员或学员账号。`
     : `确定拒绝 ${application.member.name} 的注册申请吗？申请中的密码哈希会被清除。`
-  if (!confirm(prompt)) return
+  if (!await confirmAction(prompt)) return
   registrationReviewingId.value = application.id
   registrationMessage.value = ''
   registrationError.value = ''
@@ -204,7 +251,7 @@ const reviewRegistration = async (
     </header>
 
     <p v-if="message" class="cms-alert">{{ message }}</p>
-    <p v-if="errorMessage" class="cms-alert cms-alert-error">{{ errorMessage }}</p>
+    <p v-if="errorMessage" class="cms-alert cms-alert-error">{{ errorMessage }}</p><ul v-if="batchFeedback.length" class="cms-panel cms-batch-results" aria-label="批量审核结果"><li v-for="item in batchFeedback" :key="item.id" :class="{ 'cms-alert-error': !item.ok }">{{ item.name }}：{{ item.message }}</li></ul>
     <p v-if="status === 'pending'" class="cms-muted">正在加载待审核内容…</p>
     <p v-else-if="error" class="cms-alert cms-alert-error">加载失败，请稍后重试。</p>
     <div class="cms-review-workspace">
@@ -316,8 +363,10 @@ const reviewRegistration = async (
         </header>
         <div v-if="data?.applications.length || data?.proposals.length" class="cms-review-member-body">
           <label class="cms-form cms-review-note"><span>本次审核备注</span><textarea v-model="note" rows="3" maxlength="1000" /></label>
+          <CmsMemberBatchToolbar title="新成员申请" :total="requestItems('application').length" :selected="requestSelections.application.length" :busy="memberReviewBusy" @toggle="toggleRequestSelection('application')" @approve="reviewRequestsBatch('application', 'approve')" @reject="reviewRequestsBatch('application', 'reject')" />
           <div class="cms-review-cards">
             <article v-for="item in data.applications" :key="item.id" class="cms-panel cms-member-review-card">
+              <label class="cms-review-request-select"><input v-model="requestSelections.application" type="checkbox" :value="item.id" :disabled="memberReviewBusy"><span>选择 {{ item.profile.name }} 的成员申请</span></label>
               <img v-if="item.avatarPublicUrl" class="cms-member-avatar" :src="item.avatarPublicUrl" alt="申请头像">
               <div class="cms-member-review-content">
                 <span class="cms-badge">新成员资料登记</span>
@@ -326,17 +375,22 @@ const reviewRegistration = async (
                   <div><dt>年级 / 赛季</dt><dd>{{ item.profile.grade ? `${item.profile.grade} 级` : '无年级' }} · {{ item.profile.seasons?.join('、') || '无参与赛季' }}</dd></div>
                   <div><dt>组别</dt><dd>{{ item.profile.groupName || '无' }}</dd></div>
                   <div><dt>身份与职务</dt><dd>{{ item.profile.isLearner ? '智能机器人创新实践基地学员' : item.profile.positions?.join('、') }}</dd></div>
+                  <div v-if="item.profile.teacherDetails"><dt>任职与职称</dt><dd>{{ item.profile.teacherDetails }}</dd></div>
                   <div><dt>顾问届次</dt><dd>{{ item.profile.advisorSeasons?.join('、') || '无' }}</dd></div>
                   <div><dt>学院</dt><dd>{{ item.profile.affiliation || '未填写' }}</dd></div>
                 </dl>
                 <p v-if="item.profile.body">{{ item.profile.body }}</p>
                 <div class="cms-button-row">
-                  <button class="cms-button cms-button-primary" @click="reviewMember(item.id, 'approve')">审核通过并上线</button>
-                  <button class="cms-button" @click="reviewMember(item.id, 'reject')">拒绝</button>
+                  <button class="cms-button cms-button-primary" :disabled="memberReviewBusy" @click="reviewMember(item.id, 'approve')">审核通过并上线</button>
+                  <button class="cms-button" :disabled="memberReviewBusy" @click="reviewMember(item.id, 'reject')">拒绝</button>
                 </div>
               </div>
             </article>
+            </div>
+          <CmsMemberBatchToolbar title="成员资料修改" :total="requestItems('proposal').length" :selected="requestSelections.proposal.length" :busy="memberReviewBusy" @toggle="toggleRequestSelection('proposal')" @approve="reviewRequestsBatch('proposal', 'approve')" @reject="reviewRequestsBatch('proposal', 'reject')" />
+          <div class="cms-review-cards">
             <article v-for="proposal in data.proposals" :key="proposal.id" class="cms-panel cms-member-review-card">
+              <label v-if="proposal.action === 'update'" class="cms-review-request-select"><input v-model="requestSelections.proposal" type="checkbox" :value="proposal.id" :disabled="memberReviewBusy || proposal.member.deleted"><span>选择 {{ proposal.member.name }} 的资料修改</span></label>
               <img class="cms-member-avatar" :src="resolveStaticMediaUrl(proposal.member.avatarUrl || '/images/logo.png')" alt="成员头像" loading="lazy">
               <div class="cms-member-review-content">
                 <span class="cms-badge">{{ proposal.action === 'delete' ? '删除成员档案提案' : '成员资料修改提案' }}</span>
@@ -356,8 +410,8 @@ const reviewRegistration = async (
                 <p v-else>通过后将软删除此成员档案，保留历史版本。</p>
                 <div class="cms-button-row">
                   <NuxtLink class="cms-button" :to="`/cms/members/${proposal.memberId}`">查看当前档案</NuxtLink>
-                  <button class="cms-button cms-button-primary" type="button" :disabled="!!proposalReviewingId || proposal.member.deleted" @click="reviewProposal(proposal, 'approve')">{{ proposalReviewingId === proposal.id ? '处理中…' : '审核通过' }}</button>
-                  <button class="cms-button" type="button" :disabled="!!proposalReviewingId" @click="reviewProposal(proposal, 'reject')">拒绝</button>
+                  <button class="cms-button cms-button-primary" type="button" :disabled="memberReviewBusy || !!proposalReviewingId || proposal.member.deleted" @click="reviewProposal(proposal, 'approve')">{{ proposalReviewingId === proposal.id ? '处理中…' : '审核通过' }}</button>
+                  <button class="cms-button" type="button" :disabled="memberReviewBusy || !!proposalReviewingId" @click="reviewProposal(proposal, 'reject')">拒绝</button>
                 </div>
               </div>
             </article>
@@ -394,8 +448,10 @@ const reviewRegistration = async (
             <span>本次审核备注</span>
             <textarea v-model="registrationNote" rows="2" maxlength="1000" placeholder="可选，不会显示密码等敏感信息" />
           </label>
+          <CmsMemberBatchToolbar title="账号注册申请" :total="registrationApplications.length" :selected="requestSelections.registration.length" :busy="memberReviewBusy" @toggle="toggleRequestSelection('registration')" @approve="reviewRequestsBatch('registration', 'approve')" @reject="reviewRequestsBatch('registration', 'reject')" />
           <div class="cms-registration-review-list">
             <article v-for="application in registrationApplications" :key="application.id" class="cms-panel cms-registration-review-card">
+              <label class="cms-review-request-select"><input v-model="requestSelections.registration" type="checkbox" :value="application.id" :disabled="memberReviewBusy"><span>选择 {{ application.member.name }} 的账号申请</span></label>
               <img :src="resolveStaticMediaUrl(application.member.avatarUrl || '/images/logo.png')" alt="" loading="lazy">
               <div>
                 <h3>{{ application.member.name }}</h3><p>当前档案身份：{{ application.member.isLearner ? '新学员（只读）' : '正式成员' }}</p>
@@ -403,8 +459,8 @@ const reviewRegistration = async (
                 <small>提交于 {{ new Date(application.submittedAt).toLocaleString('zh-CN') }}</small>
               </div>
               <div class="cms-button-row">
-                <button class="cms-button cms-button-primary" type="button" :disabled="!!registrationReviewingId || registrationStatus === 'pending'" @click="reviewRegistration(application, 'approve')">通过并创建账号</button>
-                <button class="cms-button" type="button" :disabled="!!registrationReviewingId || registrationStatus === 'pending'" @click="reviewRegistration(application, 'reject')">拒绝</button>
+                <button class="cms-button cms-button-primary" type="button" :disabled="memberReviewBusy || !!registrationReviewingId || registrationStatus === 'pending'" @click="reviewRegistration(application, 'approve')">通过并创建账号</button>
+                <button class="cms-button" type="button" :disabled="memberReviewBusy || !!registrationReviewingId || registrationStatus === 'pending'" @click="reviewRegistration(application, 'reject')">拒绝</button>
               </div>
             </article>
           </div>

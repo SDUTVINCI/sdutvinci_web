@@ -4,6 +4,7 @@ import { CmsMemberVersionConflictError } from '../services/cms-members'
 export const throwMemberProfileError = (error: unknown): never => {
   if (error instanceof CmsMemberVersionConflictError) throw createError({ statusCode: 409, message: error.message })
   const messages: Record<string, string> = {
+    MEMBER_TEACHER_DETAILS_INVALID: '老师补充信息仅指导老师可填，最多 200 字且不能换行',
     MEMBER_NOT_FOUND: '账号尚未关联有效成员档案',
     MEMBER_PROFILE_PENDING: '已有待审核的资料修改，请等待处理或撤回后重新提交',
     MEMBER_PROFILE_UNCHANGED: '没有需要提交的修改',

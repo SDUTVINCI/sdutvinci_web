@@ -1,43 +1,10 @@
-import { getDatabase } from '../db/client'
-import { assertNotOwnMemberWrite } from './member-account-role'
-import {
-  deleteMemberAvatarObject,
-  prepareMemberAvatar,
-  uploadMemberAvatarObject
-} from './member-avatar-storage'
-import { CmsMemberVersionConflictError, getCmsMember, updateCmsMember } from './cms-members'
+import { getCmsMember } from './cms-members'
+import { uploadMemberProfileAvatar } from './member-self-profile'
 
 export const uploadCmsMemberAvatar = async (input: {
-  memberId: string
-  expectedVersion: number
-  data: Buffer
-  mimeType: string
-  actorUserId: string
+  memberId: string, expectedVersion: number, data: Buffer, mimeType: string, actorUserId: string, name?: string
 }) => {
-  const current = await getCmsMember(input.memberId)
-  if (!current) throw new Error('MEMBER_NOT_FOUND')
-  if (current.version !== input.expectedVersion) throw new CmsMemberVersionConflictError()
-  await getDatabase().transaction(tx => assertNotOwnMemberWrite(tx, current.id, input.actorUserId))
-  const { output, filename } = await prepareMemberAvatar({
-    name: current.name,
-    data: input.data,
-    mimeType: input.mimeType
-  })
-  const key = `site-assets/images/member_photo/${filename}`
-  const { url } = await uploadMemberAvatarObject({
-    key,
-    output,
-    metadata: { 'member-id': current.id }
-  })
-  try {
-    const member = await updateCmsMember(current.id, {
-      name: current.name,
-      avatarUrl: url,
-      expectedVersion: input.expectedVersion
-    }, input.actorUserId)
-    return { member, url, filename }
-  } catch (error) {
-    await deleteMemberAvatarObject(key).catch(() => undefined)
-    throw error
-  }
+  const member = await getCmsMember(input.memberId)
+  if (!member || member.deletedAt) throw new Error('MEMBER_NOT_FOUND')
+  return uploadMemberProfileAvatar(input.actorUserId, input.memberId, { ...input, name: input.name || member.name })
 }

@@ -26,6 +26,7 @@ const memberOptionErrors: Record<string, string> = {
 
 const schema = z.object({
   memberKey: z.string().trim().toLowerCase().regex(cmsAccountPattern),
+  teacherDetails: z.string().trim().max(200).nullable().optional(),
   isLearner: z.boolean().optional(),
   name: z.string().trim().min(1).max(100),
   avatarUrl: safeAvatarUrl.nullable().optional(),
