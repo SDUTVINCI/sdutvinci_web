@@ -1,3 +1,4 @@
+import { saveMemberCohort } from '../server/services/member-options'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { eq, sql } from 'drizzle-orm'
 import { HeadObjectCommand, S3Client } from '@aws-sdk/client-s3'
@@ -78,6 +79,18 @@ integration('公开成员申请审核', () => {
       Bucket: process.env.S3_BUCKET,
       Key: `member-applications/${new Date().getUTCFullYear()}/${uploaded.filename}`
     }))).rejects.toBeTruthy()
+  })
+
+  it('2026级新学员完整申请允许空职务和空赛季，审核后保留学员分类', async () => {
+    const admin = await bootstrapCmsAdmin({ account: 'learnerreview', password: 'ReviewAdminPassword123!' })
+    await saveMemberCohort({ gradeYear: 2026, season: '28', seasonEnabled: false, active: true, groups: ['机械组'] })
+    const application = await startMemberApplication()
+    const image = await sharp({ create: { width: 32, height: 32, channels: 3, background: '#16878b' } }).png().toBuffer()
+    await uploadMemberApplicationAvatar({ id: application.id, token: application.token, name: '新学员', data: image, mimeType: 'image/png' })
+    await submitMemberApplication(application.id, application.token, { isLearner: true, name: '新学员', grade: '2026', groupName: '机械组', positions: [], seasons: [], advisorSeasons: [], links: {} })
+    expect(await getDatabase().select().from(members)).toHaveLength(0)
+    const result = await reviewMemberApplication(application.id, 'approve', '', admin!.id)
+    expect(result.member).toMatchObject({ isLearner: true, grade: '2026', groupName: '机械组', positions: [], seasons: [], memberType: '学员' })
   })
 
   it('拒绝不存在或未提交申请，且服务端拒绝年度外组别', async () => {

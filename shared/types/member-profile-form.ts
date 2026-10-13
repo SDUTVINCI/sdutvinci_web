@@ -1,5 +1,6 @@
 export interface MemberProfileFormModel {
   name: string
+  isLearner?: boolean
   grade: string
   groupName: string
   positions: string[]

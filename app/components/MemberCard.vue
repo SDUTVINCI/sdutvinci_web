@@ -62,7 +62,8 @@ const externalLinks = computed(() =>
 )
 
 const infoRows = computed(() => [
-  { label: '职务', value: roleText.value },
+  { label: props.member.isLearner ? '身份' : '职务', value: props.member.isLearner ? '学员' : roleText.value },
+  { label: '组别', value: props.member.isLearner ? props.member.group : '' },
   { label: '学院', value: props.member.affiliation },
   { label: '赛季', value: seasonText.value },
   { label: '年级', value: props.member.grade ? `${props.member.grade} 级` : '' }

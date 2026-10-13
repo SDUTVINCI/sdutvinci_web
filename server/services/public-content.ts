@@ -458,6 +458,7 @@ const toPublicMember = (row: typeof members.$inferSelect): PublicMember => {
     vinciId: row.id,
     memberKey,
     path: `/team/${encodeURIComponent(memberKey)}`,
+    isLearner: row.isLearner,
     name: row.name,
     image: resolveStaticMediaUrl(row.avatarUrl || (
       typeof metadata.image === 'string' ? metadata.image : null

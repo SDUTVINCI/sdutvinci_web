@@ -70,6 +70,7 @@ export const members = pgTable('members', {
   sourcePath: text('source_path'),
   role: text('role'),
   memberType: text('member_type'),
+  isLearner: boolean('is_learner').default(false).notNull(),
   groupName: varchar('group_name', { length: 64 }),
   positions: jsonb('positions').$type<string[]>().default([]).notNull(),
   seasons: jsonb('seasons').$type<string[]>().default([]).notNull(),
@@ -166,6 +167,7 @@ export const memberProposals = pgTable('member_proposals', {
   action: varchar('action', { length: 16 }).notNull(),
   status: varchar('status', { length: 16 }).default('pending').notNull(),
   proposedProfile: jsonb('proposed_profile').$type<Record<string, unknown>>(),
+  reviewNote: text('review_note'),
   fieldChanges: jsonb('field_changes').$type<Record<string, unknown>>().default({}).notNull(),
   sourceImportItemId: uuid('source_import_item_id')
     .references((): AnyPgColumn => contentPrImportItems.id, { onDelete: 'restrict' }),
@@ -185,10 +187,22 @@ export const memberProposals = pgTable('member_proposals', {
   index('member_proposals_member_status_index').on(table.memberId, table.status, table.createdAt)
 ])
 
+export const memberProfileUploads = pgTable('member_profile_uploads', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  memberId: uuid('member_id').notNull().references(() => members.id, { onDelete: 'cascade' }),
+  objectKey: text('object_key').notNull(),
+  url: text('url').notNull(),
+  proposalId: uuid('proposal_id').references(() => memberProposals.id, { onDelete: 'set null' }),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
+}, table => [index('member_profile_uploads_expiry_index').on(table.expiresAt)])
+
 export const memberCohorts = pgTable('member_cohorts', {
   id: uuid('id').defaultRandom().primaryKey(),
   gradeYear: integer('grade_year').notNull(),
-  season: varchar('season', { length: 16 }).notNull(),
+  season: varchar('season', { length: 16 }),
+  seasonEnabled: boolean('season_enabled').default(true).notNull(),
   groups: jsonb('groups').$type<string[]>().default([]).notNull(),
   active: boolean('active').default(true).notNull(),
   ...timestamps

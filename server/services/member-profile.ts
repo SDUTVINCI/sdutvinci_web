@@ -15,7 +15,10 @@ export const MEMBER_MARKDOWN_EDITABLE_FIELDS = [
   'links',
   'body',
   'metadata',
-  'sortOrder'
+  'sortOrder',
+  'isLearner',
+  'group',
+  'positions'
 ] as const
 
 export type MemberEditableField = typeof MEMBER_MARKDOWN_EDITABLE_FIELDS[number]
@@ -23,6 +26,7 @@ export type MemberEditableField = typeof MEMBER_MARKDOWN_EDITABLE_FIELDS[number]
 export interface MemberProfileSnapshot {
   memberKey: string
   name: string
+  isLearner?: boolean
   avatarUrl: string | null
   sourcePath: string
   role: string | null
@@ -55,7 +59,14 @@ export const normalizeMemberPositions = (value: unknown): string[] => {
   return normalized
 }
 
-export const deriveMemberType = (positions: readonly string[], groupName: string | null) => {
+export const assertLearnerProfile = (profile: Pick<MemberProfileSnapshot, 'isLearner' | 'positions' | 'seasons' | 'advisorSeasons'>) => {
+  if (profile.isLearner && (profile.positions.length || profile.seasons.length || profile.advisorSeasons.length)) {
+    throw new Error('MEMBER_LEARNER_FIELDS_INVALID')
+  }
+}
+
+export const deriveMemberType = (positions: readonly string[], groupName: string | null, isLearner = false) => {
+  if (isLearner) return '学员'
   if (positions.includes('指导老师')) return '指导老师'
   if (positions.some(position => ['队长', '副队长', '机电创新学会会长'].includes(position))) {
     return '团队负责人'
@@ -64,7 +75,8 @@ export const deriveMemberType = (positions: readonly string[], groupName: string
   return groupName || '普通成员'
 }
 
-export const deriveMemberRole = (positions: readonly string[], groupName: string | null) => {
+export const deriveMemberRole = (positions: readonly string[], groupName: string | null, isLearner = false) => {
+  if (isLearner) return '智能机器人创新实践基地学员'
   const labels = positions.map((position) => {
     if (!groupName) return position
     if (position === '组长') return `${groupName}组长`
@@ -95,7 +107,7 @@ const memberKeyPattern = /^[a-z][a-z0-9]{2,31}$/
 const sensitiveKeyPattern = /^(?:account|accounts|login|loginid|login_id|username|user_id|userid|password|password_hash|roles?|permissions?|binding|member_id|sessions?|security|status|token|secret)$/i
 const knownFrontmatterKeys = new Set([
   'id', 'name', 'image', 'role', 'type', 'time', 'advisor', 'grade',
-  'affiliation', 'links', 'metadata', 'sortOrder', 'group', 'positions'
+  'affiliation', 'links', 'metadata', 'sortOrder', 'group', 'positions', 'isLearner'
 ])
 
 const stringOrNull = (value: unknown) => {
@@ -242,20 +254,22 @@ export const memberProfileFromMarkdown = (
   }
   if (Buffer.byteLength(parsed.body) > 1_000_000) throw new Error('MEMBER_BODY_TOO_LARGE')
 
+  if (parsed.frontmatter.isLearner !== undefined && typeof parsed.frontmatter.isLearner !== 'boolean') throw new Error('MEMBER_LEARNER_FLAG_INVALID')
   const legacyRole = stringOrNull(parsed.frontmatter.role)
   const legacyType = stringOrNull(parsed.frontmatter.type)
   const groupName = stringOrNull(parsed.frontmatter.group) || inferLegacyGroup(legacyRole, legacyType)
   const positions = parsed.frontmatter.positions === undefined
-    ? inferLegacyPositions(legacyRole, legacyType)
+    ? (parsed.frontmatter.isLearner === true ? [] : inferLegacyPositions(legacyRole, legacyType))
     : normalizeMemberPositions(parsed.frontmatter.positions)
 
   return {
     memberKey,
     name,
+    isLearner: parsed.frontmatter.isLearner === true,
     avatarUrl,
     sourcePath,
-    role: legacyRole || deriveMemberRole(positions, groupName),
-    memberType: legacyType || deriveMemberType(positions, groupName),
+    role: parsed.frontmatter.isLearner === true ? deriveMemberRole([], groupName, true) : legacyRole || deriveMemberRole(positions, groupName),
+    memberType: parsed.frontmatter.isLearner === true ? '学员' : legacyType || deriveMemberType(positions, groupName),
     groupName,
     positions,
     seasons: normalizeMemberSeasons(parsed.frontmatter.time),
@@ -280,6 +294,7 @@ const normalizeValue = (value: unknown): unknown => {
 }
 
 export const serializeMemberProfile = (profile: MemberProfileSnapshot) => {
+  assertLearnerProfile(profile)
   if (!memberKeyPattern.test(profile.memberKey)) throw new Error('MEMBER_KEY_INVALID')
   if (!profile.name.trim() || profile.name.length > 100) throw new Error('MEMBER_NAME_INVALID')
   assertSafeMemberAvatarUrl(profile.avatarUrl)
@@ -300,6 +315,12 @@ export const serializeMemberProfile = (profile: MemberProfileSnapshot) => {
     affiliation: profile.affiliation,
     links: Object.keys(profile.links).length ? normalizeValue(profile.links) : null
   }
+  if (profile.isLearner) frontmatter.isLearner = true
+  // Explicit group and positions preserve learner direction and future role transitions.
+  if (profile.isLearner) {
+    frontmatter.group = profile.groupName
+    frontmatter.positions = profile.positions
+  }
   if (profile.sortOrder !== 0) frontmatter.sortOrder = profile.sortOrder
   if (Object.keys(profile.metadata).length) frontmatter.metadata = normalizeValue(profile.metadata)
   const yaml = stringify(frontmatter, {
@@ -318,6 +339,7 @@ export const serializeMemberProfile = (profile: MemberProfileSnapshot) => {
 }
 
 export const profileRecord = (profile: MemberProfileSnapshot): Record<string, unknown> => ({
+  isLearner: profile.isLearner === true,
   memberKey: profile.memberKey,
   name: profile.name,
   avatarUrl: profile.avatarUrl,
@@ -337,6 +359,7 @@ export const profileRecord = (profile: MemberProfileSnapshot): Record<string, un
 })
 
 export const profileFromRecord = (value: Record<string, unknown>): MemberProfileSnapshot => ({
+  isLearner: value.isLearner === true,
   memberKey: String(value.memberKey || ''),
   name: String(value.name || ''),
   avatarUrl: typeof value.avatarUrl === 'string' ? value.avatarUrl : null,
@@ -370,9 +393,10 @@ export const memberFieldDiff = (
         : field === 'type' ? 'memberType'
           : field === 'time' ? 'seasons'
             : field === 'advisor' ? 'advisorSeasons'
+            : field === 'group' ? 'groupName'
               : field
-      const left = base[key as keyof MemberProfileSnapshot]
-      const right = next[key as keyof MemberProfileSnapshot]
+      const left = field === 'isLearner' ? base.isLearner === true : base[key as keyof MemberProfileSnapshot]
+      const right = field === 'isLearner' ? next.isLearner === true : next[key as keyof MemberProfileSnapshot]
       if (JSON.stringify(left) !== JSON.stringify(right)) {
         changes[field] = { from: left ?? null, to: right ?? null }
       }
@@ -398,6 +422,7 @@ export const mergeMemberProfiles = (
       : field === 'type' ? 'memberType'
         : field === 'time' ? 'seasons'
           : field === 'advisor' ? 'advisorSeasons'
+            : field === 'group' ? 'groupName'
             : field
     ;(merged as unknown as Record<string, unknown>)[sourceKey] =
       (proposed as unknown as Record<string, unknown>)[sourceKey]

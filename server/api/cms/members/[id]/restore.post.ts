@@ -17,6 +17,7 @@ export default defineEventHandler(async (event) => {
   try {
     return { member: await restoreCmsMemberRevision(memberId, input.revisionId, input.expectedVersion, auth.user.id) }
   } catch (error) {
+    if (error instanceof Error && error.message === 'MEMBER_SELF_REVIEW_REQUIRED') throw createError({ statusCode: 403, message: '修改自己的资料请进入个人中心提交审核' })
     if (error instanceof CmsMemberVersionConflictError) {
       throw createError({ statusCode: 409, message: error.message })
     }

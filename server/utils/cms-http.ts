@@ -59,7 +59,7 @@ export const getCmsRequestAuth = async (event: H3Event): Promise<CmsRequestAuth 
   return user ? { token, user } : null
 }
 
-export const requireCmsRequestAuth = async (
+export const requireSiteRequestAuth = async (
   event: H3Event,
   role?: CmsRoleCode
 ): Promise<CmsRequestAuth> => {
@@ -73,6 +73,14 @@ export const requireCmsRequestAuth = async (
     throw createError({ statusCode: 403, message: '权限不足' })
   }
 
+  return auth
+}
+
+export const requireCmsRequestAuth = async (event: H3Event, role?: CmsRoleCode): Promise<CmsRequestAuth> => {
+  const auth = await requireSiteRequestAuth(event, role)
+  if (!auth.user.roles.some(code => code === 'admin' || code === 'member')) {
+    throw createError({ statusCode: 403, message: '学员账号不能进入内容管理后台' })
+  }
   return auth
 }
 

@@ -69,6 +69,7 @@ const loadUserRows = async (userId?: string) => {
       memberId: userMembers.memberId,
       memberKey: members.memberKey,
       memberName: members.name,
+      memberIsLearner: members.isLearner,
       memberAvatarUrl: members.avatarUrl
     })
     .from(users)
@@ -99,6 +100,7 @@ const rowsToManagedUsers = (rows: Awaited<ReturnType<typeof loadUserRows>>): Cms
             id: row.memberId,
             memberKey: row.memberKey,
             name: row.memberName,
+            isLearner: row.memberIsLearner === true,
             avatarUrl: row.memberAvatarUrl
           }
         : null,
@@ -209,7 +211,7 @@ export const createCmsUser = async (
     }
 
     await replaceRoles(tx, created.id, input.roles)
-    await linkMatchingMember(tx, created.id, input.account, requireMatchingMember && input.roles.includes('member'))
+    await linkMatchingMember(tx, created.id, input.account, requireMatchingMember && input.roles.some(role => role === 'member' || role === 'reader'))
     await tx.insert(auditLogs).values({
       actorUserId,
       action: auditAction,

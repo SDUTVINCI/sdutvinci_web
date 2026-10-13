@@ -13,7 +13,8 @@ const { data, refresh } = await useAsyncData(`cms:member:${id}`, () =>
   requestFetch<{ member: CmsMember }>(`/api/cms/members/${id}`)
 )
 const member = computed(() => data.value?.member)
-const { data: memberOptions } = await useFetch<any>('/api/member-options')
+if (session.value?.user.memberId === id) await navigateTo('/account')
+const { data: memberOptions } = await useFetch<any>('/api/cms/member-options')
 const { data: auxiliary, refresh: refreshAuxiliary } = await useAsyncData(`cms:member:${id}:auxiliary`, async () => {
   const [revisions, proposals] = await Promise.all([
     requestFetch<{ revisions: Array<{ id: string, revisionNumber: number, sourceKind: string, contentHash: string, createdAt: string }> }>(`/api/cms/members/${id}/revisions`),
@@ -26,6 +27,7 @@ const initialLinks = member.value?.links || {}
 const form = reactive<MemberProfileFormModel & {
   memberKey: string, avatarUrl: string, metadata: string, otherLinks: string, sortOrder: number
 }>({
+  isLearner: member.value?.isLearner === true,
   memberKey: member.value?.memberKey || '', name: member.value?.name || '', avatarUrl: member.value?.avatarUrl ? resolveStaticMediaUrl(member.value.avatarUrl) : '',
   groupName: member.value?.groupName || '', positions: [...(member.value?.positions || [])],
   seasons: [...(member.value?.seasons || [])], advisorSeasons: [...(member.value?.advisorSeasons || [])],
@@ -39,6 +41,7 @@ const submitting = ref(false)
 const avatarUploading = ref(false)
 const message = ref('')
 const errorMessage = ref('')
+useFormNotices(message, errorMessage)
 
 useHead(() => ({ title: `${member.value?.name || '成员'} · Vinci 内容管理后台` }))
 
@@ -79,7 +82,7 @@ const save = async () => {
       method: 'PATCH',
       headers: csrfHeaders(),
       body: {
-        memberKey: form.memberKey, name: form.name, avatarUrl: form.avatarUrl || null,
+        isLearner: form.isLearner === true, memberKey: form.memberKey, name: form.name, avatarUrl: form.avatarUrl || null,
         groupName: form.groupName || null, positions: form.positions,
         seasons: form.seasons,
         advisorSeasons: form.advisorSeasons,

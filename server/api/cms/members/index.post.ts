@@ -18,6 +18,7 @@ const metadataSchema = z.record(z.string(), z.unknown()).refine(
 
 const schema = z.object({
   memberKey: z.string().trim().toLowerCase().regex(cmsAccountPattern),
+  isLearner: z.boolean().optional(),
   name: z.string().trim().min(1).max(100),
   avatarUrl: safeAvatarUrl.nullable().optional(),
   sourcePath: z.string().trim().max(400).optional(),

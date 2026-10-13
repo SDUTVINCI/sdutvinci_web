@@ -42,6 +42,10 @@ onBeforeUnmount(clearLocalPreview)
 
 <template>
   <section class="member-avatar-field">
+    <div class="member-avatar-notice" :class="{ 'member-avatar-notice--ready': name.trim() }" role="status">
+      <span class="member-avatar-notice-icon" aria-hidden="true">{{ name.trim() ? '✓' : '!' }}</span>
+      <div><strong>必须填写姓名后才能上传头像</strong><p>{{ name.trim() ? `当前姓名：${name.trim()}，可以上传头像。` : '请先填写下方姓名。填写后，头像上传按钮会自动启用。' }}</p></div>
+    </div>
     <div class="member-avatar-preview">
       <img :src="previewUrl" :alt="`${name || '成员'}头像预览`">
       <span>头像预览</span>

@@ -5,7 +5,8 @@ import { requireCmsCsrf, requireCmsRequestAuth } from '../../utils/cms-http'
 
 const schema = z.object({
   gradeYear: z.number().int().min(2000).max(2200),
-  season: z.string().trim().min(1).max(16),
+  season: z.string().trim().max(16).nullable(),
+  seasonEnabled: z.boolean().optional(),
   groups: z.array(z.string().trim().min(1).max(64)).min(1).max(20),
   active: z.boolean().optional()
 }).strict()

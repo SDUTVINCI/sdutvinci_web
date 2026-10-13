@@ -2,6 +2,7 @@ export interface CmsMember {
   id: string
   memberKey: string
   name: string
+  isLearner?: boolean
   avatarUrl: string | null
   sourcePath: string
   role: string | null
@@ -26,6 +27,7 @@ export interface CmsMember {
 }
 
 export interface CmsMemberInput {
+  isLearner?: boolean
   memberKey?: string
   name: string
   avatarUrl?: string | null

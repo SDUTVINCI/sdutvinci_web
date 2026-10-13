@@ -51,7 +51,7 @@ const downloadPdf = async () => {
 
 <template>
   <div class="front-edit-action">
-    <button type="button" :disabled="busy" @click="editArticle">
+    <button v-if="session?.user.roles.some(role => role === 'admin' || role === 'member')" type="button" :disabled="busy" @click="editArticle">
       {{ busy ? '正在打开后台…' : '编辑本文' }}
     </button>
     <button v-if="allowPdf" type="button" :disabled="busy" @click="downloadPdf">下载 PDF</button>

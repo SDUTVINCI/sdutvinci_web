@@ -108,17 +108,19 @@ export const submitMemberApplication = async (id: string, token: string, profile
   const [cohort] = await getDatabase().select().from(memberCohorts).where(and(eq(memberCohorts.gradeYear, grade), eq(memberCohorts.active, true))).limit(1)
   const groupName = String(profile.groupName || '').trim()
   const affiliation = String(profile.affiliation || '').trim()
+  const isLearner = profile.isLearner === true
   const positions = normalizeMemberPositions(profile.positions)
   const requestedSeasons = Array.isArray(profile.seasons) ? [...new Set(profile.seasons.map(value => String(value).trim()).filter(Boolean))] : []
   const advisorSeasons = Array.isArray(profile.advisorSeasons) ? [...new Set(profile.advisorSeasons.map(value => String(value).trim()).filter(Boolean))] : []
-  const activeSeasons = new Set((await getDatabase().select({ season: memberCohorts.season }).from(memberCohorts).where(eq(memberCohorts.active, true))).map(item => item.season))
+  const activeSeasons = new Set((await getDatabase().select({ season: memberCohorts.season }).from(memberCohorts).where(eq(memberCohorts.seasonEnabled, true))).map(item => item.season).filter(Boolean))
   if (!name || !application.avatarObjectKey || !application.avatarPublicUrl
-    || !cohort || (groupName && !cohort.groups.includes(groupName)) || !positions.length
-    || !requestedSeasons.length || requestedSeasons.some(season => !activeSeasons.has(season))
+    || !cohort || (groupName && !cohort.groups.includes(groupName)) || (!isLearner && !positions.length)
+    || (!isLearner && !positions.includes('指导老师') && !requestedSeasons.length)
+    || (isLearner && (positions.length > 0 || requestedSeasons.length > 0 || advisorSeasons.length > 0)) || requestedSeasons.some(season => !activeSeasons.has(season))
     || advisorSeasons.some(season => !activeSeasons.has(season))
     || (affiliation && !(MEMBER_COLLEGE_OPTIONS as readonly string[]).includes(affiliation))) throw new Error('MEMBER_APPLICATION_PROFILE_INVALID')
   const normalized = {
-    name, grade: String(grade), seasons: requestedSeasons, advisorSeasons,
+    isLearner, name, grade: String(grade), seasons: requestedSeasons, advisorSeasons,
     groupName: groupName || null, positions, affiliation: affiliation || null,
     links: normalizeApplicationLinks(profile.links), body: String(profile.body || ''),
     avatarUrl: application.avatarPublicUrl

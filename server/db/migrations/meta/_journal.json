@@ -204,6 +204,20 @@
       "when": 1790397429886,
       "tag": "0028_cleanup_deleted_member_links",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1791871093425,
+      "tag": "0029_learner_profile_review",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1791871227638,
+      "tag": "0030_member_profile_uploads",
+      "breakpoints": true
     }
   ]
 }

@@ -8,7 +8,7 @@ const { data: rawMembers } = await usePublicContentQuery<Member[]>({
   ).items
 })
 const { data: memberOptions } = await useFetch<{
-  cohorts: Array<{ id: string, season: string, groups: string[] }>
+  cohorts: Array<{ id: string, season: string | null, groups: string[] }>
 }>('/api/member-options')
 
 useContentSeo({
@@ -40,8 +40,9 @@ const splitSeason = (value: unknown) =>
 
 const memberName = (member: Member) => String(member.name || '')
 
+const learners = computed(() => (rawMembers.value || []).filter(member => member.isLearner === true))
 const allMembers = computed(() =>
-  [...(rawMembers.value ?? [])].sort((a, b) => {
+  [...(rawMembers.value ?? [])].filter(member => !member.isLearner).sort((a, b) => {
     const seasonDiff = Number(b.time ?? 0) - Number(a.time ?? 0)
     if (seasonDiff) return seasonDiff
     return memberName(a).localeCompare(memberName(b), 'zh-CN')
@@ -258,5 +259,14 @@ const stats = computed(() => {
         没有匹配的成员。
       </div>
     </section>
+    <section v-if="learners.length" class="members-section learner-section" aria-labelledby="learner-title">
+      <div class="section-heading"><p class="eyebrow">VINCI LEARNERS</p><h2 id="learner-title">智能机器人创新实践基地学员</h2><p>{{ learners.length }} 位学员</p></div>
+      <div class="member-grid"><MemberCard v-for="member in learners" :key="member.memberKey" :member="member" /></div>
+    </section>
   </main>
 </template>
+
+<style scoped>
+.learner-section { width: min(var(--content), calc(100% - 48px)); margin: 64px auto 96px; }
+.learner-section .member-grid { margin-top: 24px; }
+</style>

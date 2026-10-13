@@ -67,6 +67,7 @@ export const listAccountRegistrationMembers = async (): Promise<AccountRegistrat
       id: members.id,
       memberKey: members.memberKey,
       name: members.name,
+      isLearner: members.isLearner,
       avatarUrl: members.avatarUrl
     }).from(members).where(and(
       isNull(members.deletedAt),
@@ -112,6 +113,7 @@ export const submitAccountRegistration = async (input: {
       id: members.id,
       memberKey: members.memberKey,
       name: members.name,
+      isLearner: members.isLearner,
       deletedAt: members.deletedAt,
       currentRevisionId: members.currentRevisionId
     }).from(members).where(eq(members.id, input.memberId)).limit(1).for('update')
@@ -164,6 +166,7 @@ export const listPendingAccountRegistrations = async (): Promise<CmsAccountRegis
     memberId: members.id,
     memberKey: members.memberKey,
     memberName: members.name,
+    memberIsLearner: members.isLearner,
     memberAvatarUrl: members.avatarUrl,
     submittedAt: accountRegistrationApplications.submittedAt,
     createdAt: accountRegistrationApplications.createdAt,
@@ -181,6 +184,7 @@ export const listPendingAccountRegistrations = async (): Promise<CmsAccountRegis
       id: row.memberId,
       memberKey: row.memberKey,
       name: row.memberName,
+      isLearner: row.memberIsLearner,
       avatarUrl: row.memberAvatarUrl
     },
     submittedAt: row.submittedAt.toISOString(),
@@ -225,6 +229,7 @@ export const reviewAccountRegistration = async (
     id: members.id,
     memberKey: members.memberKey,
     name: members.name,
+    isLearner: members.isLearner,
     deletedAt: members.deletedAt,
     currentRevisionId: members.currentRevisionId
   }).from(members).where(eq(members.id, application.memberId)).limit(1).for('update')
@@ -240,7 +245,7 @@ export const reviewAccountRegistration = async (
     .where(and(eq(users.account, account), isNull(users.deletedAt))).limit(1)
   if (accountCollision) throw new AccountRegistrationAccountUnavailableError()
   const [memberRole] = await tx.select({ id: roles.id })
-    .from(roles).where(eq(roles.code, 'member')).limit(1)
+    .from(roles).where(eq(roles.code, member.isLearner ? 'reader' : 'member')).limit(1)
   if (!memberRole) throw new Error('数据库中的普通成员角色缺失，请重新运行迁移')
   const [user] = await tx.insert(users).values({
     account,
@@ -268,10 +273,10 @@ export const reviewAccountRegistration = async (
       applicationId: id,
       memberId: member.id,
       account,
-      roles: ['member']
+      roles: [member.isLearner ? 'reader' : 'member']
     }
   })
-  return { id, status: 'approved' as const, account, userId: user.id }
+  return { id, status: 'approved' as const, account, userId: user.id, role: member.isLearner ? 'reader' as const : 'member' as const }
 })
 
 export const assertAccountNotReserved = async (tx: CmsTransaction, account: string) => {

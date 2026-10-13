@@ -5,6 +5,7 @@ export interface AccountRegistrationMemberOption {
   id: string
   memberKey: string
   name: string
+  isLearner?: boolean
   avatarUrl: string | null
   account: string
   registrationStatus: AccountRegistrationMemberStatus
@@ -18,6 +19,7 @@ export interface CmsAccountRegistrationApplication {
     id: string
     memberKey: string
     name: string
+    isLearner?: boolean
     avatarUrl: string | null
   }
   submittedAt: string

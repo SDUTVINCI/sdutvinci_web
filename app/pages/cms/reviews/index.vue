@@ -40,12 +40,14 @@ const registrationNote = ref('')
 const registrationReviewingId = ref('')
 const registrationMessage = ref('')
 const registrationError = ref('')
+useFormNotices(registrationMessage, registrationError)
 const refreshAll = async () => {
   await Promise.all([refresh(), refreshRegistrations()])
 }
 const note = ref('')
 const message = ref('')
 const errorMessage = ref('')
+useFormNotices(message, errorMessage)
 const selectedPendingIds = ref<string[]>([])
 const selectedApprovedIds = ref<string[]>([])
 const batchBusy = ref(false)
@@ -112,14 +114,14 @@ const reviewRegistration = async (
   action: 'approve' | 'reject'
 ) => {
   const prompt = action === 'approve'
-    ? `确定通过 ${application.member.name} 的账号 @${application.account} 注册申请吗？通过后将创建普通成员账号。`
+    ? `确定通过 ${application.member.name} 的账号 @${application.account} 注册申请吗？通过后将根据档案身份创建成员或学员账号。`
     : `确定拒绝 ${application.member.name} 的注册申请吗？申请中的密码哈希会被清除。`
   if (!confirm(prompt)) return
   registrationReviewingId.value = application.id
   registrationMessage.value = ''
   registrationError.value = ''
   try {
-    const result = await $fetch<{ account?: string }>(
+    const result = await $fetch<{ account?: string, role?: 'reader' | 'member' }>(
       `/api/cms/account-registration-applications/${application.id}/review`,
       {
         method: 'POST',
@@ -128,7 +130,7 @@ const reviewRegistration = async (
       }
     )
     registrationMessage.value = action === 'approve'
-      ? `账号 @${result.account || application.account} 已审核通过，身份为普通成员。`
+      ? `账号 @${result.account || application.account} 已审核通过，身份为${result.role === 'reader' ? '学员（只读）' : '普通成员'}。`
       : `${application.member.name} 的注册申请已拒绝。`
     await refreshRegistrations()
   } catch (error: any) {
@@ -292,6 +294,7 @@ const reviewRegistration = async (
           <div><strong>暂无成员申请</strong><p>新的公开申请提交后会显示在这里。</p></div>
         </div>
       </section>
+      <CmsMemberProfileReviews />
       <section class="cms-review-lane" data-stage="accounts">
         <header class="cms-review-lane-header">
           <div class="cms-review-lane-title">
@@ -302,7 +305,7 @@ const reviewRegistration = async (
                 <h2>账号注册申请</h2>
                 <span class="cms-review-count">{{ registrationApplications.length }} 项</span>
               </div>
-              <p>核对成员身份后创建普通成员账号；注册申请不能直接获得管理员权限。</p>
+              <p>核对成员身份后根据档案身份创建成员或学员账号；注册申请不能直接获得管理员权限。</p>
             </div>
           </div>
           <div class="cms-review-lane-actions">
@@ -322,12 +325,12 @@ const reviewRegistration = async (
             <article v-for="application in registrationApplications" :key="application.id" class="cms-panel cms-registration-review-card">
               <img :src="resolveStaticMediaUrl(application.member.avatarUrl || '/images/logo.png')" alt="" loading="lazy">
               <div>
-                <h3>{{ application.member.name }}</h3>
+                <h3>{{ application.member.name }}</h3><p>当前档案身份：{{ application.member.isLearner ? '新学员（只读）' : '正式成员' }}</p>
                 <p>@{{ application.account }} · 成员 ID：{{ application.member.memberKey }}</p>
                 <small>提交于 {{ new Date(application.submittedAt).toLocaleString('zh-CN') }}</small>
               </div>
               <div class="cms-button-row">
-                <button class="cms-button cms-button-primary" type="button" :disabled="!!registrationReviewingId || registrationStatus === 'pending'" @click="reviewRegistration(application, 'approve')">通过并创建普通成员账号</button>
+                <button class="cms-button cms-button-primary" type="button" :disabled="!!registrationReviewingId || registrationStatus === 'pending'" @click="reviewRegistration(application, 'approve')">通过并创建账号</button>
                 <button class="cms-button" type="button" :disabled="!!registrationReviewingId || registrationStatus === 'pending'" @click="reviewRegistration(application, 'reject')">拒绝</button>
               </div>
             </article>

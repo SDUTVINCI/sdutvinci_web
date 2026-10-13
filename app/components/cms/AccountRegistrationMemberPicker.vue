@@ -42,7 +42,7 @@ const select = (id: string) => {
     <summary>
       <span v-if="selected" class="cms-registration-member-selected">
         <img :src="resolveStaticMediaUrl(selected.avatarUrl || '/images/logo.png')" alt="">
-        <span><strong>{{ selected.name }}</strong><small>{{ selected.memberKey }}</small></span>
+        <span><strong>{{ selected.name }}</strong><small>{{ selected.memberKey }} · {{ selected.isLearner ? '新学员' : '正式成员' }}</small></span>
         <em :data-status="selected.registrationStatus">{{ statusLabel(selected.registrationStatus) }}</em>
       </span>
       <span v-else class="cms-registration-member-placeholder">
@@ -72,7 +72,7 @@ const select = (id: string) => {
       >
         <span class="cms-member-picker-indicator" aria-hidden="true">{{ member.id === modelValue ? '✓' : '' }}</span>
         <img :src="resolveStaticMediaUrl(member.avatarUrl || '/images/logo.png')" alt="" loading="lazy">
-        <span><strong>{{ member.name }}</strong><small>{{ member.memberKey }}</small></span>
+        <span><strong>{{ member.name }}</strong><small>{{ member.memberKey }} · {{ member.isLearner ? '新学员' : '正式成员' }}</small></span>
         <em :data-status="member.registrationStatus">{{ statusLabel(member.registrationStatus) }}</em>
       </button>
       <p v-if="!filteredMembers.length" class="cms-member-picker-empty">没有匹配的成员信息</p>

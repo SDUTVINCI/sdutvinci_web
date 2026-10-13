@@ -3,7 +3,7 @@ import type { AccountRegistrationMemberOption } from '~~/shared/types/account-re
 import { cmsPasswordMinLength } from '~~/shared/types/cms-auth'
 
 definePageMeta({ layout: 'cms-auth' })
-useHead({ title: '登录或注册 · Vinci 内容管理后台' })
+useHead({ title: '登录或注册 | Vinci' })
 
 const { loadSession, login } = useCmsSession()
 const route = useRoute()
@@ -18,6 +18,7 @@ const registrationConfirmation = ref('')
 const registrationSubmitting = ref(false)
 const registrationError = ref('')
 const registrationSuccess = ref('')
+useFormNotices(registrationSuccess, registrationError)
 const requestFetch = import.meta.server ? useRequestFetch() : $fetch
 const {
   data: registrationData,
@@ -48,10 +49,10 @@ const safeRedirect = computed(() => {
   const value = typeof route.query.redirect === 'string' ? route.query.redirect : ''
   return value.startsWith('/') && !value.startsWith('//') && !value.includes('\\')
     ? value
-    : '/cms'
+    : '/account'
 })
 const returnsToArticle = computed(() => (
-  safeRedirect.value.startsWith('/news/') || safeRedirect.value.startsWith('/wiki/')
+  safeRedirect.value.startsWith('/news/') || safeRedirect.value.startsWith('/wiki/') || safeRedirect.value.startsWith('/downloads')
 ))
 
 onMounted(async () => {
@@ -136,13 +137,13 @@ const submitRegistration = async () => {
 <template>
   <div class="cms-login-stage">
     <section class="cms-login-story" aria-labelledby="cms-login-story-title">
-      <p class="cms-login-kicker"><span aria-hidden="true" />VINCI TEAM · CMS</p>
+      <p class="cms-login-kicker"><span aria-hidden="true" />VINCI TEAM · ACCOUNT</p>
       <h1 id="cms-login-story-title">让每一次灵感<br><em>抵达赛场。</em></h1>
-      <p class="cms-login-intro">从内容记录到审核发布，在一个可靠的工作台里沉淀 Vinci 的每一步成长。</p>
-      <ul class="cms-login-capabilities" aria-label="后台能力">
-        <li><span>01</span><strong>内容编排</strong><small>Markdown 与媒体资源</small></li>
-        <li><span>02</span><strong>协作审核</strong><small>状态流转与权限控制</small></li>
-        <li><span>03</span><strong>安全发布</strong><small>Git 版本化内容发布</small></li>
+      <p class="cms-login-intro">成员与学员共用账号入口，按身份访问学习资料、维护个人信息和参与内容协作。</p>
+      <ul class="cms-login-capabilities" aria-label="账号功能">
+        <li><span>01</span><strong>学习资料</strong><small>文档与文件下载</small></li>
+        <li><span>02</span><strong>个人资料</strong><small>修改申请与审核</small></li>
+        <li><span>03</span><strong>内容协作</strong><small>授权成员使用 CMS</small></li>
       </ul>
     </section>
 
@@ -158,7 +159,7 @@ const submitRegistration = async () => {
 
       <template v-if="mode === 'login'">
         <h2>欢迎回来</h2>
-        <p class="cms-muted">{{ returnsToArticle ? '登录后将自动返回原文章。' : '使用队内成员账号进入内容管理后台。' }}</p>
+        <p class="cms-muted">{{ returnsToArticle ? '登录后将自动返回原页面。' : '使用成员或学员账号登录网站。' }}</p>
         <form class="cms-form cms-login-form" @submit.prevent="submit">
           <label class="cms-login-field">
             <span class="cms-login-field-label"><span>账号</span><small>ACCOUNT</small></span>
@@ -169,7 +170,7 @@ const submitRegistration = async () => {
             <span class="cms-login-input"><span class="cms-login-field-index" aria-hidden="true">02</span><input v-model="password" type="password" autocomplete="current-password" placeholder="请输入密码" required></span>
           </label>
           <p v-if="errorMessage" class="cms-alert cms-alert-error" role="alert">{{ errorMessage }}</p>
-          <button class="cms-button cms-button-primary cms-login-submit" type="submit" :disabled="submitting"><span>{{ submitting ? '正在验证身份…' : (returnsToArticle ? '登录并返回文章' : '进入工作台') }}</span><span aria-hidden="true">{{ submitting ? '···' : '↗' }}</span></button>
+          <button class="cms-button cms-button-primary cms-login-submit" type="submit" :disabled="submitting"><span>{{ submitting ? '正在验证身份…' : (returnsToArticle ? '登录并返回原页面' : '登录网站') }}</span><span aria-hidden="true">{{ submitting ? '···' : '↗' }}</span></button>
         </form>
       </template>
 
@@ -209,7 +210,7 @@ const submitRegistration = async () => {
         </form>
       </template>
 
-      <p class="cms-login-note"><span aria-hidden="true">◆</span>{{ mode === 'login' ? '仅限获得授权的队内成员使用' : '注册默认获得普通成员身份，不会授予管理员权限' }}</p>
+      <p class="cms-login-note"><span aria-hidden="true">◆</span>{{ mode === 'login' ? '供已审核的成员与学员使用' : '注册权限根据已审核档案分配：学员只读，正式成员可使用 CMS' }}</p>
     </section>
   </div>
 </template>

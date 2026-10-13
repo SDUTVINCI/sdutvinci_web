@@ -1,12 +1,12 @@
 import { createError, getQuery, setResponseHeader } from 'h3'
 import { getPublicArticleFromDatabase } from '../../services/public-content'
 import { createWikiPdf } from '../../services/wiki-pdf'
-import { requireCmsRequestAuth } from '../../utils/cms-http'
+import { requireSiteRequestAuth } from '../../utils/cms-http'
 
 const safeFilename = (value: string) => value.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').slice(0, 100) || 'vinci-wiki'
 
 export default defineEventHandler(async (event) => {
-  await requireCmsRequestAuth(event)
+  await requireSiteRequestAuth(event)
   const path = String(getQuery(event).path || '')
   if (!path.startsWith('/wiki/') || path.includes('\\') || path.includes('\0')) {
     throw createError({ statusCode: 400, message: 'Wiki 路径无效' })

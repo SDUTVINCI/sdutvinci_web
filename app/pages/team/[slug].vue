@@ -87,6 +87,7 @@ const externalLinks = computed(() =>
 const groupLabel = (value: Member | null | undefined) => {
   const role = String(value?.role ?? '')
   const type = String(value?.type ?? '')
+  if (value?.isLearner) return '智能机器人创新实践基地学员'
   if (type.includes('指导老师') || role.includes('指导老师')) return '指导老师'
   if (type.includes('团队负责人')) return '团队负责人'
   if (type.includes('机械') || role.includes('机械')) return '机械组'

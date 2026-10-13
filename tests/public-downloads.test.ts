@@ -5,7 +5,7 @@ import {
   PublicDownloadsError
 } from '../server/services/public-downloads'
 
-describe('公开资料目录', () => {
+describe('主站资料目录与原下载站直链', () => {
   it('只读取 /vdl 内的目录，并为文件生成编码后的 AList 直链', async () => {
     const request = vi.fn(async () => new Response(JSON.stringify({
       code: 200,
@@ -23,6 +23,7 @@ describe('公开资料目录', () => {
     expect(request).toHaveBeenCalledWith('https://dl.sdutvinci.cn/api/fs/list',
       expect.objectContaining({
         method: 'POST',
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           path: '/vdl/2026 赛季', password: '', page: 1, per_page: 200, refresh: false
         })

@@ -2,13 +2,13 @@ import {
   clearCmsSessionCookie,
   getCmsRequestIp,
   requireCmsCsrf,
-  requireCmsRequestAuth
+  requireSiteRequestAuth
 } from '../../../utils/cms-http'
 import { revokeCmsSession } from '../../../services/cms-auth'
 import { hashClientIp } from '../../../utils/cms-security'
 
 export default defineEventHandler(async (event) => {
-  const auth = await requireCmsRequestAuth(event)
+  const auth = await requireSiteRequestAuth(event)
   requireCmsCsrf(event, auth)
   await revokeCmsSession(
     auth.token,

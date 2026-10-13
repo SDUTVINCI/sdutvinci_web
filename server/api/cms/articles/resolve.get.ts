@@ -1,3 +1,4 @@
+import { requireCmsRequestAuth } from '../../../utils/cms-http'
 import { createError, getValidatedQuery } from 'h3'
 import { z } from 'zod'
 import { resolveCmsArticleByPublicPath } from '../../../services/cms-articles'
@@ -10,6 +11,7 @@ const schema = z.object({
 })
 
 export default defineEventHandler(async (event) => {
+  await requireCmsRequestAuth(event)
   const query = await getValidatedQuery(event, schema.parse)
   const article = await resolveCmsArticleByPublicPath(query.publicPath)
   if (!article) throw createError({ statusCode: 404, message: '文章不存在' })

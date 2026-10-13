@@ -27,7 +27,8 @@ const isAdmin = computed(() => session.value?.user.roles.includes('admin') ?? fa
 const requestFetch = import.meta.server ? useRequestFetch() : $fetch
 const roleLabels: Record<CmsRoleCode, string> = {
   admin: '管理员',
-  member: '成员'
+  member: '成员',
+  reader: '学员（只读）'
 }
 const roleOptions = cmsRoleCodes.map(code => ({
   code,

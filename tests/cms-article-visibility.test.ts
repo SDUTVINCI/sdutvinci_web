@@ -98,8 +98,8 @@ describe('文章访问权限入口与 Wiki 文章计数', () => {
       expect(api).toContain('statusCode: 401')
       expect(api).toContain('statusCode: 404')
     }
-    expect(loginPage).toContain('登录后将自动返回原文章')
-    expect(loginPage).toContain('登录并返回文章')
+    expect(loginPage).toContain('登录后将自动返回原页面')
+    expect(loginPage).toContain('登录并返回原页面')
   })
 
   it('只识别带受限文章错误码的 401', () => {

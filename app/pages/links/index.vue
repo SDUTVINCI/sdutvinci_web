@@ -10,8 +10,7 @@ const groups = [
   {
     title: '资料与文件',
     links: [
-      { name: '资料下载', href: '/downloads', domain: 'vinci.sdut.edu.cn/downloads', description: '浏览公开资料与文件', external: false },
-      { name: '下载站', href: 'https://dl.sdutvinci.cn', domain: 'dl.sdutvinci.cn', description: '查看原始文件目录', external: true },
+      { name: '资料下载', href: '/downloads', domain: 'vinci.sdut.edu.cn/downloads', description: '登录后浏览与下载资料', external: false },
       { name: 'AList', href: 'https://alist.sdutvinci.cn', domain: 'alist.sdutvinci.cn', description: '文件管理入口', external: true }
     ]
   },
@@ -32,7 +31,7 @@ const groups = [
       <div>
         <p class="eyebrow">VINCI LINKS</p>
         <h1>常用链接</h1>
-        <p>在这里找到公开资料与相关服务入口。</p>
+        <p>在这里找到资料与相关服务入口。</p>
       </div>
     </section>
 

@@ -16,12 +16,14 @@ type DownloadListing = {
   entries: DownloadEntry[]
 }
 
+definePageMeta({ middleware: 'site-auth' })
 useHead({
   title: '资料下载 | 山东理工大学 Vinci 机器人队',
-  meta: [{ name: 'description', content: '浏览和下载 Vinci 机器人队公开资料。' }]
+  meta: [{ name: 'description', content: '登录后浏览和下载 Vinci 机器人队成员资料。' }, { name: 'robots', content: 'noindex, nofollow' }]
 })
 
 const route = useRoute()
+const { session } = useCmsSession()
 const folderPath = computed(() => typeof route.query.path === 'string' ? route.query.path : '')
 const pageNumber = computed(() => typeof route.query.page === 'string' ? route.query.page : '1')
 const requestFetch = import.meta.server ? useRequestFetch() : $fetch
@@ -30,8 +32,15 @@ const { data, error, status, refresh } = await useAsyncData(
   () => requestFetch<DownloadListing>('/api/downloads', {
     query: { path: folderPath.value, page: pageNumber.value }
   }),
-  { watch: [folderPath, pageNumber] }
+  { watch: [folderPath, pageNumber, session] }
 )
+
+watch(session, async value => {
+  if (!value) { data.value = undefined; await navigateTo({ path: '/cms/login', query: { redirect: route.fullPath } }) }
+})
+watch(error, async value => {
+  if (value?.statusCode === 401) await navigateTo({ path: '/cms/login', query: { redirect: route.fullPath } })
+})
 
 const crumbs = computed(() => {
   const parts = folderPath.value.split('/').filter(Boolean)
@@ -73,7 +82,7 @@ const modifiedDate = (value: string | null) => {
       <div>
         <p class="eyebrow">VINCI DOWNLOADS</p>
         <h1>资料下载</h1>
-        <p>浏览 Vinci 机器人队公开的文件与资料。</p>
+        <p>浏览 Vinci 机器人队供登录用户使用的文件与资料。</p>
       </div>
     </section>
 
@@ -81,7 +90,7 @@ const modifiedDate = (value: string | null) => {
       <div class="downloads-heading">
         <div>
           <p class="eyebrow">FILES & RESOURCES</p>
-          <h2 id="downloads-title">公开资料</h2>
+          <h2 id="downloads-title">成员资料</h2>
         </div>
         <button class="downloads-refresh" type="button" :disabled="status === 'pending'" @click="refresh()">
           {{ status === 'pending' ? '正在更新…' : '更新列表' }}

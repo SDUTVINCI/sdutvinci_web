@@ -1,3 +1,5 @@
+import { getDatabase } from '../db/client'
+import { assertNotOwnMemberWrite } from './member-account-role'
 import {
   deleteMemberAvatarObject,
   prepareMemberAvatar,
@@ -15,6 +17,7 @@ export const uploadCmsMemberAvatar = async (input: {
   const current = await getCmsMember(input.memberId)
   if (!current) throw new Error('MEMBER_NOT_FOUND')
   if (current.version !== input.expectedVersion) throw new CmsMemberVersionConflictError()
+  await getDatabase().transaction(tx => assertNotOwnMemberWrite(tx, current.id, input.actorUserId))
   const { output, filename } = await prepareMemberAvatar({
     name: current.name,
     data: input.data,

@@ -1,3 +1,4 @@
+import { assertNotOwnMemberWrite, synchronizeMemberAccountRole } from './member-account-role'
 import { randomUUID } from 'node:crypto'
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm'
 import type { CmsMember, CmsMemberInput } from '../../shared/types/cms-members'
@@ -61,6 +62,7 @@ const memberSelection = {
   sourcePath: members.sourcePath,
   role: members.role,
   memberType: members.memberType,
+  isLearner: members.isLearner,
   groupName: members.groupName,
   positions: members.positions,
   seasons: members.seasons,
@@ -109,6 +111,7 @@ export const getCmsMember = async (id: string) =>
   loadMemberRows(id).then(rows => rows[0] ? toCmsMember(rows[0]) : null)
 
 const profileFromMemberRow = (row: typeof members.$inferSelect): MemberProfileSnapshot => ({
+  isLearner: row.isLearner,
   memberKey: row.memberKey,
   name: row.name,
   avatarUrl: row.avatarUrl,
@@ -128,6 +131,7 @@ const profileFromMemberRow = (row: typeof members.$inferSelect): MemberProfileSn
 })
 
 const memberValues = (profile: MemberProfileSnapshot) => ({
+  isLearner: profile.isLearner === true,
   memberKey: profile.memberKey,
   name: profile.name,
   avatarUrl: profile.avatarUrl,
@@ -199,8 +203,9 @@ const inputProfile = (
     name: input.name.trim(),
     avatarUrl: input.avatarUrl ?? null,
     sourcePath: safeSourcePath(sourcePath),
-    role: deriveMemberRole(positions, groupName),
-    memberType: deriveMemberType(positions, groupName),
+    isLearner: input.isLearner === true,
+    role: deriveMemberRole(positions, groupName, input.isLearner),
+    memberType: deriveMemberType(positions, groupName, input.isLearner),
     groupName,
     positions,
     seasons: input.seasons || [],
@@ -261,6 +266,7 @@ export const createCmsMember = async (
       targetType: 'member',
       targetId: memberId,
       metadata: {
+        isLearner: profile.isLearner === true,
         memberKey: profile.memberKey,
         revisionId: result.revisionId,
         exportJobId: result.jobId,
@@ -285,9 +291,11 @@ export const updateCmsMember = async (
     if (input.expectedVersion !== undefined && current.version !== input.expectedVersion) {
       throw new CmsMemberVersionConflictError()
     }
+    await assertNotOwnMemberWrite(tx, id, actorUserId)
     const before = profileFromMemberRow(current)
     const next = inputProfile({
       memberKey: input.memberKey ?? current.memberKey,
+      isLearner: input.isLearner ?? before.isLearner,
       name: input.name,
       avatarUrl: input.avatarUrl === undefined ? before.avatarUrl : input.avatarUrl,
       groupName: input.groupName === undefined ? before.groupName : input.groupName,
@@ -357,7 +365,7 @@ export const updateCmsMember = async (
         eq(accountRegistrationApplications.status, 'pending')
       ))
     }
-    await assertMemberProfileOptions(next)
+    await assertMemberProfileOptions(next, before)
     if (!Object.keys(changes).length) return
     const revisionNumber = (await tx.select({ value: sql<number>`coalesce(max(${memberRevisions.revisionNumber}), 0)::int` })
       .from(memberRevisions).where(eq(memberRevisions.memberId, id)))[0]!.value + 1
@@ -376,6 +384,7 @@ export const updateCmsMember = async (
     }).where(and(eq(members.id, id), eq(members.version, current.version)))
       .returning({ id: members.id })
     if (!updated) throw new CmsMemberVersionConflictError()
+    await synchronizeMemberAccountRole(tx, id, next.isLearner === true)
     await tx.insert(auditLogs).values({
       actorUserId,
       action: 'member.update',
@@ -469,6 +478,7 @@ export const restoreCmsMemberRevision = async (
   await getDatabase().transaction(async (tx) => {
     const [current] = await tx.select().from(members).where(eq(members.id, memberId)).limit(1).for('update')
     if (!current) throw new Error('MEMBER_NOT_FOUND')
+    await assertNotOwnMemberWrite(tx, current.id, actorUserId)
     if (current.version !== expectedVersion) throw new CmsMemberVersionConflictError()
     const [target] = await tx.select().from(memberRevisions).where(and(
       eq(memberRevisions.id, revisionId), eq(memberRevisions.memberId, memberId)
@@ -519,6 +529,7 @@ export const restoreCmsMemberRevision = async (
         updatedAt: new Date()
       }).where(eq(articleCreditIdentities.creditKey, current.memberKey))
     }
+    await synchronizeMemberAccountRole(tx, memberId, profile.isLearner === true)
     await tx.insert(auditLogs).values({
       actorUserId,
       action: 'member.revision.restore',
@@ -644,7 +655,8 @@ export const applyMemberProposal = async (
   proposalId: string,
   expectedVersion: number,
   confirmation: string,
-  actorUserId: string
+  actorUserId: string,
+  reviewNote = ''
 ) => {
   if (confirmation !== 'APPLY_MEMBER_PROPOSAL') throw new Error('MEMBER_PROPOSAL_CONFIRMATION_INVALID')
   let memberId = ''
@@ -656,7 +668,7 @@ export const applyMemberProposal = async (
     if (proposal.status !== 'pending') throw new Error('MEMBER_PROPOSAL_NOT_PENDING')
     const [current] = await tx.select().from(members)
       .where(eq(members.id, proposal.memberId)).limit(1).for('update')
-    if (!current) throw new Error('MEMBER_NOT_FOUND')
+    if (!current || current.deletedAt) throw new Error('MEMBER_NOT_FOUND')
     if (current.version !== expectedVersion || current.currentRevisionId !== proposal.currentRevisionId) {
       throw new CmsMemberVersionConflictError()
     }
@@ -664,6 +676,7 @@ export const applyMemberProposal = async (
       ? profileFromRecord(proposal.proposedProfile || {})
       : profileFromMemberRow(current)
     if (profile.memberKey !== current.memberKey) throw new Error('MEMBER_KEY_IMMUTABLE')
+    await assertMemberProfileOptions(profile, profileFromMemberRow(current))
     const revisionNumber = (await tx.select({ value: sql<number>`coalesce(max(${memberRevisions.revisionNumber}), 0)::int` })
       .from(memberRevisions).where(eq(memberRevisions.memberId, current.id)))[0]!.value + 1
     const result = await appendRevisionAndOutbox(tx, {
@@ -679,8 +692,9 @@ export const applyMemberProposal = async (
       deletedByUserId: proposal.action === 'delete' ? actorUserId : null,
       updatedAt: new Date()
     }).where(and(eq(members.id, current.id), eq(members.version, current.version)))
+    if (proposal.action === 'update') await synchronizeMemberAccountRole(tx, current.id, profile.isLearner === true)
     await tx.update(memberProposals).set({
-      status: 'applied', appliedByUserId: actorUserId,
+      status: 'applied', reviewNote, appliedByUserId: actorUserId,
       appliedRevisionId: result.revisionId, resolvedAt: new Date()
     }).where(eq(memberProposals.id, proposal.id))
     await tx.insert(auditLogs).values({

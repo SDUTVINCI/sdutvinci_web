@@ -54,8 +54,8 @@ describe('成员选项、自动归类与 Markdown 图床', () => {
       readFile('server/api/cms/members/[id]/avatar.post.ts', 'utf8'),
       readFile('server/services/member-options.ts', 'utf8')
     ])
-    expect(fields).toContain('参加过的赛季 <strong v-if="required" class="member-required-marker">必填</strong>（可多选）')
-    expect(fields).toContain('指导届次（可选、多选）')
+    expect(fields).toContain('参加过的赛季 <strong v-if="required && !form.isLearner && !teacher" class="member-required-marker">必填</strong>（可多选）')
+    expect(fields).toContain('顾问届次（可选、多选）')
     expect(fields).not.toContain('仅顾问或指导老师需要选择所指导的届次')
     expect(fields).toContain('GitHub 链接（可选）')
     expect(fields).toContain('个人主页链接（可选）')

@@ -8,6 +8,7 @@ definePageMeta({
 useHead({ title: '个人资料 · Vinci 内容管理后台' })
 
 const { session } = useCmsSession()
+await navigateTo('/account')
 const member = computed(() => session.value?.user.member)
 </script>
 

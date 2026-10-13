@@ -5,7 +5,8 @@ import { requireCmsCsrf, requireCmsRequestAuth } from '../../../../utils/cms-htt
 
 const schema = z.object({
   expectedVersion: z.number().int().positive(),
-  confirmation: z.literal('APPLY_MEMBER_PROPOSAL')
+  confirmation: z.literal('APPLY_MEMBER_PROPOSAL'),
+  note: z.string().trim().max(2000).optional()
 }).strict()
 
 export default defineEventHandler(async (event) => {
@@ -14,7 +15,7 @@ export default defineEventHandler(async (event) => {
   const proposalId = z.string().uuid().parse(getRouterParam(event, 'id'))
   const input = await readValidatedBody(event, schema.parse)
   try {
-    return await applyMemberProposal(proposalId, input.expectedVersion, input.confirmation, auth.user.id)
+    return await applyMemberProposal(proposalId, input.expectedVersion, input.confirmation, auth.user.id, input.note)
   } catch (error) {
     if (error instanceof CmsMemberVersionConflictError) {
       throw createError({ statusCode: 409, message: error.message })

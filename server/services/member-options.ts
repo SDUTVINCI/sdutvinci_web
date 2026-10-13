@@ -18,15 +18,14 @@ export const defaultGroupsForGrade = (gradeYear: number) => {
 }
 
 export const listMemberOptions = async (includeInactive = false) => {
-  const rows = await getDatabase().select().from(memberCohorts)
-    .where(includeInactive ? undefined : eq(memberCohorts.active, true))
-    .orderBy(asc(memberCohorts.gradeYear))
+  const rows = await getDatabase().select().from(memberCohorts).orderBy(asc(memberCohorts.gradeYear))
   return {
-    cohorts: rows.map(row => ({
+    cohorts: rows.filter(row => includeInactive || row.active).map(row => ({
       ...row,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString()
     })),
+    seasons: rows.filter(row => row.seasonEnabled && row.season).map(row => row.season!),
     positions: MEMBER_POSITION_OPTIONS.filter(position => position !== '顾问'),
     colleges: [...MEMBER_COLLEGE_OPTIONS]
   }
@@ -34,7 +33,8 @@ export const listMemberOptions = async (includeInactive = false) => {
 
 export const saveMemberCohort = async (input: {
   gradeYear: number
-  season: string
+  season: string | null
+  seasonEnabled?: boolean
   groups: string[]
   active?: boolean
 }) => {
@@ -42,27 +42,40 @@ export const saveMemberCohort = async (input: {
   if (!groups.length || groups.some(value => value.length > 64)) throw new Error('MEMBER_GROUPS_INVALID')
   const [row] = await getDatabase().insert(memberCohorts).values({
     gradeYear: input.gradeYear,
-    season: input.season.trim(),
+    season: input.season?.trim() || null,
+    seasonEnabled: Boolean(input.season?.trim()) && (input.seasonEnabled ?? true),
     groups,
     active: input.active ?? true,
     updatedAt: new Date()
   }).onConflictDoUpdate({
     target: memberCohorts.gradeYear,
-    set: { season: input.season.trim(), groups, active: input.active ?? true, updatedAt: new Date() }
+    set: { season: input.season?.trim() || null,
+    seasonEnabled: Boolean(input.season?.trim()) && (input.seasonEnabled ?? true), groups, active: input.active ?? true, updatedAt: new Date() }
   }).returning()
   return row!
 }
 
-export const assertMemberProfileOptions = async (profile: Pick<MemberProfileSnapshot, 'grade' | 'seasons' | 'advisorSeasons' | 'groupName'>) => {
-  if (!profile.grade) return
-  const gradeYear = Number(profile.grade)
-  const [cohort] = await getDatabase().select().from(memberCohorts)
-    .where(eq(memberCohorts.gradeYear, gradeYear)).limit(1)
-  if (!cohort || !cohort.active) throw new Error('MEMBER_GRADE_INVALID')
-  if (profile.groupName && !cohort.groups.includes(profile.groupName)) throw new Error('MEMBER_GROUP_INVALID')
-  const active = await getDatabase().select({ season: memberCohorts.season }).from(memberCohorts)
-    .where(eq(memberCohorts.active, true))
-  const seasons = new Set(active.map(item => item.season))
-  if (profile.seasons.some(season => !seasons.has(season))) throw new Error('MEMBER_SEASON_INVALID')
-  if (profile.advisorSeasons.some(season => !seasons.has(season))) throw new Error('MEMBER_ADVISOR_SEASON_INVALID')
+export const assertMemberProfileOptions = async (
+  profile: Pick<MemberProfileSnapshot, 'grade' | 'seasons' | 'advisorSeasons' | 'groupName'>,
+  previous?: Pick<MemberProfileSnapshot, 'grade' | 'seasons' | 'advisorSeasons' | 'groupName'>
+) => {
+  if (!profile.grade && !previous) return
+  if (profile.grade) {
+    const gradeYear = Number(profile.grade)
+    const [cohort] = await getDatabase().select().from(memberCohorts)
+      .where(eq(memberCohorts.gradeYear, gradeYear)).limit(1)
+    const unchangedGrade = previous?.grade === profile.grade
+    if (!cohort || (!cohort.active && !unchangedGrade)) throw new Error('MEMBER_GRADE_INVALID')
+    if (profile.groupName && !cohort.groups.includes(profile.groupName)
+      && !(unchangedGrade && previous?.groupName === profile.groupName)) throw new Error('MEMBER_GROUP_INVALID')
+  }
+  const enabled = await getDatabase().select().from(memberCohorts)
+    .where(eq(memberCohorts.seasonEnabled, true))
+  const seasons = new Set(enabled.map(item => item.season).filter(Boolean))
+  if (profile.seasons.some(season => !seasons.has(season) && !previous?.seasons.includes(season))) {
+    throw new Error('MEMBER_SEASON_INVALID')
+  }
+  if (profile.advisorSeasons.some(season => !seasons.has(season) && !previous?.advisorSeasons.includes(season))) {
+    throw new Error('MEMBER_ADVISOR_SEASON_INVALID')
+  }
 }

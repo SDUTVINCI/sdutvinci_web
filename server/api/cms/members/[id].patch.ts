@@ -18,6 +18,7 @@ const metadataSchema = z.record(z.string(), z.unknown()).refine(
 
 const schema = z.object({
   memberKey: z.string().trim().toLowerCase().regex(cmsAccountPattern).optional(),
+  isLearner: z.boolean().optional(),
   name: z.string().trim().min(1).max(100),
   avatarUrl: safeAvatarUrl.nullable().optional(),
   role: z.string().trim().max(100).nullable().optional(),
@@ -44,6 +45,9 @@ export default defineEventHandler(async (event) => {
   try {
     member = await updateCmsMember(id, input, auth.user.id)
   } catch (error) {
+    if (error instanceof Error && error.message === 'MEMBER_SELF_REVIEW_REQUIRED') {
+      throw createError({ statusCode: 403, message: '修改自己的资料请进入个人中心提交审核' })
+    }
     if (error instanceof CmsMemberVersionConflictError) {
       throw createError({ statusCode: 409, message: error.message })
     }

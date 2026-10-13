@@ -200,10 +200,10 @@ onBeforeUnmount(() => {
             <strong>{{ displayName }}</strong>
             <span>@{{ session.user.account }}</span>
           </div>
-          <NuxtLink to="/cms" @click="closeAccountMenu">
+          <NuxtLink v-if="session.user.roles.some(role => role === 'admin' || role === 'member')" to="/cms" @click="closeAccountMenu">
             进入后台
           </NuxtLink>
-          <NuxtLink to="/cms/profile" @click="closeAccountMenu">
+          <NuxtLink to="/account" @click="closeAccountMenu">
             个人中心
           </NuxtLink>
           <button

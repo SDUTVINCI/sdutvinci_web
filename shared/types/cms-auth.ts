@@ -1,4 +1,4 @@
-export const cmsRoleCodes = ['admin', 'member'] as const
+export const cmsRoleCodes = ['admin', 'member', 'reader'] as const
 export const cmsAccountPattern = /^[a-z][a-z0-9]{2,31}$/
 export const cmsPasswordMinLength = 12
 
@@ -9,6 +9,7 @@ export interface CmsSessionMember {
   memberKey: string
   name: string
   avatarUrl: string | null
+  isLearner?: boolean
 }
 
 export interface CmsUser {

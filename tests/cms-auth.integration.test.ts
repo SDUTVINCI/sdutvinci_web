@@ -58,7 +58,7 @@ integration('CMS 身份认证与数据库', () => {
     const result = await getDatabase().execute(sql`
       select code from roles order by code
     `)
-    expect(result.rows.map(row => row.code)).toEqual(['admin', 'member'])
+    expect(result.rows.map(row => row.code)).toEqual(['admin', 'member', 'reader'])
   })
 
   it('只允许首次引导创建一个管理员，并使用 Argon2id 保存密码', async () => {
@@ -121,6 +121,7 @@ integration('CMS 身份认证与数据库', () => {
     }, admin!.id)
     const [memberProfile] = await getDatabase().insert(members).values({
       memberKey: 'dongjiahui',
+      isLearner: false,
       name: '董家辉',
       avatarUrl: '/images/team/dongjiahui.jpg',
       sourcePath: 'active/dongjiahui.md'
@@ -144,6 +145,7 @@ integration('CMS 身份认证与数据库', () => {
     expect(authenticatedMember?.member).toEqual({
       id: memberProfile!.id,
       memberKey: 'dongjiahui',
+      isLearner: false,
       name: '董家辉',
       avatarUrl: '/images/team/dongjiahui.jpg'
     })

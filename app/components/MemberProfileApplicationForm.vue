@@ -6,12 +6,13 @@ const { csrfHeaders } = useCmsSession()
 const { data: options } = await useFetch<any>('/api/member-options')
 const application = ref<{ id: string, token: string } | null>(null)
 const form = reactive<MemberProfileFormModel>({
-  name: '', grade: '', groupName: '', positions: [] as string[], seasons: [] as string[],
+  isLearner: false, name: '', grade: '', groupName: '', positions: [] as string[], seasons: [] as string[],
   advisorSeasons: [] as string[], affiliation: '', body: '', links: { github: '', 'home-page': '' }
 })
 const avatarUrl = ref('')
 const message = ref('')
 const errorMessage = ref('')
+useFormNotices(message, errorMessage)
 const submitting = ref(false)
 const avatarUploading = ref(false)
 type ApplicationSession = { id: string, token: string }
@@ -53,11 +54,11 @@ const submit = async () => {
     errorMessage.value = '请上传头像后再提交'
     return
   }
-  if (!form.positions.length) {
+  if (!form.isLearner && !form.positions.length) {
     errorMessage.value = '请至少选择一项职责'
     return
   }
-  if (!form.seasons.length) {
+  if (!form.isLearner && !form.positions.includes('指导老师') && !form.seasons.length) {
     errorMessage.value = '请至少选择一个参加过的赛季'
     return
   }
