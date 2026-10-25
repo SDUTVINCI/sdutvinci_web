@@ -42,7 +42,7 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 200
     steps:
       - name: Check out trusted sync scripts
         uses: actions/checkout@v6
@@ -85,8 +85,9 @@ jobs:
           username: ${{ secrets.TCR_USERNAME }}
           password: ${{ secrets.TCR_PASSWORD }}
 
-      - name: Copy and verify image (60-minute total, at most 3 attempts)
-        timeout-minutes: 60
+      - name: Copy and verify image (60 minutes per attempt, at most 3 attempts)
+        # Allow all three hours plus retry backoff and process cleanup.
+        timeout-minutes: 185
         env:
           SYNC_COMMIT: ${{ inputs.commit }}
           SYNC_IMAGE: ${{ inputs.image }}

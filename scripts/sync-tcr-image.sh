@@ -99,19 +99,13 @@ sync_attempt() {
 export -f sync_attempt
 export sync_commit sync_source sync_destination sync_expected_digest sync_workdir
 
-sync_deadline="$((SECONDS + 3600))"
 for sync_attempt_number in 1 2 3; do
-  sync_remaining="$((sync_deadline - SECONDS))"
-  [ "$sync_remaining" -gt 10 ] || die '同步总时限 1 小时已到，停止'
-  # Reserve the forced-termination grace period inside the overall hour.
-  sync_attempt_limit="$((sync_remaining - 10))"
-  [ "$sync_attempt_limit" -le 1200 ] || sync_attempt_limit=1200
   sync_started_at="$SECONDS"
-  printf '[%s] 同步 %s，第 %s/3 次尝试（本次最多 %s 秒，总上限 1 小时）\n' \
-    "$(date -u +%FT%TZ)" "$sync_destination" "$sync_attempt_number" "$sync_attempt_limit"
+  printf '[%s] 同步 %s，第 %s/3 次尝试（单次最多 60 分钟，3 次累计最多 180 分钟）\n' \
+    "$(date -u +%FT%TZ)" "$sync_destination" "$sync_attempt_number"
   exec {sync_log_fd}> >(tee "$sync_workdir/attempt.log")
   sync_logger_pid="$!"
-  timeout --signal=TERM --kill-after=10s "${sync_attempt_limit}s" bash -c sync_attempt >&"$sync_log_fd" 2>&1 &
+  timeout --signal=TERM --kill-after=10s 3600s bash -c sync_attempt >&"$sync_log_fd" 2>&1 &
   sync_transfer_pid="$!"
   if wait "$sync_transfer_pid"; then
     sync_status=0
@@ -134,8 +128,6 @@ for sync_attempt_number in 1 2 3; do
   fi
   [ "$sync_attempt_number" -lt 3 ] || die '同步已尝试 3 次，停止；可按原 SHA 单独补传'
   sync_delay="$((sync_attempt_number * 30))"
-  [ "$((sync_deadline - SECONDS))" -gt "$((sync_delay + 10))" ] \
-    || die '剩余总时限不足以重试，停止'
   printf '%s 秒后重试。\n' "$sync_delay"
   sleep "$sync_delay"
 done

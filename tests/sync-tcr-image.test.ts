@@ -44,6 +44,7 @@ if (args[0] === 'inspect') {
   const fakeTimeout = join(root, 'timeout')
   await writeFile(fakeTimeout, `#!/bin/bash
 set -eu
+printf '%s\\n' "$*" >> "$SYNC_TEST_TIMEOUT_LOG"
 if [ "\${SYNC_TEST_FAST_TIMEOUT:-}" = true ]; then
   shift 3
   exec /usr/bin/timeout --signal=TERM --kill-after=0.1s 0.5s "$@"
@@ -57,6 +58,7 @@ exec /usr/bin/timeout "$@"
     GITHUB_REPOSITORY: 'SDUTVINCI/sdutvinci_web',
     SYNC_TEST_LOG: log,
     SYNC_TEST_STATE: join(root, 'attempts'),
+    SYNC_TEST_TIMEOUT_LOG: join(root, 'timeouts'),
     SYNC_TEST_MANIFEST: manifest,
     ...overrides
   }
@@ -99,6 +101,9 @@ describe('GHCR 到腾讯云镜像同步', () => {
     expect(calls.filter(call => call[1] === 'copy')).toHaveLength(3)
     expect(calls.filter(call => call[1] === 'inspect' && call.at(-1)?.includes('ghcr.io'))).toHaveLength(1)
     expect(calls.filter(call => call[0] === 'sleep')).toEqual([['sleep', '30'], ['sleep', '60']])
+    const timeouts = (await readFile(f.env.SYNC_TEST_TIMEOUT_LOG, 'utf8')).trim().split('\n')
+    expect(timeouts).toHaveLength(3)
+    expect(timeouts.every(call => call === '--signal=TERM --kill-after=10s 3600s bash -c sync_attempt')).toBe(true)
   })
 
   it('连续失败不会进行第四次尝试', async () => {

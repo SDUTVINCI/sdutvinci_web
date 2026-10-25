@@ -216,7 +216,7 @@ curl --fail --silent --show-error \
 任一命令失败时不要改 `.deploy/current`、不要删除 volume、不要 reset/rebase/Force Push。
 先保存步骤、完整 SHA、脱敏日志和报告，再按详细手册处理。
 
-CI 先发布 GHCR，再独立同步腾讯云；同步有 1 小时步骤上限、单次 20 分钟与最多 3 次尝试。
+CI 先发布 GHCR，再独立同步腾讯云；同步单次最多 60 分钟、最多 3 次尝试，传输累计最多 180 分钟。
 腾讯云上传失败时可按原 SHA 单独补传，无需重建；入口和服务器更新条件见
 [`镜像发布与腾讯云补传`](IMAGE_PUBLISHING.md)。
 
