@@ -34,6 +34,7 @@ if (binary === 'regctl' && args[0] === 'registry' && args[1] === 'set') {
 } else if (args[0] === 'copy' || (binary === 'regctl' && args[0] === 'image' && args[1] === 'copy')) {
   const download = args.at(-1).startsWith('oci:');
   const stage = download ? 'download' : 'upload';
+  fs.appendFileSync(process.env.SYNC_TEST_PROTOCOL_LOG + '-' + stage, (process.env.GODEBUG || '') + '\\n');
   const state = process.env.SYNC_TEST_STATE + '-' + stage;
   const attempt = fs.existsSync(state) ? Number(fs.readFileSync(state, 'utf8')) + 1 : 1;
   fs.writeFileSync(state, String(attempt));
@@ -73,6 +74,7 @@ exec /usr/bin/timeout "$@"
     SYNC_TEST_LOG: log,
     SYNC_TEST_STATE: join(root, 'attempts'),
     SYNC_TEST_TIMEOUT_LOG: join(root, 'timeouts'),
+    SYNC_TEST_PROTOCOL_LOG: join(root, 'protocols'),
     SYNC_TEST_MANIFEST: manifest,
     ...overrides
   }
@@ -114,7 +116,7 @@ describe('GHCR 到腾讯云镜像同步', () => {
   })
 
   it('临时网络错误最多尝试三次，并保持第一次解析的源摘要', async () => {
-    const f = await fixture({ SYNC_TEST_FAILURES: '2' })
+    const f = await fixture({ SYNC_TEST_FAILURES: '2', GODEBUG: 'gctrace=0' })
     expect((await f.run()).code).toBe(0)
     const calls = await f.commands()
     expect(calls.filter(call => call[1] === 'copy' && call.at(-1)?.startsWith('oci:'))).toHaveLength(1)
@@ -124,6 +126,10 @@ describe('GHCR 到腾讯云镜像同步', () => {
     const timeouts = (await readFile(f.env.SYNC_TEST_TIMEOUT_LOG, 'utf8')).trim().split('\n')
     expect(timeouts).toHaveLength(3)
     expect(timeouts.every(call => call === '--signal=TERM --kill-after=10s 3600s bash -c sync_attempt')).toBe(true)
+    expect((await readFile(f.env.SYNC_TEST_PROTOCOL_LOG + '-upload', 'utf8')).trim().split('\n')).toEqual([
+      'gctrace=0,http2client=0', 'gctrace=0,http2client=0', 'gctrace=0,http2client=0'
+    ])
+    expect((await readFile(f.env.SYNC_TEST_PROTOCOL_LOG + '-download', 'utf8')).trim()).toBe('gctrace=0')
   })
 
   it('连续失败不会进行第四次尝试', async () => {

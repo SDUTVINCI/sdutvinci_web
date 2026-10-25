@@ -112,12 +112,14 @@ sync_attempt() {
 
   printf '本地缓存上传腾讯云\n' > "$sync_workdir/phase"
   stage_started="$SECONDS"
-  printf '[腾讯云上传] 从本地 OCI 缓存上传；大层按 8 MiB 分块，最多 2 个并发请求。\n'
+  printf '[腾讯云上传] 从本地 OCI 缓存通过 HTTP/1.1 上传；大层按 8 MiB 分块，最多 2 个并发请求。\n'
   # Bound request size instead of keeping one multi-hundred-MB PATCH open.
   # Registry configuration is task-local; credentials still come from Docker.
   regctl registry set ccr.ccs.tencentyun.com --skip-check \
     --blob-max 8388608 --blob-chunk 8388608 --req-concurrent 2
-  regctl image copy --force-recursive --verbosity info \
+  # Scope HTTP/1.1 compatibility to the TCR upload; GHCR downloads keep their
+  # default transport. TLS and certificate verification remain enabled.
+  GODEBUG="${GODEBUG:+$GODEBUG,}http2client=0" regctl image copy --force-recursive --verbosity info \
     "ocidir://${sync_workdir}/image:release" "$sync_destination"
   printf '[腾讯云上传] 完成，耗时 %s 秒。\n' "$((SECONDS - stage_started))"
   printf '腾讯云目标摘要校验\n' > "$sync_workdir/phase"
