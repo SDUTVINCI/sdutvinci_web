@@ -85,7 +85,7 @@ jobs:
           username: ${{ secrets.TCR_USERNAME }}
           password: ${{ secrets.TCR_PASSWORD }}
 
-      - name: Copy and verify image (60 minutes per attempt, at most 3 attempts)
+      - name: Stage GHCR image locally, upload to TCR, and verify (60 minutes per attempt)
         # Allow all three hours plus retry backoff and process cleanup.
         timeout-minutes: 185
         env:

@@ -67,11 +67,13 @@ cancel_sync() {
 trap 'cancel_sync 130' INT
 trap 'cancel_sync 143' TERM
 
-# One timeout covers source resolution, copying all manifests/layers, and reading
-# the destination back. Pin the source digest across retries, even for manual runs.
+# One timeout covers source resolution, staging all manifests/layers locally,
+# uploading, and reading the destination back. Keep the local OCI cache between
+# attempts so slow uploads cannot stall GHCR reads or force another download.
 sync_attempt() {
   set -Eeuo pipefail
-  local source_digest destination_digest
+  local source_digest destination_digest cache_digest cache_ref stage_started cache_bytes
+  printf 'GHCR 源摘要解析\n' > "$sync_workdir/phase"
   if [ ! -s "$sync_workdir/source.digest" ]; then
     skopeo inspect --raw "docker://${sync_source}:${sync_commit}" > "$sync_workdir/source.manifest"
     source_digest="sha256:$(sha256sum "$sync_workdir/source.manifest" | cut -d ' ' -f 1)"
@@ -82,11 +84,37 @@ sync_attempt() {
     printf '%s\n' "$source_digest" > "$sync_workdir/source.digest"
   fi
   source_digest="$(cat "$sync_workdir/source.digest")"
+  cache_ref="oci:${sync_workdir}/image:release"
 
   # Credentials come from docker/login-action's credential file, never CLI args.
   # Disable internal retries so the outer loop remains the only retry budget.
-  skopeo copy --all --preserve-digests --retry-times 0 \
-    "docker://${sync_source}@${source_digest}" "docker://${sync_destination}"
+  if [ ! -f "$sync_workdir/cache.ready" ]; then
+    printf 'GHCR 下载到本地\n' > "$sync_workdir/phase"
+    stage_started="$SECONDS"
+    printf '[GHCR 下载] 开始下载固定摘要 %s 到本地 OCI 缓存。\n' "$source_digest"
+    skopeo copy --all --preserve-digests --retry-times 0 \
+      "docker://${sync_source}@${source_digest}" "$cache_ref"
+    skopeo inspect --raw "$cache_ref" > "$sync_workdir/cache.manifest"
+    cache_digest="sha256:$(sha256sum "$sync_workdir/cache.manifest" | cut -d ' ' -f 1)"
+    if [ "$cache_digest" != "$source_digest" ]; then
+      printf 'cache digest mismatch: expected %s, got %s\n' "$source_digest" "$cache_digest" >&2
+      return 1
+    fi
+    printf '%s\n' "$cache_digest" > "$sync_workdir/cache.ready"
+    cache_bytes="$(du -sb "$sync_workdir/image" | cut -f 1)"
+    printf '[GHCR 下载] 完成并验证摘要，耗时 %s 秒，本地缓存 %s 字节。\n' \
+      "$((SECONDS - stage_started))" "$cache_bytes"
+  else
+    printf '[GHCR 下载] 复用本轮任务已经校验的本地 OCI 缓存，无需再次从 GHCR 下载。\n'
+  fi
+
+  printf '本地缓存上传腾讯云\n' > "$sync_workdir/phase"
+  stage_started="$SECONDS"
+  printf '[腾讯云上传] 从本地 OCI 缓存上传，最多并行传输 2 个镜像层。\n'
+  skopeo copy --all --preserve-digests --retry-times 0 --image-parallel-copies 2 \
+    "$cache_ref" "docker://${sync_destination}"
+  printf '[腾讯云上传] 完成，耗时 %s 秒。\n' "$((SECONDS - stage_started))"
+  printf '腾讯云目标摘要校验\n' > "$sync_workdir/phase"
   skopeo inspect --raw "docker://${sync_destination}" > "$sync_workdir/destination.manifest"
   destination_digest="sha256:$(sha256sum "$sync_workdir/destination.manifest" | cut -d ' ' -f 1)"
   if [ "$destination_digest" != "$source_digest" ]; then
@@ -119,8 +147,9 @@ for sync_attempt_number in 1 2 3; do
     exit 0
   fi
 
-  printf '本次同步失败，退出码 %s，耗时 %s 秒。\n' \
-    "$sync_status" "$((SECONDS - sync_started_at))" >&2
+  sync_failed_phase="$(cat "$sync_workdir/phase" 2>/dev/null || printf '启动')"
+  printf '本次同步失败，阶段：%s，退出码 %s，耗时 %s 秒。\n' \
+    "$sync_failed_phase" "$sync_status" "$((SECONDS - sync_started_at))" >&2
   case "$sync_status" in 130|143) exit "$sync_status" ;; esac
   if grep -Eiq 'unauthorized|authentication required|invalid (username|password|reference)|requested access.*denied|access denied|denied:|manifest unknown|name unknown|digest mismatch' \
     "$sync_workdir/attempt.log"; then

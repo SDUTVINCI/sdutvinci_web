@@ -24,16 +24,24 @@ const args = process.argv.slice(2);
 fs.appendFileSync(process.env.SYNC_TEST_LOG, JSON.stringify(['skopeo', ...args]) + '\\n');
 if (args[0] === 'inspect') {
   const target = args.at(-1).includes('ccr.ccs.tencentyun.com');
-  process.stdout.write(target && process.env.SYNC_TEST_MISMATCH === 'true' ? '{}' : process.env.SYNC_TEST_MANIFEST);
+  const cached = args.at(-1).startsWith('oci:');
+  const mismatch = (target && process.env.SYNC_TEST_MISMATCH === 'true') || (cached && process.env.SYNC_TEST_CACHE_MISMATCH === 'true');
+  process.stdout.write(mismatch ? '{}' : process.env.SYNC_TEST_MANIFEST);
 } else if (args[0] === 'copy') {
-  const state = process.env.SYNC_TEST_STATE;
+  const download = args.at(-1).startsWith('oci:');
+  const stage = download ? 'download' : 'upload';
+  const state = process.env.SYNC_TEST_STATE + '-' + stage;
   const attempt = fs.existsSync(state) ? Number(fs.readFileSync(state, 'utf8')) + 1 : 1;
   fs.writeFileSync(state, String(attempt));
-  if (process.env.SYNC_TEST_HANG === 'true') {
+  if (stage === (process.env.SYNC_TEST_HANG_STAGE || 'upload') && process.env.SYNC_TEST_HANG === 'true') {
     setTimeout(() => {}, 10000);
-  } else if (attempt <= Number(process.env.SYNC_TEST_FAILURES || 0)) {
+  } else if (stage === (process.env.SYNC_TEST_FAILURE_STAGE || 'upload') && attempt <= Number(process.env.SYNC_TEST_FAILURES || 0)) {
     console.error(process.env.SYNC_TEST_ERROR || 'connection reset by peer');
     process.exit(1);
+  } else if (download) {
+    const directory = args.at(-1).slice(4).replace(/:release$/, '');
+    fs.mkdirSync(directory, { recursive: true });
+    fs.writeFileSync(directory + '/index.json', process.env.SYNC_TEST_MANIFEST);
   }
 } else {
   process.exit(2);
@@ -47,7 +55,7 @@ set -eu
 printf '%s\\n' "$*" >> "$SYNC_TEST_TIMEOUT_LOG"
 if [ "\${SYNC_TEST_FAST_TIMEOUT:-}" = true ]; then
   shift 3
-  exec /usr/bin/timeout --signal=TERM --kill-after=0.1s 0.5s "$@"
+  exec /usr/bin/timeout --signal=TERM --kill-after=0.1s 1.5s "$@"
 fi
 exec /usr/bin/timeout "$@"
 `)
@@ -85,20 +93,24 @@ describe('GHCR 到腾讯云镜像同步', () => {
     expect((await f.run(image)).code).toBe(0)
     const calls = await f.commands()
     const suffix = image === 'runtime' ? '' : '-ops'
-    expect(calls).toEqual([
-      ['skopeo', 'inspect', '--raw', `docker://ghcr.io/sdutvinci/sdutvinci_web${suffix}:${commit}`],
-      ['skopeo', 'copy', '--all', '--preserve-digests', '--retry-times', '0',
-        `docker://ghcr.io/sdutvinci/sdutvinci_web${suffix}@${digest}`,
-        `docker://ccr.ccs.tencentyun.com/sdutvinci/sdutvinci_web${suffix}:${commit}`],
-      ['skopeo', 'inspect', '--raw', `docker://ccr.ccs.tencentyun.com/sdutvinci/sdutvinci_web${suffix}:${commit}`]
-    ])
+    expect(calls).toHaveLength(5)
+    expect(calls[0]).toEqual(['skopeo', 'inspect', '--raw', `docker://ghcr.io/sdutvinci/sdutvinci_web${suffix}:${commit}`])
+    const cache = calls[1]!.at(-1)!
+    expect(cache).toMatch(/^oci:.*\/image:release$/)
+    expect(calls[1]).toEqual(['skopeo', 'copy', '--all', '--preserve-digests', '--retry-times', '0',
+      `docker://ghcr.io/sdutvinci/sdutvinci_web${suffix}@${digest}`, cache])
+    expect(calls[2]).toEqual(['skopeo', 'inspect', '--raw', cache])
+    expect(calls[3]).toEqual(['skopeo', 'copy', '--all', '--preserve-digests', '--retry-times', '0', '--image-parallel-copies', '2',
+      cache, `docker://ccr.ccs.tencentyun.com/sdutvinci/sdutvinci_web${suffix}:${commit}`])
+    expect(calls[4]).toEqual(['skopeo', 'inspect', '--raw', `docker://ccr.ccs.tencentyun.com/sdutvinci/sdutvinci_web${suffix}:${commit}`])
   })
 
   it('临时网络错误最多尝试三次，并保持第一次解析的源摘要', async () => {
     const f = await fixture({ SYNC_TEST_FAILURES: '2' })
     expect((await f.run()).code).toBe(0)
     const calls = await f.commands()
-    expect(calls.filter(call => call[1] === 'copy')).toHaveLength(3)
+    expect(calls.filter(call => call[1] === 'copy' && call.at(-1)?.startsWith('oci:'))).toHaveLength(1)
+    expect(calls.filter(call => call[1] === 'copy' && call.at(-1)?.startsWith('docker:'))).toHaveLength(3)
     expect(calls.filter(call => call[1] === 'inspect' && call.at(-1)?.includes('ghcr.io'))).toHaveLength(1)
     expect(calls.filter(call => call[0] === 'sleep')).toEqual([['sleep', '30'], ['sleep', '60']])
     const timeouts = (await readFile(f.env.SYNC_TEST_TIMEOUT_LOG, 'utf8')).trim().split('\n')
@@ -111,7 +123,7 @@ describe('GHCR 到腾讯云镜像同步', () => {
     const result = await f.run()
     expect(result.code).toBe(1)
     expect(result.stderr).toContain('已尝试 3 次')
-    expect((await f.commands()).filter(call => call[1] === 'copy')).toHaveLength(3)
+    expect((await f.commands()).filter(call => call[1] === 'copy' && call.at(-1)?.startsWith('docker:'))).toHaveLength(3)
   })
 
   it.each(['unauthorized: authentication required', 'denied: requested access is denied', 'manifest unknown', 'invalid reference format'])(
@@ -119,7 +131,7 @@ describe('GHCR 到腾讯云镜像同步', () => {
       const f = await fixture({ SYNC_TEST_FAILURES: '10', SYNC_TEST_ERROR: message })
       expect((await f.run()).code).toBe(1)
       const calls = await f.commands()
-      expect(calls.filter(call => call[1] === 'copy')).toHaveLength(1)
+      expect(calls.filter(call => call[1] === 'copy' && call.at(-1)?.startsWith('docker:'))).toHaveLength(1)
       expect(calls.filter(call => call[0] === 'sleep')).toHaveLength(0)
     }
   )
@@ -135,7 +147,7 @@ describe('GHCR 到腾讯云镜像同步', () => {
     const result = await f.run()
     expect(result.code).toBe(1)
     expect(result.stdout).toContain('destination digest mismatch')
-    expect((await f.commands()).filter(call => call[1] === 'copy')).toHaveLength(1)
+    expect((await f.commands()).filter(call => call[1] === 'copy' && call.at(-1)?.startsWith('docker:'))).toHaveLength(1)
   })
 
   it('手工补传可以解析已发布的 SHA 标签并锁定摘要', async () => {
@@ -149,7 +161,35 @@ describe('GHCR 到腾讯云镜像同步', () => {
     const result = await f.run()
     expect(result.code).toBe(1)
     expect(result.stderr).toContain('退出码 124')
-    expect((await f.commands()).filter(call => call[1] === 'copy')).toHaveLength(3)
+    expect(result.stderr).toContain('阶段：本地缓存上传腾讯云')
+    const calls = await f.commands()
+    expect(calls.filter(call => call[1] === 'copy' && call.at(-1)?.startsWith('docker:'))).toHaveLength(3)
+    expect(calls.filter(call => call[1] === 'copy' && call.at(-1)?.startsWith('oci:'))).toHaveLength(1)
+  })
+
+  it('下载失败时不上传，重试完成下载后才上传', async () => {
+    const f = await fixture({ SYNC_TEST_FAILURES: '1', SYNC_TEST_FAILURE_STAGE: 'download' })
+    const result = await f.run()
+    expect(result.code).toBe(0)
+    expect(result.stderr).toContain('阶段：GHCR 下载到本地')
+    const copies = (await f.commands()).filter(call => call[1] === 'copy')
+    expect(copies.map(call => call.at(-1)?.startsWith('oci:'))).toEqual([true, true, false])
+  })
+
+  it('本地缓存摘要不一致时禁止上传', async () => {
+    const f = await fixture({ SYNC_TEST_CACHE_MISMATCH: 'true' })
+    const result = await f.run()
+    expect(result.code).toBe(1)
+    expect(result.stdout).toContain('cache digest mismatch')
+    expect((await f.commands()).filter(call => call[1] === 'copy' && call.at(-1)?.startsWith('docker:'))).toHaveLength(0)
+  })
+
+  it('下载挂起时明确报告下载阶段，且不会开始上传', async () => {
+    const f = await fixture({ SYNC_TEST_HANG: 'true', SYNC_TEST_HANG_STAGE: 'download', SYNC_TEST_FAST_TIMEOUT: 'true' })
+    const result = await f.run()
+    expect(result.code).toBe(1)
+    expect(result.stderr).toContain('阶段：GHCR 下载到本地')
+    expect((await f.commands()).filter(call => call[1] === 'copy' && call.at(-1)?.startsWith('docker:'))).toHaveLength(0)
   })
 
   it('取消任务会停止传输，不开始下一次尝试', async () => {
@@ -161,7 +201,7 @@ describe('GHCR 到腾讯云镜像同步', () => {
     })
     try {
       await expect.poll(async () => {
-        try { return (await f.commands()).some(call => call[1] === 'copy') } catch { return false }
+        try { return (await f.commands()).some(call => call[1] === 'copy' && call.at(-1)?.startsWith('docker:')) } catch { return false }
       }).toBe(true)
       process.kill(-child.pid!, 'SIGTERM')
       expect(await finished).toBe(143)
