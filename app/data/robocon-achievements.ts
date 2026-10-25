@@ -8,6 +8,10 @@ export const roboconAchievements: RoboconAchievement[] = [
   {
     year: 2026,
     items: [
+      '全国大学生机器人大赛 Robocon 正赛国赛三等奖',
+      '全国大学生机器人大赛 Robocon 技能赛国赛三等奖',
+      '全国大学生机器人大赛 Robocon 马术障碍赛国赛三等奖',
+      '全国大学生机器人大赛 Robocon 马术任务赛国赛三等奖',
       '全国大学生机器人大赛 Robocon 排球赛国赛一等奖'
     ]
   },
