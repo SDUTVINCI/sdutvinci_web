@@ -7,7 +7,9 @@
 3. `sync-tcr-runtime`、`sync-tcr-operations` 各自依赖对应构建，先用 Skopeo 将 GHCR 中的固定摘要完整下载到任务临时 OCI 目录并校验，再从本地上传腾讯云。
 
 应用镜像为 `ghcr.io/sdutvinci/sdutvinci_web` 与
-`ccr.ccs.tencentyun.com/sdutvinci/sdutvinci_web`；运维镜像在仓库名后加 `-ops`。
+`hkccr.ccs.tencentyun.com/sdutvinci/sdutvinci_web`；运维镜像在仓库名后加 `-ops`。
+香港是独立的地域仓库，切换前需要验证对应命名空间、仓库和登录权限，旧地域镜像不会自动出现在香港。
+同步脚本通过 `TCR_REGISTRY` 选择目标，默认香港；只接受香港与广州两个域名，登录、分块配置、上传和摘要校验使用同一域名。
 同步包含完整镜像索引和所有平台，保留摘要，并从目标仓库读取清单再次验证一致。
 
 同一分支的新 Push 会取消旧一轮检查、构建和同步。不同分支互不影响。
@@ -47,6 +49,7 @@ PR 只检查和构建，不登录发布仓库、不上传镜像。
 1. 选择 `main` 分支。
 2. `commit` 填需要补传的完整 40 位 Commit SHA。
 3. `image` 选择 `runtime` 或 `operations`，只补传需要的镜像；两者均失败时分别运行。
+4. `registry` 默认香港 `hkccr.ccs.tencentyun.com`；需要补齐广州回退版本时选择 `ccr.ccs.tencentyun.com`。
 
 手动入口使用 main 当前的同步脚本，从指定 SHA 标签解析并锁定源摘要，后续尝试一直复制这个摘要。
 它不执行测试、编译或 Docker 构建，不产生新代码版本。若源镜像不存在，任务直接失败。
@@ -54,6 +57,7 @@ PR 只检查和构建，不登录发布仓库、不上传镜像。
 
 认证继续使用已有仓库 Secrets：`TCR_USERNAME`、`TCR_PASSWORD`；GHCR 使用 Actions 的
 `GITHUB_TOKEN`，同步任务只授予 `packages: read`。凭据由登录步骤保存，不作为复制命令参数。
+香港地域必须先通过已有凭据的登录和实际推送验证，不能仅凭广州登录成功判断香港权限。
 
 ## 服务器更新
 
@@ -62,3 +66,27 @@ PR 只检查和构建，不登录发布仓库、不上传镜像。
 使用腾讯云的服务器等待两份同步成功；同步失败时继续运行原版本。
 
 因此，GHCR 构建成功、腾讯云同步成功、服务器已更新是三个不同状态；上线验收需再核对线上版本与页面。
+
+## 切换香港仓库
+
+先从 Actions 将已发布版本的 runtime、operations 完整复制到香港并验证与 GHCR 摘要一致。
+首次速度验证必须包含真实的大镜像层，不能将跳过已存在镜像层的耗时当作上传速度。
+然后在生产服务器验证香港仓库的拉取权限和实际镜像层下载速度，再将部署目录 `.env` 中的四项改为：
+
+```dotenv
+APP_IMAGE=hkccr.ccs.tencentyun.com/sdutvinci/sdutvinci_web
+APP_OPS_IMAGE=hkccr.ccs.tencentyun.com/sdutvinci/sdutvinci_web-ops
+POSTGRES_IMAGE=hkccr.ccs.tencentyun.com/sdutvinci/postgres:17-bookworm
+CADDY_IMAGE=hkccr.ccs.tencentyun.com/sdutvinci/caddy:2.10-alpine
+```
+
+修改前保留权限受限的配置备份，测试期间保留广州镜像。应用和运维镜像必须来自同一个完整 Commit SHA。
+只复制当前在线的应用/运维 SHA，以及当前使用的 PostgreSQL、Caddy 标签，不批量迁移历史标签。
+基础组件的香港镜像须与广州同标签摘要一致，再通过 Compose 重建对应容器；沿用已有命名卷，不重新初始化数据库。
+自动部署只比较 Commit；如果切换仓库时目标 Commit 没变，需要用 `./vinci update <完整 SHA>`
+显式执行蓝绿部署，不能只等定时器。验收活动应用和内容导出 Worker 的镜像地址、网站及数据库健康状态。
+现有部署入口会重建 PostgreSQL、gateway 和已启用的 Worker，以应用新的镜像地址；
+不能只修改 `.env` 或拉取镜像而保留旧容器。回退时恢复原镜像地址，并通过相同部署入口重部署已验证的 Commit。
+
+删除旧应用仓库前先盘点其他服务的镜像地址。只迁移 runtime/operations 不会迁移 Caddy、PostgreSQL
+等基础组件；如果这些组件仍指向广州，不得直接删除整个广州实例或它们的镜像仓库。

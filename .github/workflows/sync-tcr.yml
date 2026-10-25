@@ -12,6 +12,9 @@ on:
       digest:
         type: string
         required: true
+      registry:
+        type: string
+        default: hkccr.ccs.tencentyun.com
     secrets:
       TCR_USERNAME:
         required: true
@@ -28,6 +31,12 @@ on:
         type: choice
         options: [runtime, operations]
         required: true
+      registry:
+        description: Target registry (Guangzhou remains available for rollback)
+        type: choice
+        options: [hkccr.ccs.tencentyun.com, ccr.ccs.tencentyun.com]
+        default: hkccr.ccs.tencentyun.com
+        required: true
 
 permissions:
   contents: read
@@ -36,13 +45,15 @@ permissions:
 # Keep manual retries of older SHAs separate from the current release. The caller
 # cancels superseded push workflows; identical image/SHA copies cancel duplicates.
 concurrency:
-  group: tcr-${{ github.ref }}-${{ inputs.image }}-${{ inputs.commit }}
+  group: tcr-${{ github.ref }}-${{ inputs.registry }}-${{ inputs.image }}-${{ inputs.commit }}
   cancel-in-progress: true
 
 jobs:
   sync:
     runs-on: ubuntu-latest
     timeout-minutes: 200
+    env:
+      TCR_REGISTRY: ${{ inputs.registry }}
     steps:
       - name: Check out trusted sync scripts
         uses: actions/checkout@v6
@@ -58,6 +69,7 @@ jobs:
         run: |
           [[ "$SYNC_COMMIT" =~ ^[0-9a-f]{40}$ ]]
           case "$SYNC_IMAGE" in runtime|operations) ;; *) exit 1 ;; esac
+          case "$TCR_REGISTRY" in hkccr.ccs.tencentyun.com|ccr.ccs.tencentyun.com) ;; *) exit 1 ;; esac
           if [ "$GITHUB_EVENT_NAME" != workflow_dispatch ] || [ -n "$SYNC_DIGEST" ]; then
             [[ "$SYNC_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
           fi
@@ -94,7 +106,7 @@ jobs:
         timeout-minutes: 2
         uses: docker/login-action@v4
         with:
-          registry: ccr.ccs.tencentyun.com
+          registry: ${{ inputs.registry }}
           username: ${{ secrets.TCR_USERNAME }}
           password: ${{ secrets.TCR_PASSWORD }}
 

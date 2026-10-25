@@ -27,7 +27,12 @@ sync_repository="${GITHUB_REPOSITORY:-}"
 [[ "$sync_repository" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] \
   || die '缺少有效的 GITHUB_REPOSITORY'
 sync_source="ghcr.io/${sync_repository,,}${sync_suffix}"
-sync_destination="ccr.ccs.tencentyun.com/sdutvinci/sdutvinci_web${sync_suffix}:${sync_commit}"
+sync_registry="${TCR_REGISTRY:-hkccr.ccs.tencentyun.com}"
+case "$sync_registry" in
+  hkccr.ccs.tencentyun.com|ccr.ccs.tencentyun.com) ;;
+  *) die '目标仓库只接受腾讯云香港或广州个人版域名' ;;
+esac
+sync_destination="${sync_registry}/sdutvinci/sdutvinci_web${sync_suffix}:${sync_commit}"
 
 for sync_command in skopeo regctl timeout sha256sum tee; do
   command -v "$sync_command" >/dev/null || die "缺少命令：${sync_command}"
@@ -115,7 +120,7 @@ sync_attempt() {
   printf '[腾讯云上传] 从本地 OCI 缓存通过 HTTP/1.1 上传；大层按 8 MiB 分块，最多 2 个并发请求。\n'
   # Bound request size instead of keeping one multi-hundred-MB PATCH open.
   # Registry configuration is task-local; credentials still come from Docker.
-  regctl registry set ccr.ccs.tencentyun.com --skip-check \
+  regctl registry set "$sync_registry" --skip-check \
     --blob-max 8388608 --blob-chunk 8388608 --req-concurrent 2
   # Scope HTTP/1.1 compatibility to the TCR upload; GHCR downloads keep their
   # default transport. TLS and certificate verification remain enabled.
@@ -133,7 +138,7 @@ sync_attempt() {
 }
 
 export -f sync_attempt
-export sync_commit sync_source sync_destination sync_expected_digest sync_workdir
+export sync_commit sync_source sync_destination sync_expected_digest sync_workdir sync_registry
 
 for sync_attempt_number in 1 2 3; do
   sync_started_at="$SECONDS"

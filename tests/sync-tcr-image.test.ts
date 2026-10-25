@@ -108,12 +108,34 @@ describe('GHCR 到腾讯云镜像同步', () => {
     expect(calls[1]).toEqual(['skopeo', 'copy', '--all', '--preserve-digests', '--retry-times', '0',
       `docker://ghcr.io/sdutvinci/sdutvinci_web${suffix}@${digest}`, cache])
     expect(calls[2]).toEqual(['skopeo', 'inspect', '--raw', cache])
-    expect(calls[3]).toEqual(['regctl', 'registry', 'set', 'ccr.ccs.tencentyun.com', '--skip-check',
+    expect(calls[3]).toEqual(['regctl', 'registry', 'set', 'hkccr.ccs.tencentyun.com', '--skip-check',
       '--blob-max', '8388608', '--blob-chunk', '8388608', '--req-concurrent', '2'])
     expect(calls[4]).toEqual(['regctl', 'image', 'copy', '--force-recursive', '--verbosity', 'info',
-      cache.replace(/^oci:/, 'ocidir://'), `ccr.ccs.tencentyun.com/sdutvinci/sdutvinci_web${suffix}:${commit}`])
-    expect(calls[5]).toEqual(['skopeo', 'inspect', '--raw', `docker://ccr.ccs.tencentyun.com/sdutvinci/sdutvinci_web${suffix}:${commit}`])
+      cache.replace(/^oci:/, 'ocidir://'), `hkccr.ccs.tencentyun.com/sdutvinci/sdutvinci_web${suffix}:${commit}`])
+    expect(calls[5]).toEqual(['skopeo', 'inspect', '--raw', `docker://hkccr.ccs.tencentyun.com/sdutvinci/sdutvinci_web${suffix}:${commit}`])
   })
+
+  it.each(['runtime', 'operations'])('可显式选择广州补传 %s，配置、上传和校验使用同一地域', async (image) => {
+    const f = await fixture({ TCR_REGISTRY: 'ccr.ccs.tencentyun.com' })
+    expect((await f.run(image)).code).toBe(0)
+    const calls = await f.commands()
+    const suffix = image === 'runtime' ? '' : '-ops'
+    const target = `ccr.ccs.tencentyun.com/sdutvinci/sdutvinci_web${suffix}:${commit}`
+    expect(calls[3]).toContain('ccr.ccs.tencentyun.com')
+    expect(calls[4]!.at(-1)).toBe(target)
+    expect(calls[5]!.at(-1)).toBe(`docker://${target}`)
+    expect(JSON.stringify(calls)).not.toContain('hkccr.ccs.tencentyun.com')
+  })
+
+  it.each(['https://hkccr.ccs.tencentyun.com', 'example.com', 'hkccr.ccs.tencentyun.com/unexpected'])(
+    '目标域名无效时在访问仓库之前失败：%s', async (registry) => {
+      const f = await fixture({ TCR_REGISTRY: registry })
+      const result = await f.run()
+      expect(result.code).toBe(1)
+      expect(result.stderr).toContain('目标仓库只接受')
+      await expect(f.commands()).rejects.toMatchObject({ code: 'ENOENT' })
+    }
+  )
 
   it('临时网络错误最多尝试三次，并保持第一次解析的源摘要', async () => {
     const f = await fixture({ SYNC_TEST_FAILURES: '2', GODEBUG: 'gctrace=0' })
