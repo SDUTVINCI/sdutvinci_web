@@ -1,0 +1,94 @@
+name: Sync published GHCR image to Tencent Cloud
+
+on:
+  workflow_call:
+    inputs:
+      commit:
+        type: string
+        required: true
+      image:
+        type: string
+        required: true
+      digest:
+        type: string
+        required: true
+    secrets:
+      TCR_USERNAME:
+        required: true
+      TCR_PASSWORD:
+        required: true
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: Published main commit (full 40-character SHA)
+        type: string
+        required: true
+      image:
+        description: Image to retry without rebuilding
+        type: choice
+        options: [runtime, operations]
+        required: true
+
+permissions:
+  contents: read
+  packages: read
+
+# Keep manual retries of older SHAs separate from the current release. The caller
+# cancels superseded push workflows; identical image/SHA copies cancel duplicates.
+concurrency:
+  group: tcr-${{ github.ref }}-${{ inputs.image }}-${{ inputs.commit }}
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - name: Check out trusted sync scripts
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Validate requested main commit and image
+        env:
+          SYNC_COMMIT: ${{ inputs.commit }}
+          SYNC_IMAGE: ${{ inputs.image }}
+          SYNC_DIGEST: ${{ inputs.digest }}
+        run: |
+          [[ "$SYNC_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          case "$SYNC_IMAGE" in runtime|operations) ;; *) exit 1 ;; esac
+          if [ "$GITHUB_EVENT_NAME" != workflow_dispatch ] || [ -n "$SYNC_DIGEST" ]; then
+            [[ "$SYNC_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          fi
+          git merge-base --is-ancestor "$SYNC_COMMIT" origin/main
+
+      - name: Install registry copy tool
+        timeout-minutes: 5
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends skopeo
+
+      - name: Log in to GHCR for read-only access
+        timeout-minutes: 2
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to Tencent Cloud TCR
+        timeout-minutes: 2
+        uses: docker/login-action@v4
+        with:
+          registry: ccr.ccs.tencentyun.com
+          username: ${{ secrets.TCR_USERNAME }}
+          password: ${{ secrets.TCR_PASSWORD }}
+
+      - name: Copy and verify image (60-minute total, at most 3 attempts)
+        timeout-minutes: 60
+        env:
+          SYNC_COMMIT: ${{ inputs.commit }}
+          SYNC_IMAGE: ${{ inputs.image }}
+          SYNC_DIGEST: ${{ inputs.digest }}
+        run: bash scripts/sync-tcr-image.sh "$SYNC_COMMIT" "$SYNC_IMAGE" "$SYNC_DIGEST"

@@ -8,7 +8,7 @@ on:
 
 concurrency:
   group: build-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -16,6 +16,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:17-bookworm
@@ -58,6 +59,8 @@ jobs:
           ./tests/deploy-cache-cleanup.integration.sh
           ./tests/auto-deploy.integration.sh
           ./tests/install-auto-deploy.integration.sh
+          bash -n scripts/sync-tcr-image.sh
+          npx vitest run tests/sync-tcr-image.test.ts
 
       - name: Prepare Nuxt generated types
         run: npx nuxt prepare
@@ -140,6 +143,9 @@ jobs:
   build-runtime:
     needs: [verify]
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
     permissions:
       contents: read
       packages: write
@@ -150,7 +156,6 @@ jobs:
       - name: Normalize runtime image names
         run: |
           echo "IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
-          echo "TCR_IMAGE_NAME=ccr.ccs.tencentyun.com/sdutvinci/sdutvinci_web" >> "$GITHUB_ENV"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -163,23 +168,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Log in to Tencent Cloud TCR
-        if: github.event_name == 'push'
-        uses: docker/login-action@v4
-        with:
-          registry: ccr.ccs.tencentyun.com
-          username: ${{ secrets.TCR_USERNAME }}
-          password: ${{ secrets.TCR_PASSWORD }}
-
-      - name: Build runtime image
+      - name: Build runtime image and publish to GHCR
+        id: build
         uses: docker/build-push-action@v7
         with:
           context: .
           target: runtime
           push: ${{ github.event_name == 'push' }}
-          tags: |
-            ${{ env.IMAGE_NAME }}:${{ github.sha }}
-            ${{ env.TCR_IMAGE_NAME }}:${{ github.sha }}
+          tags: ${{ env.IMAGE_NAME }}:${{ github.sha }}
           labels: |
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
@@ -190,6 +186,9 @@ jobs:
   build-operations:
     needs: [verify]
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
     permissions:
       contents: read
       packages: write
@@ -200,7 +199,6 @@ jobs:
       - name: Normalize operations image names
         run: |
           echo "IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY,,}-ops" >> "$GITHUB_ENV"
-          echo "TCR_IMAGE_NAME=ccr.ccs.tencentyun.com/sdutvinci/sdutvinci_web-ops" >> "$GITHUB_ENV"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -213,25 +211,46 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Log in to Tencent Cloud TCR
-        if: github.event_name == 'push'
-        uses: docker/login-action@v4
-        with:
-          registry: ccr.ccs.tencentyun.com
-          username: ${{ secrets.TCR_USERNAME }}
-          password: ${{ secrets.TCR_PASSWORD }}
-
-      - name: Build operations image
+      - name: Build operations image and publish to GHCR
+        id: build
         uses: docker/build-push-action@v7
         with:
           context: .
           target: operations
           push: ${{ github.event_name == 'push' }}
-          tags: |
-            ${{ env.IMAGE_NAME }}:${{ github.sha }}
-            ${{ env.TCR_IMAGE_NAME }}:${{ github.sha }}
+          tags: ${{ env.IMAGE_NAME }}:${{ github.sha }}
           labels: |
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
           cache-from: type=gha,scope=operations
           cache-to: type=gha,mode=max,scope=operations
+
+  sync-tcr-runtime:
+    needs: [build-runtime]
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/sync-tcr.yml
+    with:
+      commit: ${{ github.sha }}
+      image: runtime
+      digest: ${{ needs.build-runtime.outputs.digest }}
+    secrets:
+      TCR_USERNAME: ${{ secrets.TCR_USERNAME }}
+      TCR_PASSWORD: ${{ secrets.TCR_PASSWORD }}
+
+  sync-tcr-operations:
+    needs: [build-operations]
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/sync-tcr.yml
+    with:
+      commit: ${{ github.sha }}
+      image: operations
+      digest: ${{ needs.build-operations.outputs.digest }}
+    secrets:
+      TCR_USERNAME: ${{ secrets.TCR_USERNAME }}
+      TCR_PASSWORD: ${{ secrets.TCR_PASSWORD }}
