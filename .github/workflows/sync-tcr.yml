@@ -1,108 +1,72 @@
-name: Sync published GHCR image to Tencent Cloud
-
+name: Copy current Guangzhou images to Hong Kong
 on:
-  workflow_call:
-    inputs:
-      commit:
-        type: string
-        required: true
-      image:
-        type: string
-        required: true
-      digest:
-        type: string
-        required: true
-    secrets:
-      TCR_USERNAME:
-        required: true
-      TCR_PASSWORD:
-        required: true
   workflow_dispatch:
-    inputs:
-      commit:
-        description: Published main commit (full 40-character SHA)
-        type: string
-        required: true
-      image:
-        description: Image to retry without rebuilding
-        type: choice
-        options: [runtime, operations]
-        required: true
-
 permissions:
   contents: read
-  packages: read
-
-# Keep manual retries of older SHAs separate from the current release. The caller
-# cancels superseded push workflows; identical image/SHA copies cancel duplicates.
-concurrency:
-  group: tcr-${{ github.ref }}-${{ inputs.image }}-${{ inputs.commit }}
-  cancel-in-progress: true
-
 jobs:
-  sync:
+  mirror:
     runs-on: ubuntu-latest
     timeout-minutes: 200
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - repository: sdutvinci_web
+            tag: 16fd1489608599fc0c0102188387ea639917a6df
+          - repository: sdutvinci_web-ops
+            tag: 16fd1489608599fc0c0102188387ea639917a6df
+          - repository: caddy
+            tag: 2.10-alpine
+          - repository: postgres
+            tag: 17-bookworm
+    concurrency:
+      group: hk-current-migration-${{ matrix.repository }}
+      cancel-in-progress: true
     steps:
-      - name: Check out trusted sync scripts
-        uses: actions/checkout@v6
-        with:
-          ref: main
-          fetch-depth: 0
-
-      - name: Validate requested main commit and image
-        env:
-          SYNC_COMMIT: ${{ inputs.commit }}
-          SYNC_IMAGE: ${{ inputs.image }}
-          SYNC_DIGEST: ${{ inputs.digest }}
+      - name: Install checksum-verified registry client
         run: |
-          [[ "$SYNC_COMMIT" =~ ^[0-9a-f]{40}$ ]]
-          case "$SYNC_IMAGE" in runtime|operations) ;; *) exit 1 ;; esac
-          if [ "$GITHUB_EVENT_NAME" != workflow_dispatch ] || [ -n "$SYNC_DIGEST" ]; then
-            [[ "$SYNC_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
-          fi
-          git merge-base --is-ancestor "$SYNC_COMMIT" origin/main
-
-      - name: Install registry copy tool
-        timeout-minutes: 5
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends skopeo
-          mkdir -p "$RUNNER_TEMP/vinci-registry-tools"
+          mkdir -p "$RUNNER_TEMP/vinci-tools"
           curl --fail --location --silent --show-error --retry 2 --connect-timeout 10 --max-time 60 \
             https://github.com/regclient/regclient/releases/download/v0.11.7/regctl-linux-amd64 \
-            --output "$RUNNER_TEMP/vinci-registry-tools/regctl"
-          printf '%s  %s\n' \
-            3737fbbdd791e04e7a831640b681f3397a376498e80e2ad9b1b2d27296f239bc \
-            "$RUNNER_TEMP/vinci-registry-tools/regctl" | sha256sum --check
-          chmod 755 "$RUNNER_TEMP/vinci-registry-tools/regctl"
-          echo "$RUNNER_TEMP/vinci-registry-tools" >> "$GITHUB_PATH"
-
-      - name: Verify chunked uploads and reconnects with an isolated local registry
-        timeout-minutes: 3
-        run: python3 tests/chunked-registry-upload.integration.py
-
-      - name: Log in to GHCR for read-only access
-        timeout-minutes: 2
-        uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Log in to Tencent Cloud TCR
-        timeout-minutes: 2
+            --output "$RUNNER_TEMP/vinci-tools/regctl"
+          printf '%s  %s\n' 3737fbbdd791e04e7a831640b681f3397a376498e80e2ad9b1b2d27296f239bc "$RUNNER_TEMP/vinci-tools/regctl" | sha256sum --check
+          chmod 755 "$RUNNER_TEMP/vinci-tools/regctl"
+          echo "$RUNNER_TEMP/vinci-tools" >> "$GITHUB_PATH"
+      - name: Log in to Guangzhou
         uses: docker/login-action@v4
         with:
           registry: ccr.ccs.tencentyun.com
           username: ${{ secrets.TCR_USERNAME }}
           password: ${{ secrets.TCR_PASSWORD }}
-
-      - name: Stage GHCR image locally, upload to TCR, and verify (60 minutes per attempt)
-        # Allow all three hours plus retry backoff and process cleanup.
+      - name: Log in to Hong Kong
+        uses: docker/login-action@v4
+        with:
+          registry: hkccr.ccs.tencentyun.com
+          username: ${{ secrets.TCR_USERNAME }}
+          password: ${{ secrets.TCR_PASSWORD }}
+      - name: Copy only the current tag and verify the full index
         timeout-minutes: 185
         env:
-          SYNC_COMMIT: ${{ inputs.commit }}
-          SYNC_IMAGE: ${{ inputs.image }}
-          SYNC_DIGEST: ${{ inputs.digest }}
-        run: bash scripts/sync-tcr-image.sh "$SYNC_COMMIT" "$SYNC_IMAGE" "$SYNC_DIGEST"
+          MIRROR_REPOSITORY: ${{ matrix.repository }}
+          MIRROR_TAG: ${{ matrix.tag }}
+          GODEBUG: http2client=0
+        run: |
+          set -euo pipefail
+          source="ccr.ccs.tencentyun.com/sdutvinci/${MIRROR_REPOSITORY}:${MIRROR_TAG}"
+          target="hkccr.ccs.tencentyun.com/sdutvinci/${MIRROR_REPOSITORY}:${MIRROR_TAG}"
+          digest="$(regctl image digest "$source")"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          printf 'Source: %s\nTarget: %s\nPinned digest: %s\n' "$source" "$target" "$digest"
+          regctl registry set hkccr.ccs.tencentyun.com --skip-check --blob-max 8388608 --blob-chunk 8388608 --req-concurrent 2
+          for attempt in 1 2 3; do
+            started="$SECONDS"
+            printf '[%s] Attempt %s/3, maximum 60 minutes\n' "$(date -u +%FT%TZ)" "$attempt"
+            if timeout --signal=TERM --kill-after=10s 3600s regctl image copy --force-recursive --verbosity info "${source%:*}@${digest}" "$target"; then
+              actual="$(regctl image digest "$target")"
+              [ "$actual" = "$digest" ]
+              printf 'MIGRATION VERIFIED: %s digest=%s elapsed=%ss\n' "$target" "$actual" "$((SECONDS-started))"
+              exit 0
+            fi
+            [ "$attempt" -lt 3 ] || exit 1
+            sleep "$((attempt*30))"
+          done
