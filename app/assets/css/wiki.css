@@ -1594,6 +1594,9 @@ a.article-credit-person:hover {
   padding: 1rem;
   background: transparent;
   color: var(--ink-soft);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.875rem;
+  line-height: 1.65;
 }
 
 :root[data-theme="dark"] .wiki-content-body .shiki span {
@@ -1985,6 +1988,11 @@ a.article-credit-person:hover {
 
   .wiki-content-body {
     font-size: 1rem;
+  }
+
+  .wiki-content-body pre code {
+    padding: 0.875rem;
+    font-size: 0.8125rem;
   }
 
   .vinci-document-embed-header {
