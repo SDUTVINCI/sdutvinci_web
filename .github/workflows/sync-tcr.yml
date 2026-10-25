@@ -25,6 +25,8 @@ jobs:
     steps:
       - name: Install checksum-verified registry client
         run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends skopeo
           mkdir -p "$RUNNER_TEMP/vinci-tools"
           curl --fail --location --silent --show-error --retry 2 --connect-timeout 10 --max-time 60 \
             https://github.com/regclient/regclient/releases/download/v0.11.7/regctl-linux-amd64 \
@@ -54,14 +56,25 @@ jobs:
           set -euo pipefail
           source="ccr.ccs.tencentyun.com/sdutvinci/${MIRROR_REPOSITORY}:${MIRROR_TAG}"
           target="hkccr.ccs.tencentyun.com/sdutvinci/${MIRROR_REPOSITORY}:${MIRROR_TAG}"
-          digest="$(regctl image digest "$source")"
+          skopeo inspect --raw "docker://${source}" > "$RUNNER_TEMP/source.manifest"
+          digest="sha256:$(sha256sum "$RUNNER_TEMP/source.manifest" | cut -d ' ' -f 1)"
           [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
           printf 'Source: %s\nTarget: %s\nPinned digest: %s\n' "$source" "$target" "$digest"
           regctl registry set hkccr.ccs.tencentyun.com --skip-check --blob-max 8388608 --blob-chunk 8388608 --req-concurrent 2
           for attempt in 1 2 3; do
             started="$SECONDS"
             printf '[%s] Attempt %s/3, maximum 60 minutes\n' "$(date -u +%FT%TZ)" "$attempt"
-            if timeout --signal=TERM --kill-after=10s 3600s regctl image copy --force-recursive --verbosity info "${source%:*}@${digest}" "$target"; then
+            export source target digest
+            if timeout --signal=TERM --kill-after=10s 3600s bash -c '
+              set -euo pipefail
+              if [ ! -f "$RUNNER_TEMP/cache.ready" ]; then
+                skopeo copy --all --preserve-digests --retry-times 0 "docker://${source%:*}@${digest}" "oci:$RUNNER_TEMP/image:release"
+                skopeo inspect --raw "oci:$RUNNER_TEMP/image:release" > "$RUNNER_TEMP/cache.manifest"
+                [ "sha256:$(sha256sum "$RUNNER_TEMP/cache.manifest" | cut -d " " -f 1)" = "$digest" ]
+                touch "$RUNNER_TEMP/cache.ready"
+              fi
+              regctl image copy --force-recursive --verbosity info "ocidir://$RUNNER_TEMP/image:release" "$target"
+            '; then
               actual="$(regctl image digest "$target")"
               [ "$actual" = "$digest" ]
               printf 'MIGRATION VERIFIED: %s digest=%s elapsed=%ss\n' "$target" "$actual" "$((SECONDS-started))"
