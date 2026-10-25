@@ -41,7 +41,7 @@ concurrency:
 
 jobs:
   sync:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 200
     steps:
       - name: Check out trusted sync scripts
@@ -70,10 +70,10 @@ jobs:
           sudo apt-get install --yes --no-install-recommends skopeo
           mkdir -p "$RUNNER_TEMP/vinci-registry-tools"
           curl --fail --location --silent --show-error --retry 2 --connect-timeout 10 --max-time 60 \
-            https://github.com/regclient/regclient/releases/download/v0.11.7/regctl-linux-amd64 \
+            https://github.com/regclient/regclient/releases/download/v0.11.7/regctl-linux-arm64 \
             --output "$RUNNER_TEMP/vinci-registry-tools/regctl"
           printf '%s  %s\n' \
-            3737fbbdd791e04e7a831640b681f3397a376498e80e2ad9b1b2d27296f239bc \
+            9f349bab5c407ac04f3dabf99c7c7a6b0f9e9723c23f2775380e804d02c6dbb9 \
             "$RUNNER_TEMP/vinci-registry-tools/regctl" | sha256sum --check
           chmod 755 "$RUNNER_TEMP/vinci-registry-tools/regctl"
           echo "$RUNNER_TEMP/vinci-registry-tools" >> "$GITHUB_PATH"
