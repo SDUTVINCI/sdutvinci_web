@@ -12,6 +12,7 @@ const commit = 'a'.repeat(40)
 const manifest = '{"schemaVersion":2,"mediaType":"application/vnd.oci.image.index.v1+json","manifests":[]}'
 const digest = `sha256:${createHash('sha256').update(manifest).digest('hex')}`
 const temporaryRoots: string[] = []
+const isUpload = (call: string[]) => call[0] === 'regctl' && call[1] === 'image' && call[2] === 'copy'
 
 async function fixture(overrides: Record<string, string> = {}) {
   const root = await mkdtemp(join(tmpdir(), 'vinci-tcr-sync-'))
@@ -20,14 +21,17 @@ async function fixture(overrides: Record<string, string> = {}) {
   const fakeSkopeo = join(root, 'skopeo')
   await writeFile(fakeSkopeo, `#!/usr/bin/env node
 const fs = require('node:fs');
+const binary = require('node:path').basename(process.argv[1]);
 const args = process.argv.slice(2);
-fs.appendFileSync(process.env.SYNC_TEST_LOG, JSON.stringify(['skopeo', ...args]) + '\\n');
-if (args[0] === 'inspect') {
+fs.appendFileSync(process.env.SYNC_TEST_LOG, JSON.stringify([binary, ...args]) + '\\n');
+if (binary === 'regctl' && args[0] === 'registry' && args[1] === 'set') {
+  process.exit(0);
+} else if (args[0] === 'inspect') {
   const target = args.at(-1).includes('ccr.ccs.tencentyun.com');
   const cached = args.at(-1).startsWith('oci:');
   const mismatch = (target && process.env.SYNC_TEST_MISMATCH === 'true') || (cached && process.env.SYNC_TEST_CACHE_MISMATCH === 'true');
   process.stdout.write(mismatch ? '{}' : process.env.SYNC_TEST_MANIFEST);
-} else if (args[0] === 'copy') {
+} else if (args[0] === 'copy' || (binary === 'regctl' && args[0] === 'image' && args[1] === 'copy')) {
   const download = args.at(-1).startsWith('oci:');
   const stage = download ? 'download' : 'upload';
   const state = process.env.SYNC_TEST_STATE + '-' + stage;
@@ -47,6 +51,8 @@ if (args[0] === 'inspect') {
   process.exit(2);
 }
 `)
+  const fakeRegctl = join(root, 'regctl')
+  await writeFile(fakeRegctl, await readFile(fakeSkopeo))
   const fakeSleep = join(root, 'sleep')
   await writeFile(fakeSleep, '#!/bin/sh\nprintf \'["sleep","%s"]\\n\' "$1" >> "$SYNC_TEST_LOG"\n')
   const fakeTimeout = join(root, 'timeout')
@@ -59,7 +65,7 @@ if [ "\${SYNC_TEST_FAST_TIMEOUT:-}" = true ]; then
 fi
 exec /usr/bin/timeout "$@"
 `)
-  await Promise.all([fakeSkopeo, fakeSleep, fakeTimeout].map(path => chmod(path, 0o755)))
+  await Promise.all([fakeSkopeo, fakeRegctl, fakeSleep, fakeTimeout].map(path => chmod(path, 0o755)))
   const env = {
     ...process.env,
     PATH: `${root}:${process.env.PATH}`,
@@ -93,16 +99,18 @@ describe('GHCR 到腾讯云镜像同步', () => {
     expect((await f.run(image)).code).toBe(0)
     const calls = await f.commands()
     const suffix = image === 'runtime' ? '' : '-ops'
-    expect(calls).toHaveLength(5)
+    expect(calls).toHaveLength(6)
     expect(calls[0]).toEqual(['skopeo', 'inspect', '--raw', `docker://ghcr.io/sdutvinci/sdutvinci_web${suffix}:${commit}`])
     const cache = calls[1]!.at(-1)!
     expect(cache).toMatch(/^oci:.*\/image:release$/)
     expect(calls[1]).toEqual(['skopeo', 'copy', '--all', '--preserve-digests', '--retry-times', '0',
       `docker://ghcr.io/sdutvinci/sdutvinci_web${suffix}@${digest}`, cache])
     expect(calls[2]).toEqual(['skopeo', 'inspect', '--raw', cache])
-    expect(calls[3]).toEqual(['skopeo', 'copy', '--all', '--preserve-digests', '--retry-times', '0', '--image-parallel-copies', '2',
-      cache, `docker://ccr.ccs.tencentyun.com/sdutvinci/sdutvinci_web${suffix}:${commit}`])
-    expect(calls[4]).toEqual(['skopeo', 'inspect', '--raw', `docker://ccr.ccs.tencentyun.com/sdutvinci/sdutvinci_web${suffix}:${commit}`])
+    expect(calls[3]).toEqual(['regctl', 'registry', 'set', 'ccr.ccs.tencentyun.com', '--skip-check',
+      '--blob-max', '8388608', '--blob-chunk', '8388608', '--req-concurrent', '2'])
+    expect(calls[4]).toEqual(['regctl', 'image', 'copy', '--force-recursive', '--verbosity', 'info',
+      cache.replace(/^oci:/, 'ocidir://'), `ccr.ccs.tencentyun.com/sdutvinci/sdutvinci_web${suffix}:${commit}`])
+    expect(calls[5]).toEqual(['skopeo', 'inspect', '--raw', `docker://ccr.ccs.tencentyun.com/sdutvinci/sdutvinci_web${suffix}:${commit}`])
   })
 
   it('临时网络错误最多尝试三次，并保持第一次解析的源摘要', async () => {
@@ -110,7 +118,7 @@ describe('GHCR 到腾讯云镜像同步', () => {
     expect((await f.run()).code).toBe(0)
     const calls = await f.commands()
     expect(calls.filter(call => call[1] === 'copy' && call.at(-1)?.startsWith('oci:'))).toHaveLength(1)
-    expect(calls.filter(call => call[1] === 'copy' && call.at(-1)?.startsWith('docker:'))).toHaveLength(3)
+    expect(calls.filter(isUpload)).toHaveLength(3)
     expect(calls.filter(call => call[1] === 'inspect' && call.at(-1)?.includes('ghcr.io'))).toHaveLength(1)
     expect(calls.filter(call => call[0] === 'sleep')).toEqual([['sleep', '30'], ['sleep', '60']])
     const timeouts = (await readFile(f.env.SYNC_TEST_TIMEOUT_LOG, 'utf8')).trim().split('\n')
@@ -123,7 +131,7 @@ describe('GHCR 到腾讯云镜像同步', () => {
     const result = await f.run()
     expect(result.code).toBe(1)
     expect(result.stderr).toContain('已尝试 3 次')
-    expect((await f.commands()).filter(call => call[1] === 'copy' && call.at(-1)?.startsWith('docker:'))).toHaveLength(3)
+    expect((await f.commands()).filter(isUpload)).toHaveLength(3)
   })
 
   it.each(['unauthorized: authentication required', 'denied: requested access is denied', 'manifest unknown', 'invalid reference format'])(
@@ -131,7 +139,7 @@ describe('GHCR 到腾讯云镜像同步', () => {
       const f = await fixture({ SYNC_TEST_FAILURES: '10', SYNC_TEST_ERROR: message })
       expect((await f.run()).code).toBe(1)
       const calls = await f.commands()
-      expect(calls.filter(call => call[1] === 'copy' && call.at(-1)?.startsWith('docker:'))).toHaveLength(1)
+      expect(calls.filter(isUpload)).toHaveLength(1)
       expect(calls.filter(call => call[0] === 'sleep')).toHaveLength(0)
     }
   )
@@ -147,7 +155,7 @@ describe('GHCR 到腾讯云镜像同步', () => {
     const result = await f.run()
     expect(result.code).toBe(1)
     expect(result.stdout).toContain('destination digest mismatch')
-    expect((await f.commands()).filter(call => call[1] === 'copy' && call.at(-1)?.startsWith('docker:'))).toHaveLength(1)
+    expect((await f.commands()).filter(isUpload)).toHaveLength(1)
   })
 
   it('手工补传可以解析已发布的 SHA 标签并锁定摘要', async () => {
@@ -163,7 +171,7 @@ describe('GHCR 到腾讯云镜像同步', () => {
     expect(result.stderr).toContain('退出码 124')
     expect(result.stderr).toContain('阶段：本地缓存上传腾讯云')
     const calls = await f.commands()
-    expect(calls.filter(call => call[1] === 'copy' && call.at(-1)?.startsWith('docker:'))).toHaveLength(3)
+    expect(calls.filter(isUpload)).toHaveLength(3)
     expect(calls.filter(call => call[1] === 'copy' && call.at(-1)?.startsWith('oci:'))).toHaveLength(1)
   })
 
@@ -172,7 +180,7 @@ describe('GHCR 到腾讯云镜像同步', () => {
     const result = await f.run()
     expect(result.code).toBe(0)
     expect(result.stderr).toContain('阶段：GHCR 下载到本地')
-    const copies = (await f.commands()).filter(call => call[1] === 'copy')
+    const copies = (await f.commands()).filter(call => call[1] === 'copy' || isUpload(call))
     expect(copies.map(call => call.at(-1)?.startsWith('oci:'))).toEqual([true, true, false])
   })
 
@@ -181,7 +189,7 @@ describe('GHCR 到腾讯云镜像同步', () => {
     const result = await f.run()
     expect(result.code).toBe(1)
     expect(result.stdout).toContain('cache digest mismatch')
-    expect((await f.commands()).filter(call => call[1] === 'copy' && call.at(-1)?.startsWith('docker:'))).toHaveLength(0)
+    expect((await f.commands()).filter(isUpload)).toHaveLength(0)
   })
 
   it('下载挂起时明确报告下载阶段，且不会开始上传', async () => {
@@ -189,7 +197,7 @@ describe('GHCR 到腾讯云镜像同步', () => {
     const result = await f.run()
     expect(result.code).toBe(1)
     expect(result.stderr).toContain('阶段：GHCR 下载到本地')
-    expect((await f.commands()).filter(call => call[1] === 'copy' && call.at(-1)?.startsWith('docker:'))).toHaveLength(0)
+    expect((await f.commands()).filter(isUpload)).toHaveLength(0)
   })
 
   it('取消任务会停止传输，不开始下一次尝试', async () => {
@@ -201,7 +209,7 @@ describe('GHCR 到腾讯云镜像同步', () => {
     })
     try {
       await expect.poll(async () => {
-        try { return (await f.commands()).some(call => call[1] === 'copy' && call.at(-1)?.startsWith('docker:')) } catch { return false }
+        try { return (await f.commands()).some(isUpload) } catch { return false }
       }).toBe(true)
       process.kill(-child.pid!, 'SIGTERM')
       expect(await finished).toBe(143)
