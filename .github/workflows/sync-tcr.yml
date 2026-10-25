@@ -32,6 +32,10 @@ on:
         description: Export verified OCI image for a temporary alternate transfer path
         type: boolean
         default: false
+      probe_network:
+        description: Compare temporary blob uploads on free standard runners
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -45,6 +49,7 @@ concurrency:
 
 jobs:
   sync:
+    if: ${{ inputs.probe_network != true }}
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 200
     steps:
@@ -144,3 +149,77 @@ jobs:
           compression-level: 0
           retention-days: 1
           if-no-files-found: error
+
+  probe:
+    if: ${{ inputs.probe_network == true }}
+    timeout-minutes: 8
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            binary: regctl-linux-amd64
+            checksum: 3737fbbdd791e04e7a831640b681f3397a376498e80e2ad9b1b2d27296f239bc
+          - runner: ubuntu-24.04-arm
+            binary: regctl-linux-arm64
+            checksum: 9f349bab5c407ac04f3dabf99c7c7a6b0f9e9723c23f2775380e804d02c6dbb9
+          - runner: macos-15
+            binary: regctl-darwin-arm64
+            checksum: 8ac077a1eeb834d3053714e86ccbd838d0da46567df8cd7c2695d1a19135bf60
+    runs-on: ${{ matrix.runner }}
+    env:
+      GODEBUG: http2client=0
+    steps:
+      - name: Install checksum-verified registry client
+        env:
+          BINARY: ${{ matrix.binary }}
+          CHECKSUM: ${{ matrix.checksum }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/probe-tools"
+          curl --fail --location --silent --show-error --connect-timeout 10 --max-time 60 \
+            "https://github.com/regclient/regclient/releases/download/v0.11.7/$BINARY" \
+            --output "$RUNNER_TEMP/probe-tools/regctl"
+          python3 - <<'PY'
+          import os, pathlib, hashlib
+          data=(pathlib.Path(os.environ['RUNNER_TEMP'])/'probe-tools/regctl').read_bytes()
+          assert hashlib.sha256(data).hexdigest()==os.environ['CHECKSUM']
+          PY
+          chmod 755 "$RUNNER_TEMP/probe-tools/regctl"
+          echo "$RUNNER_TEMP/probe-tools" >> "$GITHUB_PATH"
+          echo "REGCTL_CONFIG=$RUNNER_TEMP/probe-regctl.json" >> "$GITHUB_ENV"
+
+      - name: Log in only to the existing target registry
+        env:
+          TCR_USER: ${{ secrets.TCR_USERNAME }}
+          TCR_PASS: ${{ secrets.TCR_PASSWORD }}
+        run: printf '%s' "$TCR_PASS" | regctl registry login ccr.ccs.tencentyun.com --user "$TCR_USER" --pass-stdin
+
+      - name: Time a disposable 32 MiB blob and remove it
+        run: |
+          python3 - <<'PY'
+          import hashlib, os, pathlib, subprocess, time
+          repo='ccr.ccs.tencentyun.com/sdutvinci/sdutvinci_web'
+          payload=pathlib.Path(os.environ['RUNNER_TEMP'])/'probe.bin'
+          data=os.urandom(32*1024*1024);payload.write_bytes(data)
+          digest='sha256:'+hashlib.sha256(data).hexdigest()
+          subprocess.run(['regctl','registry','set','ccr.ccs.tencentyun.com','--skip-check','--blob-max','8388608','--blob-chunk','8388608','--req-concurrent','2'],check=True)
+          started=time.monotonic()
+          try:
+              with payload.open('rb') as source:
+                  subprocess.run(['regctl','blob','put',repo,'--digest',digest],stdin=source,check=True,timeout=180)
+              elapsed=time.monotonic()-started
+              size=subprocess.check_output(['regctl','blob','head',repo,digest,'--format','{{.GetDescriptor.Size}}'],text=True,timeout=15).strip()
+              assert int(size)==len(data)
+              print(f'PROBE SUCCESS: 32 MiB in {elapsed:.2f}s, {32/elapsed:.2f} MiB/s',flush=True)
+          except subprocess.TimeoutExpired:
+              print('PROBE TIMEOUT: 32 MiB upload exceeded 180 seconds',flush=True)
+              raise
+          finally:
+              result=subprocess.run(['regctl','blob','delete',repo,digest],capture_output=True,text=True,timeout=20)
+              if result.returncode and '404' not in result.stderr:raise RuntimeError('Probe cleanup failed')
+              payload.unlink(missing_ok=True)
+          PY
+
+      - name: Remove task-local credentials
+        if: always()
+        run: rm -f -- "${REGCTL_CONFIG:-$RUNNER_TEMP/probe-regctl.json}"
