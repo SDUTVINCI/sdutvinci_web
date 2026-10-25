@@ -28,6 +28,10 @@ on:
         type: choice
         options: [runtime, operations]
         required: true
+      stage_only:
+        description: Export verified OCI image for a temporary alternate transfer path
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -79,6 +83,7 @@ jobs:
           echo "$RUNNER_TEMP/vinci-registry-tools" >> "$GITHUB_PATH"
 
       - name: Verify chunked uploads and reconnects with an isolated local registry
+        if: ${{ inputs.stage_only != true }}
         timeout-minutes: 3
         run: python3 tests/chunked-registry-upload.integration.py
 
@@ -91,6 +96,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Log in to Tencent Cloud TCR
+        if: ${{ inputs.stage_only != true }}
         timeout-minutes: 2
         uses: docker/login-action@v4
         with:
@@ -99,6 +105,7 @@ jobs:
           password: ${{ secrets.TCR_PASSWORD }}
 
       - name: Stage GHCR image locally, upload to TCR, and verify (60 minutes per attempt)
+        if: ${{ inputs.stage_only != true }}
         # Allow all three hours plus retry backoff and process cleanup.
         timeout-minutes: 185
         env:
@@ -106,3 +113,34 @@ jobs:
           SYNC_IMAGE: ${{ inputs.image }}
           SYNC_DIGEST: ${{ inputs.digest }}
         run: bash scripts/sync-tcr-image.sh "$SYNC_COMMIT" "$SYNC_IMAGE" "$SYNC_DIGEST"
+
+      - name: Export a verified image without registry credentials
+        if: ${{ inputs.stage_only == true }}
+        timeout-minutes: 10
+        env:
+          SYNC_COMMIT: ${{ inputs.commit }}
+          SYNC_IMAGE: ${{ inputs.image }}
+        run: |
+          set -euo pipefail
+          suffix=''
+          if [ "$SYNC_IMAGE" = operations ]; then suffix='-ops'; fi
+          source="ghcr.io/${GITHUB_REPOSITORY,,}${suffix}"
+          mkdir -p "$RUNNER_TEMP/mirror-stage"
+          skopeo inspect --raw "docker://${source}:${SYNC_COMMIT}" > "$RUNNER_TEMP/source.manifest"
+          digest="sha256:$(sha256sum "$RUNNER_TEMP/source.manifest" | cut -d ' ' -f 1)"
+          skopeo copy --all --preserve-digests "docker://${source}@${digest}" "oci:$RUNNER_TEMP/mirror-stage/image:release"
+          skopeo inspect --raw "oci:$RUNNER_TEMP/mirror-stage/image:release" > "$RUNNER_TEMP/cache.manifest"
+          [ "sha256:$(sha256sum "$RUNNER_TEMP/cache.manifest" | cut -d ' ' -f 1)" = "$digest" ]
+          printf '%s\n' "$digest" > "$RUNNER_TEMP/mirror-stage/source.digest"
+          tar -C "$RUNNER_TEMP/mirror-stage" -cf "$RUNNER_TEMP/mirror-oci.tar" image source.digest
+          printf 'Verified OCI export: %s\n' "$digest"
+
+      - name: Keep temporary image export for one day
+        if: ${{ inputs.stage_only == true }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: oci-${{ inputs.image }}-${{ inputs.commit }}
+          path: ${{ runner.temp }}/mirror-oci.tar
+          compression-level: 0
+          retention-days: 1
+          if-no-files-found: error
