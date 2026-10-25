@@ -60,10 +60,12 @@ jobs:
           ./tests/auto-deploy.integration.sh
           ./tests/install-auto-deploy.integration.sh
           bash -n scripts/sync-tcr-image.sh
-          npx vitest run tests/sync-tcr-image.test.ts
 
       - name: Prepare Nuxt generated types
         run: npx nuxt prepare
+
+      - name: Verify registry sync retries and cancellation
+        run: npx vitest run tests/sync-tcr-image.test.ts
 
       - name: Prepare isolated historical content snapshot
         env:
