@@ -163,6 +163,7 @@ const runBatch = async (action: 'approve' | 'publish') => {
 }
 const reviewMember = async (id: string, action: 'approve' | 'reject') => {
   if (memberReviewBusy.value) return
+  if (action === 'reject' && !note.value.trim()) { errorMessage.value = '拒绝前请填写审核原因'; return }
   if (!await confirmAction(action === 'approve' ? '审核通过后将立即创建成员档案并上线，确定吗？' : '拒绝后将删除临时头像，确定吗？')) return
   applicationReviewingId.value = id
   try {
@@ -179,6 +180,7 @@ const reviewMember = async (id: string, action: 'approve' | 'reject') => {
 
 const reviewProposal = async (proposal: MemberProposalReview, action: 'approve' | 'reject') => {
   if (memberReviewBusy.value) return
+  if (action === 'reject' && !note.value.trim()) { errorMessage.value = '拒绝前请填写审核原因'; return }
   const label = proposal.action === 'delete' ? '删除成员档案' : '修改成员资料'
   if (!await confirmAction(action === 'approve'
     ? `确定通过 ${proposal.member.name} 的“${label}”提案吗？系统会检查并合并当前版本。`
@@ -207,6 +209,7 @@ const reviewRegistration = async (
   action: 'approve' | 'reject'
 ) => {
   if (memberReviewBusy.value) return
+  if (action === 'reject' && !registrationNote.value.trim()) { registrationError.value = '拒绝前请填写审核原因'; return }
   const prompt = action === 'approve'
     ? `确定通过 ${application.member.name} 的账号 @${application.account} 注册申请吗？通过后将根据档案身份创建成员或学员账号。`
     : `确定拒绝 ${application.member.name} 的注册申请吗？申请中的密码哈希会被清除。`
@@ -245,9 +248,10 @@ const reviewRegistration = async (
         <h1>审核中心</h1>
         <p>统一处理文章草稿、成员信息与账号注册申请。</p>
       </div>
-      <button class="cms-button cms-button-quiet" type="button" @click="refreshAll()">
-        刷新
-      </button>
+      <div class="cms-review-history-entry">
+        <NuxtLink class="cms-button cms-button-quiet" to="/cms/reviews/history">审核历史</NuxtLink>
+        <button class="cms-button cms-button-quiet" type="button" @click="refreshAll()">刷新</button>
+      </div>
     </header>
 
     <p v-if="message" class="cms-alert">{{ message }}</p>
@@ -362,7 +366,7 @@ const reviewRegistration = async (
           </div>
         </header>
         <div v-if="data?.applications.length || data?.proposals.length" class="cms-review-member-body">
-          <label class="cms-form cms-review-note"><span>本次审核备注</span><textarea v-model="note" rows="3" maxlength="1000" /></label>
+          <label class="cms-form cms-review-note"><span>本次审核备注</span><textarea v-model="note" rows="3" maxlength="1000" placeholder="通过时可选，拒绝时请填写原因" /></label>
           <CmsMemberBatchToolbar title="新成员申请" :total="requestItems('application').length" :selected="requestSelections.application.length" :busy="memberReviewBusy" @toggle="toggleRequestSelection('application')" @approve="reviewRequestsBatch('application', 'approve')" @reject="reviewRequestsBatch('application', 'reject')" />
           <div class="cms-review-cards">
             <article v-for="item in data.applications" :key="item.id" class="cms-panel cms-member-review-card">
@@ -446,7 +450,7 @@ const reviewRegistration = async (
         <div v-if="registrationApplications.length && !registrationLoadError" class="cms-review-member-body">
           <label class="cms-form cms-registration-review-note">
             <span>本次审核备注</span>
-            <textarea v-model="registrationNote" rows="2" maxlength="1000" placeholder="可选，不会显示密码等敏感信息" />
+            <textarea v-model="registrationNote" rows="2" maxlength="1000" placeholder="通过时可选，拒绝时请填写原因" />
           </label>
           <CmsMemberBatchToolbar title="账号注册申请" :total="registrationApplications.length" :selected="requestSelections.registration.length" :busy="memberReviewBusy" @toggle="toggleRequestSelection('registration')" @approve="reviewRequestsBatch('registration', 'approve')" @reject="reviewRequestsBatch('registration', 'reject')" />
           <div class="cms-registration-review-list">

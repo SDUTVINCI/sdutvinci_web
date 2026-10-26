@@ -1,3 +1,4 @@
+import { recordReviewHistory, withReviewHistoryAttempt } from './cms-review-history'
 import { assertNotOwnMemberWrite, synchronizeMemberAccountRole } from './member-account-role'
 import { randomUUID } from 'node:crypto'
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm'
@@ -867,7 +868,7 @@ export const listPendingMemberProposalsForReview = async () => {
   }))
 }
 
-export const rejectMemberProposal = async (proposalId: string, note: string, actorUserId: string) => {
+const rejectMemberProposalInternal = async (proposalId: string, note: string, actorUserId: string) => {
   await getDatabase().transaction(async (tx) => {
     const [proposal] = await tx.select().from(memberProposals)
       .where(eq(memberProposals.id, proposalId)).limit(1).for('update')
@@ -877,6 +878,8 @@ export const rejectMemberProposal = async (proposalId: string, note: string, act
       status: 'rejected', reviewNote: note, appliedByUserId: actorUserId, resolvedAt: new Date()
     }).where(eq(memberProposals.id, proposalId))
     await tx.update(memberProfileUploads).set({ proposalId: null, expiresAt: new Date() }).where(eq(memberProfileUploads.proposalId, proposalId))
+    await recordReviewHistory(tx, { kind: 'member_profile', targetId: proposalId, action: 'rejected',
+      actorUserId, sourceKey: `member-proposal:${proposalId}:reject`, note })
     await tx.insert(auditLogs).values({
       actorUserId, action: 'member.proposal.reject', targetType: 'member_proposal', targetId: proposalId,
       metadata: { memberId: proposal.memberId, note }
@@ -885,7 +888,7 @@ export const rejectMemberProposal = async (proposalId: string, note: string, act
   return getMemberProposal(proposalId)
 }
 
-export const applyMemberProposal = async (
+const applyMemberProposalInternal = async (
   proposalId: string,
   expectedVersion: number,
   confirmation: string,
@@ -957,7 +960,16 @@ export const applyMemberProposal = async (
       metadata: { memberId: current.id, proposalAction: proposal.action,
         previousRevisionId: current.currentRevisionId, revisionId: result.revisionId, exportJobId: result.jobId }
     })
+    await recordReviewHistory(tx, { kind: 'member_profile', targetId: proposal.id, action: 'approved',
+      actorUserId, sourceKey: `member-proposal:${proposal.id}:approve`, note: reviewNote,
+      snapshot: { operation: proposal.action === 'delete' ? '删除成员档案' : '修改 / 恢复成员资料', before: profileRecord(before), after: proposal.action === 'delete' ? {} : profileRecord(profile) } })
     memberId = current.id
   })
   return { proposal: await getMemberProposal(proposalId), member: memberId ? await getCmsMember(memberId) : null }
 }
+
+export const rejectMemberProposal = (...args: Parameters<typeof rejectMemberProposalInternal>) =>
+  withReviewHistoryAttempt('member_profile', args[0], args[2], () => rejectMemberProposalInternal(...args), 'reject')
+
+export const applyMemberProposal = (...args: Parameters<typeof applyMemberProposalInternal>) =>
+  withReviewHistoryAttempt('member_profile', args[0], args[3], () => applyMemberProposalInternal(...args), 'approve')

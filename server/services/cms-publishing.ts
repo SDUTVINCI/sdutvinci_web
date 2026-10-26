@@ -1,3 +1,4 @@
+import { withReviewHistoryAttempt } from './cms-review-history'
 import type { CmsPublishResult } from '../../shared/types/cms-publishing'
 import { getContentPublishMode } from '../utils/cms-v2-flags'
 import { publishCmsDraftDatabase } from './cms-publishing-database'
@@ -13,7 +14,7 @@ export {
   upsertPublishedArticle
 } from './cms-publishing-legacy'
 
-export const publishCmsDraft = async (
+const publishCmsDraftInternal = async (
   draftId: string,
   operatorUserId: string,
   input: { version: number, relativePath?: string }
@@ -23,3 +24,6 @@ export const publishCmsDraft = async (
   }
   return publishCmsDraftGitFirst(draftId, operatorUserId, input)
 }
+
+export const publishCmsDraft = (...args: Parameters<typeof publishCmsDraftInternal>) =>
+  withReviewHistoryAttempt('article', args[0], args[1], () => publishCmsDraftInternal(...args), 'publish')

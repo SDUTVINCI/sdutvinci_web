@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { rejectMemberProposal } from '../../../../services/cms-members'
 import { requireCmsCsrf, requireCmsRequestAuth } from '../../../../utils/cms-http'
 
-const schema = z.object({ note: z.string().trim().max(1000).default('') }).strict()
+const schema = z.object({ note: z.string().trim().min(1, '拒绝前请填写审核原因').max(1000) }).strict()
 
 export default defineEventHandler(async (event) => {
   const auth = await requireCmsRequestAuth(event, 'admin')

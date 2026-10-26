@@ -1,3 +1,4 @@
+import { captureReviewHistorySubject, recordReviewHistory } from './cms-review-history'
 import { createHash, randomUUID } from 'node:crypto'
 import { and, desc, eq, isNull, ne, or } from 'drizzle-orm'
 import type { CmsArticleCollection } from '../../shared/types/cms-articles'
@@ -69,6 +70,8 @@ export const publishCmsDraftDatabase = async (
       .orderBy(desc(reviewEvents.createdAt))
       .limit(1)
     if (!review?.actorUserId) throw new CmsPublishStateError()
+
+    const historySubject = await captureReviewHistorySubject(tx, 'article', draftId)
 
     const authorRows = await tx
       .select({ memberKey: members.memberKey })
@@ -175,13 +178,15 @@ export const publishCmsDraftDatabase = async (
         exportJobId,
         metadata: { authority: 'database', source: 'content_pr_import', draftId: draft.id }
       })
-      await tx.insert(auditLogs).values({
+      const [historyAudit] = await tx.insert(auditLogs).values({
         actorUserId: operatorUserId,
         action: 'article.delete_proposal.publish',
         targetType: 'article',
         targetId: existingArticle.id,
         metadata: { draftId: draft.id, revisionId: revision.id, reviewerUserId: review.actorUserId, exportJobId }
-      })
+      }).returning({ id: auditLogs.id })
+      await recordReviewHistory(tx, { kind: 'article', targetId: draftId, action: 'published',
+        actorUserId: operatorUserId, sourceKey: `article-publication:${historyAudit!.id}`, snapshot: historySubject?.snapshot })
       return {
         articleId: existingArticle.id,
         collection: existingArticle.collection as CmsArticleCollection,
@@ -371,7 +376,7 @@ export const publishCmsDraftDatabase = async (
         }
       })
       .where(eq(publishRecords.id, operationId))
-    await tx.insert(auditLogs).values({
+    const [historyAudit] = await tx.insert(auditLogs).values({
       actorUserId: operatorUserId,
       action: 'article.publish',
       targetType: 'article',
@@ -387,7 +392,9 @@ export const publishCmsDraftDatabase = async (
         revisionId: revision.id,
         exportJobId
       }
-    })
+    }).returning({ id: auditLogs.id })
+    await recordReviewHistory(tx, { kind: 'article', targetId: draftId, action: 'published',
+      actorUserId: operatorUserId, sourceKey: `article-publication:${historyAudit!.id}`, snapshot: historySubject?.snapshot })
 
     return {
       articleId,

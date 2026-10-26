@@ -1,3 +1,4 @@
+import { recordReviewHistory, withReviewHistoryAttempt } from './cms-review-history'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { DeleteObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { and, asc, eq, isNull, like, lt } from 'drizzle-orm'
@@ -173,7 +174,7 @@ const memberKeyFor = async (name: string, tx: CmsTransaction) => {
   throw new Error('MEMBER_KEY_EXHAUSTED')
 }
 
-export const reviewMemberApplication = async (id: string, action: 'approve' | 'reject', note: string, actorUserId: string) => {
+const reviewMemberApplicationInternal = async (id: string, action: 'approve' | 'reject', note: string, actorUserId: string) => {
   let promotedAvatar: Awaited<ReturnType<typeof promoteMemberApplicationAvatar>> | null = null
   let temporaryAvatarKey: string | null = null
   try {
@@ -189,6 +190,8 @@ export const reviewMemberApplication = async (id: string, action: 'approve' | 'r
       if (application.status !== 'submitted') throw new Error('MEMBER_APPLICATION_STATE_INVALID')
       if (action === 'reject') {
         await tx.update(memberApplications).set({ status: 'rejected', reviewNote: note, reviewedAt: new Date(), reviewedByUserId: actorUserId, updatedAt: new Date() }).where(eq(memberApplications.id, id))
+        await recordReviewHistory(tx, { kind: 'member_application', targetId: application.id, action: 'rejected',
+          actorUserId, sourceKey: `member-application:${application.id}:reject`, note })
         temporaryAvatarKey = application.avatarObjectKey
         return { status: 'rejected' }
       }
@@ -226,6 +229,8 @@ export const reviewMemberApplication = async (id: string, action: 'approve' | 'r
         reviewedByUserId: actorUserId,
         updatedAt: new Date()
       }).where(eq(memberApplications.id, id))
+      await recordReviewHistory(tx, { kind: 'member_application', targetId: application.id, action: 'approved',
+        actorUserId, sourceKey: `member-application:${application.id}:approve`, note })
       temporaryAvatarKey = promotedAvatar ? application.avatarObjectKey : null
       return { status: 'approved', member }
     })
@@ -247,3 +252,6 @@ export const reviewMemberApplication = async (id: string, action: 'approve' | 'r
     throw error
   }
 }
+
+export const reviewMemberApplication = (...args: Parameters<typeof reviewMemberApplicationInternal>) =>
+  withReviewHistoryAttempt('member_application', args[0], args[3], () => reviewMemberApplicationInternal(...args), args[1])

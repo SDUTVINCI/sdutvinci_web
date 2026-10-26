@@ -10,6 +10,7 @@ const schema = z.object({
     .min(1).max(CMS_MEMBER_REVIEW_MAX_ITEMS).refine(items => new Set(items.map(item => item.id)).size === items.length, '申请不能重复'),
   note: z.string().trim().max(1000).default(''), confirm: z.literal(CMS_MEMBER_REVIEW_CONFIRMATION)
 }).strict().superRefine((input, ctx) => {
+  if (input.action === 'reject' && !input.note) ctx.addIssue({ code: 'custom', message: '拒绝前请填写审核原因', path: ['note'] })
   if (input.kind === 'proposal' && input.action === 'approve' && input.items.some(item => !item.version)) ctx.addIssue({ code: 'custom', message: '缺少成员版本', path: ['items'] })
 })
 

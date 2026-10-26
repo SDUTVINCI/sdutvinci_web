@@ -6638,3 +6638,5 @@
 
 .cms-review-note textarea:focus,
 .cms-registration-review-note textarea:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 0 3px var(--cyan-soft); }
+
+.cms-review-history-entry { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }

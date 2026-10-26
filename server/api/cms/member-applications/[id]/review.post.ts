@@ -4,7 +4,7 @@ import { reviewMemberApplication } from '../../../../services/member-application
 import { memberApplicationReviewError } from '../../../../utils/member-application-review-error'
 import { requireCmsCsrf, requireCmsRequestAuth } from '../../../../utils/cms-http'
 
-const schema = z.object({ action: z.enum(['approve', 'reject']), note: z.string().trim().max(1000).default('') }).strict()
+const schema = z.object({ action: z.enum(['approve', 'reject']), note: z.string().trim().max(1000).default('') }).strict().refine(input => input.action !== 'reject' || Boolean(input.note.trim()), { message: '拒绝前请填写审核原因', path: ['note'] })
 export default defineEventHandler(async (event) => {
   const auth = await requireCmsRequestAuth(event, 'admin'); requireCmsCsrf(event, auth)
   const input = await readValidatedBody(event, schema.parse)

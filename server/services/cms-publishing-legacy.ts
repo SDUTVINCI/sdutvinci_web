@@ -1,3 +1,4 @@
+import { captureReviewHistorySubject, recordReviewHistory } from './cms-review-history'
 import { createHash } from 'node:crypto'
 import { access } from 'node:fs/promises'
 import { and, desc, eq, isNull } from 'drizzle-orm'
@@ -365,6 +366,7 @@ export const publishCmsDraftGitFirst = async (
       const contentHash = sha256(built.source)
 
       const publishedResult = await db.transaction(async (tx) => {
+        const historySubject = await captureReviewHistorySubject(tx, 'article', draftId)
         const resolvedArticleId = await upsertPublishedArticle(tx, {
           articleId: draft.articleId,
           collection: draft.collection as CmsArticleCollection,
@@ -413,7 +415,7 @@ export const publishCmsDraftGitFirst = async (
           commitHash,
           completedAt: now
         }).where(eq(publishRecords.id, attempt!.id))
-        await tx.insert(auditLogs).values({
+        const [historyAudit] = await tx.insert(auditLogs).values({
           actorUserId: operatorUserId,
           action: 'article.publish',
           targetType: 'article',
@@ -425,7 +427,9 @@ export const publishCmsDraftGitFirst = async (
             commitHash,
             revisionId: revision?.id || null
           }
-        })
+        }).returning({ id: auditLogs.id })
+        await recordReviewHistory(tx, { kind: 'article', targetId: draftId, action: 'published',
+          actorUserId: operatorUserId, sourceKey: `article-publication:${historyAudit!.id}`, snapshot: historySubject?.snapshot })
         return {
           articleId: resolvedArticleId,
           revisionId: revision?.id || null,

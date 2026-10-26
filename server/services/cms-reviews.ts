@@ -1,3 +1,4 @@
+import { recordReviewHistory, withReviewHistoryAttempt } from './cms-review-history'
 import { diffLines } from 'diff'
 import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
 import type {
@@ -124,7 +125,7 @@ const insertReviewEvent = async (
     metadata?: Record<string, unknown>
   }
 ) => {
-  await tx.insert(reviewEvents).values({
+  const [event] = await tx.insert(reviewEvents).values({
     draftId: input.draftId,
     actorUserId: input.actorUserId,
     action: input.action,
@@ -132,7 +133,11 @@ const insertReviewEvent = async (
     toStatus: input.toStatus,
     reason: input.reason,
     metadata: input.metadata || {}
-  })
+  }).returning({ id: reviewEvents.id })
+  if (input.action === 'approved' || input.action === 'rejected') {
+    await recordReviewHistory(tx, { kind: 'article', targetId: input.draftId, action: input.action,
+      actorUserId: input.actorUserId, sourceKey: `article-review:${event!.id}`, note: input.reason })
+  }
 }
 
 const loadOwner = async (ownerUserId: string) => {
@@ -470,7 +475,7 @@ export const resyncCmsDraftBase = async (
   return getCmsDraftForReview(updated!.id)
 }
 
-export const rejectCmsDraftReview = async (
+const rejectCmsDraftReviewInternal = async (
   draftId: string,
   adminUserId: string,
   input: { version: number, reason: string }
@@ -503,7 +508,7 @@ export const rejectCmsDraftReview = async (
   return getCmsDraftForReview(updated!.id)
 }
 
-export const approveCmsDraftReview = async (
+const approveCmsDraftReviewInternal = async (
   draftId: string,
   adminUserId: string,
   version: number
@@ -543,3 +548,9 @@ export const approveCmsDraftReview = async (
 }
 
 export const getCmsDraftComparison = comparisonForDraft
+
+export const approveCmsDraftReview = (...args: Parameters<typeof approveCmsDraftReviewInternal>) =>
+  withReviewHistoryAttempt('article', args[0], args[1], () => approveCmsDraftReviewInternal(...args), 'approve')
+
+export const rejectCmsDraftReview = (...args: Parameters<typeof rejectCmsDraftReviewInternal>) =>
+  withReviewHistoryAttempt('article', args[0], args[1], () => rejectCmsDraftReviewInternal(...args), 'reject')

@@ -999,6 +999,30 @@ export const auditLogs = pgTable('audit_logs', {
   index('audit_logs_created_at_index').on(table.createdAt)
 ])
 
+export const cmsReviewHistory = pgTable('cms_review_history', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  sourceKey: text('source_key').notNull(),
+  kind: varchar('kind', { length: 32 }).notNull(),
+  targetId: uuid('target_id').notNull(),
+  title: text('title').notNull(),
+  action: varchar('action', { length: 16 }).notNull(),
+  actorUserId: uuid('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
+  actorLabel: text('actor_label').notNull(),
+  submitterLabel: text('submitter_label').notNull(),
+  note: text('note'),
+  snapshot: jsonb('snapshot').$type<Record<string, unknown>>().default({}).notNull(),
+  batchId: uuid('batch_id'),
+  legacy: boolean('legacy').default(false).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
+}, table => [
+  uniqueIndex('cms_review_history_source_unique').on(table.sourceKey),
+  index('cms_review_history_time_index').on(table.createdAt, table.id),
+  index('cms_review_history_kind_time_index').on(table.kind, table.createdAt),
+  index('cms_review_history_actor_time_index').on(table.actorUserId, table.createdAt),
+  check('cms_review_history_kind_check', sql`${table.kind} in ('article', 'member_application', 'member_profile', 'account_registration')`),
+  check('cms_review_history_action_check', sql`${table.action} in ('approved', 'rejected', 'published', 'failed')`)
+])
+
 export const organizationConfigs = pgTable('organization_configs', {
   id: varchar('id', { length: 32 }).primaryKey(),
   draftStructure: jsonb('draft_structure').$type<OrganizationStructure>().notNull(),

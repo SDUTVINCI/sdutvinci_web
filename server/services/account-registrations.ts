@@ -1,3 +1,4 @@
+import { recordReviewHistory, withReviewHistoryAttempt } from './cms-review-history'
 import { and, asc, eq, isNull, sql } from 'drizzle-orm'
 import type {
   AccountRegistrationMemberOption,
@@ -193,7 +194,7 @@ export const listPendingAccountRegistrations = async (): Promise<CmsAccountRegis
   }))
 }
 
-export const reviewAccountRegistration = async (
+const reviewAccountRegistrationInternal = async (
   id: string,
   action: 'approve' | 'reject',
   note: string,
@@ -222,6 +223,8 @@ export const reviewAccountRegistration = async (
       targetId: id,
       metadata: { memberId: application.memberId, account: application.account }
     })
+    await recordReviewHistory(tx, { kind: 'account_registration', targetId: id, action: 'rejected',
+      actorUserId, sourceKey: `account-registration:${id}:reject`, note })
     return { id, status: 'rejected' as const }
   }
 
@@ -276,6 +279,8 @@ export const reviewAccountRegistration = async (
       roles: [member.isLearner ? 'reader' : 'member']
     }
   })
+  await recordReviewHistory(tx, { kind: 'account_registration', targetId: id, action: 'approved',
+    actorUserId, sourceKey: `account-registration:${id}:approve`, note })
   return { id, status: 'approved' as const, account, userId: user.id, role: member.isLearner ? 'reader' as const : 'member' as const }
 })
 
@@ -288,3 +293,6 @@ export const assertAccountNotReserved = async (tx: CmsTransaction, account: stri
     )).limit(1)
   if (reserved) throw new AccountRegistrationPendingError()
 }
+
+export const reviewAccountRegistration = (...args: Parameters<typeof reviewAccountRegistrationInternal>) =>
+  withReviewHistoryAttempt('account_registration', args[0], args[3], () => reviewAccountRegistrationInternal(...args), args[1])

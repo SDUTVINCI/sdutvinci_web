@@ -1,3 +1,4 @@
+import { withReviewHistoryBatch } from './cms-review-history'
 import type { CmsMemberReviewAction, CmsMemberReviewItem, CmsMemberReviewKind, CmsMemberReviewResult } from '../../shared/types/cms-member-review'
 import { CMS_MEMBER_REVIEW_MAX_ITEMS } from '../../shared/types/cms-member-review'
 import { applyMemberProposal, getMemberProposal, rejectMemberProposal, CmsMemberVersionConflictError, CmsMemberKeyConflictError } from './cms-members'
@@ -21,7 +22,7 @@ const failureMessage = (error: unknown) => {
   return error instanceof Error ? messages[error.message] || '审核失败，申请已保留，请查看单条详情后重试' : '审核失败，请重试'
 }
 
-export const batchReviewMemberRequests = async (
+const batchReviewMemberRequestsInternal = async (
   kind: CmsMemberReviewKind, action: CmsMemberReviewAction, items: CmsMemberReviewItem[], note: string, actorUserId: string
 ): Promise<CmsMemberReviewResult[]> => {
   if (!items.length || items.length > CMS_MEMBER_REVIEW_MAX_ITEMS || new Set(items.map(item => item.id)).size !== items.length) throw new Error('MEMBER_BATCH_ITEMS_INVALID')
@@ -45,3 +46,6 @@ export const batchReviewMemberRequests = async (
   }
   return results
 }
+
+export const batchReviewMemberRequests = (...args: Parameters<typeof batchReviewMemberRequestsInternal>) =>
+  withReviewHistoryBatch(() => batchReviewMemberRequestsInternal(...args))

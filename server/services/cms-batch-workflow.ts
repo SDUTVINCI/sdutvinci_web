@@ -1,3 +1,4 @@
+import { withReviewHistoryBatch } from './cms-review-history'
 import type {
   CmsBatchActionResult,
   CmsBatchDraftItem
@@ -82,7 +83,7 @@ export const runCmsBatchAction = async (
 export const batchSubmitCmsDraftsForReview = async (
   items: CmsBatchDraftItem[],
   userId: string
-) => runCmsBatchAction(items, async (item) => {
+) => withReviewHistoryBatch(() => runCmsBatchAction(items, async (item) => {
   const lock = await acquireCmsDraftEditLock(item.id, userId, false)
   if (!lock.acquired || !lock.lock.leaseId) {
     throw new Error('EDIT_LOCK_LOST')
@@ -97,20 +98,20 @@ export const batchSubmitCmsDraftsForReview = async (
     await releaseCmsDraftEditLock(item.id, userId, leaseId)
   }
   return '已提交审核'
-})
+}))
 
 export const batchApproveCmsDrafts = async (
   items: CmsBatchDraftItem[],
   adminUserId: string
-) => runCmsBatchAction(items, async (item) => {
+) => withReviewHistoryBatch(() => runCmsBatchAction(items, async (item) => {
   await approveCmsDraftReview(item.id, adminUserId, item.version)
   return '已审核通过'
-})
+}))
 
 export const batchPublishCmsDrafts = async (
   items: CmsBatchDraftItem[],
   adminUserId: string
-) => runCmsBatchAction(items, async (item) => {
+) => withReviewHistoryBatch(() => runCmsBatchAction(items, async (item) => {
   await publishCmsDraft(item.id, adminUserId, { version: item.version })
   return '已正式发布'
-})
+}))
