@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { CopyObjectCommand, DeleteObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import sharp from 'sharp'
 import { getCmsMediaConfig } from '../utils/cms-media-config'
@@ -74,11 +74,16 @@ export const promoteMemberApplicationAvatar = async (input: {
   sourceKey: string
   applicationId: string
 }) => {
-  if (!/^member-applications\/\d{4}\/[^\u0000/\\]+-[0-9a-f]{8}\.webp$/u.test(input.sourceKey)) {
+  const applicationId = input.applicationId.toLowerCase()
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+  const source = /^member-applications\/\d{4}\/(?:(?<applicationId>[0-9a-f-]{36})\/)?(?<filename>[^\u0000/\\]+-[0-9a-f]{8}\.webp)$/u.exec(input.sourceKey)
+  // Accept legacy flat temporary keys for applications submitted before this fix.
+  if (!uuid.test(applicationId) || !source?.groups
+    || (source.groups.applicationId && source.groups.applicationId !== applicationId)) {
     throw new Error('MEMBER_APPLICATION_AVATAR_KEY_INVALID')
   }
-  const filename = input.sourceKey.split('/').at(-1)!
-  const key = `site-assets/images/member_photo/${filename}`
+  // A fresh destination also prevents a failed retry from deleting another attempt's copy.
+  const key = `site-assets/images/member_photo/${applicationId}/${randomUUID()}/${source.groups.filename}`
   const { config, client } = storage()
   await client.send(new CopyObjectCommand({
     Bucket: config.S3_BUCKET,

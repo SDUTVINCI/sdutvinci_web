@@ -1,11 +1,11 @@
-import { createHash, randomBytes } from 'node:crypto'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { DeleteObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { and, asc, eq, isNull, like, lt } from 'drizzle-orm'
 import { pinyin } from 'pinyin-pro'
 import { getDatabase } from '../db/client'
 import { memberApplications, memberCohorts, members } from '../db/schema'
 import { getCmsMediaConfig } from '../utils/cms-media-config'
-import { createCmsMember } from './cms-members'
+import { createCmsMemberInTransaction, getCmsMember, CmsMemberKeyConflictError } from './cms-members'
 import { deriveMemberRole, deriveMemberType, normalizeEditableMemberRoles } from './member-profile'
 import { MEMBER_COLLEGE_OPTIONS } from '../../shared/constants/member-colleges'
 import {
@@ -71,7 +71,7 @@ export const uploadMemberApplicationAvatar = async (input: { id: string, token: 
   const application = await ownedApplication(input.id, input.token)
   if (application.status !== 'editing' || application.expiresAt < new Date()) throw new Error('MEMBER_APPLICATION_STATE_INVALID')
   const { output, filename } = await prepareMemberAvatar(input)
-  const key = `member-applications/${new Date().getUTCFullYear()}/${filename}`
+  const key = `member-applications/${new Date().getUTCFullYear()}/${application.id}/${filename}`
   const { config, client } = storage()
   const { url } = await uploadMemberAvatarObject({
     key,
@@ -158,10 +158,12 @@ export const abandonMemberApplication = async (id: string, token: string) => {
 export const listSubmittedMemberApplications = async () => getDatabase().select().from(memberApplications)
   .where(eq(memberApplications.status, 'submitted')).orderBy(asc(memberApplications.createdAt))
 
-const memberKeyFor = async (name: string) => {
+type CmsTransaction = Parameters<Parameters<ReturnType<typeof getDatabase>['transaction']>[0]>[0]
+
+const memberKeyFor = async (name: string, tx: CmsTransaction) => {
   const base = pinyin(name, { toneType: 'none', type: 'array' }).join('').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 24)
   const readable = base.length >= 3 ? base : 'member'
-  const existing = new Set((await getDatabase().select({ memberKey: members.memberKey }).from(members)
+  const existing = new Set((await tx.select({ memberKey: members.memberKey }).from(members)
     .where(and(like(members.memberKey, `${readable}%`), isNull(members.deletedAt)))).map(item => item.memberKey))
   if (!existing.has(readable)) return readable
   for (let suffix = 1; suffix < 1_000_000; suffix += 1) {
@@ -171,50 +173,77 @@ const memberKeyFor = async (name: string) => {
   throw new Error('MEMBER_KEY_EXHAUSTED')
 }
 
-export const reviewMemberApplication = async (id: string, action: 'approve' | 'reject', note: string, actorUserId: string) => getDatabase().transaction(async tx => {
-  const [application] = await tx.select().from(memberApplications).where(eq(memberApplications.id, id)).limit(1).for('update')
-  if (!application || application.status !== 'submitted') throw new Error('MEMBER_APPLICATION_STATE_INVALID')
-  if (action === 'reject') {
-    if (application.avatarObjectKey) { const { config, client } = storage(); await client.send(new DeleteObjectCommand({ Bucket: config.S3_BUCKET, Key: application.avatarObjectKey })) }
-    await tx.update(memberApplications).set({ status: 'rejected', reviewNote: note, reviewedAt: new Date(), reviewedByUserId: actorUserId, updatedAt: new Date() }).where(eq(memberApplications.id, id))
-    return { status: 'rejected' }
-  }
-  const profile = application.profile as any
-  profile.links = normalizeApplicationLinks(profile.links)
-  const memberKey = await memberKeyFor(profile.name)
+export const reviewMemberApplication = async (id: string, action: 'approve' | 'reject', note: string, actorUserId: string) => {
   let promotedAvatar: Awaited<ReturnType<typeof promoteMemberApplicationAvatar>> | null = null
-  if (application.avatarObjectKey) {
-    promotedAvatar = await promoteMemberApplicationAvatar({
-      sourceKey: application.avatarObjectKey,
-      applicationId: application.id
-    })
-    profile.avatarUrl = promotedAvatar.url
-  }
-  let member
+  let temporaryAvatarKey: string | null = null
   try {
-    member = await createCmsMember({
-      ...profile,
-      memberKey,
-      sourcePath: `applications/${id}.md`,
-      role: deriveMemberRole(profile.positions, profile.groupName),
-      memberType: deriveMemberType(profile.positions, profile.groupName)
-    }, actorUserId)
+    const result = await getDatabase().transaction(async tx => {
+      const [application] = await tx.select().from(memberApplications).where(eq(memberApplications.id, id)).limit(1).for('update')
+      if (!application) throw new Error('MEMBER_APPLICATION_STATE_INVALID')
+      if (action === 'approve' && application.status === 'approved' && application.approvedMemberId) {
+        const member = await getCmsMember(application.approvedMemberId, tx)
+        if (!member || member.deletedAt) throw new Error('MEMBER_APPLICATION_MEMBER_DELETED')
+        return { status: 'approved', member }
+      }
+      if (action === 'reject' && application.status === 'rejected') return { status: 'rejected' }
+      if (application.status !== 'submitted') throw new Error('MEMBER_APPLICATION_STATE_INVALID')
+      if (action === 'reject') {
+        await tx.update(memberApplications).set({ status: 'rejected', reviewNote: note, reviewedAt: new Date(), reviewedByUserId: actorUserId, updatedAt: new Date() }).where(eq(memberApplications.id, id))
+        temporaryAvatarKey = application.avatarObjectKey
+        return { status: 'rejected' }
+      }
+      const profile = application.profile as any
+      profile.links = normalizeApplicationLinks(profile.links)
+      const defaultSourcePath = `applications/${application.id}.md`
+      const [previousMember] = await tx.select({ deletedAt: members.deletedAt }).from(members)
+        .where(eq(members.sourcePath, defaultSourcePath)).limit(1)
+      if (previousMember && !previousMember.deletedAt) {
+        throw new CmsMemberKeyConflictError('该申请已有成员档案，请先核对已有档案，避免重复创建')
+      }
+      const sourcePath = previousMember ? `applications/${application.id}-${randomUUID()}.md` : defaultSourcePath
+      const memberKey = await memberKeyFor(profile.name, tx)
+      if (application.avatarObjectKey) {
+        promotedAvatar = await promoteMemberApplicationAvatar({
+          sourceKey: application.avatarObjectKey,
+          applicationId: application.id
+        })
+        profile.avatarUrl = promotedAvatar.url
+      }
+      const member = await createCmsMemberInTransaction(tx, {
+        ...profile,
+        memberKey,
+        sourcePath,
+        role: deriveMemberRole(profile.positions, profile.groupName),
+        memberType: deriveMemberType(profile.positions, profile.groupName)
+      }, actorUserId)
+      await tx.update(memberApplications).set({
+        status: 'approved',
+        approvedMemberId: member!.id,
+        avatarObjectKey: promotedAvatar?.key || application.avatarObjectKey,
+        avatarPublicUrl: promotedAvatar?.url || application.avatarPublicUrl,
+        reviewNote: note,
+        reviewedAt: new Date(),
+        reviewedByUserId: actorUserId,
+        updatedAt: new Date()
+      }).where(eq(memberApplications.id, id))
+      temporaryAvatarKey = promotedAvatar ? application.avatarObjectKey : null
+      return { status: 'approved', member }
+    })
+    // Object storage is not transactional: remove the temporary source only after
+    // the member, revision/outbox, and application approval have all committed.
+    if (temporaryAvatarKey) await deleteMemberAvatarObject(temporaryAvatarKey).catch(() => undefined)
+    return result
   } catch (error) {
-    if (promotedAvatar) await deleteMemberAvatarObject(promotedAvatar.key).catch(() => undefined)
+    if (promotedAvatar) {
+      const avatar = promotedAvatar as Awaited<ReturnType<typeof promoteMemberApplicationAvatar>>
+      // If COMMIT's response was lost, retain an avatar referenced by the saved
+      // application. If the database is unavailable, leave the object for cleanup.
+      try {
+        const [saved] = await getDatabase().select({ id: memberApplications.id }).from(memberApplications)
+          .where(eq(memberApplications.avatarObjectKey, avatar.key)).limit(1)
+        if (!saved) await deleteMemberAvatarObject(avatar.key)
+      } catch { /* Preserve potentially committed data when the outcome is unknown. */ }
+    }
     throw error
   }
-  await tx.update(memberApplications).set({
-    status: 'approved',
-    approvedMemberId: member!.id,
-    avatarObjectKey: promotedAvatar?.key || application.avatarObjectKey,
-    avatarPublicUrl: promotedAvatar?.url || application.avatarPublicUrl,
-    reviewNote: note,
-    reviewedAt: new Date(),
-    reviewedByUserId: actorUserId,
-    updatedAt: new Date()
-  }).where(eq(memberApplications.id, id))
-  if (promotedAvatar && application.avatarObjectKey) {
-    await deleteMemberAvatarObject(application.avatarObjectKey).catch(() => undefined)
-  }
-  return { status: 'approved', member }
-})
+}

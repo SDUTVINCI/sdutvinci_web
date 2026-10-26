@@ -2,6 +2,7 @@ import type { CmsMemberReviewAction, CmsMemberReviewItem, CmsMemberReviewKind, C
 import { CMS_MEMBER_REVIEW_MAX_ITEMS } from '../../shared/types/cms-member-review'
 import { applyMemberProposal, getMemberProposal, rejectMemberProposal, CmsMemberVersionConflictError, CmsMemberKeyConflictError } from './cms-members'
 import { reviewMemberApplication } from './member-applications'
+import { memberApplicationReviewError } from '../utils/member-application-review-error'
 import { reviewAccountRegistration, AccountRegistrationStateError, AccountRegistrationAlreadyRegisteredError, AccountRegistrationAccountUnavailableError } from './account-registrations'
 
 const failureMessage = (error: unknown) => {
@@ -40,7 +41,7 @@ export const batchReviewMemberRequests = async (
         }
       }
       results.push({ id: item.id, ok: true, message: action === 'approve' ? '已通过并生效' : '已拒绝' })
-    } catch (error) { results.push({ id: item.id, ok: false, message: failureMessage(error) }) }
+    } catch (error) { results.push({ id: item.id, ok: false, message: (kind === 'application' ? memberApplicationReviewError(error)?.message : null) || failureMessage(error) }) }
   }
   return results
 }

@@ -64,18 +64,19 @@ export const newlyUnavailableMemberSeasons = (next: readonly string[], allowed: 
 
 export const assertMemberProfileOptions = async (
   profile: Pick<MemberProfileSnapshot, 'grade' | 'seasons' | 'advisorSeasons' | 'groupName'>,
-  previous?: Pick<MemberProfileSnapshot, 'grade' | 'seasons' | 'advisorSeasons' | 'groupName'>
+  previous?: Pick<MemberProfileSnapshot, 'grade' | 'seasons' | 'advisorSeasons' | 'groupName'>,
+  database: Pick<ReturnType<typeof getDatabase>, 'select'> = getDatabase()
 ) => {
   if (profile.grade) {
     const gradeYear = Number(profile.grade)
-    const [cohort] = await getDatabase().select().from(memberCohorts)
+    const [cohort] = await database.select().from(memberCohorts)
       .where(eq(memberCohorts.gradeYear, gradeYear)).limit(1)
     const unchangedGrade = previous?.grade === profile.grade
     if (!cohort || (!cohort.active && !unchangedGrade)) throw new Error('MEMBER_GRADE_INVALID')
     if (profile.groupName && !cohort.groups.includes(profile.groupName)
       && !(unchangedGrade && previous?.groupName === profile.groupName)) throw new Error('MEMBER_GROUP_INVALID')
   }
-  const enabled = await getDatabase().select().from(memberCohorts)
+  const enabled = await database.select().from(memberCohorts)
     .where(eq(memberCohorts.seasonEnabled, true))
   const seasons = new Set(enabled.map(item => item.season).filter((season): season is string => Boolean(season)))
   if (newlyUnavailableMemberSeasons(profile.seasons, seasons, previous?.seasons).length) {

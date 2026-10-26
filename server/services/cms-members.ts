@@ -103,8 +103,11 @@ const toCmsMember = (row: Awaited<ReturnType<typeof loadMemberRows>>[number]): C
   deletedAt: row.deletedAt?.toISOString() || null
 })
 
-const loadMemberRows = async (id?: string, includeDeleted = true) => {
-  const query = getDatabase()
+type CmsTransaction = Parameters<Parameters<ReturnType<typeof getDatabase>['transaction']>[0]>[0]
+type MemberReader = Pick<ReturnType<typeof getDatabase>, 'select'>
+
+const loadMemberRows = async (id?: string, includeDeleted = true, database: MemberReader = getDatabase()) => {
+  const query = database
     .select(memberSelection)
     .from(members)
     .leftJoin(userMembers, eq(members.id, userMembers.memberId))
@@ -120,8 +123,8 @@ const loadMemberRows = async (id?: string, includeDeleted = true) => {
 export const listCmsMembers = async (includeDeleted = false): Promise<CmsMember[]> =>
   (await loadMemberRows(undefined, includeDeleted)).map(toCmsMember)
 
-export const getCmsMember = async (id: string) =>
-  loadMemberRows(id).then(rows => rows[0] ? toCmsMember(rows[0]) : null)
+export const getCmsMember = async (id: string, database: MemberReader = getDatabase()) =>
+  loadMemberRows(id, true, database).then(rows => rows[0] ? toCmsMember(rows[0]) : null)
 
 const profileFromMemberRow = (row: typeof members.$inferSelect): MemberProfileSnapshot => ({
   isLearner: row.isLearner,
@@ -268,60 +271,64 @@ const canonicalizeHistoricalProfile = (source: MemberProfileSnapshot): MemberPro
   return profile
 }
 
-export const createCmsMember = async (
+export const createCmsMemberInTransaction = async (
+  tx: CmsTransaction,
   input: CmsMemberInput & { memberKey: string },
   actorUserId: string
 ) => {
   const memberId = randomUUID()
   const defaultSourcePath = `cms/${input.memberKey.trim().toLowerCase()}.md`
-  const [usedDefaultPath] = input.sourcePath ? [] : await getDatabase()
+  const [usedDefaultPath] = input.sourcePath ? [] : await tx
     .select({ id: members.id }).from(members)
     .where(eq(members.sourcePath, defaultSourcePath)).limit(1)
   const sourcePath = input.sourcePath || (usedDefaultPath
     ? `cms/${input.memberKey.trim().toLowerCase()}-${memberId}.md`
     : defaultSourcePath)
   const profile = inputProfile(input, sourcePath)
-  await assertMemberProfileOptions(profile)
-  await getDatabase().transaction(async (tx) => {
-    await tx.insert(members).values({ id: memberId, ...memberValues(profile) })
-    await tx.update(articleCreditIdentities).set({
-      memberId,
-      version: sql`${articleCreditIdentities.version} + 1`,
-      updatedAt: new Date()
-    }).where(eq(articleCreditIdentities.creditKey, profile.memberKey))
-    const result = await appendRevisionAndOutbox(tx, {
-      memberId,
-      revisionNumber: 1,
-      profile,
-      sourceKind: 'cms_create',
-      actorUserId,
-      operation: 'create'
-    })
-    await tx.update(members).set({ currentRevisionId: result.revisionId })
-      .where(eq(members.id, memberId))
-    const [matchingUser] = await tx.select({ id: users.id }).from(users)
-      .where(and(eq(users.account, profile.memberKey), isNull(users.deletedAt))).limit(1)
-    if (matchingUser) {
-      const [linked] = await tx.insert(userMembers).values({ userId: matchingUser.id, memberId })
-        .onConflictDoNothing().returning({ userId: userMembers.userId })
-      if (!linked) throw new CmsMemberKeyConflictError('同 ID 账号已关联其他成员，请先在账号管理中处理')
-    }
-    await tx.insert(auditLogs).values({
-      actorUserId,
-      action: 'member.create',
-      targetType: 'member',
-      targetId: memberId,
-      metadata: {
-        isLearner: profile.isLearner === true,
-        memberKey: profile.memberKey,
-        revisionId: result.revisionId,
-        exportJobId: result.jobId,
-        changedFields: ['name', 'image', 'role', 'type', 'time', 'advisor', 'grade', 'affiliation', 'links', 'body', 'metadata', 'sortOrder']
-      }
-    })
+  await assertMemberProfileOptions(profile, undefined, tx)
+  await tx.insert(members).values({ id: memberId, ...memberValues(profile) })
+  await tx.update(articleCreditIdentities).set({
+    memberId,
+    version: sql`${articleCreditIdentities.version} + 1`,
+    updatedAt: new Date()
+  }).where(eq(articleCreditIdentities.creditKey, profile.memberKey))
+  const result = await appendRevisionAndOutbox(tx, {
+    memberId,
+    revisionNumber: 1,
+    profile,
+    sourceKind: 'cms_create',
+    actorUserId,
+    operation: 'create'
   })
-  return getCmsMember(memberId)
+  await tx.update(members).set({ currentRevisionId: result.revisionId })
+    .where(eq(members.id, memberId))
+  const [matchingUser] = await tx.select({ id: users.id }).from(users)
+    .where(and(eq(users.account, profile.memberKey), isNull(users.deletedAt))).limit(1)
+  if (matchingUser) {
+    const [linked] = await tx.insert(userMembers).values({ userId: matchingUser.id, memberId })
+      .onConflictDoNothing().returning({ userId: userMembers.userId })
+    if (!linked) throw new CmsMemberKeyConflictError('同 ID 账号已关联其他成员，请先在账号管理中处理')
+  }
+  await tx.insert(auditLogs).values({
+    actorUserId,
+    action: 'member.create',
+    targetType: 'member',
+    targetId: memberId,
+    metadata: {
+      isLearner: profile.isLearner === true,
+      memberKey: profile.memberKey,
+      revisionId: result.revisionId,
+      exportJobId: result.jobId,
+      changedFields: ['name', 'image', 'role', 'type', 'time', 'advisor', 'grade', 'affiliation', 'links', 'body', 'metadata', 'sortOrder']
+    }
+  })
+  return getCmsMember(memberId, tx)
 }
+
+export const createCmsMember = async (
+  input: CmsMemberInput & { memberKey: string },
+  actorUserId: string
+) => getDatabase().transaction(tx => createCmsMemberInTransaction(tx, input, actorUserId))
 
 const renameMemberIdentity = async (tx: Parameters<Parameters<ReturnType<typeof getDatabase>['transaction']>[0]>[0], id: string, before: MemberProfileSnapshot, next: MemberProfileSnapshot) => {
   const [otherMember] = await tx.select({ id: members.id }).from(members)
