@@ -72,11 +72,17 @@ const time = (value: string) => new Intl.DateTimeFormat('zh-CN', { timeZone: 'As
 .history-filters input, .history-filters select { min-width: 0; width: 100%; padding: .65rem .75rem; border: 1px solid var(--line); border-radius: .65rem; background: var(--surface); color: inherit; font: inherit; }
 .history-filter-actions, .history-pagination { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
 .history-filter-actions { grid-column: 1 / -1; }
-.history-table { min-width: 900px; }
-.history-table td { vertical-align: top; }
+.history-table { min-width: 1120px; table-layout: fixed; }
+.history-table th:nth-child(1) { width: 180px; }
+.history-table th:nth-child(2) { width: 200px; }
+.history-table th:nth-child(3), .history-table th:nth-child(4) { width: 150px; }
+.history-table th:nth-child(5) { width: 110px; }
+.history-table th:nth-child(7) { width: 112px; }
+.history-table th:last-child, .history-table td:last-child { white-space: nowrap; }
+.history-table td { vertical-align: top; overflow-wrap: anywhere; }
 .history-table small, .history-table strong { display: block; }
 .history-table small { color: var(--muted); font-size: .8rem; margin-bottom: .25rem; }
-.history-time { white-space: nowrap; }
+.history-time { white-space: nowrap; font-size: .85rem; }
 .history-note { max-width: 20rem; white-space: pre-wrap; overflow-wrap: anywhere; }
 .history-result { display: inline-block; white-space: nowrap; padding: .2rem .55rem; border-radius: 1rem; background: #e6f2eb; color: #1c6741; font-weight: 600; }
 .history-result[data-result="rejected"], .history-result[data-result="failed"] { background: #fbeaea; color: #a42525; }
