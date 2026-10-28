@@ -34,6 +34,14 @@
 标题 ID、Wiki 标题编号和目录逻辑。公开页面不调用 `queryCollection` 或 `ContentRenderer`。Wiki 公共路径、
 目录和顺序由普通应用模块从数据库字段派生；发布、恢复和导出使用同一算法。
 
+Wiki 页内目录通过 `useWikiContentReady` 跟踪实际正文容器的挂载、替换及异步渲染，在下一动画帧
+同步目录、标题编号和阅读辅助，不再假定页面 `mounted` 后的一次 `nextTick` 足以等待 Markdown。
+观察器忽略自身编号和复制工具栏变化，并在容器替换或页面卸载时清理。该逻辑不改变内容查询与权限。
+回归测试为 `tests/wiki-content-ready.test.ts`；浏览器同时检查直达、刷新、站内跳转、锚点与手机目录。
+正文滚动时按标题相对视口的位置高亮当前小节，当前条目越出目录视口时仅滚动目录自身；
+手机抽屉打开时同步露出当前位置。跟随位置计算由 `wiki-toc-scroll.ts` 提供，并由
+`tests/wiki-toc-scroll.test.ts` 覆盖；不改正文滚动位置或URL。
+
 文章访问权限由 `articles.requires_auth` 保存，默认 `false`（未登录可见）。匿名新闻/Wiki 列表、
 详情、搜索、Sitemap 和 RSS 统一排除需登录文章；有效 CMS 会话可读取。权限是文章投影层策略，
 不进入 Frontmatter、Revision 或 Markdown 导出，也不改变 PostgreSQL 的内容权威边界。管理员在

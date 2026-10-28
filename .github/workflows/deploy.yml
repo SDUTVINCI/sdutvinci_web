@@ -64,6 +64,9 @@ jobs:
       - name: Prepare Nuxt generated types
         run: npx nuxt prepare
 
+      - name: Verify Wiki directory initialization and scrolling
+        run: npx vitest run tests/wiki-content-ready.test.ts tests/wiki-toc-scroll.test.ts
+
       - name: Verify registry sync retries and cancellation
         run: npx vitest run tests/sync-tcr-image.test.ts
 

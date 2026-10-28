@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import mediumZoom from 'medium-zoom'
+import { getActiveWikiHeadingId, getWikiTocScrollTop } from '~/utils/wiki-toc-scroll'
 import { cmsAccountPattern } from '~~/shared/types/cms-auth'
 import type { PublicArticleCreditIdentity } from '~~/shared/types/article-credit-identities'
 import type { PublicWikiListItem } from '~~/shared/types/public-content'
@@ -168,6 +169,8 @@ useContentSeo({
   ]
 })
 
+const contentRoot = ref<HTMLElement | null>(null)
+const tocSidebar = ref<HTMLElement | null>(null)
 const showDocNav = ref(false)
 const showToc = ref(false)
 const activeHeadingId = ref('')
@@ -206,22 +209,32 @@ const updateReadingProgress = () => {
 }
 
 const updateActiveHeading = () => {
-  if (!tocLinks.value.length || !headingElements.length) return
-
-  const scrollPosition = window.scrollY + headingScrollOffset
-  let active = ''
-
-  for (const heading of headingElements) {
-    if (heading.offsetTop <= scrollPosition) {
-      active = heading.id
-      continue
-    }
-
-    break
+  if (!tocLinks.value.length || !headingElements.length) {
+    activeHeadingId.value = ''
+    return
   }
 
-  activeHeadingId.value = active
+  activeHeadingId.value = getActiveWikiHeadingId(headingElements, headingScrollOffset)
 }
+
+const syncActiveToc = () => {
+  const sidebar = tocSidebar.value
+  if (!sidebar || !activeHeadingId.value || sidebar.clientHeight <= 0) return
+  if (window.matchMedia('(max-width: 860px)').matches && !showToc.value) return
+  const link = sidebar.querySelector<HTMLElement>('.toc-link.is-active')
+  if (!link) return
+
+  const bounds = sidebar.getBoundingClientRect()
+  const top = getWikiTocScrollTop({
+    top: bounds.top + sidebar.clientTop,
+    height: sidebar.clientHeight,
+    scrollTop: sidebar.scrollTop
+  }, link.getBoundingClientRect())
+  // Scroll only the directory; scrollIntoView would also move the article.
+  if (Math.abs(sidebar.scrollTop - top) > 1) sidebar.scrollTop = top
+}
+
+watch([activeHeadingId, showToc, tocSidebar], syncActiveToc, { flush: 'post' })
 
 const updateViewportState = () => {
   updateReadingProgress()
@@ -245,7 +258,7 @@ const clearViewportSyncFrame = () => {
 }
 
 const buildTocFromDom = () => {
-  const content = document.querySelector('.wiki-article .wiki-content-body')
+  const content = contentRoot.value
   if (!content) {
     headingElements = []
     tocLinks.value = []
@@ -523,11 +536,10 @@ const setupContentResizeSync = () => {
   contentResizeObserver.observe(content)
 }
 
-const enhanceContent = async () => {
+const enhanceContent = () => {
   cancelPendingAnchorScroll()
   clearViewportSyncFrame()
   clearImageLoadListeners()
-  await nextTick()
   syncHeadingScrollOffset()
   buildTocFromDom()
   enhanceCodeBlocks()
@@ -563,6 +575,7 @@ const handleWindowScroll = () => {
 
 const handleWindowResize = () => {
   syncHeadingScrollOffset()
+  syncActiveToc()
   scheduleViewportSync()
   if (pendingAnchorId.value) {
     correctHeadingPosition(pendingAnchorId.value)
@@ -576,11 +589,9 @@ watch(hasMobileDrawer, (isOpen) => {
   }
 })
 
-watch(() => page.value, async () => {
-  if (import.meta.client) {
-    await enhanceContent()
-    scrollToCurrentHash('auto')
-  }
+useWikiContentReady(contentRoot, () => {
+  enhanceContent()
+  scrollToCurrentHash('auto')
 })
 
 watch(() => route.hash, (hash) => {
@@ -592,8 +603,7 @@ watch(() => route.hash, (hash) => {
   }
 })
 
-onMounted(async () => {
-  await enhanceContent()
+onMounted(() => {
   window.addEventListener('scroll', handleWindowScroll, { passive: true })
   window.addEventListener('resize', handleWindowResize, { passive: true })
   window.addEventListener('hashchange', handleHashChange)
@@ -734,7 +744,7 @@ function normalizePath(path: string) {
             <CmsArticleEditButton :public-path="cleanPath" allow-pdf />
           </header>
 
-          <div class="wiki-content-body">
+          <div ref="contentRoot" class="wiki-content-body">
             <VinciMarkdownRenderer variant="wiki" :markdown="String(page.body || '')" />
           </div>
 
@@ -758,6 +768,7 @@ function normalizePath(path: string) {
 
       <aside
         v-if="tocLinks.length"
+        ref="tocSidebar"
         class="wiki-toc-sidebar"
         :class="{ 'is-open': showToc }"
       >
@@ -773,6 +784,7 @@ function normalizePath(path: string) {
             :href="`#${link.id}`"
             class="toc-link"
             :class="{ 'is-active': isTocActive(link.id) }"
+            :aria-current="isTocActive(link.id) ? 'location' : undefined"
             :style="{ '--toc-level': String(link.level) }"
             @click.prevent="scrollToHeading(link.id)"
           >
