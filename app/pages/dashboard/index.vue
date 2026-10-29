@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { dashboardBrand as site } from '~/data/dashboard'
+import { dashboardBrand as site, dashboardSeason } from '~/data/dashboard'
 import { competitions, type CompetitionConfig } from '~/data/competitions'
 import { roboconPartner } from '~/data/footer-partners'
 import { prepareCompetitions, competitionTimeLeft } from '~/utils/competitions'
-import { dashboardCodeProfile } from '../../../utils/dashboard-members.mjs'
+import { dashboardCodeProfile, dashboardCohortRanking } from '../../../utils/dashboard-members.mjs'
 import { resolveStaticMediaUrl } from '~~/shared/utils/static-media'
 import { dashboardGridLayout, dashboardTaskPages, dashboardTaskState, dashboardTaskGroups, selectDashboardTasks, dashboardScoreboard, type DashboardData, type DashboardTask, type DashboardStatusIssue } from '~/utils/dashboard'
 import { DASHBOARD_PREFERENCES_KEY, dashboardPreferences, readDashboardPreferences } from '../../../utils/dashboard-experience.mjs'
@@ -32,6 +32,12 @@ const message = ref('')
 const loading = ref(false)
 const selectedStatus = ref('todo')
 const selectedGroup = ref('all')
+const selectedRanking = ref('all')
+const rankingOptions = [
+  { value: 'all', label: '总榜' },
+  { value: 'senior', label: '老登榜' },
+  { value: 'junior', label: '小登榜' }
+]
 const search = ref('')
 const currentTime = ref(0)
 const pageIndex = ref(0)
@@ -40,8 +46,8 @@ const taskList = ref<HTMLElement | null>(null)
 const dashboardPage = ref<HTMLElement | null>(null)
 const layout = ref({ columns: 1, rows: 2, size: 2 })
 
-type BoardMember = { name: string; memberKey: string; image: string; path: string; links?: Record<string, string | null> }
-const { data: memberData } = await useFetch<{ items: BoardMember[] }>('/api/v2/content/members', { server: false, lazy: true })
+type BoardMember = { name: string; memberKey: string; image: string; path: string; grade?: string | null; links?: Record<string, string | null> }
+const { data: memberData, status: memberStatus, error: memberError, refresh: refreshMembers } = await useFetch<{ items: BoardMember[] }>('/api/v2/content/members', { server: false, lazy: true })
 const memberProfile = (name: string) => {
   const matches = (memberData.value?.items || []).filter(member => member.name === name)
   const member = matches.length === 1 ? matches[0] : undefined
@@ -92,6 +98,8 @@ const pages = computed(() => paginated.value ? Math.max(1, taskPages.value.lengt
 const pageTasks = computed(() => paginated.value ? visibleTasks.value.slice(taskPages.value[pageIndex.value]?.start || 0, taskPages.value[pageIndex.value]?.end || layout.value.size) : visibleTasks.value)
 const rankedTasks = computed<DashboardTask[]>(() => selectDashboardTasks(tasks.value, { status: 'all', group: selectedGroup.value }))
 const scoreboard = computed(() => dashboardScoreboard(rankedTasks.value))
+const cohortRanking = computed(() => dashboardCohortRanking(scoreboard.value.rows, memberData.value?.items || [], dashboardSeason, selectedRanking.value))
+const rankingLabel = computed(() => rankingOptions.find(option => option.value === selectedRanking.value)?.label || '总榜')
 const activeTask = computed(() => tasks.value.find(task => task.id === selectedTaskId.value))
 const statusIssues = computed(() => failedStatusIssues.value.length ? failedStatusIssues.value : data.value?.statusIssues || [])
 const overlayOpen = computed(() => Boolean(activeTask.value || showCompletion.value || showStatusIssues.value))
@@ -246,6 +254,7 @@ function escapeFullscreen(event: KeyboardEvent) {
 function resetDisplay() {
   search.value = ''
   selectedGroup.value = 'all'
+  selectedRanking.value = 'all'
   selectedStatus.value = 'todo'
   autoRotate.value = true
   setScreen(false)
@@ -270,15 +279,24 @@ const measureScreen = () => {
   viewportFitsScreen.value = candidate
   dashboardPage.value?.classList.toggle('is-fixed-screen', fixedScreen.value)
   desktopPagination.value = window.matchMedia('(min-width: 1000px)').matches
+  const rankPanel = dashboardPage.value?.querySelector<HTMLElement>('.dashboard-scoreboard')
+  const rankViewport = rankPanel?.querySelector<HTMLElement>('.dashboard-scroll-viewport')
+  const rankStyle = rankPanel && getComputedStyle(rankPanel)
+  // 空任务/单行任务时也给榜单保留按钮、说明和两行人员的空间。
+  const minimumRankingHeight = rankPanel && rankViewport && rankStyle
+    ? rankViewport.getBoundingClientRect().top - rankPanel.getBoundingClientRect().top
+      + Number.parseFloat(rankStyle.paddingBottom) + Number.parseFloat(rankStyle.borderBottomWidth)
+      + (Number.parseFloat(rankStyle.fontSize) || 16) * 7
+    : 0
   if (!taskList.value) {
     const panel = dashboardPage.value?.querySelector<HTMLElement>('.dashboard-tasks')
     const style = panel && getComputedStyle(panel)
-    fixedGridHeight.value = fixedScreen.value && developmentPanel && panel && style ? Math.ceil(
+    fixedGridHeight.value = fixedScreen.value && developmentPanel && panel && style ? Math.ceil(Math.max(minimumRankingHeight,
       [...panel.children].reduce((total, element) => {
         const childStyle = getComputedStyle(element)
         return total + element.getBoundingClientRect().height + (Number.parseFloat(childStyle.marginTop) || 0) + (Number.parseFloat(childStyle.marginBottom) || 0)
       }, 0) + Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom) + Number.parseFloat(style.borderTopWidth) + Number.parseFloat(style.borderBottomWidth)
-    ) : null
+    )) : null
 
     return
   }
@@ -306,7 +324,7 @@ const measureScreen = () => {
   layout.value = dashboardGridLayout(box.width, height, gap, fontSize, cardHeight)
   const usedRows = Math.min(layout.value.rows, Math.max(1, Math.ceil(visibleTasks.value.length / layout.value.columns)))
   // 尾页也保留相同面板高度，翻页不重新分配空间或改变每页容量。
-  fixedGridHeight.value = fixedScreen.value && developmentPanel ? Math.ceil(chrome + usedRows * cardHeight + (usedRows - 1) * gap) : null
+  fixedGridHeight.value = fixedScreen.value && developmentPanel ? Math.ceil(Math.max(minimumRankingHeight, chrome + usedRows * cardHeight + (usedRows - 1) * gap)) : null
 }
 watch(taskList, (element, previous) => {
   if (previous) layoutObserver?.unobserve(previous)
@@ -314,7 +332,7 @@ watch(taskList, (element, previous) => {
   void nextTick(resizeScreen)
 }, { flush: 'post' })
 watch([screen, showSyncDetails], () => { void nextTick(resizeScreen) })
-watch([data, selectedGroup, search, selectedStatus, () => visibleTasks.value.length], () => { void nextTick(resizeScreen) }, { flush: 'post' })
+watch([data, memberStatus, selectedRanking, selectedGroup, search, selectedStatus, () => visibleTasks.value.length], () => { void nextTick(resizeScreen) }, { flush: 'post' })
 onMounted(() => {
   currentTime.value = Date.now()
   lastRotation = currentTime.value
@@ -442,14 +460,17 @@ onBeforeUnmount(() => {
 
         <aside class="dashboard-ranks" aria-label="个人积分统计">
           <section class="dashboard-panel dashboard-scoreboard">
-            <DashboardAutoScroll label="个人总分榜" :suspended="overlayOpen" heading-class="dashboard-panel-heading">
-            <template #heading><h2>个人总分榜</h2></template>
+            <DashboardAutoScroll :key="`${selectedRanking}:${selectedGroup}`" :label="`个人${rankingLabel}`" :suspended="overlayOpen" heading-class="dashboard-panel-heading">
+            <template #heading><h2>个人积分榜</h2></template>
             <template #description>
-              <p class="dashboard-score-scope">{{ selectedGroup === 'all' ? '全部组别' : selectedGroup }} · 仅已完成任务计分</p>
+              <div class="dashboard-ranking-switch" role="group" aria-label="积分榜切换"><button v-for="option in rankingOptions" :key="option.value" type="button" :aria-pressed="selectedRanking === option.value" @click="selectedRanking = option.value">{{ option.label }}</button></div>
+              <p class="dashboard-score-scope">{{ dashboardSeason }}赛季 · {{ selectedGroup === 'all' ? '全部组别' : selectedGroup }}<template v-if="cohortRanking.grade"> · {{ cohortRanking.grade }}级</template><br>仅已完成任务计分<template v-if="memberStatus === 'success' && cohortRanking.unmatchedCount"> · {{ cohortRanking.unmatchedCount }}人年级未确认，仅列总榜</template></p>
               <p v-if="scoreboard.missingScoreCount || scoreboard.invalidScoreCount || scoreboard.unassignedCount" class="dashboard-score-warning" role="status">已完成任务中，<template v-if="scoreboard.missingScoreCount">{{ scoreboard.missingScoreCount }}项未设分；</template><template v-if="scoreboard.invalidScoreCount">{{ scoreboard.invalidScoreCount }}项分值异常；</template><template v-if="scoreboard.unassignedCount">{{ scoreboard.unassignedCount }}项未分配负责人；</template>以上情况不产生对应积分。</p>
             </template>
-            <ol v-if="scoreboard.rows.length" class="dashboard-rank-list"><li v-for="person in scoreboard.rows" :key="person.key" :style="{ '--rank-width': `${person.score / (scoreboard.rows[0]?.score || 1) * 100}%` }"><span class="dashboard-rank-number">{{ String(person.rank).padStart(2, '0') }}</span><DashboardMember class="dashboard-rank-name" :person="person" :profile="memberProfile(person.name)" /><div class="dashboard-rank-total"><strong>{{ person.score }}<small> 分</small></strong><small>已完成 {{ person.doneCount }} 项</small></div></li></ol>
-            <p v-else class="dashboard-empty">暂无任务人员</p>
+            <p v-if="selectedRanking !== 'all' && memberError" class="dashboard-empty" role="status">成员资料暂时无法读取<br><button type="button" class="dashboard-text-button" @click="refreshMembers()">重新读取</button></p>
+            <p v-else-if="selectedRanking !== 'all' && memberStatus !== 'success'" class="dashboard-empty" role="status">正在读取成员年级…</p>
+            <ol v-else-if="cohortRanking.rows.length" class="dashboard-rank-list"><li v-for="person in cohortRanking.rows" :key="person.key" :style="{ '--rank-width': `${person.score / (cohortRanking.rows[0]?.score || 1) * 100}%` }"><span class="dashboard-rank-number">{{ String(person.rank).padStart(2, '0') }}</span><DashboardMember class="dashboard-rank-name" :person="person" :profile="memberProfile(person.name)" /><div class="dashboard-rank-total"><strong>{{ person.score }}<small> 分</small></strong><small>已完成 {{ person.doneCount }} 项</small></div></li></ol>
+            <p v-else class="dashboard-empty">{{ selectedRanking === 'all' ? '暂无任务人员' : `暂无${cohortRanking.grade}级任务人员` }}</p>
             </DashboardAutoScroll>
           </section>
         </aside>

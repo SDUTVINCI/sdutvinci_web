@@ -45,6 +45,14 @@
 成员姓名唯一匹配本站现有成员档案时，展示本站头像并链接至稳定 `memberKey` 的个人页；
 重名或未匹配时使用 Vinci 队徽，不猜测链接。成员资料读取失败不阻塞飞书任务。
 
+个人积分榜提供「总榜 / 老登榜 / 小登榜」按钮，默认总榜，组别筛选仍适用于三个榜单。
+当前赛季由 `app/data/dashboard.ts` 的 `dashboardSeason = 2027` 显式配置，不随自然年自动切换；
+换季时同步维护该值与赛事倒计时。老登榜仅取赛季减 2 的入学年级（2025 级），小登榜仅取赛季减 1（2026 级），
+以成员资料 `grade` 为准，不使用参赛年份 `time`、角色或任务日期推断。支持完整四位年份和「2025级」格式。
+总榜包含所有任务人员，其他年级也保留；两个年级榜各自重排，同分并列，切换不改变积分或任务列表。
+飞书任务人员和网站档案的姓名必须两边均唯一；未匹配、重名、缺少年级或年级格式无效者仅列总榜，并显示人数提示。
+成员资料加载中/失败时，年级榜显示相应状态并提供失败重试，总榜继续可用；分值异常提醒仍针对当前组别全部任务。
+
 ## 2. 服务端配置
 
 所有配置只放服务器 `.env`，不放 Nuxt public runtime config、不提交真实值。
@@ -91,7 +99,7 @@ FEISHU_FIELD_MAP=
 以下历史验收中的“口令/锁定”描述仅属于旧版。当前以网站登录会话及 `dashboard-auth.test.ts` 的权限回归为准。
 
 ```bash
-npm test -- tests/dashboard-auth.test.ts tests/dashboard.test.mjs tests/dashboard-experience.test.mjs tests/dashboard-github.test.mjs tests/competitions.test.mjs
+npm test -- tests/dashboard-auth.test.ts tests/dashboard-ranking.test.mjs tests/dashboard.test.mjs tests/dashboard-experience.test.mjs tests/dashboard-github.test.mjs tests/competitions.test.mjs
 npm run typecheck
 npm run build
 ```

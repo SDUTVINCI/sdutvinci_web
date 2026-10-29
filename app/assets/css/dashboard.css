@@ -68,6 +68,9 @@
 .dashboard-rank-total { display: flex; flex: 0 0 auto; flex-direction: column; align-items: flex-end; gap: 2px; }
 .dashboard-score-scope, .dashboard-score-warning { flex: 0 0 auto; margin: 0 0 10px; font-size: calc(var(--dashboard-text) * .75); color: var(--muted); overflow-wrap: anywhere; }
 .dashboard-score-warning { color: var(--gold); }
+.dashboard-ranking-switch { display: flex; flex: 0 0 auto; gap: 4px; margin-bottom: 10px; }
+.dashboard-ranking-switch button { flex: 1; min-width: 0; min-height: 36px; padding: 6px 8px; font-size: calc(var(--dashboard-text) * .85); }
+.dashboard-ranking-switch button[aria-pressed="true"] { background: var(--surface-soft); }
 @media (min-width: 1000px) {
   .dashboard-scoreboard .dashboard-scroll-viewport { max-height: clamp(360px, 50vh, 720px); }
 }
