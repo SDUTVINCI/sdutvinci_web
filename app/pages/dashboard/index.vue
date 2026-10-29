@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { dashboardBrand as site } from '~/data/dashboard'
-import { competitions } from '~/data/competitions'
+import { competitions, type CompetitionConfig } from '~/data/competitions'
 import { roboconPartner } from '~/data/footer-partners'
 import { prepareCompetitions, competitionTimeLeft } from '~/utils/competitions'
 import { dashboardCodeProfile } from '../../../utils/dashboard-members.mjs'
@@ -60,6 +60,10 @@ let ownsFullscreen = false
 let disposed = false
 let generation = 0
 
+const eventReferenceLabel = (event: CompetitionConfig) => {
+  if (event.dateStatus === 'historical') return `${event.referenceYear}同期参考`
+  return { pending: '日期待定', target: '备赛目标', tentative: '暂定', confirmed: '已确认' }[event.dateStatus]
+}
 const competitionSchedule = prepareCompetitions(competitions).filter(event => event.enabled)
 const eventCountdowns = computed(() => competitionSchedule.map(event => ({ ...event, ...competitionTimeLeft(event.target, currentTime.value) })))
 const formatEventTime = (value: number) => new Intl.DateTimeFormat('zh-CN', {
@@ -371,14 +375,18 @@ onBeforeUnmount(() => {
         <div><strong class="dashboard-team-name"><span>{{ site.university }}</span><span>{{ site.shortName }}</span></strong><span class="dashboard-brand-caption">{{ site.englishName }}</span></div>
       </NuxtLink>
       <div class="dashboard-heading-center">
-        <div class="dashboard-title-block"><p class="eyebrow">Mission Control</p><h1>任务看板</h1></div>
+        <div class="dashboard-title-block"><p class="eyebrow">ROBOCON · 北京时间</p><h1>任务看板</h1></div>
         <section v-if="eventCountdowns.length" class="dashboard-heading-competitions" aria-label="赛事倒计时">
           <article v-for="event in eventCountdowns" :key="event.name" class="dashboard-heading-event" :class="{ 'is-reached': event.state === 'reached' }">
             <div class="dashboard-heading-event-info">
-              <h2><img class="dashboard-event-logo" :src="roboconPartner.logo" alt="CURC 全国大学生机器人大赛与 ROBOCON 标志" width="1931" height="656"><span>{{ event.name }}</span></h2>
+              <h2 :aria-label="event.name"><img class="dashboard-event-logo" :src="roboconPartner.logo" alt="CURC 全国大学生机器人大赛与 ROBOCON 标志" width="1931" height="656"><span>{{ event.shortName || event.name }}</span></h2>
               <div class="dashboard-heading-event-meta">
-                <a v-if="event.sourceUrl" :href="event.sourceUrl" target="_blank" rel="noopener noreferrer" class="dashboard-event-source" :title="event.referenceNote">官方参考 ↗</a><span v-if="event.dateStatus !== 'pending'" class="dashboard-heading-event-status" :class="event.dateStatus">{{ event.dateStatus === 'target' ? '最终形态目标' : event.dateStatus === 'historical' ? `${event.referenceYear} 同期参考` : event.dateStatus === 'tentative' ? '暂定' : '已确认' }}</span>
-                <time v-if="event.target !== null" :datetime="event.startsAt || undefined" :title="`${formatEventTime(event.target)} · 北京时间${event.dateStatus === 'historical' ? ' · 同期推算' : ''} · ${event.referenceNote || ''}`">{{ formatTime(event.target) }} · 北京时间</time>
+                <time v-if="event.target !== null" :datetime="event.startsAt || undefined" :title="`${formatEventTime(event.target)} · 北京时间 · ${event.referenceNote || ''}`">{{ formatEventTime(event.target) }}</time>
+                <component :is="event.sourceUrl ? 'a' : 'span'" class="dashboard-event-reference" :class="event.dateStatus"
+                  :href="event.sourceUrl || undefined" :target="event.sourceUrl ? '_blank' : undefined" :rel="event.sourceUrl ? 'noopener noreferrer' : undefined"
+                  :title="event.referenceNote" :aria-label="`${event.name}：${eventReferenceLabel(event)}${event.sourceUrl ? '，查看官方参考' : ''}`">
+                  {{ eventReferenceLabel(event) }}<span v-if="event.sourceUrl" aria-hidden="true"> ↗</span>
+                </component>
               </div>
             </div>
             <div class="dashboard-heading-event-count">

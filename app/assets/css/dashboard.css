@@ -1,5 +1,4 @@
 .dashboard-page { width: min(1440px, calc(100% - 48px)); margin: 48px auto 80px; }
-.dashboard-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 24px; margin-bottom: 32px; }
 .dashboard-heading h1 { font-size: clamp(2.1rem, 4vw, 3.4rem); }
 .dashboard-heading .eyebrow { margin-bottom: 10px; }
 .dashboard-clock { color: var(--muted); margin: 12px 0 0; font-variant-numeric: tabular-nums; min-height: 26px; }
@@ -142,12 +141,6 @@ body.dashboard-tech::before {
   position: relative;
 }
 
-.dashboard-heading {
-  position: relative;
-  border-bottom: 1px solid var(--line);
-  padding-bottom: 20px;
-}
-
 .dashboard-heading::after {
   position: absolute;
   bottom: -1px;
@@ -178,10 +171,6 @@ body.dashboard-tech::before {
 .dashboard-brand-caption { display: block; margin-top: 7px; color: #83b6ce; font: .75em var(--dashboard-mono); text-transform: uppercase; letter-spacing: .15em; }
 .dashboard-identity:hover .dashboard-team-name { color: var(--cyan); }
 .dashboard-identity:focus-visible { outline: 2px solid var(--cyan); outline-offset: 6px; }
-.dashboard-title-block { text-align: center; }
-.dashboard-header-controls { justify-self: end; min-width: 0; }
-.dashboard-header-controls .dashboard-clock { text-align: right; margin: 0 0 10px; }
-.dashboard-header-controls .dashboard-actions { justify-content: flex-end; }
 .dashboard-heading .eyebrow { font-family: var(--dashboard-mono); font-size: .7rem; letter-spacing: .19em; font-weight: 600; }
 .dashboard-heading h1 { color: #effbff; letter-spacing: .07em; text-shadow: 0 0 30px rgba(80, 196, 255, .16); }
 .dashboard-clock { color: #83b6ce; font-family: var(--dashboard-mono); font-size: .85rem; letter-spacing: .08em; }
@@ -319,12 +308,9 @@ body.dashboard-tech::before {
 body.dashboard-screen .site-header, body.dashboard-screen .site-footer { display: none; }
 body.dashboard-screen .site-shell { display: flow-root; }
 .dashboard-page.is-screen { width: calc(100% - 48px); max-width: none; margin: 24px auto; }
-.dashboard-page.is-screen .dashboard-heading { margin-bottom: 20px; }
 @media (min-width: 1200px) and (min-height: 700px) {
   .dashboard-page.is-fixed-screen { display: flex; flex-direction: column; height: calc(100dvh - 32px); margin: 16px auto; overflow: hidden; }
-  .is-fixed-screen .dashboard-heading { flex: 0 0 auto; margin-bottom: 12px; }
   .is-fixed-screen .dashboard-heading h1 { font-size: clamp(2rem, 2vw, 3.5rem); }
-  .is-fixed-screen .dashboard-heading { padding-bottom: 10px; }
   .is-fixed-screen .dashboard-heading .eyebrow { margin-bottom: 5px; }
   .is-fixed-screen .dashboard-clock { font-size: calc(var(--dashboard-text) * .85); }
   .is-fixed-screen .dashboard-notice { flex: 0 0 auto; padding: 5px 12px; margin: 0 0 8px; font-size: .75rem; }
@@ -433,21 +419,12 @@ a.dashboard-person:focus-visible { outline: 2px solid var(--cyan); outline-offse
 @keyframes dashboard-reveal { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 
 @media (max-width: 1199px) {
-  .dashboard-heading { grid-template-columns: minmax(0, 1fr) auto; gap: 20px; }
-  .dashboard-title-block { grid-row: 2; grid-column: 1 / -1; padding-top: 14px; border-top: 1px solid var(--line); }
   .dashboard-team-name { font-size: clamp(1.05rem, 2.2vw, 1.5rem); }
 }
 @media (max-width: 760px) {
-  .dashboard-heading { grid-template-columns: 1fr; gap: 18px; }
   .dashboard-identity { justify-self: center; }
   .dashboard-team-name { font-size: clamp(1.05rem, 4.7vw, 1.4rem); }
   .dashboard-brand-caption { margin-top: 4px; font-size: .7rem; }
-  .dashboard-title-block { grid-row: auto; padding-top: 12px; }
-  .dashboard-title-block .eyebrow { margin-bottom: 4px; }
-  .dashboard-title-block h1 { font-size: 2rem; }
-  .dashboard-header-controls { justify-self: stretch; }
-  .dashboard-header-controls .dashboard-clock { text-align: center; margin-bottom: 10px; }
-  .dashboard-header-controls .dashboard-actions { justify-content: center; }
 }
 
 /* 赛事来自 app/data/competitions.ts，独立于飞书任务和任务筛选。 */
@@ -573,35 +550,20 @@ a.dashboard-person:focus-visible { outline: 2px solid var(--cyan); outline-offse
 
 /* 顶部信息完整保留，用紧凑排列给任务让出视口空间。 */
 .dashboard-page { margin-top: 24px; }
-.dashboard-page .dashboard-heading { gap: 16px; margin-bottom: 16px; padding-bottom: 10px; }
 .dashboard-page .dashboard-insignia { width: clamp(48px, 3.2vw, 64px); padding: 4px; }
 .dashboard-page .dashboard-identity { gap: 12px; }
 .dashboard-page .dashboard-team-name { font-size: clamp(1rem, 1.1vw, 1.35rem); }
 .dashboard-page .dashboard-brand-caption { margin-top: 3px; font-size: .65rem; }
 .dashboard-page .dashboard-heading h1 { font-size: clamp(1.5rem, 2vw, 2.1rem); line-height: 1.2; }
 .dashboard-page .dashboard-heading .eyebrow { margin-bottom: 4px; font-size: .6rem; }
-.dashboard-page .dashboard-header-controls .dashboard-clock { margin-bottom: 5px; min-height: 0; font-size: .75rem; }
 .dashboard-page .dashboard-actions { gap: 6px; }
 .dashboard-page .dashboard-actions button { padding: 7px 10px; font-size: .8rem; }
-@media (min-width: 761px) and (max-width: 1199px) {
-  .dashboard-page .dashboard-heading { grid-template-columns: minmax(0, 1fr) auto; gap: 10px 16px; }
-  .dashboard-page .dashboard-title-block { grid-row: 1; grid-column: 2; border: 0; padding: 0; text-align: right; }
-  .dashboard-page .dashboard-header-controls { grid-column: 1 / -1; justify-self: stretch; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; }
-  .dashboard-page .dashboard-header-controls .dashboard-clock { margin: 0; text-align: left; }
-}
 @media (max-width: 760px) {
   .dashboard-page, .dashboard-page.is-screen { margin-top: 16px; }
-  .dashboard-page .dashboard-heading { grid-template-columns: minmax(0, 1fr) auto; gap: 10px; }
   .dashboard-page .dashboard-identity { justify-self: start; gap: 8px; }
   .dashboard-page .dashboard-insignia { width: 40px; padding: 3px; }
   .dashboard-page .dashboard-team-name { font-size: .85rem; letter-spacing: 0; }
   .dashboard-page .dashboard-brand-caption { font-size: .55rem; letter-spacing: .05em; }
-  .dashboard-page .dashboard-title-block { grid-row: 1; grid-column: 2; border: 0; padding: 0; text-align: right; }
-  .dashboard-page .dashboard-title-block h1 { font-size: 1.15rem; }
-  .dashboard-page .dashboard-title-block .eyebrow { font-size: .43rem; letter-spacing: .05em; }
-  .dashboard-page .dashboard-header-controls { grid-column: 1 / -1; }
-  .dashboard-page .dashboard-header-controls .dashboard-clock { text-align: left; font-size: .65rem; margin-bottom: 6px; }
-  .dashboard-page .dashboard-header-controls .dashboard-actions { justify-content: flex-start; }
   .dashboard-page .dashboard-actions button { padding: 6px 8px; font-size: .75rem; }
 }
 
@@ -646,48 +608,8 @@ a.dashboard-person:focus-visible { outline: 2px solid var(--cyan); outline-offse
 }
 
 /* 赛事借用标题两侧空间，不再占用独立卡片行。 */
-.dashboard-page .dashboard-heading { grid-template-columns: minmax(0, 1fr) minmax(0, 2.3fr) minmax(0, 1fr); }
-.dashboard-heading-center { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: stretch; gap: 12px; }
-.dashboard-heading-center .dashboard-title-block { align-self: center; }
-.dashboard-page .dashboard-heading-center .dashboard-title-block { grid-column: 2; grid-row: 1; padding: 0; border: 0; text-align: center; }
-.dashboard-heading-competitions { display: contents; }
-.dashboard-heading-event { min-width: 0; padding: 2px 10px; border-left: 1px solid rgba(57, 230, 244, .25); color: var(--cyan); }
-.dashboard-heading-event:first-child { grid-column: 1; grid-row: 1; }
-.dashboard-heading-event:nth-child(2) { grid-column: 3; grid-row: 1; color: var(--gold); }
-.dashboard-heading-event h2 { display: flex; align-items: center; gap: 5px; margin: 0; font-size: calc(var(--dashboard-text) * .8); line-height: 1.35; color: var(--ink); }
-.dashboard-heading-event h2 img { width: 22px; height: 16px; object-fit: contain; padding: 2px; background: #fff; border-radius: 2px; flex: 0 0 auto; }
-.dashboard-heading-event-count { display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 8px; font-family: var(--dashboard-mono); font-variant-numeric: tabular-nums; }
-.dashboard-heading-event-count strong { font-size: 1.6rem; line-height: 1.3; white-space: nowrap; }
-.dashboard-heading-event-count small { font-size: .7rem; font-weight: 400; }
-.dashboard-heading-event-count > span { font-size: calc(var(--dashboard-text) * .75); }
-.dashboard-heading-event-status, .dashboard-heading-event time { display: block; font-size: .7rem; line-height: 1.5; }
-.dashboard-heading-event-status { color: var(--green); }
-.dashboard-heading-event-status.historical, .dashboard-heading-event-status.tentative { color: var(--gold); }
-.dashboard-heading-event time { color: var(--muted); }
-@media (max-width: 1399px) and (min-width: 761px) {
-  .dashboard-page .dashboard-heading { grid-template-columns: minmax(0, 1fr) minmax(0, 1.8fr); }
-  .dashboard-heading-center { grid-column: 2; grid-row: 1 / 3; }
-  .dashboard-page .dashboard-header-controls { grid-column: 1; grid-row: 2; justify-self: start; }
-  .dashboard-page .dashboard-header-controls .dashboard-clock { text-align: left; }
-  .dashboard-page .dashboard-header-controls .dashboard-actions { justify-content: flex-start; }
-}
-@media (max-width: 760px) {
-  .dashboard-page .dashboard-heading { grid-template-columns: minmax(0, 1fr) auto; }
-  .dashboard-heading-center { display: contents; }
-  .dashboard-page .dashboard-heading-center .dashboard-title-block { grid-column: 2; grid-row: 1; text-align: right; }
-  .dashboard-heading-competitions { display: grid; grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-  .dashboard-heading-event:first-child, .dashboard-heading-event:nth-child(2) { grid-column: auto; grid-row: auto; padding: 2px 8px; }
-  .dashboard-heading-event h2 { font-size: .75rem; }
-  .dashboard-heading-event-count strong { font-size: 1.2rem; }
-  .dashboard-heading-event-count > span { font-size: .7rem; }
-}
 
 /* 本地验收：限制标题组宽度，赛事等宽且内容居中，消除左右松紧不一。 */
-.dashboard-heading-center { width: min(100%, 720px); justify-self: center; gap: 20px; }
-.dashboard-heading-event { display: grid; grid-template-rows: minmax(2.7em, 1fr) repeat(3, auto); align-self: stretch; text-align: center; border-left: 0; padding: 0 12px; }
-.dashboard-heading-event:first-child { border-right: 1px solid rgba(57, 230, 244, .18); }
-.dashboard-heading-event:nth-child(2) { border-left: 1px solid rgba(57, 230, 244, .18); }
-.dashboard-heading-event h2, .dashboard-heading-event-count { justify-content: center; }
 .dashboard-task-timing { display: flex; flex-direction: column; justify-content: center; min-width: 0; gap: 1px; font-family: var(--dashboard-mono); font-variant-numeric: tabular-nums; }
 .has-publisher .dashboard-task-timing { height: var(--dashboard-avatar-size); }
 .dashboard-task-remaining { font-size: calc(var(--dashboard-text) * .8); line-height: 1; color: var(--cyan); white-space: nowrap; }
@@ -696,44 +618,10 @@ a.dashboard-person:focus-visible { outline: 2px solid var(--cyan); outline-offse
 .dashboard-task-timing.done .dashboard-task-remaining { color: var(--green); }
 .dashboard-task-deadline { color: var(--muted); font-size: max(12px, calc(var(--dashboard-text) * .72)); line-height: 1; white-space: nowrap; }
 .dashboard-task-meta:not(.has-publisher) { margin-top: 5px; padding-top: 3px; }
-@media (max-width: 760px) {
-  .dashboard-heading-center { width: auto; }
-  .dashboard-heading-event:first-child { border-right: 0; }
-  .dashboard-heading-event h2 { align-self: stretch; }
-}
 
 .dashboard-task-meta { gap: 1px 12px; padding-top: 5px; }
 
 /* 本地验收：横向赛事卡，信息在外、时间在内，内部布局镜像对称。 */
-.dashboard-page .dashboard-heading { grid-template-columns: minmax(180px, 1fr) minmax(0, 3.7fr) minmax(220px, 1fr); }
-.dashboard-heading-center { width: min(100%, 1180px); }
-.dashboard-heading-event { --event-accent: var(--cyan); display: grid; grid-template-columns: minmax(0, 1fr) max-content; grid-template-rows: auto; align-items: center; gap: 14px; padding: 12px 16px; border: 1px solid rgba(57, 230, 244, .28); border-inline-start: 3px solid var(--event-accent); background: linear-gradient(110deg, rgba(21, 100, 133, .18), rgba(3, 17, 30, .55)); }
-.dashboard-heading-event:first-child { border-right: 1px solid rgba(57, 230, 244, .28); }
-.dashboard-heading-event:nth-child(2) { --event-accent: var(--gold); grid-template-columns: max-content minmax(0, 1fr); border-left: 1px solid rgba(255, 179, 92, .28); border-right: 3px solid var(--event-accent); background: linear-gradient(250deg, rgba(133, 91, 21, .15), rgba(3, 17, 30, .55)); }
-.dashboard-heading-event-info { min-width: 0; text-align: left; }
-.dashboard-heading-event h2 { justify-content: flex-start; }
-.dashboard-heading-event-count { display: flex; flex-direction: column; align-items: flex-end; justify-content: center; gap: 2px; color: var(--event-accent); }
-.dashboard-heading-event-count strong { font-size: clamp(1.6rem, 1.5vw, 2rem); }
-.dashboard-heading-event:nth-child(2) .dashboard-heading-event-info { grid-column: 2; grid-row: 1; text-align: right; }
-.dashboard-heading-event:nth-child(2) h2 { flex-direction: row-reverse; }
-.dashboard-heading-event:nth-child(2) .dashboard-heading-event-count { grid-column: 1; grid-row: 1; align-items: flex-start; }
-.dashboard-heading-event-status { margin-top: 5px; }
-@media (min-width: 761px) and (max-width: 1399px) {
-  .dashboard-page .dashboard-heading { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
-  .dashboard-heading-center { display: contents; }
-  .dashboard-page .dashboard-heading-center .dashboard-title-block { grid-column: 2; grid-row: 1; }
-  .dashboard-page .dashboard-header-controls { grid-column: 3; grid-row: 1; justify-self: end; }
-  .dashboard-heading-competitions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-column: 1 / -1; gap: 16px; }
-  .dashboard-heading-event:first-child, .dashboard-heading-event:nth-child(2) { grid-column: auto; grid-row: auto; }
-}
-@media (max-width: 760px) {
-  .dashboard-page .dashboard-heading { grid-template-columns: minmax(0, 1fr) auto; }
-  .dashboard-heading-event:first-child, .dashboard-heading-event:nth-child(2) { padding: 10px 12px; }
-  .dashboard-heading-event { gap: 10px; }
-  .dashboard-heading-event h2 { align-self: auto; }
-  .dashboard-heading-event-count strong { font-size: 1.6rem; }
-}
-@media (max-width: 600px) { .dashboard-heading-competitions { grid-template-columns: 1fr; } }
 
 /* 分页卡片使用紧凑统一行高；屏幕变高增加行数，不拉长卡片。 */
 .is-paginated .dashboard-task-list { grid-template-rows: none; grid-auto-rows: calc(var(--dashboard-text) * 14); align-content: start; }
@@ -748,42 +636,8 @@ a.dashboard-person:focus-visible { outline: 2px solid var(--cyan); outline-offse
 .dashboard-page .dashboard-more-people { flex: 0 0 auto; padding: 2px 5px; font-size: .75em; }
 
 /* 大屏沿用既有横向外框，按卡片实际宽度放大内容并收紧内边距。 */
-@media (min-width: 1200px) {
-  .is-screen .dashboard-heading-event { container-type: inline-size; padding: 5px 12px; gap: 12px; }
-  .is-screen .dashboard-heading-event h2 { font-size: clamp(18px, 4.4cqw, 24px); line-height: 1.3; gap: 8px; }
-  .is-screen .dashboard-heading-event h2 img { width: clamp(28px, 6cqw, 34px); height: clamp(20px, 4.3cqw, 24px); }
-  .is-screen .dashboard-heading-event-status, .is-screen .dashboard-heading-event time { font-size: clamp(12px, 2.8cqw, 15px); line-height: 1.35; }
-  .is-screen .dashboard-heading-event-status { margin-top: 4px; }
-  .is-screen .dashboard-heading-event-count { gap: 4px; }
-  .is-screen .dashboard-heading-event-count strong { font-size: clamp(34px, 9cqw, 46px); line-height: 1.05; }
-  .is-screen .dashboard-heading-event-count small { font-size: clamp(13px, 3cqw, 16px); }
-  .is-screen .dashboard-heading-event-count > span:not(.visually-hidden) { font-size: clamp(16px, 3.6cqw, 20px); line-height: 1.15; }
-}
 
 /* 大屏三列横向展开：名称｜参考与日期｜天数和时钟，右卡镜像。 */
-@media (min-width: 1200px) {
-  .is-screen.dashboard-page .dashboard-heading { grid-template-columns: clamp(240px, 11vw, 320px) minmax(0, 1fr) clamp(240px, 11vw, 320px); }
-  .is-screen .dashboard-heading-center { width: 100%; }
-  .is-screen .dashboard-heading-event { grid-template-columns: minmax(0, 1.25fr) minmax(0, .85fr) max-content; }
-  .is-screen .dashboard-heading-event-info { display: contents; }
-  .is-screen .dashboard-heading-event h2 { grid-column: 1; grid-row: 1; font-size: clamp(18px, 3cqw, 32px); }
-  .is-screen .dashboard-heading-event-meta { grid-column: 2; grid-row: 1; text-align: center; }
-  .is-screen .dashboard-heading-event-status, .is-screen .dashboard-heading-event time { font-size: clamp(12px, 1.9cqw, 20px); }
-  .is-screen .dashboard-heading-event-status { margin: 0; }
-  .is-screen .dashboard-heading-event-count { grid-column: 3; grid-row: 1; flex-direction: row; flex-wrap: nowrap; align-items: baseline; justify-content: flex-end; gap: 10px; white-space: nowrap; }
-  .is-screen .dashboard-heading-event-count strong { font-size: clamp(34px, 5.5cqw, 64px); }
-  .is-screen .dashboard-heading-event-count small { font-size: clamp(13px, 2cqw, 20px); }
-  .is-screen .dashboard-heading-event-count > span:not(.visually-hidden) { font-size: clamp(16px, 3.3cqw, 32px); }
-  .is-screen .dashboard-heading-event:nth-child(2) { grid-template-columns: max-content minmax(0, .85fr) minmax(0, 1.25fr); }
-  .is-screen .dashboard-heading-event:nth-child(2) h2 { grid-column: 3; }
-  .is-screen .dashboard-heading-event:nth-child(2) .dashboard-heading-event-count { grid-column: 1; justify-content: flex-start; align-items: baseline; }
-}
-
-@media (min-width: 1200px) {
-  .is-screen .dashboard-heading-event { grid-template-columns: minmax(0, 1.6fr) minmax(148px, .7fr) max-content; }
-  .is-screen .dashboard-heading-event:nth-child(2) { grid-template-columns: max-content minmax(148px, .7fr) minmax(0, 1.6fr); }
-  .is-screen .dashboard-heading-event:first-child .dashboard-heading-event-count { flex-direction: row-reverse; }
-}
 
 /* 完整任务行优先；不足一行的余量交给研发动态，不留在分页上方。 */
 @media (min-width: 1200px) and (min-height: 700px) {
@@ -811,12 +665,6 @@ a.dashboard-person:focus-visible { outline: 2px solid var(--cyan); outline-offse
 .is-paginated .dashboard-task-top { flex-wrap: nowrap; }
 .is-paginated .dashboard-task-flags { flex-wrap: nowrap; flex-shrink: 0; }
 .dashboard-page .dashboard-team-name { white-space: nowrap; }
-@media (min-width: 1200px) {
-  .is-screen.dashboard-page .dashboard-heading { grid-template-columns: clamp(280px, 14.5vw, 380px) minmax(0, 1fr) clamp(280px, 14.5vw, 380px); }
-}
-@media (min-width: 1400px) {
-  .dashboard-page:not(.is-screen) .dashboard-heading { grid-template-columns: minmax(280px, 1fr) minmax(0, 3.7fr) minmax(280px, 1fr); }
-}
 
 .dashboard-scroll-block { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .dashboard-list-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; flex: 0 0 auto; }
@@ -842,40 +690,9 @@ a.dashboard-person:focus-visible { outline: 2px solid var(--cyan); outline-offse
 
 .dashboard-scroll-viewport { overflow-x: hidden; }
 /* 有缩放的2K屏同样保持标题两侧，不把倒计时移到下一行。 */
-@media (min-width: 1200px) and (max-width: 2199px) {
-  .is-screen .dashboard-heading-center { display: grid; grid-column: 2; grid-row: 1; }
-  .is-screen .dashboard-heading-competitions { display: contents; }
-  .is-screen .dashboard-heading-event:first-child { grid-column: 1; grid-row: 1; }
-  .is-screen .dashboard-heading-event:nth-child(2) { grid-column: 3; grid-row: 1; }
-  .is-screen.dashboard-page .dashboard-header-controls { grid-column: 3; grid-row: 1; justify-self: end; }
-  .is-screen .dashboard-heading-event { grid-template-columns: minmax(0, 1fr) max-content; }
-  .is-screen .dashboard-heading-event:nth-child(2) { grid-template-columns: max-content minmax(0, 1fr); }
-  .is-screen .dashboard-heading-event-info { display: block; grid-column: 1; grid-row: 1; }
-  .is-screen .dashboard-heading-event h2 { font-size: 18px; }
-  .is-screen .dashboard-heading-event-meta { text-align: left; }
-  .is-screen .dashboard-heading-event-count { grid-column: 2; }
-  .is-screen .dashboard-heading-event:nth-child(2) .dashboard-heading-event-info { grid-column: 2; }
-  .is-screen .dashboard-heading-event:nth-child(2) .dashboard-heading-event-meta { text-align: right; }
-}
-
-@media (min-width: 1200px) and (max-width: 1599px) {
-  .is-screen .dashboard-heading-center { gap: 12px; }
-  .is-screen .dashboard-heading-event,
-  .is-screen .dashboard-heading-event:nth-child(2) { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto; gap: 4px; padding: 5px 8px; }
-  .is-screen .dashboard-heading-event .dashboard-heading-event-info,
-  .is-screen .dashboard-heading-event:nth-child(2) .dashboard-heading-event-info { grid-column: 1; grid-row: 1; }
-  .is-screen .dashboard-heading-event .dashboard-heading-event-count,
-  .is-screen .dashboard-heading-event:nth-child(2) .dashboard-heading-event-count { grid-column: 1; grid-row: 2; }
-  .is-screen .dashboard-heading-event h2 { font-size: 16px; gap: 4px; }
-  .is-screen .dashboard-heading-event h2 img { width: 22px; height: 16px; }
-  .is-screen .dashboard-heading-event-count strong { font-size: 30px; }
-  .is-screen .dashboard-heading-event-count > span:not(.visually-hidden) { font-size: 14px; }
-}
 
 /* 短屏保留可读字号和两行任务，缩小头部与分页控件的额外占高。 */
 @media (min-width: 1200px) and (min-height: 700px) and (max-height: 1000px) {
-  .dashboard-page.is-fixed-screen .dashboard-heading { margin-bottom: 8px; padding-bottom: 8px; }
-  .is-fixed-screen .dashboard-header-controls .dashboard-clock { line-height: 1.2; margin: 0 0 4px; }
   .is-fixed-screen .dashboard-actions { display: grid; grid-template-columns: repeat(3, max-content); justify-content: end; align-items: center; gap: 4px; }
   .is-fixed-screen .dashboard-actions button { padding: 4px 8px; font-size: 12px; line-height: 1.2; }
   .is-fixed-screen .dashboard-connection { font-size: 12px; line-height: 1.2; }
@@ -888,32 +705,81 @@ a.dashboard-person:focus-visible { outline: 2px solid var(--cyan); outline-offse
 }
 
 /* 单个 ROBOCON 节点仍保持标题和倒计时紧凑排列。 */
-@media (min-width: 761px) {
-  .dashboard-heading-center:has(.dashboard-heading-event:only-child) { grid-template-columns: auto minmax(180px, 1fr); max-width: 620px; }
-  .dashboard-page .dashboard-heading-center:has(.dashboard-heading-event:only-child) .dashboard-title-block { grid-column: 1; }
-  .dashboard-heading-competitions .dashboard-heading-event:only-child { grid-column: 2; grid-row: 1; }
-}
 
 /* Vinci 校名与队名分行，避免长品牌文字挤入中央倒计时区域。 */
 .dashboard-page .dashboard-identity { max-width: 100%; }
 .dashboard-page .dashboard-team-name { white-space: normal; overflow-wrap: anywhere; }
 .dashboard-team-name > span { display: block; }
-.dashboard-event-source { font-size: .72em; color: var(--cyan); }
 
 /* 复用对象存储中的 CURC + ROBOCON 横向组合标志，保持原图比例。 */
-.dashboard-page .dashboard-heading-event h2 { flex-direction: column; align-items: flex-start; gap: 5px; }
-.dashboard-page .dashboard-heading-event:nth-child(2) h2 { flex-direction: column; align-items: flex-end; }
-.dashboard-page .dashboard-heading-event h2 .dashboard-event-logo {
-  width: clamp(104px, 7vw, 140px);
-  max-width: 100%;
-  height: auto;
-  box-sizing: border-box;
-  padding: 4px 6px;
-  border-radius: 0;
-  object-fit: contain;
-  background: transparent;
+
+/* 倒计时统一两行：标志与节点名称｜天数；日期与同期参考｜时钟。 */
+.dashboard-page .dashboard-heading {
+  display: grid;
+  grid-template-columns: minmax(180px, .8fr) minmax(0, 3fr) minmax(200px, .9fr);
+  align-items: center;
+  gap: 18px;
+  position: relative;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
 }
-@media (min-width: 1200px) and (max-height: 850px) {
-  .dashboard-page.is-fixed-screen .dashboard-heading-event h2 { gap: 2px; }
-  .dashboard-page.is-fixed-screen .dashboard-heading-event h2 .dashboard-event-logo { width: 104px; padding: 2px 4px; }
+.dashboard-heading-center { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 14px; }
+.dashboard-page .dashboard-heading-center .dashboard-title-block { grid-column: 2; grid-row: 1; text-align: center; }
+.dashboard-page .dashboard-title-block h1 { margin: 0; font-size: clamp(1.5rem, 1.8vw, 2.1rem); line-height: 1.2; white-space: nowrap; }
+.dashboard-page .dashboard-title-block .eyebrow { margin: 0 0 4px; font-size: 10px; letter-spacing: .06em; white-space: nowrap; }
+.dashboard-heading-competitions { display: contents; }
+.dashboard-heading-event {
+  --event-accent: var(--cyan);
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 5px 12px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--event-accent) 28%, transparent);
+  border-left: 3px solid var(--event-accent);
+  background: linear-gradient(110deg, rgba(21, 100, 133, .12), rgba(3, 17, 30, .35));
 }
+.dashboard-heading-event:first-child { grid-column: 1; grid-row: 1; }
+.dashboard-heading-event:nth-child(2) { --event-accent: var(--gold); grid-column: 3; grid-row: 1; border-left-width: 1px; border-right: 3px solid var(--event-accent); }
+.dashboard-heading-event-info, .dashboard-heading-event-count { display: contents; }
+.dashboard-page .dashboard-heading-event h2 { display: flex; align-items: center; gap: 8px; grid-column: 1; grid-row: 1; min-width: 0; margin: 0; color: var(--ink); font-size: 16px; line-height: 1.3; white-space: nowrap; }
+.dashboard-page .dashboard-heading-event h2 .dashboard-event-logo { flex: 0 0 auto; width: 76px; max-width: 42%; height: auto; padding: 0; border: 0; border-radius: 0; background: transparent; object-fit: contain; }
+.dashboard-heading-event-meta { grid-column: 1; grid-row: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-width: 0; color: var(--muted); font-size: 11px; line-height: 1.4; }
+.dashboard-heading-event time, .dashboard-event-reference { white-space: nowrap; }
+.dashboard-event-reference { color: var(--green); }
+.dashboard-event-reference:is(.historical, .tentative) { color: var(--gold); }
+a.dashboard-event-reference:hover { text-decoration: underline; text-underline-offset: 3px; }
+a.dashboard-event-reference:focus-visible { outline: 2px solid var(--event-accent); outline-offset: 3px; }
+.dashboard-heading-event-count > strong { grid-column: 2; grid-row: 1; color: var(--event-accent); font: 600 32px/1.1 var(--dashboard-mono); font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+.dashboard-heading-event-count small { margin-left: 3px; font-size: 12px; font-weight: 400; }
+.dashboard-heading-event-count > span:not(.visually-hidden) { grid-column: 2; grid-row: 2; color: var(--event-accent); font: 13px/1.4 var(--dashboard-mono); font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+.dashboard-page .dashboard-heading .dashboard-header-controls { grid-column: 3; grid-row: 1; min-width: 0; justify-self: end; }
+.dashboard-page .dashboard-heading .dashboard-clock { min-height: 0; margin: 0 0 6px; font-size: 12px; line-height: 1.3; text-align: right; }
+.dashboard-page .dashboard-heading .dashboard-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 4px; }
+.dashboard-page .dashboard-heading .dashboard-actions button { padding: 5px 8px; font-size: 12px; line-height: 1.3; }
+.dashboard-page .dashboard-heading .dashboard-connection { font-size: 12px; }
+@media (min-width: 1200px) {
+  .dashboard-page.is-fixed-screen .dashboard-heading { flex: 0 0 auto; gap: 16px; margin-bottom: 10px; padding-bottom: 10px; }
+}
+@media (min-width: 761px) and (max-width: 1199px) {
+  .dashboard-page .dashboard-heading { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 12px; }
+  .dashboard-heading-center { display: contents; }
+  .dashboard-heading-competitions { display: grid; grid-column: 1 / -1; grid-row: 2; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .dashboard-heading-event:first-child, .dashboard-heading-event:nth-child(2) { grid-column: auto; grid-row: auto; }
+}
+@media (max-width: 760px) {
+  .dashboard-page .dashboard-heading { grid-template-columns: minmax(0, 1fr) auto; gap: 12px; }
+  .dashboard-heading-center { display: contents; }
+  .dashboard-page .dashboard-heading-center .dashboard-title-block { grid-column: 2; grid-row: 1; text-align: right; }
+  .dashboard-heading-competitions { display: grid; grid-column: 1 / -1; grid-row: 2; grid-template-columns: 1fr; gap: 8px; }
+  .dashboard-heading-event:first-child, .dashboard-heading-event:nth-child(2) { grid-column: auto; grid-row: auto; padding: 8px 10px; gap: 3px 10px; }
+  .dashboard-page .dashboard-heading-event h2 { font-size: 15px; }
+  .dashboard-heading-event-count > strong { font-size: 28px; }
+  .dashboard-page .dashboard-heading .dashboard-header-controls { grid-column: 1 / -1; grid-row: 3; justify-self: stretch; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; }
+  .dashboard-page .dashboard-heading .dashboard-clock { margin: 0; text-align: left; font-size: 11px; }
+  .dashboard-page .dashboard-heading .dashboard-actions { justify-content: flex-start; }
+}
+.dashboard-heading-event-count > strong:only-child { max-width: 120px; font-size: 14px; line-height: 1.4; white-space: normal; }
