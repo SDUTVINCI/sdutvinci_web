@@ -909,9 +909,9 @@ a.dashboard-person:focus-visible { outline: 2px solid var(--cyan); outline-offse
   height: auto;
   box-sizing: border-box;
   padding: 4px 6px;
-  border-radius: 4px;
+  border-radius: 0;
   object-fit: contain;
-  background: #fff;
+  background: transparent;
 }
 @media (min-width: 1200px) and (max-height: 850px) {
   .dashboard-page.is-fixed-screen .dashboard-heading-event h2 { gap: 2px; }

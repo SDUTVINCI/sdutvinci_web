@@ -172,4 +172,4 @@ DASHBOARD_GITHUB_PEOPLE=
 两处倒计时复用首页/页脚的 `roboconPartner.logo`：
 `https://cdn.sdutvinci.cn/site-assets/images/sponsors/robocon-logo.webp`。
 该1931×656透明WebP包含CURC和ROBOCON两个标志，沿用原图，不裁切或改色。
-倒计时以横向图片、原始比例和浅色底板展示，标题分行排在标志下方，避免在深色背景上难以辨认。
+倒计时以横向图片和原始比例展示，保留原图透明背景，直接叠放在深色界面上；标题分行排在标志下方。
