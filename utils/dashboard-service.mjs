@@ -12,20 +12,11 @@ function response(body, status = 200, extra = {}) {
   })
 }
 
-async function sameSecret(a, b) {
-  const encode = value => new TextEncoder().encode(value)
-  const [left, right] = await Promise.all([a, b].map(value => crypto.subtle.digest('SHA-256', encode(value))))
-  const x = new Uint8Array(left), y = new Uint8Array(right)
-  let diff = 0
-  for (let i = 0; i < x.length; i++) diff |= x[i] ^ y[i]
-  return diff === 0
-}
-
 export function createDashboardService({ fetcher = globalThis.fetch, now = Date.now } = {}) {
   const handlers = new Map()
   return context => {
     const env = context.env || {}
-    const keys = ['DASHBOARD_ENABLED', 'DASHBOARD_PUBLIC', 'DASHBOARD_ACCESS_CODE', 'FEISHU_APP_ID', 'FEISHU_APP_SECRET',
+    const keys = ['DASHBOARD_ENABLED', 'FEISHU_APP_ID', 'FEISHU_APP_SECRET',
       'FEISHU_BITABLE_APP_TOKEN', 'FEISHU_BITABLE_TABLE_ID', 'FEISHU_BITABLE_VIEW_ID', 'FEISHU_FIELD_MAP',
       'DASHBOARD_GITHUB_ORG', 'DASHBOARD_GITHUB_REPOS', 'DASHBOARD_GITHUB_EXCLUDE_REPOS', 'DASHBOARD_GITHUB_TOKEN', 'DASHBOARD_GITHUB_PEOPLE']
     const scope = JSON.stringify(keys.map(key => env[key] || ''))
@@ -132,19 +123,13 @@ function createScopedService({ fetcher, now }) {
 
   const development = createDashboardGithub({ json, now })
 
-  return async function handle({ request, env = {} }) {
+  return async function handle({ request, env = {}, authenticated = false }) {
     if (request.method !== 'GET') return response({ code: 'METHOD_NOT_ALLOWED' }, 405, { Allow: 'GET' })
+    // 只能由服务端校验网站会话后设置；不接受请求头、查询参数或旧共享口令替代登录。
+    if (authenticated !== true) return response({ code: 'LOGIN_REQUIRED', message: '请先登录。' }, 401)
     const required = ['FEISHU_APP_ID', 'FEISHU_APP_SECRET', 'FEISHU_BITABLE_APP_TOKEN', 'FEISHU_BITABLE_TABLE_ID']
-    const isPublic = env.DASHBOARD_PUBLIC === 'true'
-    if (env.DASHBOARD_ENABLED !== 'true' || required.some(key => !env[key]) || (!isPublic && !/^[\x21-\x7e]{12,128}$/.test(String(env.DASHBOARD_ACCESS_CODE || '')))) {
+    if (env.DASHBOARD_ENABLED !== 'true' || required.some(key => !env[key])) {
       return response({ code: 'NOT_CONFIGURED', message: '看板尚未开放，请联系团队负责人。' }, 503)
-    }
-    if (!isPublic) {
-      const authorization = request.headers.get('Authorization') || ''
-      const code = authorization.startsWith('Bearer ') ? authorization.slice(7) : ''
-      if (!code || code.length > 1000 || !await sameSecret(code, env.DASHBOARD_ACCESS_CODE)) {
-        return response({ code: 'ACCESS_REQUIRED', message: '请输入正确的访问口令。' }, 401)
-      }
     }
     try {
       const [data, activity] = await Promise.all([tasks(env), development(env)])

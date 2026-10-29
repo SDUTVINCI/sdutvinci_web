@@ -8,10 +8,11 @@ import { resolveStaticMediaUrl } from '~~/shared/utils/static-media'
 import { dashboardGridLayout, dashboardTaskPages, dashboardTaskState, dashboardTaskGroups, selectDashboardTasks, dashboardScoreboard, type DashboardData, type DashboardTask, type DashboardStatusIssue } from '~/utils/dashboard'
 import { DASHBOARD_PREFERENCES_KEY, dashboardPreferences, readDashboardPreferences } from '../../../utils/dashboard-experience.mjs'
 
-definePageMeta({ layout: 'dashboard' })
+definePageMeta({ layout: 'dashboard', middleware: 'site-auth' })
 useHead({ title: `任务看板 | ${site.shortName}`, meta: [{ name: 'robots', content: 'noindex, nofollow' }], bodyAttrs: { class: 'dashboard-tech' } })
 const route = useRoute()
 const router = useRouter()
+const { session, loaded: sessionLoaded } = useCmsSession()
 const screen = ref(false)
 const showSyncDetails = ref(false)
 const fixedGridHeight = ref<number | null>(null)
@@ -29,7 +30,6 @@ const data = shallowRef<DashboardData | null>(null)
 const phase = ref('loading')
 const message = ref('')
 const loading = ref(false)
-const accessCode = ref('')
 const selectedStatus = ref('todo')
 const selectedGroup = ref('all')
 const search = ref('')
@@ -50,7 +50,6 @@ const memberProfile = (name: string) => {
 const codeProfile = (person: { name: string; href?: string; login?: string; memberName?: string }) => dashboardCodeProfile(person, memberData.value?.items || [], site.logo)
 let layoutObserver: ResizeObserver | undefined
 let layoutFrame = 0
-const authorization = ref('')
 let request: AbortController | undefined
 let pollTimer: ReturnType<typeof setTimeout> | undefined
 let clockTimer: ReturnType<typeof setInterval> | undefined
@@ -130,7 +129,7 @@ watch(() => route.query.screen, () => {
 
 function scheduleRefresh() {
   clearTimeout(pollTimer)
-  if (disposed || ['locked', 'closed'].includes(phase.value)) return
+  if (disposed || ['login', 'closed'].includes(phase.value)) return
   pollTimer = setTimeout(() => { if (!document.hidden) void refresh(); else scheduleRefresh() }, 30_000)
 }
 
@@ -142,16 +141,12 @@ async function refresh() {
   request = controller
   const timeout = setTimeout(() => controller.abort(), 45_000)
   try {
-    const result = await fetch('/api/dashboard', { signal: controller.signal, cache: 'no-store', headers: authorization.value ? { Authorization: `Bearer ${authorization.value}` } : {} })
+    const result = await fetch('/api/dashboard', { signal: controller.signal, cache: 'no-store', credentials: 'same-origin' })
     const body = result.headers.get('Content-Type')?.includes('application/json') ? await result.json() : null
     if (ticket !== generation || disposed) return
     failedStatusIssues.value = []
     if (result.status === 401) {
-      data.value = null
-      phase.value = 'locked'
-      message.value = authorization.value ? '口令不正确，请重新输入。' : ''
-      authorization.value = ''
-      showStatusIssues.value = false
+      await redirectToLogin()
       return
     }
     if (result.status === 404 || body?.code === 'NOT_CONFIGURED') {
@@ -193,26 +188,25 @@ async function refresh() {
   }
 }
 
-function unlock() {
-  authorization.value = accessCode.value.trim()
-  accessCode.value = ''
-  void refresh()
-}
-
-function lock() {
+async function redirectToLogin() {
+  if (phase.value === 'login' || disposed) return
+  phase.value = 'login'
   generation++
   request?.abort()
   loading.value = false
-  authorization.value = ''
   data.value = null
   selectedTaskId.value = null
   showCompletion.value = false
   showStatusIssues.value = false
   failedStatusIssues.value = []
   message.value = ''
-  phase.value = 'locked'
   clearTimeout(pollTimer)
+  session.value = null
+  sessionLoaded.value = true
+  await navigateTo({ path: '/cms/login', query: { redirect: route.fullPath } }, { replace: true })
 }
+
+watch(session, value => { if (!value) void redirectToLogin() }, { flush: 'sync' })
 
 function setScreen(value: boolean) {
   screen.value = value
@@ -261,7 +255,7 @@ function resetDisplay() {
 const resumeRefresh = () => {
   if (document.hidden) return
   currentTime.value = Date.now()
-  if (!['locked', 'closed'].includes(phase.value)) void refresh()
+  if (!['login', 'closed'].includes(phase.value)) void refresh()
 }
 const resizeScreen = () => {
   if (!layoutFrame) layoutFrame = requestAnimationFrame(() => { layoutFrame = 0; measureScreen() })
@@ -355,6 +349,7 @@ onBeforeUnmount(() => {
   layoutObserver?.disconnect()
   cancelAnimationFrame(layoutFrame)
   disposed = true
+  data.value = null
   request?.abort()
   clearTimeout(pollTimer)
   clearInterval(clockTimer)
@@ -400,32 +395,16 @@ onBeforeUnmount(() => {
       <div class="dashboard-header-controls">
         <p class="dashboard-clock">{{ clock || '任务进展，一目了然。' }}</p>
         <div class="dashboard-actions">
-        <span class="dashboard-connection" :class="{ 'is-online': phase === 'ready' && !updateInterrupted }"><i aria-hidden="true" />{{ loading ? '正在同步' : phase === 'ready' ? updateInterrupted ? '等待更新' : '数据已同步' : phase === 'locked' ? '等待解锁' : '暂未连接' }}</span>
+        <span class="dashboard-connection" :class="{ 'is-online': phase === 'ready' && !updateInterrupted }"><i aria-hidden="true" />{{ loading ? '正在同步' : phase === 'ready' ? updateInterrupted ? '等待更新' : '数据已同步' : phase === 'login' ? '请先登录' : '暂未连接' }}</span>
         <button type="button" :disabled="loading" @click="refresh">{{ loading ? '更新中…' : '刷新' }}</button>
         <button type="button" :aria-pressed="screen" @click="toggleScreen">{{ screen ? '退出大屏' : '大屏模式' }}</button>
         <button type="button" :aria-pressed="fullscreen" @click="toggleFullscreen">{{ fullscreen ? '退出全屏' : '浏览器全屏' }}</button>
-        <button v-if="data && authorization" type="button" @click="lock">锁定</button>
         </div>
       </div>
     </header>
     <p v-if="displayMessage" class="dashboard-notice" role="status">{{ displayMessage }}</p>
 
-    <section v-if="phase === 'locked'" class="dashboard-gate dashboard-access" :class="{ 'is-verifying': loading }" :aria-busy="loading" aria-labelledby="dashboard-unlock-title">
-      <div class="dashboard-gate-visual" aria-hidden="true"><div class="dashboard-radar"><span /><i /></div><span class="dashboard-gate-signal">VINCI / MISSION CONTROL</span></div>
-      <div class="dashboard-gate-content">
-        <p class="eyebrow">Team Access / 队内入口</p><h2 id="dashboard-unlock-title">每一份进展<br>都在这里汇聚</h2><p>输入访问口令，查看团队任务进展。</p>
-        <form @submit.prevent="unlock"><label for="dashboard-code">访问口令</label><div class="dashboard-code-row"><input id="dashboard-code" v-model="accessCode" :disabled="loading" type="password" required maxlength="1000" autocomplete="current-password" placeholder="输入队内访问口令"><button type="submit" :disabled="loading">{{ loading ? '验证中…' : '进入看板 →' }}</button></div></form>
-        <p v-if="message" role="alert" class="dashboard-warning">{{ message }}</p>
-        <p class="dashboard-access-hint"><i aria-hidden="true" />仅本次页面有效 · 离开后重新验证</p>
-      </div>
-      <div v-if="loading" class="dashboard-unlocking" role="status" aria-live="polite">
-        <span class="dashboard-loading-orbit" aria-hidden="true"><i /><img :src="site.logo" alt="" width="68" height="68"></span>
-        <strong>正在进入任务看板</strong>
-        <p>正在验证口令并同步任务…</p>
-        <span class="dashboard-loading-track" aria-hidden="true"><i /></span>
-      </div>
-    </section>
-    <section v-else-if="!data" class="dashboard-gate" aria-live="polite">
+    <section v-if="!data" class="dashboard-gate" aria-live="polite">
       <div class="dashboard-radar" aria-hidden="true"><span /><i /></div>
       <h2>{{ phase === 'loading' ? '正在读取任务…' : phase === 'closed' ? '看板尚未开放' : '暂时无法更新' }}</h2>
       <p>{{ message || '稍等片刻，正在获取最新进展。' }}</p>

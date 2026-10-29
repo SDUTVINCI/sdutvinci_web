@@ -51,8 +51,6 @@
 
 ```dotenv
 DASHBOARD_ENABLED=true
-DASHBOARD_PUBLIC=false
-DASHBOARD_ACCESS_CODE=
 FEISHU_APP_ID=
 FEISHU_APP_SECRET=
 FEISHU_BITABLE_APP_TOKEN=
@@ -64,10 +62,10 @@ FEISHU_FIELD_MAP=
 - 为 SDUT 表格配置自己的飞书应用和表格标识，不复用 YSU 的凭证、表格 token 或任务数据。
 - 飞书应用需发布并获得目标多维表格的记录只读权限（`base:record:retrieve`），以及表格相应访问授权。
   若需调试字段，可另开字段只读权限（`base:field:read`）；本站接口只读取记录，不修改表格。
-- `DASHBOARD_ACCESS_CODE`：管理员设置 12～128 位非空格 ASCII 口令。
+- 页面与接口统一使用现有网站登录会话；管理员、成员、学员等有效登录账号均可查看，无需额外口令。
 - `FEISHU_BITABLE_VIEW_ID`：可选；留空读取全表，配置后按该视图筛选范围读取，避免误选单组视图。
 - `FEISHU_FIELD_MAP`：可选；列名相同时留空即可。
-- `DASHBOARD_PUBLIC=true` 会明确取消共享口令保护，仅在允许公开任务内容时启用。默认关闭。
+- `DASHBOARD_PUBLIC`、`DASHBOARD_ACCESS_CODE` 已移除；旧环境变量、Bearer 口令和请求参数均不能绕过登录。
 
 `compose.yaml` 已将这些变量传给 app-blue / app-green 的运行环境。按本站正常部署流程更新后，
 配置变更需重建对应应用容器才能生效；不需要数据库迁移，也不需要为此配置 EO 函数。
@@ -75,12 +73,13 @@ FEISHU_FIELD_MAP=
 
 ## 3. 访问、缓存和故障
 
-- `/api/dashboard` 为只读 GET；未配置 503、无效口令 401、成功 200、上游错误 502，写请求不允许。
-- 共享口令授权整张看板，不区分个人权限，也不是飞书单点登录；独立于本站 CMS 登录。
-- 口令只在页面内存中保存，通过 Authorization 请求头发送。刷新/离开页面后重新验证；“锁定”清除口令和任务。
-- 浏览器只保存显示偏好（组别、状态、大屏和轮播），不保存任务正文或访问凭证。
+- `/api/dashboard` 为只读 GET；未登录或会话失效 401、已登录但未配置 503、成功 200、上游错误 502，写请求不允许。
+- `/dashboard`（含 `?screen=1`）使用 `site-auth` 路由中间件；未登录跳转 `/cms/login`，保留完整回跳地址。
+- API 每次先通过 `requireSiteRequestAuth` 校验网站会话，包含缓存命中；过期、撤销或停用账号不能读取任务。
+- 页面自动使用同源登录 Cookie；退出登录或接口返回 401 时清空任务和详情并跳转登录页。没有独立口令输入或公开模式。
+- 浏览器只保存显示偏好（组别、状态、大屏和轮播），不保存任务正文或访问凭证。网站会话继续使用现有 HttpOnly Cookie。
 - API 与页面使用 `private, no-store`，并设置 noindex；任务不进入 Sitemap、新闻/Wiki 内容导出或公开搜索。
-- 服务实例内任务缓存 30 秒，合并并发请求，缓存命中也需验证口令。配置改变时隔离缓存。
+- 服务实例内任务缓存 30 秒，合并并发请求，缓存命中也需验证会话。配置改变时隔离缓存。
 - 飞书认证令牌复用有效期，失效时重取一次；上游超时/错误只返回固定诊断，不返回密钥或原始响应。
 - 读取失败时最多回退 15 分钟内缓存，明确标记同步中断和原更新时间；无可用缓存则报错。
   浏览器已显示的结果可继续保留，但会明确提示更新中断，不表示最新状态。
@@ -89,8 +88,10 @@ FEISHU_FIELD_MAP=
 
 ## 4. 验证
 
+以下历史验收中的“口令/锁定”描述仅属于旧版。当前以网站登录会话及 `dashboard-auth.test.ts` 的权限回归为准。
+
 ```bash
-npm test -- tests/dashboard.test.mjs tests/dashboard-experience.test.mjs tests/dashboard-github.test.mjs tests/competitions.test.mjs
+npm test -- tests/dashboard-auth.test.ts tests/dashboard.test.mjs tests/dashboard-experience.test.mjs tests/dashboard-github.test.mjs tests/competitions.test.mjs
 npm run typecheck
 npm run build
 ```
@@ -134,7 +135,7 @@ DASHBOARD_GITHUB_PEOPLE=
 - 贡献与动态分开缓存：无令牌30分钟、有令牌10分钟；失败后至少60秒再尝试，旧值至多保留一天。
 - 每轮最多4个并发请求、8秒预算；仓库较多时跨轮继续同步，显示部分结果与真实更新时间。
   GitHub 403/429、超时或某仓库失败不会阻塞飞书任务，页面可展开逐仓库同步状态。
-- 整个 API（含研发区）继续受同一看板口令与 `private, no-store` 保护。
+- 整个 API（含研发区）统一要求有效网站登录会话，并设置 `private, no-store` 和 `Vary: Cookie`。
 
 2026-10-29 使用本机服务代码实际匿名读取 GitHub 成功：目录5个公开仓库，5/5贡献与动态同步，无不可用项；
 未配置或读取 GitHub 写令牌，没有修改任何组织/仓库内容。真实飞书仍待独立配置和联调。

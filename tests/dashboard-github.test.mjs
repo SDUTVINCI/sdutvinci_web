@@ -113,7 +113,7 @@ test('超时预算中止整轮、并发合并、配置变更隔离缓存',async(
   assert(calls>before)
 })
 
-test('研发接口失败不阻塞飞书任务，未解锁不访问 GitHub',async()=>{
+test('研发接口失败不阻塞飞书任务，未登录不访问 GitHub',async()=>{
   const calls=[]
   const read=createDashboardService({now:()=>instant,fetcher:async url=>{
     calls.push(url)
@@ -121,10 +121,10 @@ test('研发接口失败不阻塞飞书任务，未解锁不访问 GitHub',async
     if(url.includes('/auth/'))return Response.json({code:0,tenant_access_token:'never-return-token'})
     return Response.json({code:0,data:{items:[{record_id:'task',fields:{任务详情:'任务',完成情况:'未完成'}}],has_more:false}})
   }})
-  const config={...env,DASHBOARD_ENABLED:'true',DASHBOARD_ACCESS_CODE:'test-access-only',FEISHU_APP_ID:'example',FEISHU_APP_SECRET:'secret',FEISHU_BITABLE_APP_TOKEN:'base',FEISHU_BITABLE_TABLE_ID:'table'}
+  const config={...env,DASHBOARD_ENABLED:'true',FEISHU_APP_ID:'example',FEISHU_APP_SECRET:'secret',FEISHU_BITABLE_APP_TOKEN:'base',FEISHU_BITABLE_TABLE_ID:'table'}
   assert.equal((await read({env:config,request:new Request('https://example.test/api/dashboard')})).status,401)
   assert.equal(calls.length,0)
-  const response=await read({env:config,request:new Request('https://example.test/api/dashboard',{headers:{Authorization:'Bearer test-access-only'}})})
+  const response=await read({env:config,authenticated:true,request:new Request('https://example.test/api/dashboard')})
   const value=await response.json()
   assert.equal(response.status,200);assert.equal(value.tasks.length,1)
   assert.equal(value.development.unavailable,true)

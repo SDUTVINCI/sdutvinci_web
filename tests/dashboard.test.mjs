@@ -5,9 +5,9 @@ import { createDashboardService } from '../utils/dashboard-service.mjs'
 import { dashboardFixtures } from './fixtures/dashboard.mjs'
 
 const instant = Date.parse('2027-01-01T00:00:00+08:00')
-const env = { DASHBOARD_ENABLED: 'true', DASHBOARD_ACCESS_CODE: 'test-access-code-only',
+const env = { DASHBOARD_ENABLED: 'true',
   FEISHU_APP_ID: 'cli_test', FEISHU_APP_SECRET: 'secret-test-only', FEISHU_BITABLE_APP_TOKEN: 'base_test', FEISHU_BITABLE_TABLE_ID: 'tbl_test' }
-const context = (options = {}) => ({ env, request: new Request('https://example.test/api/dashboard', { headers: { Authorization: `Bearer ${env.DASHBOARD_ACCESS_CODE}` } }), ...options })
+const context = (options = {}) => ({ env, authenticated: true, request: new Request('https://example.test/api/dashboard'), ...options })
 const reply = body => Response.json(body)
 const records = dashboardFixtures(instant).records
 
@@ -163,22 +163,22 @@ test('任务榜按执行人统计，多人任务各记一次，同名不同标�
   assert.deepEqual(rows.map(row => [row.key, row.count]), [['1', 2], ['2', 1]])
 })
 
-test('未配置、错误口令及写入请求均不访问上游，响应不缓存', async () => {
+test('未配置、未登录及写入请求均不访问上游，响应不缓存', async () => {
   const calls = [], handler = createDashboardService({ fetcher: upstream(calls) })
   const closed = await handler(context({ env: {} }))
   assert.equal(closed.status, 503)
   assert.equal((await closed.json()).code, 'NOT_CONFIGURED')
-  const locked = await handler(context({ request: new Request('https://example.test/api/dashboard') }))
+  const locked = await handler(context({ authenticated: false }))
   assert.equal(locked.status, 401)
   assert.equal(locked.headers.get('Cache-Control'), 'private, no-store')
-  const wrong = await handler(context({ request: new Request('https://example.test/api/dashboard', { headers: { Authorization: 'Bearer wrong' } }) }))
+  const wrong = await handler(context({ authenticated: false, request: new Request('https://example.test/api/dashboard', { headers: { Authorization: 'Bearer old-code' } }) }))
   assert.equal(wrong.status, 401)
   const write = await handler(context({ request: new Request('https://example.test/api/dashboard', { method: 'POST' }) }))
   assert.equal(write.status, 405)
   assert.equal(calls.length, 0)
 })
 
-test('分页读取完整任务，复用令牌和缓存，缓存命中仍需口令', async () => {
+test('分页读取完整任务，复用令牌和缓存，缓存命中仍需有效登录', async () => {
   const calls = []
   const handler = createDashboardService({ now: () => instant, fetcher: async (url, options = {}) => {
     calls.push({ url: String(url), ...options })
@@ -193,7 +193,7 @@ test('分页读取完整任务，复用令牌和缓存，缓存命中仍需口�
   await handler(context())
   assert.equal(calls.length, 3)
   assert(calls.every(call => call.method === undefined || call.url.includes('/auth/')))
-  const unauthorized = await handler(context({ request: new Request('https://example.test/api/dashboard') }))
+  const unauthorized = await handler(context({ authenticated: false }))
   assert.equal(unauthorized.status, 401)
   assert.equal(calls.length, 3)
 })
@@ -256,11 +256,17 @@ test('分页异常、超过2000条与字段错误不返回残缺成功结果', a
   assert.equal(pages, 4)
 })
 
-test('公开访问必须显式开启，空口令不会自动使私有看板公开', async () => {
-  const handler = createDashboardService({ fetcher: upstream() })
-  const request = new Request('https://example.test/api/dashboard')
-  assert.equal((await handler({ request, env: { ...env, DASHBOARD_ACCESS_CODE: '' } })).status, 503)
-  assert.equal((await handler({ request, env: { ...env, DASHBOARD_ACCESS_CODE: '', DASHBOARD_PUBLIC: 'true' } })).status, 200)
+test('旧公开开关与共享口令不能替代网站会话，已登录无需口令', async () => {
+  const calls = [], handler = createDashboardService({ fetcher: upstream(calls) })
+  const request = new Request('https://example.test/api/dashboard?authenticated=true', { headers: { Authorization: 'Bearer old-code' } })
+  const legacy = { ...env, DASHBOARD_ACCESS_CODE: 'old-code', DASHBOARD_PUBLIC: 'true' }
+  for (const authenticated of [undefined, false, 'true', 1]) {
+    const result = await handler({ request, env: legacy, authenticated })
+    assert.equal(result.status, 401)
+    assert.equal((await result.json()).code, 'LOGIN_REQUIRED')
+  }
+  assert.equal(calls.length, 0)
+  assert.equal((await handler(context())).status, 200)
 })
 
 test('面板容量随真实可用宽高增长，窄屏至少保留一列一行', () => {

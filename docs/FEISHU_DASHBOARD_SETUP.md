@@ -4,7 +4,10 @@
 敏感值只保存在服务器环境变量中；本文不记录 App Secret、看板口令、Base token 或运维会话令牌。
 接口与运维约定见 [TASK_DASHBOARD.md](TASK_DASHBOARD.md)。
 
-## 2026-10-29：创建任务表与专用应用
+**当前访问规则已改为网站登录会话，取消共享口令。** 下方首次接入中有关口令生成和验证的记录仅供审计，
+不再是当前操作指南；后续改造见文末。
+
+## 2026-10-29：创建任务表与专用应用（首次接入记录）
 
 ### 仓库基线
 
@@ -112,11 +115,23 @@
 完成趋势已经验收。维护者录入第一批真实任务后，应逐项核对任务数量、人员、组别、截止时间、
 完成/撤回和积分，并用真实完成时间验证趋势。不应为让页面看起来有数据而填入演示任务。
 
-访问口令保存在部署目录 `.env` 的 `DASHBOARD_ACCESS_CODE`。维护者应在服务器安全查看并通过
-队内约定渠道分发，不把它追加到本记录、提交说明、网页 URL 或聊天日志。更改配置后仍需重建
-应用容器；优先继续使用 `./vinci update <已发布完整SHA>` 的正常蓝绿流程。
+## 2026-10-29：按维护者要求改为网站登录访问
 
-服务器配置沿用现有约定：`DASHBOARD_ENABLED`、`DASHBOARD_PUBLIC`、
-`DASHBOARD_ACCESS_CODE`、`FEISHU_APP_ID`、`FEISHU_APP_SECRET`、
-`FEISHU_BITABLE_APP_TOKEN`、`FEISHU_BITABLE_TABLE_ID`，以及可选视图与字段映射。
-保持 `DASHBOARD_PUBLIC=false`，不在日志、聊天、文档或 Git 中输出真实凭证。
+- 维护者明确要求“不要用口令，登录的用户才能看”，因此取消首次接入的共享口令方案。
+- 页面（含大屏）复用 `site-auth`，未登录先跳转 `/cms/login`，登录后回到原页面及查询参数。
+- `/api/dashboard` 复用 `requireSiteRequestAuth`，每次请求先查有效会话，再读取任务或缓存。
+  采用网站现有的过期、退出撤销、账号停用校验，不限制为 CMS 管理员或成员角色；学员登录也可查看。
+- 页面移除口令表单、Bearer 认证头和“锁定”；退出或会话失效时清除任务、详情和轮询并跳转登录。
+- 删除代码、Compose 与环境示例中的 `DASHBOARD_PUBLIC`、`DASHBOARD_ACCESS_CODE`；旧开关和旧口令不再授予访问权。
+- 保留 `private, no-store`、`noindex, nofollow`，补充 `Vary: Cookie`；飞书应用仍为只读，无须改变表格字段或权限。
+- 新增 HTTP 路由权限测试：匿名、旧口令、伪造 Cookie 均 401；各类有效登录角色均成功；
+  会话撤销后的下一次请求 401 且不调用任务读取服务。原任务缓存、分页、飞书和 GitHub 测试改用服务器已验证的登录上下文。
+- 未创建新的飞书自动化或工作流；此次仅调整网站访问控制。
+
+服务器仍只需 `DASHBOARD_ENABLED`、`FEISHU_APP_ID`、`FEISHU_APP_SECRET`、
+`FEISHU_BITABLE_APP_TOKEN`、`FEISHU_BITABLE_TABLE_ID`，以及可选视图、字段映射和 GitHub 配置。
+登录会话使用现有网站配置。生产发布与验收结果在完成后补充，不将本地测试当成上线验收。
+
+本地验收：看板与权限等 53 项回归测试、类型检查、生产构建通过。使用生产构建实际请求
+`/dashboard` 与 `?screen=1`，匿名均 302 到登录并保留回跳地址；API 匿名和旧 Bearer 口令均 401。
+测试进程特意保留旧公开开关，仍无法绕过登录；响应保持 `private, no-store`、`Vary: Cookie`。
