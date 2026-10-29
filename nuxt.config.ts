@@ -68,6 +68,8 @@ export default defineNuxtConfig({
     '/recruitment': { prerender: false },
     '/links': { prerender: false },
     '/downloads': { prerender: false },
+    '/dashboard': { prerender: false, headers: { 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex, nofollow' } },
+    '/api/dashboard': { prerender: false, headers: { 'cache-control': 'private, no-store' } },
     '/contact': { prerender: false },
     '/cms/**': { prerender: false },
     '/api/cms/**': { prerender: false },

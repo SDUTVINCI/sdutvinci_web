@@ -15,6 +15,7 @@ const navItems = [
   { label: 'Wiki', to: '/wiki' },
   { label: '纳新', to: '/recruitment' },
   { label: '链接', to: '/links' },
+  { label: '看板', to: '/dashboard' },
   { label: '联系', to: '/contact' }
 ]
 
