@@ -1,5 +1,8 @@
 # Vinci 飞书任务看板
 
+飞书表格、应用、权限、自动化和服务器接入的实际操作记录见
+[飞书接入操作记录](FEISHU_DASHBOARD_SETUP.md)。新建或调整这些配置后应同步更新该记录，勿记录真实密钥。
+
 入口：`/dashboard`；大屏：`/dashboard?screen=1`。主站导航提供“看板”入口。
 
 本模块参考 `tungchiahui/ysu_web` 的任务看板（`b1057a47f924510bbfc2ff24a750c9e21b2c6f2b`），
