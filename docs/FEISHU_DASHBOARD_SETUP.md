@@ -130,8 +130,24 @@
 
 服务器仍只需 `DASHBOARD_ENABLED`、`FEISHU_APP_ID`、`FEISHU_APP_SECRET`、
 `FEISHU_BITABLE_APP_TOKEN`、`FEISHU_BITABLE_TABLE_ID`，以及可选视图、字段映射和 GitHub 配置。
-登录会话使用现有网站配置。生产发布与验收结果在完成后补充，不将本地测试当成上线验收。
+登录会话使用现有网站配置。
 
 本地验收：看板与权限等 53 项回归测试、类型检查、生产构建通过。使用生产构建实际请求
 `/dashboard` 与 `?screen=1`，匿名均 302 到登录并保留回跳地址；API 匿名和旧 Bearer 口令均 401。
 测试进程特意保留旧公开开关，仍无法绕过登录；响应保持 `private, no-store`、`Vary: Cookie`。
+
+### 登录访问控制上线验收（2026-10-29 22:32，北京时间）
+
+- 功能提交：`9f0c9a45d7d5bde44113bb9e3d83bad6de5f73fa`，已推送组织仓库 main。
+- [该提交 CI](https://github.com/SDUTVINCI/sdutvinci_web/actions/runs/40891011353) 全部成功，
+  包括统一检查、运行与运维镜像构建、腾讯云镜像同步。
+- 由现有自动部署上线。尝试复用原运维页面时提示登录失效，因此本次没有新建 SSH 会话，
+  没有重新读取密钥或编辑服务器 `.env`；旧的口令/公开配置即使仍留在文件中，也不再被新版读取或注入。
+- 从开发机实际访问生产 `/dashboard` 和 `/dashboard?screen=1`，未登录均返回 302，
+  `Location` 指向 `/cms/login` 且保留原看板路径及大屏参数。
+- 生产 `/api/dashboard` 的匿名请求、旧 Bearer 口令请求、伪造 Cookie 请求均返回 401，
+  提示“请先登录”；请求参数 `authenticated=true` 不能绕过校验。
+- 上述响应均保留 `private, no-store` 和 `Vary: Cookie`。
+- 使用浏览器已有的网站登录会话刷新生产大屏，直接出现“数据已同步”、组别/状态筛选、
+  空任务列表和真实 GitHub 研发动态；没有输入共享口令，也没有口令输入框或“锁定”按钮。
+- 飞书任务表尚无业务任务，因此有效任务数仍为 0；赛事日期与“2026同期参考”说明保持不变。
