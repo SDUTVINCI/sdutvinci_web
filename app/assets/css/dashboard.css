@@ -888,7 +888,6 @@ a.dashboard-person:focus-visible { outline: 2px solid var(--cyan); outline-offse
 }
 
 /* 单个 ROBOCON 节点仍保持标题和倒计时紧凑排列。 */
-.dashboard-event-mark { display: inline-grid; place-items: center; width: 24px; height: 24px; border: 1px solid var(--cyan); border-radius: 5px; color: var(--cyan); font: 800 1rem var(--dashboard-mono); }
 @media (min-width: 761px) {
   .dashboard-heading-center:has(.dashboard-heading-event:only-child) { grid-template-columns: auto minmax(180px, 1fr); max-width: 620px; }
   .dashboard-page .dashboard-heading-center:has(.dashboard-heading-event:only-child) .dashboard-title-block { grid-column: 1; }
@@ -900,3 +899,21 @@ a.dashboard-person:focus-visible { outline: 2px solid var(--cyan); outline-offse
 .dashboard-page .dashboard-team-name { white-space: normal; overflow-wrap: anywhere; }
 .dashboard-team-name > span { display: block; }
 .dashboard-event-source { font-size: .72em; color: var(--cyan); }
+
+/* 复用对象存储中的 CURC + ROBOCON 横向组合标志，保持原图比例。 */
+.dashboard-page .dashboard-heading-event h2 { flex-direction: column; align-items: flex-start; gap: 5px; }
+.dashboard-page .dashboard-heading-event:nth-child(2) h2 { flex-direction: column; align-items: flex-end; }
+.dashboard-page .dashboard-heading-event h2 .dashboard-event-logo {
+  width: clamp(104px, 7vw, 140px);
+  max-width: 100%;
+  height: auto;
+  box-sizing: border-box;
+  padding: 4px 6px;
+  border-radius: 4px;
+  object-fit: contain;
+  background: #fff;
+}
+@media (min-width: 1200px) and (max-height: 850px) {
+  .dashboard-page.is-fixed-screen .dashboard-heading-event h2 { gap: 2px; }
+  .dashboard-page.is-fixed-screen .dashboard-heading-event h2 .dashboard-event-logo { width: 104px; padding: 2px 4px; }
+}

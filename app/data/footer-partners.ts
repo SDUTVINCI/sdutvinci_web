@@ -43,7 +43,7 @@ const organizations: FooterPartner[] = [
   }
 ]
 
-const competition: FooterPartner = {
+export const roboconPartner: FooterPartner = {
   name: '全国大学生机器人大赛 ROBOCON',
   role: '核心赛事',
   logo: sponsorAsset('robocon-logo.webp'),
@@ -125,7 +125,7 @@ export const sponsorPartners: FooterPartner[] = [
   }
 ]
 
-export const homeAffiliations: FooterPartner[] = [school, ...organizations, competition]
+export const homeAffiliations: FooterPartner[] = [school, ...organizations, roboconPartner]
 
 export const footerPartnerGroups: FooterPartnerGroup[] = [
   {
@@ -141,6 +141,6 @@ export const footerPartnerGroups: FooterPartnerGroup[] = [
   {
     id: 'partners',
     title: '赛事与合作支持',
-    items: [competition, ...sponsorPartners]
+    items: [roboconPartner, ...sponsorPartners]
   }
 ]

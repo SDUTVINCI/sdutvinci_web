@@ -165,3 +165,11 @@ DASHBOARD_GITHUB_PEOPLE=
 - 本地完整功能已完成；最初因GitHub App未安装到SDUTVINCI组织，写入代码树返回403。
   2026-10-29维护者完成组织安装，已重新确认组织授权，按用户要求直接提交main。
   部署状态以该提交对应Actions及站点实际结果为准；飞书应用配置仍需在运行时单独设置。
+
+
+### 倒计时赛事标志
+
+两处倒计时复用首页/页脚的 `roboconPartner.logo`：
+`https://cdn.sdutvinci.cn/site-assets/images/sponsors/robocon-logo.webp`。
+该1931×656透明WebP包含CURC和ROBOCON两个标志，沿用原图，不裁切或改色。
+倒计时以横向图片、原始比例和浅色底板展示，标题分行排在标志下方，避免在深色背景上难以辨认。

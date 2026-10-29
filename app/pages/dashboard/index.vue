@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { dashboardBrand as site } from '~/data/dashboard'
 import { competitions } from '~/data/competitions'
+import { roboconPartner } from '~/data/footer-partners'
 import { prepareCompetitions, competitionTimeLeft } from '~/utils/competitions'
 import { dashboardCodeProfile } from '../../../utils/dashboard-members.mjs'
 import { resolveStaticMediaUrl } from '~~/shared/utils/static-media'
@@ -374,7 +375,7 @@ onBeforeUnmount(() => {
         <section v-if="eventCountdowns.length" class="dashboard-heading-competitions" aria-label="赛事倒计时">
           <article v-for="event in eventCountdowns" :key="event.name" class="dashboard-heading-event" :class="{ 'is-reached': event.state === 'reached' }">
             <div class="dashboard-heading-event-info">
-              <h2><span class="dashboard-event-mark" aria-hidden="true">R</span>{{ event.name }}</h2>
+              <h2><img class="dashboard-event-logo" :src="roboconPartner.logo" alt="CURC 全国大学生机器人大赛与 ROBOCON 标志" width="1931" height="656"><span>{{ event.name }}</span></h2>
               <div class="dashboard-heading-event-meta">
                 <a v-if="event.sourceUrl" :href="event.sourceUrl" target="_blank" rel="noopener noreferrer" class="dashboard-event-source" :title="event.referenceNote">官方参考 ↗</a><span v-if="event.dateStatus !== 'pending'" class="dashboard-heading-event-status" :class="event.dateStatus">{{ event.dateStatus === 'target' ? '最终形态目标' : event.dateStatus === 'historical' ? `${event.referenceYear} 同期参考` : event.dateStatus === 'tentative' ? '暂定' : '已确认' }}</span>
                 <time v-if="event.target !== null" :datetime="event.startsAt || undefined" :title="`${formatEventTime(event.target)} · 北京时间${event.dateStatus === 'historical' ? ' · 同期推算' : ''} · ${event.referenceNote || ''}`">{{ formatTime(event.target) }} · 北京时间</time>
