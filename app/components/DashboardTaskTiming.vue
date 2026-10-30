@@ -7,7 +7,7 @@ const dateFormat = new Intl.DateTimeFormat('zh-CN', {
 })
 const deadline = computed(() => props.task.deadline ? dateFormat.format(props.task.deadline) : '')
 const deadlineIso = computed(() => props.task.deadline ? new Date(props.task.deadline).toISOString() : undefined)
-const completed = computed(() => props.task.completedAt ? `完成于 ${dateFormat.format(props.task.completedAt)}` : '完成时间未记录')
+const completed = computed(() => props.task.completedAt ? `审核通过 ${dateFormat.format(props.task.completedAt)}` : '审核时间未记录')
 const remaining = computed(() => dashboardTaskCountdown(props.task, props.now))
 const urgency = computed(() => dashboardUrgency(props.task, props.now)?.level)
 </script>

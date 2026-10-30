@@ -28,14 +28,16 @@ test('相同最近截止任务完整返回，排序稳定，排除已完成、�
 })
 
 test('显示偏好严格白名单保存，不接受口令、任务数据及无效结构', () => {
-  const defaults = { version: 1, group: 'all', status: 'todo', screen: false, autoRotate: true }
+  const defaults = { version: 1, group: 'all', status: 'pending', week: 'all', screen: false, autoRotate: true }
   assert.deepEqual(readDashboardPreferences('broken'), defaults)
   assert.deepEqual(readDashboardPreferences('[]'), defaults)
   assert.deepEqual(readDashboardPreferences('{"version":99,"screen":true}'), defaults)
   assert.deepEqual(dashboardPreferences({ version: 1, group: '机械组', status: 'done', screen: true, autoRotate: false, authorization: 'never-save', tasks: ['private'] }),
-    { version: 1, group: '机械组', status: 'done', screen: true, autoRotate: false })
+    { version: 1, group: '机械组', status: 'done', week: 'all', screen: true, autoRotate: false })
   assert.deepEqual(dashboardPreferences({ version: 1, group: {}, status: 'unknown', screen: 'true', autoRotate: 0 }), defaults)
   assert.equal(dashboardPreferences({ version: 1, group: 'x'.repeat(101) }).group, 'all')
+  assert.equal(dashboardPreferences({ version: 1, week: '10', status: 'review' }).week, '10')
+  assert.equal(dashboardPreferences({ version: 1, week: '21' }).week, 'all')
 })
 
 test('完成统计以北京时间周一及最近七个自然日为界，不计未来或缺失完成时间', () => {

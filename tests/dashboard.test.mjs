@@ -62,7 +62,7 @@ test('空完成状态按未完成展示并标记，已有完成时间和分值�
 
 test('非空未知状态可单条隔离，布尔或数字等异常格式不能误判为空状态', () => {
   const statusIssues = []
-  const invalid = ['进行中', false, 0, {}].map((value, i) => ({ record_id: `invalid-${i}`, fields: {
+  const invalid = ['未知流程', false, 0, {}].map((value, i) => ({ record_id: `invalid-${i}`, fields: {
     任务名称: '状态待确认', 完成情况: value, 内部资料: 'private-never-return'
   } }))
   for (const record of invalid) assert.throws(() => normalizeDashboardRecords([record]), /INVALID_TASK_STATUS/)
@@ -78,7 +78,7 @@ test('真实读取链路兼容空状态，隔离未知项并在补填完成后�
   const source = [
     { record_id: 'empty-status', fields: { 任务详情: '空状态任务', 分值: '5', 负责人: [{ id: 'a', name: '成员甲' }] } },
     { record_id: 'done', fields: { 任务详情: '完成任务', 完成情况: '已完成', 分值: '3', 负责人: [{ id: 'a', name: '成员甲' }] } },
-    { record_id: 'unknown', fields: { 任务详情: '未知状态任务', 完成情况: '待验收', 分值: '99', 负责人: [{ id: 'a', name: '成员甲' }], 内部资料: 'private-never-return' } }
+    { record_id: 'unknown', fields: { 任务详情: '未知状态任务', 完成情况: '未知流程', 分值: '99', 负责人: [{ id: 'a', name: '成员甲' }], 内部资料: 'private-never-return' } }
   ]
   const handler = createDashboardService({ now: () => time, fetcher: async url => String(url).includes('/auth/')
     ? reply({ code: 0, tenant_access_token: 'private-token' }) : reply({ code: 0, data: { items: source, has_more: false } }) })
@@ -88,7 +88,7 @@ test('真实读取链路兼容空状态，隔离未知项并在补填完成后�
   const body = await response.json()
   assert.equal(body.tasks.length, 2)
   assert.equal(body.tasks[0].statusMissing, true)
-  assert.deepEqual(body.statusIssues, [{ id: 'unknown', title: '未知状态任务', status: '待验收' }])
+  assert.deepEqual(body.statusIssues, [{ id: 'unknown', title: '未知状态任务', status: '未知流程' }])
   assert.equal(dashboardScoreboard(body.tasks).rows[0].score, 3)
   assert(!JSON.stringify(body).includes('private-never-return'))
   assert(!JSON.stringify(body).includes('private-token'))
@@ -109,7 +109,7 @@ test('真实读取链路兼容空状态，隔离未知项并在补填完成后�
 })
 
 test('全部状态未知仍明确报错并给出白名单诊断，全部空状态可正常展示', async () => {
-  for (const [status, expected] of [['待验收', 502], [null, 200]]) {
+  for (const [status, expected] of [['未知流程', 502], [null, 200]]) {
     const handler = createDashboardService({ fetcher: async url => String(url).includes('/auth/')
       ? reply({ code: 0, tenant_access_token: 'private-token' })
       : reply({ code: 0, data: { items: [{ record_id: 'id', fields: { 任务名称: '示例任务', 完成情况: status, 私有资料: 'private-never-return' } }], has_more: false } }) })
@@ -146,7 +146,7 @@ test('截止边界实时进入逾期，已完成任务不逾期，无截止任�
   assert.equal(dashboardTaskState(task, task.deadline), 'overdue')
   assert.equal(dashboardTaskState({ ...task, status: 'done' }, task.deadline + 1), 'done')
   const pending = selectDashboardTasks(tasks, { now: instant })
-  assert.equal(pending.length, 7)
+  assert.equal(pending.length, 9)
   assert.equal(pending.at(-1).deadline, null)
   assert.equal(selectDashboardTasks(tasks, { status: 'overdue', now: instant }).length, 2)
   assert.equal(selectDashboardTasks(tasks, { status: 'done', now: instant }).length, 3)

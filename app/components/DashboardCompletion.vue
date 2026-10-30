@@ -22,9 +22,9 @@ const peak = computed(() => Math.max(1, ...stats.value.days.map(day => day.count
         <h3>近7天每日完成</h3>
         <ol><li v-for="day in stats.days" :key="day.date"><span class="dashboard-completion-bar" :style="{ '--completion-bar': `${day.count / peak * 100}%` }" aria-hidden="true" /><strong>{{ day.count }}</strong><time :datetime="day.date">{{ day.date.slice(5).replace('-', '/') }}</time></li></ol>
       </section>
-      <p class="dashboard-completion-caption">本周从周一零点开始。按时率基于本周已记录完成时间和截止时间的 {{ stats.eligibleCount }} 项任务计算。<template v-if="stats.weekWithoutDeadline">另有 {{ stats.weekWithoutDeadline }} 项没有截止时间，未计入按时率。</template></p>
-      <p v-if="stats.missingTimeCount" class="dashboard-notice dashboard-warning">当前有 {{ stats.missingTimeCount }} 项已完成任务缺少有效完成时间，未纳入上述统计。</p>
+      <p class="dashboard-completion-caption">本周从周一零点开始。按时率基于本周已记录审核通过时间和截止时间的 {{ stats.eligibleCount }} 项任务计算。<template v-if="stats.weekWithoutDeadline">另有 {{ stats.weekWithoutDeadline }} 项没有截止时间，未计入按时率。</template></p>
+      <p v-if="stats.missingTimeCount" class="dashboard-notice dashboard-warning">当前有 {{ stats.missingTimeCount }} 项已完成任务缺少有效审核通过时间，未纳入上述统计。</p>
     </template>
-    <div v-else class="dashboard-completion-unavailable"><h3>暂无完成时间记录</h3><p>当前 {{ stats.doneCount }} 项已完成任务尚无有效完成时间，暂时无法统计近期趋势和按时完成率。</p><p>记录真实完成时间后，这里会自动更新。</p></div>
+    <div v-else class="dashboard-completion-unavailable"><h3>暂无审核通过时间记录</h3><p>当前 {{ stats.doneCount }} 项已完成任务尚无有效审核通过时间，暂时无法统计近期趋势和按时完成率。</p><p>记录审核通过时间后，这里会自动更新。</p></div>
   </DashboardDialog>
 </template>

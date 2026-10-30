@@ -1,11 +1,13 @@
-export { dashboardGridLayout, dashboardTaskPages, dashboardMemberPath, dashboardTaskState, dashboardTaskGroups, selectDashboardTasks, dashboardScoreboard, dashboardScoreLabel } from '../../utils/dashboard-data.mjs'
+export { dashboardGridLayout, dashboardTaskPages, dashboardMemberPath, dashboardTaskState, dashboardTaskGroups, selectDashboardTasks, dashboardScoreboard, dashboardScoreLabel, dashboardStatusLabel } from '../../utils/dashboard-data.mjs'
 
 export type DashboardPerson = { key: string; name: string; avatar: string }
 export type DashboardStatusIssue = { id: string; title: string; status: string }
 export type DashboardTask = {
   id: string; title: string; group: string; groups?: string[]; assignees: DashboardPerson[]; publisher: string; publishers?: DashboardPerson[]
   deadline: number | null; completedAt: number | null; score: number | null; scoreInvalid?: boolean
-  status: 'todo' | 'done'; statusMissing?: boolean; note: string
+  status: 'todo' | 'progress' | 'review' | 'done'; statusMissing?: boolean; note: string
+  week?: number | null; requirements?: string; acceptance?: string; cohorts?: string[]; links?: string[]
+  attachments?: { name: string; size: number | null; href: string }[]
 }
 export type DashboardDevelopment = {
   enabled: boolean; unavailable: boolean; updatedAt?: number; configurationError?: boolean; syncing?: boolean

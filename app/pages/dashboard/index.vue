@@ -30,8 +30,9 @@ const data = shallowRef<DashboardData | null>(null)
 const phase = ref('loading')
 const message = ref('')
 const loading = ref(false)
-const selectedStatus = ref('todo')
+const selectedStatus = ref('pending')
 const selectedGroup = ref('all')
+const selectedWeek = ref('all')
 const selectedRanking = ref('all')
 const rankingOptions = [
   { value: 'all', label: '总榜' },
@@ -46,8 +47,8 @@ const taskList = ref<HTMLElement | null>(null)
 const dashboardPage = ref<HTMLElement | null>(null)
 const layout = ref({ columns: 1, rows: 2, size: 2 })
 
-type BoardMember = { name: string; memberKey: string; image: string; path: string; grade?: string | null; links?: Record<string, string | null> }
-const { data: memberData, status: memberStatus, error: memberError, refresh: refreshMembers } = await useFetch<{ items: BoardMember[] }>('/api/v2/content/members', { server: false, lazy: true })
+type BoardMember = { name: string; memberKey: string; image: string; path: string; links?: Record<string, string | null> }
+const { data: memberData, status: memberStatus } = await useFetch<{ items: BoardMember[] }>('/api/v2/content/members', { server: false, lazy: true })
 const memberProfile = (name: string) => {
   const matches = (memberData.value?.items || []).filter(member => member.name === name)
   const member = matches.length === 1 ? matches[0] : undefined
@@ -78,32 +79,34 @@ const formatEventTime = (value: number) => new Intl.DateTimeFormat('zh-CN', {
 const tasks = computed(() => data.value?.tasks || [])
 const missingStatusCount = computed(() => tasks.value.filter(task => task.statusMissing).length)
 const groups = computed(() => [...new Set<string>(tasks.value.flatMap(dashboardTaskGroups))].sort((a, b) => a.localeCompare(b, 'zh-CN')))
-const scopedTasks = computed<DashboardTask[]>(() => selectDashboardTasks(tasks.value, { status: 'all', group: selectedGroup.value, search: search.value, now: currentTime.value }))
+const weeks = computed(() => [...new Set(tasks.value.flatMap(task => task.week ? [task.week] : []))].sort((a, b) => a - b))
+const scopedTasks = computed<DashboardTask[]>(() => selectDashboardTasks(tasks.value, { status: 'all', group: selectedGroup.value, week: selectedWeek.value, search: search.value, now: currentTime.value }))
 const counts = computed(() => ({
-  todo: scopedTasks.value.filter(task => dashboardTaskState(task, currentTime.value) === 'todo').length,
+  pending: scopedTasks.value.filter(task => task.status !== 'done').length,
   overdue: scopedTasks.value.filter(task => dashboardTaskState(task, currentTime.value) === 'overdue').length,
   done: scopedTasks.value.filter(task => task.status === 'done').length
 }))
 const statuses = computed(() => [
-  { value: 'todo', label: '未完成', count: counts.value.todo },
+  { value: 'pending', label: '未完成', count: counts.value.pending },
+  ...(['todo', 'progress', 'review'] as const).map(value => ({ value, label: { todo: '未开始', progress: '进行中', review: '待验收' }[value], count: scopedTasks.value.filter(task => task.status === value).length })),
   { value: 'overdue', label: '已逾期', count: counts.value.overdue },
   { value: 'done', label: '已完成', count: counts.value.done }
 ])
 const visibleTasks = computed<DashboardTask[]>(() => selectDashboardTasks(tasks.value, {
-  status: selectedStatus.value, group: selectedGroup.value, search: search.value, now: currentTime.value
+  status: selectedStatus.value, group: selectedGroup.value, week: selectedWeek.value, search: search.value, now: currentTime.value
 }))
 const pageSize = computed(() => layout.value.size)
 const taskPages = computed(() => dashboardTaskPages(visibleTasks.value.length, layout.value.columns, layout.value.rows))
 const pages = computed(() => paginated.value ? Math.max(1, taskPages.value.length) : 1)
 const pageTasks = computed(() => paginated.value ? visibleTasks.value.slice(taskPages.value[pageIndex.value]?.start || 0, taskPages.value[pageIndex.value]?.end || layout.value.size) : visibleTasks.value)
-const rankedTasks = computed<DashboardTask[]>(() => selectDashboardTasks(tasks.value, { status: 'all', group: selectedGroup.value }))
+const rankedTasks = computed<DashboardTask[]>(() => selectDashboardTasks(tasks.value, { status: 'all', group: selectedGroup.value, week: selectedWeek.value }))
 const scoreboard = computed(() => dashboardScoreboard(rankedTasks.value))
-const cohortRanking = computed(() => dashboardCohortRanking(scoreboard.value.rows, memberData.value?.items || [], dashboardSeason, selectedRanking.value))
+const cohortRanking = computed(() => dashboardCohortRanking(scoreboard.value.rows, tasks.value, selectedRanking.value))
 const rankingLabel = computed(() => rankingOptions.find(option => option.value === selectedRanking.value)?.label || '总榜')
 const activeTask = computed(() => tasks.value.find(task => task.id === selectedTaskId.value))
 const statusIssues = computed(() => failedStatusIssues.value.length ? failedStatusIssues.value : data.value?.statusIssues || [])
 const overlayOpen = computed(() => Boolean(activeTask.value || showCompletion.value || showStatusIssues.value))
-const completionScope = computed(() => `${selectedGroup.value === 'all' ? '全部组别' : selectedGroup.value}${search.value.trim() ? ' · 当前关键词筛选' : ''}`)
+const completionScope = computed(() => `${selectedGroup.value === 'all' ? '全部组别' : selectedGroup.value} · ${selectedWeek.value === 'all' ? '全部周次' : selectedWeek.value === 'missing' ? '未填周次' : `第${selectedWeek.value}周`}${search.value.trim() ? ' · 当前关键词筛选' : ''}`)
 const development = computed(() => data.value?.development)
 const developmentEvents = computed(() => development.value?.events || [])
 const updateInterrupted = computed(() => Boolean(data.value && (data.value.stale || message.value || currentTime.value - data.value.updatedAt > 90_000)))
@@ -114,16 +117,16 @@ const clock = computed(() => currentTime.value ? new Intl.DateTimeFormat('zh-CN'
   timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit', weekday: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
 }).format(currentTime.value) : '')
 
-watch([selectedStatus, selectedGroup, search, paginated, pageSize], () => { pageIndex.value = 0; lastRotation = currentTime.value })
+watch([selectedStatus, selectedGroup, selectedWeek, search, paginated, pageSize], () => { pageIndex.value = 0; lastRotation = currentTime.value })
 watch(pages, value => { pageIndex.value = Math.min(pageIndex.value, value - 1) })
 watch(activeTask, task => { if (!task) selectedTaskId.value = null })
 watch(statusIssues, issues => { if (!issues.length) showStatusIssues.value = false })
 watch(data, value => { if (!value) { selectedTaskId.value = null; showCompletion.value = false } })
-watch([selectedGroup, selectedStatus, screen, autoRotate], () => {
+watch([selectedGroup, selectedStatus, selectedWeek, screen, autoRotate], () => {
   if (!import.meta.client || !preferencesLoaded) return
   try {
     localStorage.setItem(DASHBOARD_PREFERENCES_KEY, JSON.stringify(dashboardPreferences({
-      version: 1, group: selectedGroup.value, status: selectedStatus.value, screen: screen.value, autoRotate: autoRotate.value
+      version: 1, group: selectedGroup.value, status: selectedStatus.value, week: selectedWeek.value, screen: screen.value, autoRotate: autoRotate.value
     })))
   } catch { displayMessage.value = '浏览器未允许保存显示偏好，设置仅本次有效。' }
 }, { flush: 'post' })
@@ -255,7 +258,8 @@ function resetDisplay() {
   search.value = ''
   selectedGroup.value = 'all'
   selectedRanking.value = 'all'
-  selectedStatus.value = 'todo'
+  selectedStatus.value = 'pending'
+  selectedWeek.value = 'all'
   autoRotate.value = true
   setScreen(false)
   displayMessage.value = '已恢复默认显示设置。'
@@ -332,7 +336,7 @@ watch(taskList, (element, previous) => {
   void nextTick(resizeScreen)
 }, { flush: 'post' })
 watch([screen, showSyncDetails], () => { void nextTick(resizeScreen) })
-watch([data, memberStatus, selectedRanking, selectedGroup, search, selectedStatus, () => visibleTasks.value.length], () => { void nextTick(resizeScreen) }, { flush: 'post' })
+watch([data, memberStatus, selectedRanking, selectedGroup, selectedWeek, search, selectedStatus, () => visibleTasks.value.length], () => { void nextTick(resizeScreen) }, { flush: 'post' })
 onMounted(() => {
   currentTime.value = Date.now()
   lastRotation = currentTime.value
@@ -340,6 +344,7 @@ onMounted(() => {
   try { saved = readDashboardPreferences(localStorage.getItem(DASHBOARD_PREFERENCES_KEY)) } catch { /* 显示仍可正常使用。 */ }
   selectedGroup.value = saved.group
   selectedStatus.value = saved.status
+  selectedWeek.value = saved.week
   autoRotate.value = saved.autoRotate
   const explicit = new URLSearchParams(window.location.search).get('screen')
   screen.value = explicit === null ? saved.screen : explicit === '1'
@@ -436,11 +441,11 @@ onBeforeUnmount(() => {
       <p v-if="missingStatusCount || statusIssues.length" role="status" class="dashboard-notice dashboard-warning"><template v-if="missingStatusCount">{{ missingStatusCount }} 项状态未填写，暂按未完成展示、不计分。</template><template v-if="statusIssues.length">{{ statusIssues.length }} 项状态无法识别，暂未纳入统计。<button type="button" class="dashboard-text-button" @click="showStatusIssues = true">查看异常任务 →</button></template></p>
       <div class="dashboard-toolbar">
         <div class="dashboard-filters">
-          <div class="dashboard-query"><label for="task-search" class="visually-hidden">搜索任务</label><input id="task-search" v-model="search" type="search" placeholder="搜索任务、执行人或备注"><label for="task-group" class="visually-hidden">组别</label><select id="task-group" v-model="selectedGroup"><option value="all">全部组别</option><option v-for="group in groups" :key="group" :value="group">{{ group }}</option></select></div>
+          <div class="dashboard-query"><label for="task-week" class="visually-hidden">周次</label><select id="task-week" v-model="selectedWeek"><option value="all">全部周次</option><option v-for="week in weeks" :key="week" :value="String(week)">第{{ week }}周</option><option value="missing">未填周次</option></select><label for="task-search" class="visually-hidden">搜索任务</label><input id="task-search" v-model="search" type="search" placeholder="搜索任务、执行人或备注"><label for="task-group" class="visually-hidden">组别</label><select id="task-group" v-model="selectedGroup"><option value="all">全部组别</option><option v-for="group in groups" :key="group" :value="group">{{ group }}</option></select></div>
           <p class="dashboard-update"><span :class="{ interrupted: updateInterrupted }" />{{ updateInterrupted ? '等待更新' : '自动更新中' }} · {{ formatTime(data.updatedAt) }} <button type="button" class="dashboard-text-button" @click="resetDisplay">重置显示</button></p>
         </div>
         <section class="dashboard-stats" aria-label="任务概览">
-          <div><span>待办任务</span><strong>{{ counts.todo + counts.overdue }}</strong></div>
+          <div><span>待办任务</span><strong>{{ counts.pending }}</strong></div>
           <div class="dashboard-overdue"><span>已逾期</span><strong>{{ counts.overdue }}</strong></div>
           <div><span>已完成</span><strong>{{ counts.done }}</strong><button type="button" class="dashboard-text-button dashboard-trend-trigger" aria-label="查看完成趋势" @click="selectedTaskId = null; showCompletion = true">完成趋势 →</button></div>
         </section>
@@ -464,13 +469,11 @@ onBeforeUnmount(() => {
             <template #heading><h2>个人积分榜</h2></template>
             <template #description>
               <div class="dashboard-ranking-switch" role="group" aria-label="积分榜切换"><button v-for="option in rankingOptions" :key="option.value" type="button" :aria-pressed="selectedRanking === option.value" @click="selectedRanking = option.value">{{ option.label }}</button></div>
-              <p class="dashboard-score-scope">{{ dashboardSeason }}赛季 · {{ selectedGroup === 'all' ? '全部组别' : selectedGroup }}<template v-if="cohortRanking.grade"> · {{ cohortRanking.grade }}级</template><br>仅已完成任务计分<template v-if="memberStatus === 'success' && cohortRanking.unmatchedCount"> · {{ cohortRanking.unmatchedCount }}人年级未确认，仅列总榜</template></p>
+              <p class="dashboard-score-scope">{{ dashboardSeason }}赛季 · {{ selectedGroup === 'all' ? '全部组别' : selectedGroup }}<template v-if="selectedWeek !== 'all'"> · {{ selectedWeek === 'missing' ? '未填周次' : `第${selectedWeek}周` }}</template><br>仅已完成任务计分<template v-if="cohortRanking.unmatchedCount"> · {{ cohortRanking.unmatchedCount }}人身份未确认，仅列总榜</template></p>
               <p v-if="scoreboard.missingScoreCount || scoreboard.invalidScoreCount || scoreboard.unassignedCount" class="dashboard-score-warning" role="status">已完成任务中，<template v-if="scoreboard.missingScoreCount">{{ scoreboard.missingScoreCount }}项未设分；</template><template v-if="scoreboard.invalidScoreCount">{{ scoreboard.invalidScoreCount }}项分值异常；</template><template v-if="scoreboard.unassignedCount">{{ scoreboard.unassignedCount }}项未分配负责人；</template>以上情况不产生对应积分。</p>
             </template>
-            <p v-if="selectedRanking !== 'all' && memberError" class="dashboard-empty" role="status">成员资料暂时无法读取<br><button type="button" class="dashboard-text-button" @click="refreshMembers()">重新读取</button></p>
-            <p v-else-if="selectedRanking !== 'all' && memberStatus !== 'success'" class="dashboard-empty" role="status">正在读取成员年级…</p>
-            <ol v-else-if="cohortRanking.rows.length" class="dashboard-rank-list"><li v-for="person in cohortRanking.rows" :key="person.key" :style="{ '--rank-width': `${person.score / (cohortRanking.rows[0]?.score || 1) * 100}%` }"><span class="dashboard-rank-number">{{ String(person.rank).padStart(2, '0') }}</span><DashboardMember class="dashboard-rank-name" :person="person" :profile="memberProfile(person.name)" /><div class="dashboard-rank-total"><strong>{{ person.score }}<small> 分</small></strong><small>已完成 {{ person.doneCount }} 项</small></div></li></ol>
-            <p v-else class="dashboard-empty">{{ selectedRanking === 'all' ? '暂无任务人员' : `暂无${cohortRanking.grade}级任务人员` }}</p>
+            <ol v-if="cohortRanking.rows.length" class="dashboard-rank-list"><li v-for="person in cohortRanking.rows" :key="person.key" :style="{ '--rank-width': `${person.score / (cohortRanking.rows[0]?.score || 1) * 100}%` }"><span class="dashboard-rank-number">{{ String(person.rank).padStart(2, '0') }}</span><DashboardMember class="dashboard-rank-name" :person="person" :profile="memberProfile(person.name)" /><div class="dashboard-rank-total"><strong>{{ person.score }}<small> 分</small></strong><small>已完成 {{ person.doneCount }} 项</small></div></li></ol>
+            <p v-else class="dashboard-empty">{{ selectedRanking === 'all' ? '暂无任务人员' : `暂无${rankingLabel}任务人员` }}</p>
             </DashboardAutoScroll>
           </section>
         </aside>
@@ -494,7 +497,7 @@ onBeforeUnmount(() => {
     <DashboardDialog v-if="showStatusIssues" :open="true" labelledby="dashboard-status-issues-title" @close="showStatusIssues = false">
       <header class="dashboard-dialog-heading"><p class="eyebrow">任务状态检查</p><button type="button" autofocus aria-label="关闭状态异常" @click="showStatusIssues = false">关闭 ×</button></header>
       <h2 id="dashboard-status-issues-title">{{ statusIssues.length }} 项任务状态待确认</h2>
-      <p>以下任务的“完成状态/完成情况”无法识别，暂未纳入任务和积分统计。请在飞书核对，当前支持“未完成”和“已完成”；修改后随下一次同步更新。状态为空的任务按未完成展示，不在此列表中。</p>
+      <p>以下任务的“完成状态/完成情况”无法识别，暂未纳入任务和积分统计。请在飞书核对，当前支持“未开始”“进行中”“待验收”“已完成”（兼容旧“未完成”）；修改后随下一次同步更新。状态为空的任务按未完成展示，不在此列表中。</p>
       <dl class="dashboard-detail-fields"><div v-for="issue in statusIssues" :key="issue.id"><dt>{{ issue.title }}</dt><dd>当前状态：{{ issue.status || '未填写' }}</dd></div></dl>
     </DashboardDialog>
   </main>

@@ -64,6 +64,9 @@ jobs:
       - name: Prepare Nuxt generated types
         run: npx nuxt prepare
 
+      - name: Verify dashboard schema, ranking and authentication
+        run: npx vitest run tests/dashboard.test.mjs tests/dashboard-schema.test.mjs tests/dashboard-ranking.test.mjs tests/dashboard-experience.test.mjs tests/dashboard-auth.test.ts tests/dashboard-github.test.mjs tests/competitions.test.mjs
+
       - name: Verify Wiki directory initialization and scrolling
         run: npx vitest run tests/wiki-content-ready.test.ts tests/wiki-toc-scroll.test.ts
 

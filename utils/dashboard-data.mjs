@@ -1,14 +1,55 @@
 export const DASHBOARD_FIELD_NAMES = {
-  title: ['任务详情', '任务名称'], group: ['负责人.部门', '所属组别', '组别'], assignees: ['负责人', '执行人'], publisher: ['发布人'],
+  title: ['任务名称', '任务详情'], group: ['部门', '负责人.部门', '所属组别', '组别'], assignees: ['负责人', '执行人'], publisher: ['发布与审核人', '发布人'],
   deadline: ['最晚截止日期', '截止时间'], score: ['分值'], priority: ['优先级'], status: ['完成情况', '完成状态'],
-  completedAt: ['完成时间'], note: ['备注']
+  completedAt: ['审核通过时间', '完成时间'], note: ['备注'], requirements: ['任务要求'], acceptance: ['验收标准'],
+  week: ['周次'], cohorts: ['啥登'], links: ['Github链接等', 'GitHub链接', '成果链接'], attachments: ['成果附件', '验收附件']
+}
+
+// 查找引用/公式返回带 type/value 的包装，不改变普通文本和人员的结构。
+function unwrap(value, depth = 0) {
+  return depth < 5 && value && !Array.isArray(value) && typeof value === 'object' && Object.hasOwn(value, 'value')
+    ? unwrap(value.value, depth + 1) : value
 }
 
 function text(value) {
+  value = unwrap(value)
   if (typeof value === 'string') return value.trim()
+  if (value && typeof value.text === 'string') return value.text.trim()
   if (Array.isArray(value)) return value.map(item => typeof item === 'string' ? item : item?.text || '').join('').trim()
   return ''
 }
+
+function labels(value) {
+  value = unwrap(value)
+  return (Array.isArray(value) ? value.flatMap(item => labels(item)) : [text(value)]).filter(Boolean)
+}
+
+function taskWeek(value) {
+  const raw = text(value) || (typeof value === 'number' ? String(value) : '')
+  const match = /^(?:第\s*)?(\d{1,2})(?:\s*周)?$/.exec(raw)
+  const week = match ? Number(match[1]) : 0
+  return week >= 1 && week <= 20 ? week : null
+}
+
+function taskLinks(value) {
+  const rows = Array.isArray(unwrap(value)) ? unwrap(value) : [unwrap(value)]
+  const urls = rows.flatMap(item => typeof item?.link === 'string' ? [item.link] : (text(item).match(/https:\/\/[^\s<>"，；）]+/g) || []))
+  return [...new Set(urls.map(safeDashboardUrl).filter(Boolean))].slice(0, 10)
+}
+
+function taskAttachments(value) {
+  return (Array.isArray(value) ? value : []).slice(0, 30).flatMap(item => {
+    const name = text(item?.name).slice(0, 200)
+    if (!name) return []
+    // 飞书下载 API 需要服务端凭证，不能把 API 地址或 file_token 当作公开下载链接。
+    const href = safeDashboardUrl(item?.link)
+    return [{ name, size: Number.isSafeInteger(item.size) && item.size >= 0 ? item.size : null,
+      href: href && !new URL(href).pathname.startsWith('/open-apis/') ? href : '' }]
+  })
+}
+
+export const DASHBOARD_STATUS_LABELS = { todo: '未开始', progress: '进行中', review: '待验收', done: '已完成' }
+export const dashboardStatusLabel = task => task.statusMissing ? '状态未填写' : DASHBOARD_STATUS_LABELS[task.status] || '未开始'
 
 export function safeDashboardUrl(value) {
   if (typeof value !== 'string') return ''
@@ -84,7 +125,7 @@ export function normalizeDashboardRecords(records, overrides = {}, { statusIssue
   const names = { ...DASHBOARD_FIELD_NAMES }
   for (const [key, value] of Object.entries(overrides)) {
     if (!Object.hasOwn(names, key) || typeof value !== 'string' || !value.trim()) throw new Error('INVALID_FIELD_MAP')
-    names[key] = [value.trim()]
+    names[key] = [...new Set([value.trim(), ...names[key]])]
   }
   return records.flatMap(record => {
     const fields = record.fields || {}
@@ -96,16 +137,15 @@ export function normalizeDashboardRecords(records, overrides = {}, { statusIssue
     const status = text(rawStatus)
     const statusMissing = rawStatus === undefined || rawStatus === null
       || (typeof rawStatus === 'string' && !rawStatus.trim()) || (Array.isArray(rawStatus) && !rawStatus.length)
-    if (!statusMissing && !['未完成', '已完成'].includes(status)) {
+    const statuses = { 未完成: 'todo', 未开始: 'todo', 进行中: 'progress', 待验收: 'review', 已完成: 'done' }
+    if (!statusMissing && !Object.hasOwn(statuses, status)) {
       // 服务可隔离单条状态异常；默认严格校验，绝不猜测为未完成或已完成。
       if (!Array.isArray(statusIssues)) throw new Error('INVALID_TASK_STATUS')
       statusIssues.push({ id: record.record_id, title: title.slice(0, 500), status: status.slice(0, 100) || '无法识别的状态格式' })
       return []
     }
     const priority = text(field('priority'))
-    const groupValue = field('group')
-    const groups = [...new Set((Array.isArray(groupValue) ? groupValue : [groupValue])
-      .map(value => text(value).slice(0, 100)).filter(Boolean))]
+    const groups = [...new Set(labels(field('group')).map(value => value.slice(0, 100)))]
     return [{
       id: String(record.record_id), title: title.slice(0, 500), group: groups.join('、'), groups,
       assignees: people(field('assignees')), publishers: people(field('publisher')), publisher: people(field('publisher')).map(person => person.name).join('、'),
@@ -113,7 +153,10 @@ export function normalizeDashboardRecords(records, overrides = {}, { statusIssue
       ...taskScore(field('score')),
       // 仅保留旧字段映射/API兼容；当前卡片、排序和总分榜均使用分值。
       priority: /^(高|紧急|P0)(?:$|[-－：:])/i.test(priority) ? 'high' : /^(低|P2)(?:$|[-－：:])/i.test(priority) ? 'low' : 'medium',
-      status: status === '已完成' ? 'done' : 'todo', ...(statusMissing ? { statusMissing: true } : {}), note: text(field('note')).slice(0, 3000)
+      status: statuses[status] || 'todo', ...(statusMissing ? { statusMissing: true } : {}), note: text(field('note')).slice(0, 3000),
+      requirements: text(field('requirements')).slice(0, 12000), acceptance: text(field('acceptance')).slice(0, 6000),
+      week: taskWeek(field('week')), cohorts: labels(field('cohorts')).slice(0, 100),
+      links: taskLinks(field('links')), attachments: taskAttachments(field('attachments'))
     }]
   })
 }
@@ -122,11 +165,13 @@ export function dashboardTaskState(task, now = Date.now()) {
   return task.status === 'done' ? 'done' : task.deadline !== null && task.deadline <= now ? 'overdue' : 'todo'
 }
 
-export function selectDashboardTasks(tasks, { status = 'todo', group = 'all', search = '', now = Date.now() } = {}) {
+export function selectDashboardTasks(tasks, { status = 'pending', group = 'all', week = 'all', search = '', now = Date.now() } = {}) {
   const keyword = search.trim().toLowerCase()
-  return tasks.filter(task => (status === 'all' || dashboardTaskState(task, now) === status)
+  return tasks.filter(task => (status === 'all' || (status === 'overdue' ? dashboardTaskState(task, now) === 'overdue'
+    : status === 'pending' ? task.status !== 'done' : task.status === status))
     && (group === 'all' || dashboardTaskGroups(task).includes(group))
-    && (!keyword || [task.title, task.group, task.publisher, task.note, ...task.assignees.map(person => person.name)].join(' ').toLowerCase().includes(keyword)))
+    && (week === 'all' || (week === 'missing' ? task.week == null : task.week === Number(week)))
+    && (!keyword || [task.title, task.group, task.publisher, task.note, task.requirements, task.acceptance, ...task.assignees.map(person => person.name)].join(' ').toLowerCase().includes(keyword)))
     .sort((a, b) => status === 'done' ? (b.completedAt || 0) - (a.completedAt || 0)
       : (a.deadline ?? Infinity) - (b.deadline ?? Infinity) || compareDashboardScores(a, b) || a.id.localeCompare(b.id))
 }

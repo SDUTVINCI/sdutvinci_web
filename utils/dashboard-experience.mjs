@@ -39,7 +39,8 @@ export function dashboardPreferences(value) {
   return {
     version: 1,
     group: typeof source.group === 'string' && source.group.trim() && source.group.length <= 100 ? source.group.trim() : 'all',
-    status: ['todo', 'overdue', 'done'].includes(source.status) ? source.status : 'todo',
+    status: ['pending', 'todo', 'progress', 'review', 'overdue', 'done'].includes(source.status) ? source.status : 'pending',
+    week: source.week === 'missing' || /^(?:[1-9]|1\d|20)$/.test(String(source.week)) ? String(source.week) : 'all',
     screen: typeof source.screen === 'boolean' ? source.screen : false,
     autoRotate: typeof source.autoRotate === 'boolean' ? source.autoRotate : true
   }
