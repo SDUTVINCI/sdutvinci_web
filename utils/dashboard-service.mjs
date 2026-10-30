@@ -4,6 +4,7 @@ import { createDashboardGithub } from './dashboard-github.mjs'
 const FEISHU = 'https://open.feishu.cn/open-apis'
 const TASK_TTL = 30_000
 const STALE_TTL = 15 * 60_000
+const optionId = value => /^opt[A-Za-z0-9]{6,}$/.test(value)
 
 function response(body, status = 200, extra = {}) {
   return new Response(JSON.stringify(body), {
@@ -99,7 +100,8 @@ function createScopedService({ fetcher, now }) {
         const tasks = normalizeDashboardRecords(records, JSON.parse(env.FEISHU_FIELD_MAP || '{}'), { statusIssues })
         if (statusIssues.length && !tasks.length) throw Object.assign(new Error('INVALID_TASK_STATUS'), { statusIssues })
         if (records.some(record => Object.keys(record.fields || {}).length) && !tasks.length) throw new Error('INVALID_FIELD_MAP')
-        return { tasks, statusIssues }
+        const lookupUnavailable = await resolveLookups(tasks, env)
+        return { tasks, statusIssues, lookupUnavailable }
       }
       pageToken = result.data.page_token
       if (!pageToken || seenPages.has(pageToken)) throw new Error('INVALID_PAGINATION')
@@ -108,10 +110,59 @@ function createScopedService({ fetcher, now }) {
     throw new Error('TASK_LIMIT_EXCEEDED')
   }
 
+  async function readFields(table, env) {
+    const fields = [], seen = new Set()
+    let cursor = ''
+    for (let page = 0; page < 4; page++) {
+      const url = new URL(`${FEISHU}/bitable/v1/apps/${encodeURIComponent(env.FEISHU_BITABLE_APP_TOKEN)}/tables/${encodeURIComponent(table)}/fields`)
+      url.searchParams.set('page_size', '100')
+      if (cursor) url.searchParams.set('page_token', cursor)
+      const body = await json(url.href, { headers: { Authorization: `Bearer ${await tenantToken(env)}` } })
+      if (body.code !== 0 || !Array.isArray(body.data?.items)) throw new Error('FEISHU_FIELDS_UNAVAILABLE')
+      fields.push(...body.data.items)
+      if (!body.data.has_more) return fields
+      cursor = body.data.page_token
+      if (!cursor || seen.has(cursor)) throw new Error('INVALID_PAGINATION')
+      seen.add(cursor)
+    }
+    throw new Error('FIELD_LIMIT_EXCEEDED')
+  }
+
+  async function resolveLookups(tasks, env) {
+    if (!tasks.some(task => [...task.groups, ...task.cohorts].some(optionId))) return false
+    const options = new Map()
+    try {
+      const fields = await readFields(env.FEISHU_BITABLE_TABLE_ID, env)
+      // 查找引用保留源单选/多选的 option ID；字典从引用源字段读取，不能硬编码 ID。
+      const sourceTables = [...new Set(fields.filter(field => field.type === 19)
+        .map(field => field.property?.filter_info?.target_table).filter(table => typeof table === 'string' && /^tbl[A-Za-z0-9]+$/.test(table)))]
+      if (sourceTables.length > 4) throw new Error('LOOKUP_LIMIT_EXCEEDED')
+      for (const table of sourceTables) fields.push(...await readFields(table, env))
+      for (const field of fields) for (const item of field.property?.options || []) {
+        if (typeof item.id !== 'string' || typeof item.name !== 'string') continue
+        const name = item.name.trim().slice(0, 100)
+        options.set(item.id, options.has(item.id) && options.get(item.id) !== name ? '' : name)
+      }
+    } catch { /* 任务仍可读，但不能把内部选项 ID 当成部门或身份。 */ }
+    let unavailable = false
+    const resolve = values => [...new Set(values.flatMap(value => {
+      if (!optionId(value)) return [value]
+      const label = options.get(value)
+      if (!label) unavailable = true
+      return label ? [label] : []
+    }))]
+    for (const task of tasks) {
+      task.groups = resolve(task.groups)
+      task.group = task.groups.join('、')
+      task.cohorts = resolve(task.cohorts)
+    }
+    return unavailable
+  }
+
   async function tasks(env) {
     if (taskCache && now() - taskCache.at < TASK_TTL) return { ...taskCache, stale: false }
     if (!taskPending) taskPending = readTasks(env).then(value => {
-      taskCache = { value: value.tasks, statusIssues: value.statusIssues, at: now() }
+      taskCache = { value: value.tasks, statusIssues: value.statusIssues, lookupUnavailable: value.lookupUnavailable, at: now() }
       return { ...taskCache, stale: false }
     }).catch(error => {
       if (taskCache && now() - taskCache.at <= STALE_TTL) return { ...taskCache, stale: true }
@@ -133,7 +184,7 @@ function createScopedService({ fetcher, now }) {
     }
     try {
       const [data, activity] = await Promise.all([tasks(env), development(env)])
-      return response({ tasks: data.value, statusIssues: data.statusIssues, updatedAt: data.at, stale: data.stale, refreshSeconds: 30, development: activity })
+      return response({ tasks: data.value, statusIssues: data.statusIssues, lookupUnavailable: data.lookupUnavailable, updatedAt: data.at, stale: data.stale, refreshSeconds: 30, development: activity })
     } catch (error) {
       const reasons = ['INVALID_FIELD_MAP', 'INVALID_TASK_STATUS', 'INVALID_TASK_DATE', 'INVALID_TASK_ID', 'TASK_LIMIT_EXCEEDED', 'INVALID_PAGINATION', 'FEISHU_AUTH_FAILED', 'FEISHU_READ_FAILED']
       const reason = reasons.includes(error.message) ? error.message : 'UPSTREAM_UNAVAILABLE'

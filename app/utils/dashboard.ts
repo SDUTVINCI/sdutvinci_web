@@ -22,5 +22,6 @@ export type DashboardDevelopment = {
 export type DashboardData = {
   tasks: DashboardTask[]; updatedAt: number; stale: boolean; refreshSeconds: number; demo?: boolean
   statusIssues?: DashboardStatusIssue[]
+  lookupUnavailable?: boolean
   development?: DashboardDevelopment
 }

@@ -437,6 +437,7 @@ onBeforeUnmount(() => {
 
     <template v-else>
       <p v-if="data.demo" class="dashboard-notice">本地演示数据</p>
+      <p v-if="data.lookupUnavailable" class="dashboard-notice dashboard-warning" role="status">部门或成员身份暂未同步，请检查飞书应用的字段只读权限及查找引用设置；身份未确认的人员仅列总榜。</p>
       <p v-if="updateInterrupted" role="status" class="dashboard-notice dashboard-warning">{{ message || '更新暂时中断，正在显示上次结果。' }} 上次更新 {{ formatTime(data.updatedAt) }}</p>
       <p v-if="missingStatusCount || statusIssues.length" role="status" class="dashboard-notice dashboard-warning"><template v-if="missingStatusCount">{{ missingStatusCount }} 项状态未填写，暂按未完成展示、不计分。</template><template v-if="statusIssues.length">{{ statusIssues.length }} 项状态无法识别，暂未纳入统计。<button type="button" class="dashboard-text-button" @click="showStatusIssues = true">查看异常任务 →</button></template></p>
       <div class="dashboard-toolbar">
