@@ -1,6 +1,6 @@
-export { dashboardGridLayout, dashboardTaskPages, dashboardMemberPath, dashboardTaskState, dashboardTaskGroups, selectDashboardTasks, dashboardScoreboard, dashboardScoreLabel, dashboardStatusLabel } from '../../utils/dashboard-data.mjs'
+export { dashboardGridLayout, dashboardTaskPages, dashboardMemberPath, dashboardTaskState, dashboardTaskGroups, selectDashboardTasks, dashboardScoreboard, dashboardScoreLabel, dashboardStatusLabel, dashboardTaskKind, dashboardUnclaimed, dashboardEffectiveStatus, dashboardTaskMetrics } from '../../utils/dashboard-data.mjs'
 
-export type DashboardPerson = { key: string; name: string; avatar: string }
+export type DashboardPerson = { key: string; name: string; avatar: string; cohort?: 'senior' | 'junior' | null; groups?: string[] }
 export type DashboardStatusIssue = { id: string; title: string; status: string }
 export type DashboardTask = {
   id: string; title: string; group: string; groups?: string[]; assignees: DashboardPerson[]; publisher: string; publishers?: DashboardPerson[]
@@ -8,6 +8,7 @@ export type DashboardTask = {
   status: 'todo' | 'progress' | 'review' | 'done'; statusMissing?: boolean; note: string
   week?: number | null; requirements?: string; acceptance?: string; cohorts?: string[]; links?: string[]
   attachments?: { name: string; size: number | null; href: string }[]
+  kind?: 'required' | 'optional'; feishuUrl?: string; reviewers?: DashboardPerson[]
 }
 export type DashboardDevelopment = {
   enabled: boolean; unavailable: boolean; updatedAt?: number; configurationError?: boolean; syncing?: boolean
@@ -23,5 +24,7 @@ export type DashboardData = {
   tasks: DashboardTask[]; updatedAt: number; stale: boolean; refreshSeconds: number; demo?: boolean
   statusIssues?: DashboardStatusIssue[]
   lookupUnavailable?: boolean
+  membersUnavailable?: boolean; partial?: boolean
+  sources?: { kind: string; label: string; unavailable: boolean; stale: boolean; updatedAt?: number; taskCount?: number }[]
   development?: DashboardDevelopment
 }

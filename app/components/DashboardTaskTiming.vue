@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DashboardTask } from '~/utils/dashboard'
+import { dashboardUnclaimed, type DashboardTask } from '~/utils/dashboard'
 import { dashboardTaskCountdown, dashboardUrgency } from '../../utils/dashboard-experience.mjs'
 const props = defineProps<{ task: DashboardTask; now: number }>()
 const dateFormat = new Intl.DateTimeFormat('zh-CN', {
@@ -13,9 +13,9 @@ const urgency = computed(() => dashboardUrgency(props.task, props.now)?.level)
 </script>
 
 <template>
-  <div class="dashboard-task-timing" :class="[task.status === 'done' ? 'done' : urgency]">
-    <span class="dashboard-task-remaining">{{ task.status === 'done' ? completed : remaining }}</span>
-    <time v-if="deadline" :datetime="deadlineIso" class="dashboard-task-deadline">截止 {{ deadline }}</time>
-    <span v-else-if="task.status === 'done'" class="dashboard-task-deadline">未设置截止</span>
+  <div class="dashboard-task-timing" :class="[task.status === 'done' && !dashboardUnclaimed(task) ? 'done' : urgency]">
+    <span class="dashboard-task-remaining">{{ task.status === 'done' && !dashboardUnclaimed(task) ? completed : remaining }}</span>
+    <time v-if="deadline && !dashboardUnclaimed(task)" :datetime="deadlineIso" class="dashboard-task-deadline">截止 {{ deadline }}</time>
+    <span v-else-if="task.status === 'done' && !dashboardUnclaimed(task)" class="dashboard-task-deadline">未设置截止</span>
   </div>
 </template>

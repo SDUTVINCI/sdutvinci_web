@@ -1,11 +1,11 @@
-import { compareDashboardScores } from './dashboard-data.mjs'
+import { compareDashboardScores, dashboardUnclaimed } from './dashboard-data.mjs'
 
 const DAY = 86_400_000
 const BEIJING_OFFSET = 8 * 3600_000
 const dayStart = now => Math.floor((now + BEIJING_OFFSET) / DAY) * DAY - BEIJING_OFFSET
 
 export function dashboardUrgency(task, now) {
-  if (task.status === 'done' || task.deadline === null || !Number.isFinite(task.deadline) || now <= 0) return null
+  if (dashboardUnclaimed(task) || task.status === 'done' || task.deadline === null || !Number.isFinite(task.deadline) || now <= 0) return null
   const left = task.deadline - now
   if (left <= 0) return { level: 'overdue', label: '已逾期' }
   if (dayStart(task.deadline) === dayStart(now)) return { level: 'today', label: '今日到期' }
@@ -16,6 +16,7 @@ export function dashboardUrgency(task, now) {
 
 // 共用页面时钟：未来向上取整避免到期前显示零；逾期按已过整秒计时。
 export function dashboardTaskCountdown(task, now) {
+  if (dashboardUnclaimed(task)) return '待认领 · 前往飞书选择负责人'
   if (task.status === 'done') return ''
   if (!Number.isFinite(task.deadline) || task.deadline <= 0) return '未设置截止'
   if (!Number.isFinite(now) || now <= 0) return '正在校时…'
@@ -26,7 +27,7 @@ export function dashboardTaskCountdown(task, now) {
 }
 
 export function dashboardNextDeadlines(tasks, now) {
-  const pending = tasks.filter(task => task.status !== 'done' && Number.isFinite(task.deadline) && task.deadline > now)
+  const pending = tasks.filter(task => !dashboardUnclaimed(task) && task.status !== 'done' && Number.isFinite(task.deadline) && task.deadline > now)
   if (!pending.length) return []
   const earliest = Math.min(...pending.map(task => task.deadline))
   return pending.filter(task => task.deadline === earliest).sort((a, b) =>
@@ -41,6 +42,9 @@ export function dashboardPreferences(value) {
     group: typeof source.group === 'string' && source.group.trim() && source.group.length <= 100 ? source.group.trim() : 'all',
     status: ['pending', 'todo', 'progress', 'review', 'overdue', 'done'].includes(source.status) ? source.status : 'pending',
     week: source.week === 'missing' || /^(?:[1-9]|1\d|20)$/.test(String(source.week)) ? String(source.week) : 'all',
+    kind: ['required', 'optional'].includes(source.kind) ? source.kind : 'all',
+    cohort: ['senior', 'junior'].includes(source.cohort) ? source.cohort : 'all',
+    claim: source.kind === 'optional' && ['unclaimed', 'claimed'].includes(source.claim) ? source.claim : 'all',
     screen: typeof source.screen === 'boolean' ? source.screen : false,
     autoRotate: typeof source.autoRotate === 'boolean' ? source.autoRotate : true
   }
@@ -52,6 +56,7 @@ export function readDashboardPreferences(raw) {
 
 // 北京时间周一零点为本周起点；缺少/未来的完成时间不纳入统计，不用任务发布时间代替。
 export function dashboardCompletionStats(tasks, now) {
+  tasks = tasks.filter(task => !dashboardUnclaimed(task))
   const today = dayStart(now)
   const weekday = new Date(today + BEIJING_OFFSET).getUTCDay()
   const weekStart = today - ((weekday + 6) % 7) * DAY

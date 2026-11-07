@@ -1,4 +1,6 @@
-import { normalizeDashboardRecords } from './dashboard-data.mjs'
+import { dashboardSourceConfig } from './dashboard-source-config.mjs'
+import { dashboardMemberIndex, applyDashboardMembers } from './dashboard-members.mjs'
+import { normalizeDashboardRecords, DASHBOARD_FIELD_NAMES } from './dashboard-data.mjs'
 import { createDashboardGithub } from './dashboard-github.mjs'
 
 const FEISHU = 'https://open.feishu.cn/open-apis'
@@ -19,6 +21,7 @@ export function createDashboardService({ fetcher = globalThis.fetch, now = Date.
     const env = context.env || {}
     const keys = ['DASHBOARD_ENABLED', 'FEISHU_APP_ID', 'FEISHU_APP_SECRET',
       'FEISHU_BITABLE_APP_TOKEN', 'FEISHU_BITABLE_TABLE_ID', 'FEISHU_BITABLE_VIEW_ID', 'FEISHU_FIELD_MAP',
+      'FEISHU_OPTIONAL_TABLE_ID', 'FEISHU_MEMBERS_TABLE_ID', 'FEISHU_DASHBOARD_URL',
       'DASHBOARD_GITHUB_ORG', 'DASHBOARD_GITHUB_REPOS', 'DASHBOARD_GITHUB_EXCLUDE_REPOS', 'DASHBOARD_GITHUB_TOKEN', 'DASHBOARD_GITHUB_PEOPLE']
     const scope = JSON.stringify(keys.map(key => env[key] || ''))
     if (!handlers.has(scope)) {
@@ -31,7 +34,8 @@ export function createDashboardService({ fetcher = globalThis.fetch, now = Date.
 
 function createScopedService({ fetcher, now }) {
   // 仅为当前运行实例中的临时缓存；业务记录始终由飞书保存。
-  let token, tokenPending, taskCache, taskPending
+  let token, tokenPending
+  const caches = new Map(), pending = new Map()
 
   async function json(url, options = {}) {
     // GitHub 的父信号已有更短的整轮预算，直接传递，避免套叠信号监听。
@@ -74,40 +78,50 @@ function createScopedService({ fetcher, now }) {
     return tokenPending
   }
 
-  async function readTasks(env) {
+  async function feishuJson(url, env) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const result = await json(url, { headers: { Authorization: `Bearer ${await tenantToken(env)}` } })
+        if ([99991661, 99991663, 99991668].includes(result.code)) throw new Error('UPSTREAM_UNAUTHORIZED')
+        return result
+      } catch (error) {
+        if (attempt || error.message !== 'UPSTREAM_UNAUTHORIZED') throw error
+        token = undefined
+      }
+    }
+  }
+
+  async function readRecords(table, view, env) {
     const records = [], seenPages = new Set()
     let pageToken = ''
     for (let page = 0; page < 4; page++) {
-      const url = new URL(`${FEISHU}/bitable/v1/apps/${encodeURIComponent(env.FEISHU_BITABLE_APP_TOKEN)}/tables/${encodeURIComponent(env.FEISHU_BITABLE_TABLE_ID)}/records`)
+      const url = new URL(`${FEISHU}/bitable/v1/apps/${encodeURIComponent(env.FEISHU_BITABLE_APP_TOKEN)}/tables/${encodeURIComponent(table)}/records`)
       url.searchParams.set('page_size', '500')
       if (pageToken) url.searchParams.set('page_token', pageToken)
-      if (env.FEISHU_BITABLE_VIEW_ID) url.searchParams.set('view_id', env.FEISHU_BITABLE_VIEW_ID)
-      let result
-      for (let attempt = 0; attempt < 2; attempt++) {
-        try {
-          result = await json(url.href, { headers: { Authorization: `Bearer ${await tenantToken(env)}` } })
-          if ([99991661, 99991663, 99991668].includes(result.code)) throw new Error('UPSTREAM_UNAUTHORIZED')
-          break
-        } catch (error) {
-          if (attempt || error.message !== 'UPSTREAM_UNAUTHORIZED') throw error
-          token = undefined
-        }
-      }
+      if (view) url.searchParams.set('view_id', view)
+      const result = await feishuJson(url.href, env)
       if (result.code !== 0 || !Array.isArray(result.data?.items)) throw new Error('FEISHU_READ_FAILED')
       records.push(...result.data.items)
-      if (!result.data.has_more) {
-        const statusIssues = []
-        const tasks = normalizeDashboardRecords(records, JSON.parse(env.FEISHU_FIELD_MAP || '{}'), { statusIssues })
-        if (statusIssues.length && !tasks.length) throw Object.assign(new Error('INVALID_TASK_STATUS'), { statusIssues })
-        if (records.some(record => Object.keys(record.fields || {}).length) && !tasks.length) throw new Error('INVALID_FIELD_MAP')
-        const lookupUnavailable = await resolveLookups(tasks, env)
-        return { tasks, statusIssues, lookupUnavailable }
-      }
+      if (records.length > 2000) throw new Error('TASK_LIMIT_EXCEEDED')
+      if (!result.data.has_more) return records
       pageToken = result.data.page_token
       if (!pageToken || seenPages.has(pageToken)) throw new Error('INVALID_PAGINATION')
       seenPages.add(pageToken)
     }
     throw new Error('TASK_LIMIT_EXCEEDED')
+  }
+
+  async function readTasks(source, env) {
+    const records = await readRecords(source.table, source.view, env)
+    const overrides = JSON.parse(env.FEISHU_FIELD_MAP || '{}')
+    const statusIssues = []
+    const tasks = normalizeDashboardRecords(records, overrides, { statusIssues })
+    if (statusIssues.length && !tasks.length) throw Object.assign(new Error('INVALID_TASK_STATUS'), { statusIssues })
+    // 无标题的空白行可带有默认状态、分值；未知标题列则明确报映射错误。
+    const knownColumns = new Set([...Object.values(DASHBOARD_FIELD_NAMES).flat(), ...Object.values(overrides)])
+    if (!tasks.length && records.some(record => Object.keys(record.fields || {}).some(key => !knownColumns.has(key)))) throw new Error('INVALID_FIELD_MAP')
+    const lookupUnavailable = await resolveLookups(tasks, { ...env, FEISHU_BITABLE_TABLE_ID: source.table })
+    return { tasks, statusIssues, lookupUnavailable }
   }
 
   async function readFields(table, env) {
@@ -117,7 +131,7 @@ function createScopedService({ fetcher, now }) {
       const url = new URL(`${FEISHU}/bitable/v1/apps/${encodeURIComponent(env.FEISHU_BITABLE_APP_TOKEN)}/tables/${encodeURIComponent(table)}/fields`)
       url.searchParams.set('page_size', '100')
       if (cursor) url.searchParams.set('page_token', cursor)
-      const body = await json(url.href, { headers: { Authorization: `Bearer ${await tenantToken(env)}` } })
+      const body = await feishuJson(url.href, env)
       if (body.code !== 0 || !Array.isArray(body.data?.items)) throw new Error('FEISHU_FIELDS_UNAVAILABLE')
       fields.push(...body.data.items)
       if (!body.data.has_more) return fields
@@ -159,18 +173,50 @@ function createScopedService({ fetcher, now }) {
     return unavailable
   }
 
-  async function tasks(env) {
-    if (taskCache && now() - taskCache.at < TASK_TTL) return { ...taskCache, stale: false }
-    if (!taskPending) taskPending = readTasks(env).then(value => {
-      taskCache = { value: value.tasks, statusIssues: value.statusIssues, lookupUnavailable: value.lookupUnavailable, at: now() }
-      return { ...taskCache, stale: false }
+  async function cached(key, reader, allowStale = true) {
+    const cache = caches.get(key)
+    if (cache && now() - cache.at < TASK_TTL) return { ...cache, stale: false }
+    if (!pending.has(key)) pending.set(key, reader().then(value => {
+      const entry = { value, at: now() }
+      caches.set(key, entry)
+      return { ...entry, stale: false }
     }).catch(error => {
-      if (taskCache && now() - taskCache.at <= STALE_TTL) return { ...taskCache, stale: true }
+      if (allowStale && cache && now() - cache.at <= STALE_TTL) return { ...cache, stale: true }
       throw error
-    }).finally(() => { taskPending = undefined })
-    return taskPending
+    }).finally(() => pending.delete(key)))
+    return pending.get(key)
   }
 
+  async function tasks(env) {
+    const config = dashboardSourceConfig(env)
+    const [results, roster] = await Promise.all([
+      Promise.allSettled(config.sources.map(source => cached(source.kind, () => readTasks(source, env)))),
+      config.members ? cached('members', async () => dashboardMemberIndex(await readRecords(config.members, '', env)), false)
+        .catch(() => null) : null
+    ])
+    if (results.every(result => result.status === 'rejected')) throw results[0].reason
+    const sources = [], tasks = [], statusIssues = []
+    let lookupUnavailable = false
+    for (let index = 0; index < config.sources.length; index++) {
+      const source = config.sources[index], result = results[index]
+      if (result.status === 'rejected') {
+        sources.push({ kind: source.kind, label: source.label, unavailable: true, stale: false })
+        continue
+      }
+      const entry = result.value
+      sources.push({ kind: source.kind, label: source.label, unavailable: false, stale: entry.stale,
+        updatedAt: entry.at, taskCount: entry.value.tasks.length })
+      const id = value => config.sources.length > 1 ? `${source.kind}:${value}` : value
+      const href = value => config.wiki ? `${config.wiki}?table=${encodeURIComponent(source.table)}&record=${encodeURIComponent(value)}` : ''
+      tasks.push(...entry.value.tasks.map(task => ({ ...task, id: id(task.id), kind: source.kind, feishuUrl: href(task.id) })))
+      statusIssues.push(...entry.value.statusIssues.map(issue => ({ ...issue, id: id(issue.id) })))
+      lookupUnavailable ||= entry.value.lookupUnavailable
+    }
+    return { tasks: config.members ? applyDashboardMembers(tasks, roster?.value || new Map()) : tasks,
+      sources, statusIssues, lookupUnavailable, membersUnavailable: Boolean(config.members && !roster),
+      partial: sources.some(source => source.unavailable), stale: sources.some(source => source.stale),
+      updatedAt: Math.min(...sources.filter(source => !source.unavailable).map(source => source.updatedAt)) }
+  }
 
   const development = createDashboardGithub({ json, now })
 
@@ -184,9 +230,9 @@ function createScopedService({ fetcher, now }) {
     }
     try {
       const [data, activity] = await Promise.all([tasks(env), development(env)])
-      return response({ tasks: data.value, statusIssues: data.statusIssues, lookupUnavailable: data.lookupUnavailable, updatedAt: data.at, stale: data.stale, refreshSeconds: 30, development: activity })
+      return response({ ...data, refreshSeconds: 30, development: activity })
     } catch (error) {
-      const reasons = ['INVALID_FIELD_MAP', 'INVALID_TASK_STATUS', 'INVALID_TASK_DATE', 'INVALID_TASK_ID', 'TASK_LIMIT_EXCEEDED', 'INVALID_PAGINATION', 'FEISHU_AUTH_FAILED', 'FEISHU_READ_FAILED']
+      const reasons = ['INVALID_FIELD_MAP', 'INVALID_TASK_STATUS', 'INVALID_TASK_DATE', 'INVALID_TASK_ID', 'TASK_LIMIT_EXCEEDED', 'INVALID_PAGINATION', 'FEISHU_AUTH_FAILED', 'FEISHU_READ_FAILED', 'INVALID_SOURCE_CONFIG']
       const reason = reasons.includes(error.message) ? error.message : 'UPSTREAM_UNAVAILABLE'
       return response({ code: 'DATA_UNAVAILABLE', reason, message: '暂时无法更新任务，请稍后重试。',
         ...(reason === 'INVALID_TASK_STATUS' && Array.isArray(error.statusIssues) ? { statusIssues: error.statusIssues } : {}) }, 502)

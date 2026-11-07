@@ -1,7 +1,7 @@
 export const DASHBOARD_FIELD_NAMES = {
   title: ['任务名称', '任务详情'], group: ['部门', '负责人.部门', '所属组别', '组别'], assignees: ['负责人', '执行人'], publisher: ['发布与审核人', '发布人'],
   deadline: ['最晚截止日期', '截止时间'], score: ['分值'], priority: ['优先级'], status: ['完成情况', '完成状态'],
-  completedAt: ['审核通过时间', '完成时间'], note: ['备注'], requirements: ['任务要求'], acceptance: ['验收标准'],
+  completedAt: ['审核通过时间', '完成时间'], note: ['备注'], requirements: ['任务要求', '要求'], acceptance: ['验收标准'], reviewers: ['审核人'],
   week: ['周次'], cohorts: ['啥登'], links: ['Github链接等', 'GitHub链接', '成果链接'], attachments: ['成果附件', '验收附件']
 }
 
@@ -19,10 +19,11 @@ function text(value) {
   return ''
 }
 
-function labels(value) {
+export function dashboardLabels(value) {
   value = unwrap(value)
-  return (Array.isArray(value) ? value.flatMap(item => labels(item)) : [text(value)]).filter(Boolean)
+  return (Array.isArray(value) ? value.flatMap(item => dashboardLabels(item)) : [text(value)]).filter(Boolean)
 }
+const labels = dashboardLabels
 
 function taskWeek(value) {
   const raw = text(value) || (typeof value === 'number' ? String(value) : '')
@@ -59,7 +60,7 @@ export function safeDashboardUrl(value) {
   } catch { return '' }
 }
 
-function people(value) {
+export function dashboardPeople(value) {
   const rows = Array.isArray(value) ? value : value ? [value] : []
   const seen = new Set()
   return rows.flatMap(item => {
@@ -70,6 +71,7 @@ function people(value) {
     return [{ key, name, avatar: safeDashboardUrl(item?.avatar_url) }]
   })
 }
+const people = dashboardPeople
 
 function timestamp(value) {
   if (value === undefined || value === null || value === '') return null
@@ -149,6 +151,7 @@ export function normalizeDashboardRecords(records, overrides = {}, { statusIssue
     return [{
       id: String(record.record_id), title: title.slice(0, 500), group: groups.join('、'), groups,
       assignees: people(field('assignees')), publishers: people(field('publisher')), publisher: people(field('publisher')).map(person => person.name).join('、'),
+      reviewers: people(field('reviewers')),
       deadline: timestamp(field('deadline')), completedAt: timestamp(field('completedAt')),
       ...taskScore(field('score')),
       // 仅保留旧字段映射/API兼容；当前卡片、排序和总分榜均使用分值。
@@ -161,14 +164,36 @@ export function normalizeDashboardRecords(records, overrides = {}, { statusIssue
   })
 }
 
-export function dashboardTaskState(task, now = Date.now()) {
-  return task.status === 'done' ? 'done' : task.deadline !== null && task.deadline <= now ? 'overdue' : 'todo'
+export const dashboardTaskKind = task => task.kind === 'optional' ? 'optional' : 'required'
+export const dashboardUnclaimed = task => dashboardTaskKind(task) === 'optional' && !task.assignees?.length
+export const dashboardTaskCohorts = task => task.cohorts || []
+export const dashboardEffectiveStatus = task => dashboardUnclaimed(task) ? 'todo' : task.status
+
+export function dashboardTaskMetrics(tasks, now = Date.now()) {
+  const required = tasks.filter(task => dashboardTaskKind(task) === 'required')
+  const requiredDone = required.filter(task => task.status === 'done').length
+  return {
+    pending: tasks.filter(task => dashboardEffectiveStatus(task) !== 'done').length,
+    overdue: tasks.filter(task => dashboardTaskState(task, now) === 'overdue').length,
+    done: tasks.filter(task => dashboardEffectiveStatus(task) === 'done').length,
+    unclaimed: tasks.filter(dashboardUnclaimed).length,
+    requiredTotal: required.length, requiredDone,
+    requiredRate: required.length ? Math.round(requiredDone / required.length * 100) : null
+  }
 }
 
-export function selectDashboardTasks(tasks, { status = 'pending', group = 'all', week = 'all', search = '', now = Date.now() } = {}) {
+export function dashboardTaskState(task, now = Date.now()) {
+  if (dashboardUnclaimed(task)) return 'unclaimed'
+  return task.status === 'done' ? 'done' : task.deadline != null && task.deadline <= now ? 'overdue' : 'todo'
+}
+
+export function selectDashboardTasks(tasks, { status = 'pending', group = 'all', week = 'all', kind = 'all', cohort = 'all', claim = 'all', search = '', now = Date.now() } = {}) {
   const keyword = search.trim().toLowerCase()
   return tasks.filter(task => (status === 'all' || (status === 'overdue' ? dashboardTaskState(task, now) === 'overdue'
-    : status === 'pending' ? task.status !== 'done' : task.status === status))
+    : status === 'pending' ? dashboardEffectiveStatus(task) !== 'done' : dashboardEffectiveStatus(task) === status))
+    && (kind === 'all' || dashboardTaskKind(task) === kind)
+    && (cohort === 'all' || dashboardTaskCohorts(task).includes(({ senior: '老登', junior: '小登' })[cohort]))
+    && (claim === 'all' || dashboardTaskKind(task) === 'optional' && (claim === 'unclaimed' ? dashboardUnclaimed(task) : !dashboardUnclaimed(task)))
     && (group === 'all' || dashboardTaskGroups(task).includes(group))
     && (week === 'all' || (week === 'missing' ? task.week == null : task.week === Number(week)))
     && (!keyword || [task.title, task.group, task.publisher, task.note, task.requirements, task.acceptance, ...task.assignees.map(person => person.name)].join(' ').toLowerCase().includes(keyword)))
@@ -181,6 +206,7 @@ export function dashboardScoreboard(tasks) {
   const totals = new Map(), seen = new Set()
   let missingScoreCount = 0, invalidScoreCount = 0, unassignedCount = 0
   for (const task of tasks) {
+    if (dashboardUnclaimed(task)) continue
     if (seen.has(task.id)) continue
     seen.add(task.id)
     const validScore = !task.scoreInvalid && Number.isFinite(task.score) && task.score >= 0

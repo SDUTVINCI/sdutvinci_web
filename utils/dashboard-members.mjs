@@ -1,13 +1,51 @@
+import { dashboardPeople, dashboardLabels } from './dashboard-data.mjs'
 
+export function dashboardMemberIndex(records) {
+  const identities = new Map()
+  for (const record of records) {
+    const fields = record.fields || {}
+    const cohorts = dashboardLabels(fields['啥登'])
+    const groups = [...new Set(dashboardLabels(fields['组别']).filter(value => !/^opt[A-Za-z0-9]{6,}$/.test(value)))].sort()
+    const cohort = cohorts.length === 1 ? ({ 老登: 'senior', 小登: 'junior' }[cohorts[0]] || null) : null
+    for (const person of dashboardPeople(fields['飞书账号'])) {
+      if (!person.key || person.key === person.name) continue
+      const previous = identities.get(person.key)
+      const next = { cohort, groups }
+      // 重复账号但身份/部门矛盾时不按读取顺序覆盖。
+      identities.set(person.key, identities.has(person.key) && JSON.stringify(previous) !== JSON.stringify(next) ? null : next)
+    }
+  }
+  return identities
+}
+
+export function applyDashboardMembers(tasks, identities) {
+  return tasks.map(task => {
+    const assignees = task.assignees.map(person => {
+      const member = person.key !== person.name ? identities.get(person.key) : null
+      return { ...person, cohort: member?.cohort || null, groups: member?.groups || [] }
+    })
+    const complete = assignees.length && assignees.every(person => identities.get(person.key))
+    const groups = complete ? [...new Set(assignees.flatMap(person => person.groups))] : [...(task.groups || [])]
+    const cohorts = [...new Set(assignees.flatMap(person => person.cohort ? [person.cohort === 'senior' ? '老登' : '小登'] : []))]
+    return { ...task, assignees, groups, group: groups.join('、'), cohorts }
+  })
+}
 const handle = value => typeof value === 'string' && /^[a-z\d_.-]+$/i.test(value) && !['.', '..'].includes(value) ? value.toLowerCase() : ''
 
 // “啥登”来自成员表查找引用。只有可唯一对应的账号进入分榜，不按姓名或年级猜测。
 export function dashboardCohortRanking(rows, tasks, cohort = 'all') {
   const identities = new Map()
+  const authoritative = new Set()
+  for (const task of tasks) for (const person of task.assignees || []) {
+    if (!Object.hasOwn(person, 'cohort') || !person.key || person.key === person.name) continue
+    const value = ['senior', 'junior'].includes(person.cohort) ? person.cohort : null
+    identities.set(person.key, identities.has(person.key) && identities.get(person.key) !== value ? null : value)
+    authoritative.add(person.key)
+  }
   for (const task of tasks) {
     if (task.assignees?.length !== 1) continue
     const person = task.assignees[0]
-    if (!person.key || person.key === person.name) continue
+    if (!person.key || person.key === person.name || authoritative.has(person.key)) continue
     const labels = task.cohorts || []
     const value = labels.length === 1 ? ({ 老登: 'senior', 小登: 'junior' }[labels[0]] || null) : null
     identities.set(person.key, identities.has(person.key) && identities.get(person.key) !== value ? null : value)

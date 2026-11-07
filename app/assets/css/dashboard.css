@@ -621,6 +621,22 @@ a.dashboard-person:focus-visible { outline: 2px solid var(--cyan); outline-offse
 .dashboard-detail-note + .dashboard-detail-note { margin-top: 20px; }
 .dashboard-detail-note ul { padding-left: 1.3em; margin: 0; line-height: 1.8; overflow-wrap: anywhere; }
 .dashboard-page .dashboard-query { flex-wrap: wrap; }
+.dashboard-page .dashboard-query input { flex: 1 1 180px; min-width: 150px; }
+.dashboard-page .dashboard-query select { flex: 0 1 145px; }
+.dashboard-kind { flex: 0 0 auto; padding: 2px 6px; border: 1px solid var(--cyan); border-radius: 3px; color: var(--cyan); font-size: .7em; }
+.dashboard-kind.optional { border-color: var(--gold); color: var(--gold); }
+.dashboard-scope-notes { display: flex; flex: 1 1 100%; flex-wrap: wrap; align-items: start; gap: 5px 16px; color: var(--muted); font-size: .72rem; }
+.dashboard-source-sync { position: relative; }
+.dashboard-source-sync summary { cursor: pointer; }
+.dashboard-source-sync ul { margin: 6px 0; padding-left: 18px; }
+.dashboard-feishu-action { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.dashboard-feishu-action a { padding: 8px 12px; border: 1px solid var(--cyan); border-radius: 4px; color: var(--cyan); }
+.dashboard-feishu-action span { color: var(--muted); font-size: .85em; }
+.is-fixed-screen .dashboard-task-list { overflow-y: auto; }
+@media (max-width: 760px) {
+  .dashboard-page .dashboard-query select { flex: 1 1 125px; width: auto; }
+  .dashboard-page .dashboard-query input { flex: 1 1 200px; width: auto; }
+}
 .dashboard-page .dashboard-team-name { white-space: nowrap; }
 
 .dashboard-scroll-block { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
