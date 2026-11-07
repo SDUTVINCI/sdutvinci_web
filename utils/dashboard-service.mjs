@@ -7,6 +7,9 @@ const FEISHU = 'https://open.feishu.cn/open-apis'
 const TASK_TTL = 30_000
 const STALE_TTL = 15 * 60_000
 const optionId = value => /^opt[A-Za-z0-9]{6,}$/.test(value)
+const sourceReason = error => ['INVALID_FIELD_MAP', 'INVALID_TASK_STATUS', 'INVALID_TASK_DATE', 'INVALID_TASK_ID',
+  'TASK_LIMIT_EXCEEDED', 'INVALID_PAGINATION', 'FEISHU_AUTH_FAILED', 'FEISHU_READ_FAILED', 'FEISHU_FIELDS_UNAVAILABLE',
+  'FIELD_LIMIT_EXCEEDED'].includes(error?.message) ? error.message : 'UPSTREAM_UNAVAILABLE'
 
 function response(body, status = 200, extra = {}) {
   return new Response(JSON.stringify(body), {
@@ -117,9 +120,13 @@ function createScopedService({ fetcher, now }) {
     const statusIssues = []
     const tasks = normalizeDashboardRecords(records, overrides, { statusIssues })
     if (statusIssues.length && !tasks.length) throw Object.assign(new Error('INVALID_TASK_STATUS'), { statusIssues })
-    // 无标题的空白行可带有默认状态、分值；未知标题列则明确报映射错误。
-    const knownColumns = new Set([...Object.values(DASHBOARD_FIELD_NAMES).flat(), ...Object.values(overrides)])
-    if (!tasks.length && records.some(record => Object.keys(record.fields || {}).some(key => !knownColumns.has(key)))) throw new Error('INVALID_FIELD_MAP')
+    // 空白行可能带系统默认值或非展示列，不能通过记录中的列集合猜测字段配置错误。
+    // 直接核对字段结构：有效标题列存在即允许空表；标题列被错误改名仍明确报错。
+    if (!tasks.length && records.some(record => Object.keys(record.fields || {}).length)) {
+      const fields = await readFields(source.table, env)
+      const titleNames = [overrides.title, ...DASHBOARD_FIELD_NAMES.title].filter(name => typeof name === 'string' && name.trim())
+      if (!fields.some(field => titleNames.includes(field.field_name))) throw new Error('INVALID_FIELD_MAP')
+    }
     const lookupUnavailable = await resolveLookups(tasks, { ...env, FEISHU_BITABLE_TABLE_ID: source.table })
     return { tasks, statusIssues, lookupUnavailable }
   }
@@ -200,7 +207,7 @@ function createScopedService({ fetcher, now }) {
     for (let index = 0; index < config.sources.length; index++) {
       const source = config.sources[index], result = results[index]
       if (result.status === 'rejected') {
-        sources.push({ kind: source.kind, label: source.label, unavailable: true, stale: false })
+        sources.push({ kind: source.kind, label: source.label, unavailable: true, stale: false, reason: sourceReason(result.reason) })
         continue
       }
       const entry = result.value

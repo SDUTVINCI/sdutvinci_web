@@ -23,6 +23,7 @@ function fixture(overrides = {}) {
   const service = createDashboardService({ now: () => state.time, fetcher: async (url, options = {}) => {
     state.requests.push([String(url), options.method || 'GET'])
     if (String(url).includes('/auth/')) return Response.json({ code: 0, tenant_access_token: 'private-token' })
+    if (String(url).includes('/fields')) return Response.json({ code: 0, data: { items: [{ field_name: '任务名称', type: 1 }], has_more: false } })
     const table = /\/tables\/([^/]+)\/records/.exec(String(url))?.[1]
     if (!table || !Object.hasOwn(state.tables, table)) throw new Error('Unexpected upstream route')
     if (state.fail.includes(table)) throw new Error('private-error')
@@ -70,7 +71,7 @@ describe('统一任务列表的真实读取链路', () => {
     const data = await body()
     expect(data.partial).toBe(true)
     expect(data.tasks).toHaveLength(1)
-    expect(data.sources[1]).toMatchObject({ kind: 'optional', unavailable: true })
+    expect(data.sources[1]).toMatchObject({ kind: 'optional', unavailable: true, reason: 'UPSTREAM_UNAVAILABLE' })
     expect(data.sources[1].taskCount).toBeUndefined()
     state.fail = []
     expect((await body()).tasks).toHaveLength(3)
@@ -106,7 +107,7 @@ describe('统一任务列表的真实读取链路', () => {
 
   it('成员表完整分页；空白任务的默认状态不触发映射错误', async () => {
     const { state, body } = fixture()
-    state.tables.tblOptional = [{ record_id: 'blank', fields: { 完成情况: '未开始', 分值: '2', 周次: '第1周' } }]
+    state.tables.tblOptional = [{ record_id: 'blank', fields: { 完成情况: '未开始', 分值: '2', 周次: '第1周', 任务发布时间: now } }]
     expect((await body()).sources[1]).toMatchObject({ unavailable: false, taskCount: 0 })
     let memberPages = 0
     const service = createDashboardService({ fetcher: async url => {

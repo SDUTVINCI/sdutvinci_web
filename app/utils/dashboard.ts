@@ -25,6 +25,6 @@ export type DashboardData = {
   statusIssues?: DashboardStatusIssue[]
   lookupUnavailable?: boolean
   membersUnavailable?: boolean; partial?: boolean
-  sources?: { kind: string; label: string; unavailable: boolean; stale: boolean; updatedAt?: number; taskCount?: number }[]
+  sources?: { kind: string; label: string; unavailable: boolean; stale: boolean; updatedAt?: number; taskCount?: number; reason?: string }[]
   development?: DashboardDevelopment
 }

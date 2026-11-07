@@ -39,6 +39,7 @@ const selectedClaim = ref('all')
 const kindLabels: Record<string, string> = { all: '全部类型', required: '每周必做', optional: '选做任务' }
 const cohortLabels: Record<string, string> = { all: '全部身份', senior: '老登', junior: '小登' }
 const kindLabel = computed(() => kindLabels[selectedKind.value] || '全部类型')
+const sourceFailure = (reason?: string) => ({ INVALID_FIELD_MAP: '标题字段需检查', FEISHU_READ_FAILED: '表格读取失败，请检查应用访问范围', FEISHU_FIELDS_UNAVAILABLE: '字段信息读取失败，请检查只读权限', INVALID_TASK_STATUS: '完成状态需检查', INVALID_TASK_DATE: '任务日期需检查', TASK_LIMIT_EXCEEDED: '记录超出读取上限' } as Record<string, string>)[reason || ''] || '连接或数据异常，请稍后重试'
 const selectedRanking = ref('all')
 const rankingOptions = [
   { value: 'all', label: '总榜' },
@@ -472,7 +473,7 @@ onBeforeUnmount(() => {
           <span v-if="counts.requiredTotal">必做完成率 {{ counts.requiredRate }}%（{{ counts.requiredDone }}/{{ counts.requiredTotal }}）</span>
           <span v-if="counts.unclaimed">待认领 {{ counts.unclaimed }} 项，不计逾期、积分和完成趋势。</span>
           <span v-if="selectedKind === 'optional' && (selectedCohort !== 'all' || selectedGroup !== 'all')">未认领任务通常没有负责人身份和部门，清除对应筛选可查看。</span>
-          <details v-if="data.sources?.length" class="dashboard-source-sync" @toggle="resizeScreen"><summary>飞书同步详情{{ data.partial ? ' · 数据不完整' : '' }}</summary><ul><li v-for="source in data.sources" :key="source.kind">{{ source.label }}：{{ source.unavailable ? '暂不可用，未纳入当前统计' : `${source.taskCount} 项 · ${source.stale ? '同步中断，保留上次结果' : '已同步'} · ${formatTime(source.updatedAt)}` }}</li></ul></details>
+          <details v-if="data.sources?.length" class="dashboard-source-sync" @toggle="resizeScreen"><summary>飞书同步详情{{ data.partial ? ' · 数据不完整' : '' }}</summary><ul><li v-for="source in data.sources" :key="source.kind">{{ source.label }}：{{ source.unavailable ? `暂不可用，未纳入当前统计 · ${sourceFailure(source.reason)}` : `${source.taskCount} 项 · ${source.stale ? '同步中断，保留上次结果' : '已同步'} · ${formatTime(source.updatedAt)}` }}</li></ul></details>
         </div>
       </div>
       <div class="dashboard-grid">
